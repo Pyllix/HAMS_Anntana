@@ -1,1 +1,1 @@
-frontend ทำใน folder นี้นะจ๊ะเวลาลง init install อะไร อย่าลืม cd เข้ามาที่ folder นี้ก่อนด้วยนะจ๊ะ
+frontend ทำใน folder นี้นะจ๊ะเวลาลง init install อะไร อย่าลืม cd เข้ามาที่ folder นี้ก่อนด้วยนะจ๊ะ @palm: รับทราบครับ
