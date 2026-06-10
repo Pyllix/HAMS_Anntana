@@ -28,7 +28,10 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 | Auth | BetterAuth | Confirmed | Known decision; pending codebase integration |
 
 ## High-Level Architecture
-TBD: Currently structured as a foundational NestJS monolithic backend. Service layers, database integration patterns, and data flow are pending explicit documentation and implementation.
+The system follows a standard Layered Architecture pattern specific to NestJS (Module -> Controller -> Service). 
+- **Controllers** handle HTTP routing and requests.
+- **Services** house all business logic.
+- **Data Access:** Services interact directly with the Prisma Client (ORMs) without an intermediate Repository layer to utilize Prisma's native type-safety and avoid boilerplate.
 
 ## Core Modules
 - `app.module.ts`: Root module of the application.
