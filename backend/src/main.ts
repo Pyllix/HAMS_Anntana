@@ -4,7 +4,15 @@ import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable body parsing to allow apiReference to handle it
+    });
+
+    // Enable CORS for the React frontend
+    app.enableCors({
+    origin: process.env.FRONTEND_URL, // React frontend URL
+    credentials: true,
+    });
 
   // Swagger configuration
   const config = new DocumentBuilder()
@@ -15,6 +23,7 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
 
+  // Serve Swagger UI at /reference
   app.use(
     '/reference', 
     apiReference({
