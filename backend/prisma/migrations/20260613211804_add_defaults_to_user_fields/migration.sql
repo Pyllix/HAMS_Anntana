@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "users" ALTER COLUMN "first_name" SET DEFAULT '',
+ALTER COLUMN "last_name" SET DEFAULT '',
+ALTER COLUMN "user_name" SET DEFAULT '',
+ALTER COLUMN "role" SET DEFAULT 'DEPARTMENT_STAFF';

@@ -29,6 +29,7 @@ async function bootstrap() {
     .setTitle('HAMS API References')
     .setDescription('ระบบบริหารจัดการครุภัณฑ์หลังบ้าน')
     .setVersion('1.0')
+    .addBearerAuth() // Enable Bearer token input in Scalar/Swagger UI
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
