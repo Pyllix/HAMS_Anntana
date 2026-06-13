@@ -11,8 +11,3 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-model Test {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-}

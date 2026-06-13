@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
@@ -13,6 +14,15 @@ async function bootstrap() {
     origin: process.env.FRONTEND_URL, // React frontend URL
     credentials: true,
     });
+
+  // Enable global validation pipe for DTO validation
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,       // ตัด properties ที่ไม่อยู่ใน DTO ออก
+      forbidNonWhitelisted: true, // throw error ถ้ามี unknown properties
+      transform: true,       // แปลง primitive types อัตโนมัติ
+    }),
+  );
 
   // Swagger configuration
   const config = new DocumentBuilder()
