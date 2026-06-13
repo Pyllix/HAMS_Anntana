@@ -23,6 +23,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
+@ApiBearerAuth()
+@UseGuards(AuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
@@ -45,8 +47,6 @@ export class UsersController {
   // ─── Read All ──────────────────────────────────────────────────────────────
 
   @Get()
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Get all Users',
     description: 'Retrieve all active users (excludes soft-deleted)',
@@ -60,8 +60,6 @@ export class UsersController {
   // ─── Read One ──────────────────────────────────────────────────────────────
 
   @Get(':id')
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get User by ID' })
   @ApiParam({ name: 'id', description: 'User ID (CUID/UUID)' })
   @ApiResponse({ status: 200, description: 'User data' })
@@ -74,8 +72,6 @@ export class UsersController {
   // ─── Update ────────────────────────────────────────────────────────────────
 
   @Patch(':id')
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Update User',
     description: 'Update user data excluding email and password (use better-auth for those)',
@@ -92,8 +88,6 @@ export class UsersController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Soft Delete User',
     description: 'Soft delete user (sets deletedAt to now) — actual record is not removed',
@@ -109,8 +103,6 @@ export class UsersController {
   // ─── Restore ───────────────────────────────────────────────────────────────
 
   @Patch(':id/restore')
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Restore a soft-deleted User',
     description: 'Restore a soft-deleted user back to active status',
