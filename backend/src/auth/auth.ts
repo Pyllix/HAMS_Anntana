@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
-import { admin, openAPI } from "better-auth/plugins"
+import { openAPI } from "better-auth/plugins"
 import { Pool } from "pg"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "@prisma/client"
@@ -19,6 +19,5 @@ export const auth = betterAuth({
   },
   plugins: [
     openAPI(),
-    // admin(),
   ],
 })

@@ -10,7 +10,7 @@ import { auth } from '../auth/auth';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ─── Create ──────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export class UsersService {
       throw new ConflictException(`Email ${dto.email} is already in use`);
     }
 
-    // Use better-auth API to hash the password and create user+account records
+    // Use better-auth to hash password and create user + account record
     const result = await auth.api.signUpEmail({
       body: {
         name: `${dto.firstname} ${dto.lastname}`,
@@ -44,7 +44,7 @@ export class UsersService {
         userName: dto.userName,
         firstname: dto.firstname,
         lastname: dto.lastname,
-        role: dto.role,
+        role: dto.role ?? 'DEPARTMENT_STAFF',
         imageUrl: dto.imageUrl,
       },
       omit: { deletedAt: true },
