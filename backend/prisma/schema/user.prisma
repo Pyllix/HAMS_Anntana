@@ -1,22 +1,23 @@
 // This file defines the User model and related models for authentication in the Prisma schema.
 
 model User {
-  id            String    @id 
+  id            String    @id
   userName      String    @default("") @map("user_name") @db.VarChar(50)
   firstname     String    @default("") @map("first_name") @db.VarChar(100)
   lastname      String    @default("") @map("last_name") @db.VarChar(100)
   email         String    @unique @db.VarChar(100)
   emailVerified Boolean
   imageUrl      String?
-  section_id    String?   @map("section_id") @default(uuid())
+  section_id    String    @default(uuid()) @map("section_id")
   role          UserRole  @default(DEPARTMENT_STAFF)
   createdAt     DateTime
   updatedAt     DateTime
   deletedAt     DateTime? @map("deleted_at")
 
   //Auth relations
-  sessions      Session[]
-  accounts      Account[]
+  sessions Session[]
+  accounts Account[]
+  section  Section?  @relation(fields: [section_id], references: [id])
 
   @@map("users")
 }

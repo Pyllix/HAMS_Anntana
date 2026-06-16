@@ -1,0 +1,17 @@
+// This model is used for managing sections.
+
+model Section {
+    id       String @id @default(uuid()) @map("section_id")
+    code     String @unique @default("") @map("section_code") @db.VarChar(20)
+    name     String @default("") @map("name") @db.VarChar(255)
+    tel      String @default("") @map("tel") @db.VarChar(20)
+    building String @default("") @map("building") @db.VarChar(100)
+
+    createdAt DateTime  @default(now()) @map("created_at")
+    updatedAt DateTime  @updatedAt @map("updated_at")
+    deletedAt DateTime? @map("deleted_at")
+
+    users User[]
+
+    @@map("sections")
+}
