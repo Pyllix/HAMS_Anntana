@@ -31,7 +31,6 @@ export class UsersController {
 
   // ─── Create ────────────────────────────────────────────────────────────────
 
-  // 🔴 Temporarily public to allow creating the first Admin user
   @Post()
   @ApiOperation({
     summary: 'Create new User',

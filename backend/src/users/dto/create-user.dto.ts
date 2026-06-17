@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   MinLength,
 } from 'class-validator';
 
@@ -45,4 +46,9 @@ export class CreateUserDto {
   @IsUrl()
   @IsOptional()
   imageUrl?: string;
+
+  @ApiPropertyOptional({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'Section ID' })
+  @IsUUID()
+  @IsOptional()
+  sectionId: string;
 }
