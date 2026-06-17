@@ -8,12 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -21,6 +23,7 @@ import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -43,17 +46,20 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
-  // ─── Read All ──────────────────────────────────────────────────────────────
+  // ─── Read All (paginated) ──────────────────────────────────────────────
 
   @Get()
   @ApiOperation({
-    summary: 'Get all Users',
-    description: 'Retrieve all active users (excludes soft-deleted)',
+    summary: 'Get all Users (paginated)',
+    description: 'Retrieve active users with pagination and optional search by name or email',
   })
-  @ApiResponse({ status: 200, description: 'List of users' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of users' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: PaginationDto) {
+    return this.usersService.findAll(query);
   }
 
   // ─── Read One ──────────────────────────────────────────────────────────────

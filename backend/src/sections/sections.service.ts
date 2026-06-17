@@ -28,6 +28,8 @@ export class SectionsService {
     return section;
   }
 
+  // ─── Read All ─────────────────────────────────────────────────────
+
   async findAll() {
     return this.prisma.section.findMany({
       where: { deletedAt: null },
@@ -55,15 +57,41 @@ export class SectionsService {
     return section;
   }
 
-  async update(id: number, updateSectionDto: UpdateSectionDto) {
-    return `This action updates a #${id} section`;
+  //Update Section 
+  async update(id: string, dto: UpdateSectionDto) {
+    await this.findOne(id)
+
+    return this.prisma.section.update({
+      where: { id },
+      data: dto,
+      omit: { deletedAt: true }
+    })
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} section`;
+  // Soft Delete Section
+  async remove(id: string) {
+    await this.findOne(id)
+    return this.prisma.section.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
   }
 
-  restore(id: number) {
-    return `This action restore a #${id} section`
+  // Restore Section
+  async restore(id: string) {
+    const section = await this.prisma.section.findFirst({
+      where: { id, deletedAt: { not: null } },
+    })
+
+    if (!section) {
+      throw new NotFoundException(
+        `Deleted section not found with ID: ${id} (may not exist or not deleted)`,
+      );
+    }
+    return this.prisma.section.update({
+      where: { id },
+      data: { deletedAt: null },
+      omit: { deletedAt: true },
+    })
   }
 }

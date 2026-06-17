@@ -54,3 +54,31 @@ The system follows a standard Layered Architecture pattern specific to NestJS (M
 - **Availability**: Must remain operational during all hospital working hours to support medical continuity.
 - **Security**: Must strictly enforce access controls based on user roles (Admin, Staff, Manager, etc.).
 - **Data Integrity**: Must heavily prevent data loss and reduce duplicate inputs across departments.
+
+---
+
+## Pagination Pattern
+
+All list endpoints follow a unified pagination standard:
+
+- **Query params**: `?page=1&limit=20&search=keyword`
+- **Response envelope**:
+  ```json
+  {
+    "data": [ ...items... ],
+    "meta": {
+      "page": 1,
+      "limit": 20,
+      "total": 42,
+      "totalPages": 3,
+      "hasNextPage": true,
+      "hasPrevPage": false
+    }
+  }
+  ```
+- **Shared utilities** (under `src/common/`):
+  - `dto/pagination.dto.ts` — validated query DTO with `page`, `limit`, `search`
+  - `utils/paginate.util.ts` — `paginate(data, total, page, limit)` helper that builds the meta envelope
+- **Prisma pattern**: use `$transaction([findMany, count])` to fetch data and total count in a single round-trip
+- **Search**: applied as case-insensitive `contains` filter on relevant text fields (e.g. `name`, `code`, `building`)
+- All future list endpoints across all features must follow this pattern.

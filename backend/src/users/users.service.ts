@@ -7,6 +7,9 @@ import { PrismaService } from '../prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { auth } from '../auth/auth';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -53,15 +56,40 @@ export class UsersService {
     return user;
   }
 
-  // ─── Read All ─────────────────────────────────────────────────────────────────
+  // ─── Read All (paginated) ───────────────────────────────────────────────────
 
-  /** Retrieve all active users (not soft-deleted) */
-  async findAll() {
-    return this.prisma.user.findMany({
-      where: { deletedAt: null },
-      omit: { deletedAt: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  /** Retrieve all active users (not soft-deleted), with optional pagination and search */
+  async findAll(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.UserWhereInput = {
+      deletedAt: null,
+      ...(query.search
+        ? {
+            OR: [
+              { userName: { contains: query.search, mode: 'insensitive' } },
+              { firstname: { contains: query.search, mode: 'insensitive' } },
+              { lastname: { contains: query.search, mode: 'insensitive' } },
+              { email: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        omit: { deletedAt: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
   // ─── Read One ─────────────────────────────────────────────────────────────────
