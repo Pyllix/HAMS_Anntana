@@ -1,5 +1,5 @@
 /**
- * Prisma Seed Script — Create initial Admin user
+ * Prisma Seed Script — Create initial Sections and Admin user
  *
  * Run with:
  *   pnpm tsx prisma/seed.ts
@@ -21,6 +21,27 @@ const prisma = new PrismaClient({ adapter });
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
+const sections = [
+  {
+    code: 'IT',
+    name: 'Information Technology',
+    tel: '1234',
+    building: 'Admin Building',
+  },
+  {
+    code: 'OPD',
+    name: 'Outpatient Department',
+    tel: '1100',
+    building: 'Main Building',
+  },
+  {
+    code: 'ICU',
+    name: 'Intensive Care Unit',
+    tel: '1200',
+    building: 'Ward Building',
+  },
+];
+
 const adminUsers = [
   {
     userName: 'admin',
@@ -29,6 +50,7 @@ const adminUsers = [
     email: 'admin@hospital.go.th',
     password: 'Admin@1234',
     role: 'ADMIN' as const,
+    sectionCode: 'IT', // which section this user belongs to
   },
 ];
 
@@ -37,14 +59,36 @@ const adminUsers = [
 async function main() {
   console.log('🌱 Seeding database...\n');
 
+  // ── 1. Sections ─────────────────────────────────────────────────────────────
+  console.log('📂 Seeding sections...');
+  const sectionMap: Record<string, string> = {}; // code -> id
+
+  for (const data of sections) {
+    const section = await prisma.section.upsert({
+      where: { code: data.code },
+      update: { name: data.name, tel: data.tel, building: data.building },
+      create: { ...data },
+    });
+    sectionMap[section.code] = section.id;
+    console.log(`  ✅ Section: [${section.code}] ${section.name}`);
+  }
+
+  // ── 2. Admin Users ──────────────────────────────────────────────────────────
+  console.log('\n👤 Seeding admin users...');
+
   for (const data of adminUsers) {
     const existing = await prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existing) {
-      console.log(`⚠️  User already exists: ${data.email} — skipping`);
+      console.log(`  ⚠️  User already exists: ${data.email} — skipping`);
       continue;
+    }
+
+    const sectionId = sectionMap[data.sectionCode];
+    if (!sectionId) {
+      throw new Error(`Section code "${data.sectionCode}" not found in seeded sections`);
     }
 
     const hashedPassword = await hashPassword(data.password);
@@ -59,6 +103,7 @@ async function main() {
         email: data.email,
         emailVerified: true,
         role: data.role,
+        section_id: sectionId,
         createdAt: new Date(),
         updatedAt: new Date(),
         accounts: {
@@ -74,7 +119,9 @@ async function main() {
       },
     });
 
-    console.log(`✅ Created user: ${data.email} (role: ${data.role})`);
+    console.log(
+      `  ✅ Created user: ${data.email} (role: ${data.role}, section: ${data.sectionCode})`,
+    );
   }
 
   console.log('\n✨ Seeding complete!');
