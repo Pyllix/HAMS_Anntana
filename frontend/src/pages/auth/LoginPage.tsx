@@ -13,16 +13,20 @@ export default function LoginPage() {
         email: "somying.r@hospital.com",
       },
       token: "mock-jwt-token-xyz123",
-      role: "pharmacist",
+      role: "admin",
     })
     navigate("/", { replace: true })
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50">
+    <main className="flex min-h-screen items-center justify-center bg-slate-50">
       <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-2xl font-semibold text-slate-900">เข้าสู่ระบบ</h1>
-        <p className="mb-6 text-slate-600">กดปุ่มด้านล่างเพื่อเข้าสู่ระบบตัวอย่าง</p>
+        <h1 className="mb-6 text-2xl font-semibold text-slate-900">
+          เข้าสู่ระบบ
+        </h1>
+        <p className="mb-6 text-slate-600">
+          กดปุ่มด้านล่างเพื่อเข้าสู่ระบบตัวอย่าง
+        </p>
         <button
           type="button"
           onClick={handleLogin}

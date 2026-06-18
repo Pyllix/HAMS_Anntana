@@ -1,4 +1,10 @@
-export type UserRole = "admin" | "pharmacist" | "nurse" | "doctor" | null
+export type UserRole =
+  | "admin"
+  | "inventory_officer"
+  | "user"
+  | "technician"
+  | "manager"
+  | null
 
 export interface User {
   id: string
@@ -12,7 +18,7 @@ export interface LoginPayload {
   role: UserRole
 }
 
-export  interface AuthState {
+export interface AuthState {
   user: User | null
   token: string | null
   role: UserRole

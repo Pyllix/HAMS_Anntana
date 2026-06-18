@@ -2,12 +2,17 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import ProtectedRoute from "./ProtectedRoute"
 import AppLayout from "@/components/layout/AppLayout"
 import LoginPage from "@/pages/auth/LoginPage"
-import Dashboard from "@/pages/Dashboard"
+import Inventory from "@/pages/Inventory"
+import Maintenance from "@/pages/Maintenance"
+import Track from "@/pages/Track"
+import History from "@/pages/History"
+import ManagePage from "@/pages/Borrow/ManagePage"
+import RequestPage from "@/pages/Borrow/RequestPage"
 
 const router = createBrowserRouter([
   {
     path: "/login",
-    element: <LoginPage />,
+    Component: LoginPage,
   },
   {
     element: <ProtectedRoute />,
@@ -15,16 +20,33 @@ const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: "/", element: <Dashboard /> },
           {
-            element: <ProtectedRoute allowedRoles={["admin", "pharmacist"]} />,
-            children: [
-              { path: "/inventory", element: <div>คลังครุภัณฑ์</div> },
-            ],
+            path: "/",
+            element: <ManagePage />,
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/settings", element: <div>ตั้งค่าระบบ</div> }],
+            children: [{ path: "/2", element: <RequestPage /> }],
+          },
+          {
+            element: <ProtectedRoute allowedRoles={["admin"]} />,
+            children: [{ path: "/inventory", element: <Inventory /> }],
+          },
+          {
+            element: <ProtectedRoute allowedRoles={["admin"]} />,
+            children: [{ path: "/inventory", element: <Inventory /> }],
+          },
+          {
+            element: <ProtectedRoute allowedRoles={["admin"]} />,
+            children: [{ path: "/maintenance", element: <Maintenance /> }],
+          },
+          {
+            element: <ProtectedRoute allowedRoles={["admin"]} />,
+            children: [{ path: "/track", element: <Track /> }],
+          },
+          {
+            element: <ProtectedRoute allowedRoles={["admin"]} />,
+            children: [{ path: "/history", element: <History /> }],
           },
         ],
       },

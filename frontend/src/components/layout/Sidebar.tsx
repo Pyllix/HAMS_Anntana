@@ -1,75 +1,99 @@
 // src/components/Sidebar.tsx
 import {
-  LayoutDashboard,
+  FileCheck,
   Package,
-  ClipboardList,
-  Settings,
-  ChevronRight,
+  Hammer,
+  History,
+  SearchCheck,
+  LogOut,
+  FilePlus,
   type LucideIcon,
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import type { UserRole } from "@/types/user"
+import { useAuthStore } from "@/stores/authStore"
+import { useNavigate } from "react-router-dom"
 
-// 1. กำหนดประเภทของ Role ให้ตรงกับระบบหลัก
-type UserRole = "admin" | "pharmacist" | "nurse" | "doctor" | null
-
-// 2. กำหนดโครงสร้างของแต่ละเมนูใน Sidebar
 interface NavItem {
   label: string
-  icon: LucideIcon // ใช้ Type ของ LucideIcon โดยเฉพาะสำหรับตัวแปรไอคอน
+  icon: LucideIcon
   path: string
-  roles: Exclude<UserRole, null>[] // เอาทกตัวยกเว้น null เพื่อป้องกันการใส่ค่าผิดพลาด
+  roles: Exclude<UserRole, null>[]
 }
 
-// 3. กำหนด Props สำหรับ Component Sidebar
 interface SidebarProps {
   userRole: UserRole
 }
 
 const navItems: NavItem[] = [
   {
-    label: "Dashboard",
-    icon: LayoutDashboard,
+    label: "ยืม - คืนครุภัณฑ์",
+    icon: FileCheck,
     path: "/",
-    roles: ["admin", "pharmacist", "nurse"],
+    roles: ["admin"],
   },
   {
-    label: "คลังครุภัณฑ์",
+    label: "ยืม - คืนครุภัณฑ์",
+    icon: FilePlus,
+    path: "/2",
+    roles: ["admin"],
+  },
+  {
+    label: "จัดการสต็อกครุภัณฑ์",
     icon: Package,
     path: "/inventory",
-    roles: ["admin", "pharmacist"],
+    roles: ["admin"],
   },
   {
-    label: "รายการเบิก",
-    icon: ClipboardList,
-    path: "/requests",
-    roles: ["admin", "pharmacist", "nurse"],
+    label: "แจ้งซ่อมครุภัณฑ์ ",
+    icon: Hammer,
+    path: "/maintenance",
+    roles: ["admin"],
   },
-  { label: "ตั้งค่า", icon: Settings, path: "/settings", roles: ["admin"] },
+  {
+    label: "ติดตามสถานะ",
+    icon: SearchCheck,
+    path: "/track",
+    roles: ["admin"],
+  },
+  {
+    label: "ประวัติการยืม",
+    icon: History,
+    path: "/history",
+    roles: ["admin"],
+  },
 ]
 
 export default function Sidebar({ userRole }: SidebarProps) {
-  // กรองเมนูตามสิทธิ์: ป้องกันบั๊กกรณี userRole เป็น null โดยเช็คเพิ่มก่อนคำสั่ง .includes
+  const { logout } = useAuthStore()
+  const navigate = useNavigate()
+
   const filtered = navItems.filter(
     (item) => userRole && item.roles.includes(userRole as any)
   )
 
+  const handleLogout = () => {
+    logout()
+    navigate("/login", { replace: true })
+  }
+
   return (
-    <aside className="w-64 bg-slate-900 text-white flex min-h-screen flex-col">
+    <aside className="flex min-h-screen w-54 flex-col bg-slate-900 text-white">
       {/* Logo */}
-      <div className="gap-3 px-6 py-5 border-slate-700 flex items-center border-b">
-        <div className="w-8 h-8 rounded-lg bg-blue-500 font-bold text-sm text-white flex items-center justify-center">
+      <div className="flex items-center gap-3 border-b border-slate-700 px-6 py-5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
           H
         </div>
-        <span className="font-semibold text-sm leading-tight">
-          Hospital
+        <span className="text-sm leading-tight font-semibold">
+          ระบบครุภัณฑ์
           <br />
-          <span className="text-slate-400 font-normal">ERP System</span>
+          <span className="font-normal text-slate-400">ERP System</span>
         </span>
       </div>
 
       {/* Nav Items */}
-      <nav className="px-3 py-4 space-y-1 flex-1">
+      <nav className="flex-1 space-y-2 px-3 py-4">
         {filtered.map((item) => (
           <NavLink
             key={item.path}
@@ -77,19 +101,28 @@ export default function Sidebar({ userRole }: SidebarProps) {
             end={item.path === "/"}
             className={({ isActive }) =>
               cn(
-                "gap-3 px-3 py-2.5 rounded-lg text-sm flex items-center transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                 isActive
-                  ? "bg-blue-600 text-white"
+                  ? "bg-emerald-600 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )
             }
           >
             <item.icon size={18} />
             <span className="flex-1">{item.label}</span>
-            <ChevronRight size={14} className="opacity-40" />
           </NavLink>
         ))}
       </nav>
+      {/* Logout Button */}
+      <div className="px-3 py-4">
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          <LogOut size={18} />
+          <span>ออกจากระบบ</span>
+        </button>
+      </div>
     </aside>
   )
 }
