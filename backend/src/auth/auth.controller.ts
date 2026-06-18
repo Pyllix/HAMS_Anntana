@@ -31,7 +31,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Sign in',
-    description: 'Authenticate with email and password — returns a session token',
+    description:
+      'Authenticate with email and password — returns a session token',
   })
   @ApiBody({ type: SignInDto })
   @ApiResponse({
@@ -40,7 +41,11 @@ export class AuthController {
     schema: {
       example: {
         token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        user: { id: 'uuid', email: 'admin@hospital.go.th', name: 'System Admin' },
+        user: {
+          id: 'uuid',
+          email: 'admin@hospital.go.th',
+          name: 'System Admin',
+        },
       },
     },
   })
@@ -49,7 +54,8 @@ export class AuthController {
     // Forward the real request headers so better-auth has full context
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+      if (value)
+        headers.set(key, Array.isArray(value) ? value.join(', ') : value);
     }
 
     const result = await auth.api.signInEmail({
@@ -85,7 +91,8 @@ export class AuthController {
   async signOut(@Req() req: Request) {
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+      if (value)
+        headers.set(key, Array.isArray(value) ? value.join(', ') : value);
     }
 
     await auth.api.signOut({ headers });

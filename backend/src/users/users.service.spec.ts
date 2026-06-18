@@ -273,7 +273,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
       mockPrismaService.user.update.mockResolvedValue(updatedUser);
 
-      const result = await service.update('user-uuid-1', updateDto as any);
+      const result = await service.update('user-uuid-1', updateDto);
 
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
@@ -308,7 +308,9 @@ describe('UsersService', () => {
         where: { id: 'user-uuid-1' },
         data: { deletedAt: expect.any(Date) },
       });
-      expect(result).toEqual({ message: 'User ID: user-uuid-1 successfully deleted' });
+      expect(result).toEqual({
+        message: 'User ID: user-uuid-1 successfully deleted',
+      });
     });
 
     it('should throw NotFoundException when user does not exist or is already deleted', async () => {

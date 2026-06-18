@@ -17,4 +17,4 @@ import { SectionsModule } from './sections/sections.module';
   providers: [PrismaService],
   exports: [PrismaService],
 })
-export class AppModule { }
+export class AppModule {}

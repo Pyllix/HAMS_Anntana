@@ -13,7 +13,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Create ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,9 @@ export class UsersService {
   // ─── Read All (paginated) ───────────────────────────────────────────────────
 
   /** Retrieve all active users (not soft-deleted), with optional pagination and search */
-  async findAll(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findAll(
+    query: PaginationDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;

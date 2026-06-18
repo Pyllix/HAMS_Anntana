@@ -30,14 +30,15 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 @UseGuards(AuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   // ─── Create ────────────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({
     summary: 'Create new User',
-    description: 'Create a new user via better-auth (automatic password hashing) — Admin only',
+    description:
+      'Create a new user via better-auth (automatic password hashing) — Admin only',
   })
   @ApiResponse({ status: 201, description: 'User created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -51,7 +52,8 @@ export class UsersController {
   @Get()
   @ApiOperation({
     summary: 'Get all Users (paginated)',
-    description: 'Retrieve active users with pagination and optional search by name or email',
+    description:
+      'Retrieve active users with pagination and optional search by name or email',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
@@ -79,7 +81,8 @@ export class UsersController {
   @Patch(':id')
   @ApiOperation({
     summary: 'Update User',
-    description: 'Update user data excluding email and password (use better-auth for those)',
+    description:
+      'Update user data excluding email and password (use better-auth for those)',
   })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
@@ -95,10 +98,14 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Soft Delete User',
-    description: 'Soft delete user (sets deletedAt to now) — actual record is not removed',
+    description:
+      'Soft delete user (sets deletedAt to now) — actual record is not removed',
   })
   @ApiParam({ name: 'id', description: 'User ID' })
-  @ApiResponse({ status: 200, description: 'User deleted successfully (soft delete)' })
+  @ApiResponse({
+    status: 200,
+    description: 'User deleted successfully (soft delete)',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   remove(@Param('id') id: string) {

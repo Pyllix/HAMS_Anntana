@@ -23,11 +23,18 @@ export class CreateUserDto {
   @IsString()
   lastname: string;
 
-  @ApiProperty({ example: 'john.doe@hospital.go.th', description: 'Unique email address' })
+  @ApiProperty({
+    example: 'john.doe@hospital.go.th',
+    description: 'Unique email address',
+  })
   @IsEmail()
   email: string;
 
-  @ApiProperty({ example: 'P@ssword123', description: 'Password (minimum 8 characters)', minLength: 8 })
+  @ApiProperty({
+    example: 'P@ssword123',
+    description: 'Password (minimum 8 characters)',
+    minLength: 8,
+  })
   @IsString()
   @MinLength(8)
   password: string;
@@ -42,12 +49,18 @@ export class CreateUserDto {
   @IsOptional()
   role?: UserRole = UserRole.DEPARTMENT_STAFF;
 
-  @ApiPropertyOptional({ example: 'https://example.com/avatar.png', description: 'Profile image URL' })
+  @ApiPropertyOptional({
+    example: 'https://example.com/avatar.png',
+    description: 'Profile image URL',
+  })
   @IsUrl()
   @IsOptional()
   imageUrl?: string;
 
-  @ApiPropertyOptional({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'Section ID' })
+  @ApiPropertyOptional({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Section ID',
+  })
   @IsUUID()
   @IsOptional()
   sectionId: string;

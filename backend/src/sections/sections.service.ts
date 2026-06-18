@@ -1,15 +1,19 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class SectionsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Create ──────────────────────────────────────────────────────────────────
 
-  // Create a new section 
+  // Create a new section
   async create(dto: CreateSectionDto) {
     // Check if section code already exists
     const existingSection = await this.prisma.section.findUnique({
@@ -57,23 +61,23 @@ export class SectionsService {
     return section;
   }
 
-  //Update Section 
+  //Update Section
   async update(id: string, dto: UpdateSectionDto) {
-    await this.findOne(id)
+    await this.findOne(id);
 
     return this.prisma.section.update({
       where: { id },
       data: dto,
-      omit: { deletedAt: true }
-    })
+      omit: { deletedAt: true },
+    });
   }
 
   // Soft Delete Section
   async remove(id: string) {
-    await this.findOne(id)
+    await this.findOne(id);
     return this.prisma.section.update({
       where: { id },
-      data: { deletedAt: new Date() }
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -81,7 +85,7 @@ export class SectionsService {
   async restore(id: string) {
     const section = await this.prisma.section.findFirst({
       where: { id, deletedAt: { not: null } },
-    })
+    });
 
     if (!section) {
       throw new NotFoundException(
@@ -92,6 +96,6 @@ export class SectionsService {
       where: { id },
       data: { deletedAt: null },
       omit: { deletedAt: true },
-    })
+    });
   }
 }
