@@ -9,4 +9,3 @@ enum UserRole {
   DEPARTMENT_STAFF
   MAINTENANCE_STAFF
 }
-

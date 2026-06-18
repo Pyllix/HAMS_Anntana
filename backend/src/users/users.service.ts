@@ -49,6 +49,7 @@ export class UsersService {
         lastname: dto.lastname,
         role: dto.role ?? 'DEPARTMENT_STAFF',
         imageUrl: dto.imageUrl,
+        section_id: dto.sectionId,
       },
       omit: { deletedAt: true },
     });
