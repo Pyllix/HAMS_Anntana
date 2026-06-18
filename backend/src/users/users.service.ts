@@ -13,7 +13,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ─── Create ──────────────────────────────────────────────────────────────────
 
@@ -71,13 +71,13 @@ export class UsersService {
       deletedAt: null,
       ...(query.search
         ? {
-            OR: [
-              { userName: { contains: query.search, mode: 'insensitive' } },
-              { firstname: { contains: query.search, mode: 'insensitive' } },
-              { lastname: { contains: query.search, mode: 'insensitive' } },
-              { email: { contains: query.search, mode: 'insensitive' } },
-            ],
-          }
+          OR: [
+            { userName: { contains: query.search, mode: 'insensitive' } },
+            { firstname: { contains: query.search, mode: 'insensitive' } },
+            { lastname: { contains: query.search, mode: 'insensitive' } },
+            { email: { contains: query.search, mode: 'insensitive' } },
+          ],
+        }
         : {}),
     };
 
@@ -117,9 +117,14 @@ export class UsersService {
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id); // throws NotFoundException if not found
 
+    const { sectionId, ...rest } = dto;
+
     return this.prisma.user.update({
       where: { id },
-      data: dto,
+      data: {
+        ...rest,
+        ...(sectionId !== undefined && { section_id: sectionId }),
+      },
       omit: { deletedAt: true },
     });
   }

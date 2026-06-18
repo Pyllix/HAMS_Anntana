@@ -58,7 +58,7 @@ export class CreateUserDto {
   imageUrl?: string;
 
   @ApiPropertyOptional({
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    example: '94037db6-e299-49de-98a1-bfc82a9f5ecb',
     description: 'Section ID',
   })
   @IsUUID()
