@@ -1,0 +1,11 @@
+// This file defines the UserRole enum for the Prisma schema.
+
+// The UserRole enum defines the different roles that a user can have in the system, such as ADMIN, MANAGER, PARCEL_STAFF, ASSET_CENTER_STAFF, DEPARTMENT_STAFF, and MAINTENANCE_STAFF. This enum is used in the User model to specify the role of each user.
+enum UserRole {
+  ADMIN
+  MANAGER
+  PARCEL_STAFF
+  ASSET_CENTER_STAFF
+  DEPARTMENT_STAFF
+  MAINTENANCE_STAFF
+}

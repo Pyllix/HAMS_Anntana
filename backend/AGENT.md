@@ -135,6 +135,72 @@ src/
 
 ---
 
+## Pagination
+
+All list endpoints **must** use the shared pagination utilities in `src/common/`.
+
+### Query Parameters
+| Param    | Type     | Default | Constraint    | Description                        |
+|----------|----------|---------|---------------|------------------------------------|
+| `page`   | `number` | `1`     | min 1         | Page number (1-based)              |
+| `limit`  | `number` | `20`    | min 1, max 100| Items per page                     |
+| `search` | `string` | —       | optional      | Keyword filter (case-insensitive)  |
+
+### Response Shape
+Every paginated endpoint returns:
+```json
+{
+  "data": [ ...items... ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 42,
+    "totalPages": 3,
+    "hasNextPage": true,
+    "hasPrevPage": false
+  }
+}
+```
+
+### Shared Files
+| File | Purpose |
+|------|---------|
+| `src/common/dto/pagination.dto.ts` | Validated query DTO (`page`, `limit`, `search`) |
+| `src/common/utils/paginate.util.ts` | `paginate(data, total, page, limit)` helper |
+
+### Implementation Pattern
+```ts
+// service
+async findAll(query: PaginationDto): Promise<PaginatedResult<T>> {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
+  const skip = (page - 1) * limit;
+
+  const where = { deletedAt: null, /* optional search filter */ };
+
+  const [data, total] = await this.prisma.$transaction([
+    this.prisma.model.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    this.prisma.model.count({ where }),
+  ]);
+
+  return paginate(data, total, page, limit);
+}
+
+// controller
+@Get()
+findAll(@Query() query: PaginationDto) {
+  return this.service.findAll(query);
+}
+```
+
+### Rules
+- Always use `$transaction([findMany, count])` to get data and total in one round-trip
+- Never return raw arrays from list endpoints — always wrap with `paginate()`
+- Use `@ApiQuery` on controller for each param to document in Swagger
+- Add `search` filter with `{ contains: ..., mode: 'insensitive' }` on relevant text fields
+
+---
+
 ## Testing
 
 - **Unit tests**: one `.spec.ts` per service file, placed beside the source file

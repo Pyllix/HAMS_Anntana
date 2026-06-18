@@ -1,36 +1,28 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
-generator client {
-  provider = "prisma-client-js"
-}
-datasource db {
-  provider = "postgresql"
-}
-
-model Test {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-}
+// This file defines the User model and related models for authentication in the Prisma schema.
 
 model User {
   id            String    @id
-  name          String
-  email         String    @unique
+  userName      String    @default("") @map("user_name") @db.VarChar(50)
+  firstname     String    @default("") @map("first_name") @db.VarChar(100)
+  lastname      String    @default("") @map("last_name") @db.VarChar(100)
+  email         String    @unique @db.VarChar(100)
   emailVerified Boolean
-  image         String?
+  imageUrl      String?
+  section_id    String?   @map("section_id")
+  role          UserRole  @default(DEPARTMENT_STAFF)
   createdAt     DateTime
   updatedAt     DateTime
-  role          String?
+  deletedAt     DateTime? @map("deleted_at")
 
-  sessions      Session[]
-  accounts      Account[]
+  //Auth relations
+  sessions Session[]
+  accounts Account[]
+  section  Section?  @relation(fields: [section_id], references: [id])
 
   @@map("users")
 }
 
+// This model is used for managing user sessions, including session tokens and expiration times.
 model Session {
   id        String   @id
   expiresAt DateTime
@@ -45,6 +37,7 @@ model Session {
   @@map("sessions")
 }
 
+// This model is used for third-party authentication providers (e.g., Google, Facebook) and also for email/password authentication.
 model Account {
   id                    String    @id
   accountId             String
@@ -64,6 +57,7 @@ model Account {
   @@map("accounts")
 }
 
+// This model is used for email verification and password reset tokens.
 model Verification {
   id         String    @id
   identifier String

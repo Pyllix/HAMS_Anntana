@@ -71,6 +71,10 @@ pnpm run test:debug
 
 # Run end-to-end tests
 pnpm run test:e2e
+
+# API Reference Test
+- localhost:3000/reference
+
 ```
 
 ## Project Structure
