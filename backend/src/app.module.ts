@@ -6,6 +6,7 @@ import { AuthFeatureModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { SectionsModule } from './sections/sections.module';
 import { CompanyModule } from './company/company.module';
+import { AssetTypeModule } from './asset-type/asset-type.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CompanyModule } from './company/company.module';
     UsersModule,
     SectionsModule,
     CompanyModule,
+    AssetTypeModule,
   ],
   controllers: [],
   providers: [PrismaService],
