@@ -7,6 +7,8 @@ import { UsersModule } from './users/users.module';
 import { SectionsModule } from './sections/sections.module';
 import { CompanyModule } from './company/company.module';
 import { AssetTypeModule } from './asset-type/asset-type.module';
+import { AssetStatusModule } from './asset-status/asset-status.module';
+import { AvailabilitiesModule } from './availabilities/availabilities.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { AssetTypeModule } from './asset-type/asset-type.module';
     SectionsModule,
     CompanyModule,
     AssetTypeModule,
+    AssetStatusModule,
+    AvailabilitiesModule,
   ],
   controllers: [],
   providers: [PrismaService],
