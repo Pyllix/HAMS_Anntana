@@ -15,7 +15,8 @@ model Company {
     updatedAt DateTime  @updatedAt @map("updated_at")
     deletedAt DateTime? @map("deleted_at")
 
-    //   assets Asset[]
+    //relations
+    assets Asset[]
 
     @@map("company")
 }

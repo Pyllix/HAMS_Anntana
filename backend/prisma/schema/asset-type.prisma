@@ -8,5 +8,8 @@ model AssetType {
     updatedAt   DateTime  @updatedAt @map("updated_at")
     deletedAt   DateTime? @map("deleted_at")
 
+    //relations
+    asset Asset[]
+
     @@map("asset_type")
 }

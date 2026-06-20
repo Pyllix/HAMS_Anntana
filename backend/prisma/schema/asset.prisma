@@ -1,0 +1,35 @@
+model Asset {
+    id                   String    @id @default(uuid()) @map("asset_id")
+    name                 String    @map("asset_name") @db.VarChar(100)
+    model                String    @map("asset_model") @db.VarChar(100)
+    serialNo             String?   @map("serial_no") @db.VarChar(100)
+    gmdn                 String?   @map("gmdn") @db.VarChar(100)
+    price                Decimal   @map("price") @db.Decimal(10, 2)
+    disposalApprovedDate DateTime? @map("disposal_approved_at")
+    warrantyDate         DateTime? @map("warranty_date")
+    riskLevel            Int       @map("risk_level") @db.SmallInt
+    isMedicalDevice      Boolean   @default(false) @map("is_medical_device")
+    remark               String?   @db.Text
+    imageUrl             String?   @map("image_url") @db.Text
+    receivedDate         DateTime  @map("received_date")
+
+    //relations
+    section_id             String @map("section_id")
+    company_id             String @map("company_id")
+    asset_type_id          Int    @map("asset_type_id")
+    asset_status_id        Int    @map("asset_status_id")
+    availability_status_id Int    @map("availability_status_id")
+
+    sections            Section[]
+    company             Company[]
+    type                AssetType[]
+    status              AssetStatus[]
+    availability_status AvailabilityStatus[]
+
+    createdAt DateTime @default(now()) @map("created_at")
+    createdBy String   @map("created_by")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    updatedBy String   @map("updated_by")
+
+    @@map("asset")
+}
