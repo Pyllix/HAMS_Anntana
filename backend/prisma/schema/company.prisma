@@ -1,22 +1,22 @@
 // company model
 
 model Company {
-    id      String @id @default(uuid()) @map("company_id")
-    code    String @unique @default("") @map("company_code") @db.VarChar(20)
-    name    String @default("") @map("name") @db.VarChar(255)
-    tel     String @default("") @map("tel") @db.VarChar(20)
-    email   String @default("") @map("email") @db.VarChar(255)
-    address String @default("") @map("address") @db.VarChar(255)
-    fax     String @default("") @map("fax") @db.VarChar(20)
-    group   String @default("") @map("group") @db.VarChar(20)
-    remark  String @default("") @map("remark") @db.Text
+  id      String @id @default(uuid()) @map("company_id")
+  code    String @unique @default("") @map("company_code") @db.VarChar(20)
+  name    String @default("") @map("name") @db.VarChar(255)
+  tel     String @default("") @map("tel") @db.VarChar(20)
+  email   String @default("") @map("email") @db.VarChar(255)
+  address String @default("") @map("address") @db.VarChar(255)
+  fax     String @default("") @map("fax") @db.VarChar(20)
+  group   String @default("") @map("group") @db.VarChar(20)
+  remark  String @default("") @map("remark") @db.Text
 
-    createdAt DateTime  @default(now()) @map("created_at")
-    updatedAt DateTime  @updatedAt @map("updated_at")
-    deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
-    //relations
-    assets Asset[]
+  //relations
+  assets Asset[]
 
-    @@map("company")
+  @@map("company")
 }

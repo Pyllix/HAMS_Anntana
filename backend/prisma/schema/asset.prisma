@@ -19,6 +19,8 @@ model Asset {
     asset_type_id          Int    @map("asset_type_id")
     asset_status_id        Int    @map("asset_status_id")
     availability_status_id Int    @map("availability_status_id")
+    creator                User   @relation("CreatedBy", fields: [createdBy], references: [id])
+    updater                User   @relation("UpdatedBy", fields: [updatedBy], references: [id])
 
     sections            Section[]
     company             Company[]

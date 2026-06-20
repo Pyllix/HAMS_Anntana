@@ -15,9 +15,11 @@ model User {
   deletedAt     DateTime? @map("deleted_at")
 
   //Auth relations
-  sessions Session[]
-  accounts Account[]
-  section  Section?  @relation(fields: [section_id], references: [id])
+  sessions      Session[]
+  accounts      Account[]
+  section       Section?  @relation(fields: [section_id], references: [id])
+  createdAssets Asset[]   @relation("CreatedBy")
+  updatedAssets Asset[]   @relation("UpdatedBy")
 
   @@map("users")
 }
