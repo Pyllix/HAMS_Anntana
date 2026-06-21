@@ -1,5 +1,5 @@
 import type { AssetCategory } from "@/types/common"
-import type { StockAsset } from "@/types/stock"
+import type { StockAsset } from "@/types/StockType"
 
 export const STOCK_CATEGORIES: AssetCategory[] = [
   { code: "01", name: "ครุภัณฑ์วิทยาศาสตร์และการแพทย์" },
