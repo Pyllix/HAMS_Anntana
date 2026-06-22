@@ -3,6 +3,7 @@ import type { StockAsset } from "@/types/StockType"
 
 interface Props {
   assets: StockAsset[]
+  onViewDetail: (asset: StockAsset) => void
 }
 
 const COLUMNS = [
@@ -14,7 +15,7 @@ const COLUMNS = [
   "จัดการ",
 ]
 
-export function StockTable({ assets }: Props) {
+export function StockTable({ assets, onViewDetail }: Props) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -76,8 +77,10 @@ export function StockTable({ assets }: Props) {
 
                 {/* จัดการ */}
                 <td className="px-5 py-3">
-                  {/* TODO: ต่อ router ไปหน้า /inventory/:id */}
-                  <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">
+                  <button
+                    onClick={() => onViewDetail(asset)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                  >
                     รายละเอียด
                   </button>
                 </td>
