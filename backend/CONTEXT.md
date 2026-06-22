@@ -4,7 +4,10 @@
 The Hospital Asset & Maintenance System (HAMS) is a centralized web application designed to manage hospital assets and maintenance workflows. It serves as a single source of truth to minimize data redundancy, track assets in real-time, and streamline processes ranging from borrowing equipment to tracking spare parts and repairs.
 
 ## Business Domain
-- **Asset (ครุภัณฑ์)**: Physical equipment or property owned by the hospital managed within the system.
+- **Asset (ครุภัณฑ์)**: Physical equipment or property owned by the hospital managed within the system. Asset records are **never deleted** — lifecycle changes are handled by updating `asset_status_id` to statuses such as Lost or Disposal.
+- **AssetStatus (สถานะครุภัณฑ์)**: Lookup table driving all asset lifecycle states (e.g. In Use, Lost, Pending Disposal, Disposed). Shared by both `Asset` and `AssetDisposal` models.
+- **AssetLost (ประวัติการสูญหาย)**: History record capturing details each time an asset is reported lost (date discovered, last seen location, reason).
+- **AssetDisposal (ประวัติการจำหน่าย)**: History record tracking the two-phase disposal workflow — Pending Disposal → Disposed.
 - **Department (หน่วยงาน / แผนก)**: Internal hospital units or wards where assets are stationed or utilized.
 - **Spare Part (อะไหล่)**: Inventory items and parts used specifically for the repair and maintenance of assets.
 - **Maintenance Ticket (ใบแจ้งซ่อม / งานซ่อม)**: A documented request generated when an asset requires repair or scheduled maintenance.
@@ -82,3 +85,35 @@ All list endpoints follow a unified pagination standard:
 - **Prisma pattern**: use `$transaction([findMany, count])` to fetch data and total count in a single round-trip
 - **Search**: applied as case-insensitive `contains` filter on relevant text fields (e.g. `name`, `code`, `building`)
 - All future list endpoints across all features must follow this pattern.
+
+---
+
+## Asset Lifecycle Pattern
+
+Asset records use **status-based lifecycle management** — no soft delete.
+
+- **No `deletedAt`** on the `Asset` model.
+- Asset state changes are performed by updating `asset_status_id` (FK → `AssetStatus` table).
+- Key statuses include: `IN_USE`, `LOST`, `PENDING_DISPOSAL`, `DISPOSED` (seeded as rows in `asset_status`).
+- `AssetStatus` is also reused as `disposal_status_id` in `AssetDisposal` to avoid a separate enum.
+
+### History Tables
+
+| Table | Purpose | Trigger |
+|---|---|---|
+| `asset_lost` | Records each lost event (date, location, reason) | When status → Lost |
+| `asset_disposal` | Tracks two-phase disposal (Pending → Disposed) | When status → Pending Disposal / Disposed |
+
+### Disposal Workflow (2-phase)
+
+```
+POST  /asset/:id/disposal        → create AssetDisposal (disposal_status = PENDING_DISPOSAL) + pendingReason
+PATCH /asset/:id/disposal/:id    → update to DISPOSED + disposalReason + remark + disposedAt
+```
+
+### Endpoint: Change Asset Status
+
+```
+PATCH /asset/:id/status
+Body: { asset_status_id: number }
+```
