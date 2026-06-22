@@ -1,17 +1,13 @@
-export type AssetStatus = "ทั้งหมด" | "ว่าง" | "กำลังยืม" | "ส่งซ่อม"
-export type AssetType =
-  | "ทั้งหมด"
-  | "01-ครุภัณฑ์วิทยาศาสตร์และการแพทย์"
-  | "06-ครุภัณฑ์โฆษณาและเผยแพร่"
-  | "07-ครุภัณฑ์ยานพาหนะและขนส่ง"
+export type BorrowAssetStatus = "ว่าง" | "กำลังยืม" | "ส่งซ่อม"
+export type BorrowStatusFilter = "ทั้งหมด" | BorrowAssetStatus
 
 export interface Asset {
   id: string
   name: string
-  type: AssetType
+  categoryCode: string
   borrower: string
   borrowDate: string
-  status: AssetStatus
+  status: BorrowAssetStatus
   image: string
 }
 
