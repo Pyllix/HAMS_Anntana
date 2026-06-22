@@ -67,7 +67,7 @@ export class CreateAssetDto {
     warrantyDate?: string;
 
     @ApiProperty({
-        example: '1',
+        example: 1,
         description: 'ระดับความเสี่ยง',
     })
     @IsInt()
@@ -75,7 +75,7 @@ export class CreateAssetDto {
     riskLevel: number;
 
     @ApiProperty({
-        example: 'true',
+        example: true,
         description: 'เป็นเครื่องมือแพทย์หรือไม่',
     })
     @IsBoolean()
@@ -123,7 +123,7 @@ export class CreateAssetDto {
     company_id: string;
 
     @ApiProperty({
-        example: '1',
+        example: 1,
         description: 'รหัสประเภทครุภัณฑ์',
     })
     @IsInt()
@@ -131,7 +131,7 @@ export class CreateAssetDto {
     asset_type_id: number;
 
     @ApiProperty({
-        example: '1',
+        example: 1,
         description: 'รหัสสถานะครุภัณฑ์',
     })
     @IsInt()
@@ -139,7 +139,7 @@ export class CreateAssetDto {
     asset_status_id: number;
 
     @ApiProperty({
-        example: '1',
+        example: 1,
         description: 'รหัสสถานะความพร้อมใช้งาน',
     })
     @IsInt()

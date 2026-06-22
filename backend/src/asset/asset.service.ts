@@ -9,23 +9,36 @@ import { PrismaService } from 'src/prisma.service';
 
 /** Include block ที่ใช้ซ้ำทุก asset query */
 const ASSET_INCLUDE = {
-  status: true,
-  availabilityStatus: true,
-  type: true,
-  section: true,
-  company: true,
+  status: { select: { id: true, code: true, name: true } },
+  availabilityStatus: { select: { id: true, code: true, name: true } },
+  type: { select: { id: true, name: true } },
+  section: { select: { id: true, code: true, name: true, building: true } },
+  company: { select: { id: true, name: true } },
 } as const;
+
+/**
+ * แปลง date string “2022-01-01” → Date object สำหรับทุก DateTime field ของ Asset
+ * Prisma ต้องการ Date object หรือ ISO-8601 แบบเต็ม — date-only string จะล้ม (premature end of input)
+ */
+function toAssetDates(dto: Record<string, any>) {
+  return {
+    ...dto,
+    receivedDate: dto.receivedDate ? new Date(dto.receivedDate) : undefined,
+    warrantyDate: dto.warrantyDate ? new Date(dto.warrantyDate) : undefined,
+    disposalApprovedDate: dto.disposalApprovedDate ? new Date(dto.disposalApprovedDate) : undefined,
+  };
+}
 
 @Injectable()
 export class AssetService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ─── Asset CRUD ───────────────────────────────────────────────────────────
 
   async create(createAssetDto: CreateAssetDto, userId: string) {
     const { createdBy: _ignore, ...dto } = createAssetDto as any;
     return this.prisma.asset.create({
-      data: { ...dto, createdBy: userId, updatedBy: userId },
+      data: { ...toAssetDates(dto), createdBy: userId, updatedBy: userId } as any,
       include: ASSET_INCLUDE,
     });
   }
@@ -48,7 +61,7 @@ export class AssetService {
     const { createdBy: _ignore, ...dto } = updateAssetDto as any;
     return this.prisma.asset.update({
       where: { id },
-      data: { ...dto, updatedBy: userId },
+      data: { ...toAssetDates(dto), updatedBy: userId } as any,
       include: ASSET_INCLUDE,
     });
   }
