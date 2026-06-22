@@ -7,8 +7,10 @@ model AssetStatus {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
-  //relations
-  asset     Asset[]
+  //relations (One-to-Many: AssetStatus มีได้หลาย Asset)
+  assets          Asset[]
+  // AssetDisposal ใช้ AssetStatus เพื่อบอกสถานะการจำหน่าย (รอจำหน่าย, จำหน่ายแล้ว)
+  disposalRecords AssetDisposal[] @relation("DisposalStatus")
 
   @@map("asset_status")
 }
@@ -20,8 +22,8 @@ model AvailabilityStatus {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
-  //relations
-  asset     Asset[]
+  //relations (One-to-Many: AvailabilityStatus มีได้หลาย Asset)
+  assets    Asset[]
 
   @@map("availability_status")
 }

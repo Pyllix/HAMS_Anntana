@@ -21,6 +21,12 @@ model User {
   createdAssets Asset[]   @relation("CreatedBy")
   updatedAssets Asset[]   @relation("UpdatedBy")
 
+  //Asset history relations
+  createdLostRecords     AssetLost[]     @relation("LostCreatedBy")
+  updatedLostRecords     AssetLost[]     @relation("LostUpdatedBy")
+  createdDisposalRecords AssetDisposal[] @relation("DisposalCreatedBy")
+  updatedDisposalRecords AssetDisposal[] @relation("DisposalUpdatedBy")
+
   @@map("users")
 }
 

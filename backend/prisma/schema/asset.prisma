@@ -5,7 +5,7 @@ model Asset {
     serialNo             String?   @map("serial_no") @db.VarChar(100)
     gmdn                 String?   @map("gmdn") @db.VarChar(100)
     price                Decimal   @map("price") @db.Decimal(10, 2)
-    disposalApprovedDate DateTime? @map("disposal_approved_at")
+    disposalApprovedDate DateTime? @map("disposal_approved_at") // @deprecated: ใช้ AssetDisposal.disposedAt แทน
     warrantyDate         DateTime? @map("warranty_date")
     riskLevel            Int       @map("risk_level") @db.SmallInt
     isMedicalDevice      Boolean   @default(false) @map("is_medical_device")
@@ -13,25 +13,33 @@ model Asset {
     imageUrl             String?   @map("image_url") @db.Text
     receivedDate         DateTime  @map("received_date")
 
-    //relations
+    // ไม่มี deletedAt — Asset ไม่ใช้ soft delete
+    // การ "ลบ" คือการเปลี่ยนสถานะผ่าน asset_status_id (เช่น Lost, Disposal)
+
+    //relations (FK scalars)
     section_id             String @map("section_id")
     company_id             String @map("company_id")
     asset_type_id          Int    @map("asset_type_id")
     asset_status_id        Int    @map("asset_status_id")
     availability_status_id Int    @map("availability_status_id")
-    creator                User   @relation("CreatedBy", fields: [createdBy], references: [id])
-    updater                User   @relation("UpdatedBy", fields: [updatedBy], references: [id])
+    createdBy              String @map("created_by")
+    updatedBy              String @map("updated_by")
 
-    sections            Section[]
-    company             Company[]
-    type                AssetType[]
-    status              AssetStatus[]
-    availability_status AvailabilityStatus[]
+    //relation objects (Many-to-One)
+    section             Section            @relation(fields: [section_id], references: [id])
+    company             Company            @relation(fields: [company_id], references: [id])
+    type                AssetType          @relation(fields: [asset_type_id], references: [id])
+    status              AssetStatus        @relation(fields: [asset_status_id], references: [id])
+    availabilityStatus  AvailabilityStatus @relation(fields: [availability_status_id], references: [id])
+    creator             User               @relation("CreatedBy", fields: [createdBy], references: [id])
+    updater             User               @relation("UpdatedBy", fields: [updatedBy], references: [id])
+
+    // One-to-Many history records
+    lostRecords     AssetLost[]
+    disposalRecords AssetDisposal[]
 
     createdAt DateTime @default(now()) @map("created_at")
-    createdBy String   @map("created_by")
     updatedAt DateTime @updatedAt @map("updated_at")
-    updatedBy String   @map("updated_by")
 
     @@map("asset")
 }

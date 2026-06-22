@@ -145,12 +145,4 @@ export class CreateAssetDto {
     @IsInt()
     @IsNotEmpty()
     availability_status_id: number;
-
-    @ApiProperty({
-        example: '60d0b594-553d-4f2f-9efa-ffb926cd5dba',
-        description: 'รหัสผู้สร้าง',
-    })
-    @IsString()
-    @IsNotEmpty()
-    createdBy: string;
 }
