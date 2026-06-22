@@ -80,7 +80,7 @@ export function ManageReturnDialog({
           </button>
         </div>
 
-        {/* สรุปข้อมูลครุภัณฑ์ (เปลี่ยนมาใช้ Lucide Icon) */}
+       
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-slate-100 bg-[#f8fafc] p-3.5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm">
             {getAssetIcon(asset.id)}
@@ -144,7 +144,7 @@ export function ManageReturnDialog({
             </div>
           </div>
 
-          {/* ช่องวันที่/เวลาที่ล็อก (เปลี่ยนมาใช้ Lucide Icon) */}
+  
           <div>
             <label className="mb-1.5 block text-xs font-bold text-slate-700">
               วันที่และเวลาที่รับคืน <span className="text-rose-500">*</span>
