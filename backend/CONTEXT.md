@@ -88,27 +88,42 @@ All list endpoints follow a unified pagination standard:
 
 ---
 
-## Asset Lifecycle Pattern
+## Asset Lifecycle Pattern & Status Transition Rules
 
 Asset records use **status-based lifecycle management** — no soft delete.
 
 - **No `deletedAt`** on the `Asset` model.
 - Asset state changes are performed by updating `asset_status_id` (FK → `AssetStatus` table).
-- Key statuses include: `IN_USE`, `LOST`, `PENDING_DISPOSAL`, `DISPOSED` (seeded as rows in `asset_status`).
 - `AssetStatus` is also reused as `disposal_status_id` in `AssetDisposal` to avoid a separate enum.
+
+### Asset Status & Initial State
+- **Initial State**: `NORMAL` (เมื่อลงทะเบียนครุภัณฑ์ใหม่เข้าระบบ)
+- **Available Statuses**: `NORMAL` (ปกติ), `DAMAGED` (ชำรุด), `UNDER_REPAIR` (อยู่ระหว่างซ่อม), `WAIT_DISPOSAL` (รอจำหน่าย), `DISPOSAL` (จำหน่ายแล้ว), `LOST` (สูญหาย)
+
+### Status Transition Rules
+- **แจ้งชำรุด (Report Damage)**: `NORMAL` → `DAMAGED` (เกิดจากแจ้งชำรุดขณะคืน, เจ้าหน้าที่แจ้ง, หรือระบบแจ้งซ่อม)
+- **ส่งซ่อม (Send to Repair)**: `DAMAGED` → `UNDER_REPAIR`
+- **ซ่อมเสร็จ (Repair Complete)**: `UNDER_REPAIR` → `NORMAL`
+- **รอจำหน่าย (Pending Disposal)**: `NORMAL`, `DAMAGED`, `UNDER_REPAIR` → `WAIT_DISPOSAL`
+- **จำหน่ายเสร็จสิ้น (Disposed)**: `WAIT_DISPOSAL` → `DISPOSAL` (ต้องระบุเหตุผล เช่น เสียหาย, เสื่อมตามอายุการใช้งาน, บริจาค, หรืออื่นๆ)
+- **สูญหาย (Lost)**: `NORMAL`, `DAMAGED`, `UNDER_REPAIR` → `LOST` (ต้องบันทึกรายละเอียดการสูญหาย)
+
+### Terminal States
+- **`DISPOSAL`** และ **`LOST`** ถือเป็นสถานะสิ้นสุด (Terminal States) 
+- ไม่สามารถเปลี่ยนกลับเป็นสถานะอื่นได้ผ่านระบบปกติ (ยกเว้นผู้ดูแลระบบ Admin ดำเนินการแก้ไขข้อมูลพร้อมบันทึก Audit Log)
 
 ### History Tables
 
 | Table | Purpose | Trigger |
 |---|---|---|
-| `asset_lost` | Records each lost event (date, location, reason) | When status → Lost |
-| `asset_disposal` | Tracks two-phase disposal (Pending → Disposed) | When status → Pending Disposal / Disposed |
+| `asset_lost` | Records each lost event (date, location, reason) | When status → `LOST` |
+| `asset_disposal` | Tracks two-phase disposal (Pending → Disposed) | When status → `WAIT_DISPOSAL` / `DISPOSAL` |
 
 ### Disposal Workflow (2-phase)
 
 ```
-POST  /asset/:id/disposal        → create AssetDisposal (disposal_status = PENDING_DISPOSAL) + pendingReason
-PATCH /asset/:id/disposal/:id    → update to DISPOSED + disposalReason + remark + disposedAt
+POST  /asset/:id/disposal        → create AssetDisposal (disposal_status = WAIT_DISPOSAL) + pendingReason
+PATCH /asset/:id/disposal/:id    → update to DISPOSAL + disposalReason + remark + disposedAt
 ```
 
 ### Endpoint: Change Asset Status
