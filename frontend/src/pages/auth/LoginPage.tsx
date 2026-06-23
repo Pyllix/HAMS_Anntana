@@ -1,9 +1,11 @@
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuthStore } from "@/stores/authStore"
 
 export default function LoginPage() {
   const login = useAuthStore((state) => state.login)
   const navigate = useNavigate()
+  const [selectedRole, setSelectedRole] = useState<"admin" | "inventory_officer" | "user" | "technician" | "manager">("admin")
 
   function handleLogin() {
     login({
@@ -13,7 +15,7 @@ export default function LoginPage() {
         email: "somying.r@hospital.com",
       },
       token: "mock-jwt-token-xyz123",
-      role: "admin",
+      role: selectedRole,
     })
     navigate("/", { replace: true })
   }
@@ -27,6 +29,22 @@ export default function LoginPage() {
         <p className="mb-6 text-slate-600">
           กดปุ่มด้านล่างเพื่อเข้าสู่ระบบตัวอย่าง
         </p>
+        <div className="mb-6 space-y-2">
+          <label className="block text-sm font-medium text-slate-700 mb-3">เลือก Role:</label>
+          {(["admin", "inventory_officer", "user", "technician", "manager"] as const).map((role) => (
+            <label key={role} className="flex items-center">
+              <input
+                type="radio"
+                name="role"
+                value={role}
+                checked={selectedRole === role}
+                onChange={(e) => setSelectedRole(e.target.value as typeof selectedRole)}
+                className="mr-2"
+              />
+              <span className="text-sm text-slate-700">{role}</span>
+            </label>
+          ))}
+        </div>
         <button
           type="button"
           onClick={handleLogin}

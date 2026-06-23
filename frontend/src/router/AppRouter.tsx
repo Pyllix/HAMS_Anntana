@@ -2,12 +2,12 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import ProtectedRoute from "./ProtectedRoute"
 import AppLayout from "@/components/layout/AppLayout"
 import LoginPage from "@/pages/auth/LoginPage"
-import Inventory from "@/pages/Inventory"
+import StockPage from "@/pages/Inventory/StockPage"
 import Maintenance from "@/pages/Maintenance"
 import Track from "@/pages/Track"
 import History from "@/pages/History"
 import ManagePage from "@/pages/Borrow/ManagePage"
-import RequestPage from "@/pages/Borrow/RequestPage"
+import EquipmentBorrowPage from "@/pages/EquipmentBorrow/EquipmentBorrowPage"
 
 const router = createBrowserRouter([
   {
@@ -26,15 +26,15 @@ const router = createBrowserRouter([
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/2", element: <RequestPage /> }],
+            children: [{ path: "/2", element: <EquipmentBorrowPage /> }],
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/inventory", element: <Inventory /> }],
+            children: [{ path: "/inventory", element: <StockPage /> }],
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/inventory", element: <Inventory /> }],
+            children: [{ path: "/inventory", element: <StockPage /> }],
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
