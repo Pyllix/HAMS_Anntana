@@ -1,0 +1,29 @@
+// status model
+
+model AssetStatus {
+  id        Int       @id @default(autoincrement()) @map("status_id")
+  code      String    @unique @default("") @map("code") @db.VarChar(20)
+  name      String    @default("") @map("name") @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  //relations (One-to-Many: AssetStatus มีได้หลาย Asset)
+  assets          Asset[]
+  // AssetDisposal ใช้ AssetStatus เพื่อบอกสถานะการจำหน่าย (รอจำหน่าย, จำหน่ายแล้ว)
+  disposalRecords AssetDisposal[] @relation("DisposalStatus")
+
+  @@map("asset_status")
+}
+
+model AvailabilityStatus {
+  id        Int       @id @default(autoincrement()) @map("availability_status_id")
+  code      String    @unique @default("") @map("code") @db.VarChar(20)
+  name      String    @default("") @map("name") @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  //relations (One-to-Many: AvailabilityStatus มีได้หลาย Asset)
+  assets    Asset[]
+
+  @@map("availability_status")
+}

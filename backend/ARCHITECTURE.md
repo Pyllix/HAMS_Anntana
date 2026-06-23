@@ -118,14 +118,13 @@ HTTP Request
 |-----------------|-------------------------------------------------------------------|
 | `auth`          | Login, logout, JWT issuance via BetterAuth                        |
 | `users`         | User accounts and role assignment                                 |
-| `assets`        | Asset registration, status tracking, asset detail management      |
+| `assets`        | Asset registration, status tracking, lost & disposal history      |
 | `departments`   | Department/unit data that assets are assigned to                  |
 | `transfers`     | Asset transfer between departments or locations                   |
 | `borrowings`    | Borrow and return flow for department officers                    |
 | `maintenance`   | Repair requests, technician assignments, maintenance history      |
 | `spare-parts`   | Spare parts inventory, tracking and requisition                   |
 | `audits`        | Physical asset counting and system data comparison                |
-| `disposals`     | Asset write-off and disposal records                              |
 | `files`         | File upload and retrieval for asset documents and images          |
 | `reports`       | Aggregated data views for executives and supply officers          |
 | `common`        | Guards, interceptors, filters, decorators shared across modules   |
@@ -180,6 +179,43 @@ ASSET_CENTER_STAFF
        │
        ▼
   PostgreSQL
+```
+
+### Asset Status Change & History Recording
+
+```
+PARCEL_STAFF / ASSET_CENTER_STAFF
+       │  PATCH /api/v1/asset/:id/status
+       ▼
+  JwtAuthGuard → RolesGuard
+       │
+       ▼
+  AssetController.updateStatus()
+       │
+       ▼
+  AssetService
+    - validate asset exists
+    - update asset.asset_status_id → new status
+       │
+       ▼
+  PrismaService
+       │
+       ▼
+  PostgreSQL
+
+  ─── Then separately record history ───
+
+  POST /api/v1/asset/:id/disposal
+       ▼
+  AssetService.createDisposal()
+    - validate asset exists
+    - create AssetDisposal record (disposal_status = PENDING_DISPOSAL, pendingReason, pendingAt)
+
+  PATCH /api/v1/asset/:id/disposal/:disposalId
+       ▼
+  AssetService.completeDisposal()
+    - validate disposal record exists and is PENDING
+    - update AssetDisposal (disposal_status = DISPOSED, disposalReason, remark, disposedAt)
 ```
 
 ---
