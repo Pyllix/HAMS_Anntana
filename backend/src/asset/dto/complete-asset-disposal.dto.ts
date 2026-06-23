@@ -1,18 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO สำหรับอัปเดตระเบียนการจำหน่าย — ขั้นตอนที่ 2: จำหน่ายแล้ว (DISPOSED)
- * disposal_status_id ชี้ไปที่ AssetStatus table (row ที่มี code = 'DISPOSED')
+ * DTO สำหรับอัปเดตระเบียนการจำหน่าย — ขั้นตอนที่ 2: จำหน่ายแล้ว (DISPOSAL)
  */
 export class CompleteAssetDisposalDto {
-    @ApiProperty({
-        example: 4,
-        description: 'รหัสสถานะการจำหน่ายจาก AssetStatus (code: DISPOSED)',
-    })
-    @IsInt()
-    @IsNotEmpty()
-    disposal_status_id: number;
 
     @ApiProperty({
         example: '2024-07-15T00:00:00.000Z',

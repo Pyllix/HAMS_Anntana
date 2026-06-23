@@ -22,7 +22,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:reset": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed"
+    "prisma:reset": "pnpm run prisma:generate && pnpm run prisma:migrate && pnpm run prisma:seed"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

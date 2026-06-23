@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, UseGuards } from '@nestjs/common';
 import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
-import { UpdateAssetStatusDto } from './dto/update-asset-status.dto';
 import { CreateAssetLostDto } from './dto/create-asset-lost.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { CompleteAssetDisposalDto } from './dto/complete-asset-disposal.dto';
@@ -35,6 +34,30 @@ export class AssetController {
     return this.assetService.findAll();
   }
 
+  @Get('lost')
+  @ApiOperation({ summary: 'Find all Lost Records', description: 'Find all lost event records across all assets' })
+  @ApiResponse({ status: 200, description: 'Lost records found successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findAllLostRecords() {
+    return this.assetService.findAllLostRecords();
+  }
+
+  @Get('wait-disposal')
+  @ApiOperation({ summary: 'Find all Wait Disposal Records', description: 'Find all records currently in wait-disposal state across all assets' })
+  @ApiResponse({ status: 200, description: 'Wait Disposal records found successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findAllWaitDisposalRecords() {
+    return this.assetService.findAllWaitDisposalRecords();
+  }
+
+  @Get('disposal')
+  @ApiOperation({ summary: 'Find all Completed Disposal Records', description: 'Find all completed disposal records across all assets' })
+  @ApiResponse({ status: 200, description: 'Disposal records found successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findAllCompletedDisposalRecords() {
+    return this.assetService.findAllCompletedDisposalRecords();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Find one Asset', description: 'Find one asset by ID' })
   @ApiResponse({ status: 200, description: 'Asset found successfully' })
@@ -57,25 +80,6 @@ export class AssetController {
     return this.assetService.update(id, updateAssetDto, session.user.id);
   }
 
-  // ─── Update Status ─────────────────────────────────────────────────────────
-  // Asset ไม่มีการลบข้อมูล — ใช้การเปลี่ยน AssetStatus แทน (Lost, Disposal ฯลฯ)
-
-  @Patch(':id/status')
-  @ApiOperation({
-    summary: 'Update Asset status',
-    description: 'Change asset status (e.g. Lost, Disposal) — Asset is never deleted, only its status changes.',
-  })
-  @ApiResponse({ status: 200, description: 'Asset status updated successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'Asset not found' })
-  updateStatus(
-    @Param('id') id: string,
-    @Body() updateAssetStatusDto: UpdateAssetStatusDto,
-    @Session() session: UserSession,
-  ) {
-    return this.assetService.updateStatus(id, updateAssetStatusDto, session.user.id);
-  }
-
   // ─── Lost History ──────────────────────────────────────────────────────────
 
   @Post(':id/lost')
@@ -83,9 +87,12 @@ export class AssetController {
     summary: 'Report Asset as Lost',
     description:
       'Record a lost event for the asset (date discovered, last seen location, reason). ' +
-      'Update asset status separately via PATCH /:id/status.',
+      'This action automatically updates the asset status to LOST. ' +
+      'Allowed from status: NORMAL, DAMAGED, UNDER_REPAIR. ' +
+      'Terminal states (DISPOSAL, LOST) cannot transition.',
   })
   @ApiResponse({ status: 201, description: 'Lost record created successfully' })
+  @ApiResponse({ status: 400, description: 'Status transition not allowed' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   reportLost(
@@ -114,10 +121,13 @@ export class AssetController {
   @ApiOperation({
     summary: 'Create Disposal Record (Step 1: Pending)',
     description:
-      'Register the asset as Pending Disposal. Provide disposal_status_id referencing ' +
-      'the PENDING_DISPOSAL row in asset_status, and the reason for pending.',
+      'Register the asset as Wait Disposal. ' +
+      'This action automatically updates the asset status to WAIT_DISPOSAL. ' +
+      'Allowed from status: NORMAL, DAMAGED, UNDER_REPAIR. ' +
+      'Terminal states (DISPOSAL, LOST) cannot transition.',
   })
   @ApiResponse({ status: 201, description: 'Disposal record created (pending)' })
+  @ApiResponse({ status: 400, description: 'Status transition not allowed' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   createDisposal(
@@ -132,16 +142,18 @@ export class AssetController {
   @ApiOperation({
     summary: 'Complete Disposal (Step 2: Disposed)',
     description:
-      'Mark the disposal record as completed (DISPOSED). ' +
+      'Mark the disposal record as completed (DISPOSAL). ' +
+      'This action automatically updates the asset status to DISPOSAL. ' +
+      'Allowed from status: WAIT_DISPOSAL only. ' +
       'Requires the disposal record to exist and not already be completed.',
   })
   @ApiResponse({ status: 200, description: 'Disposal completed successfully' })
-  @ApiResponse({ status: 400, description: 'Disposal already completed' })
+  @ApiResponse({ status: 400, description: 'Status transition not allowed or disposal already completed' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset or disposal record not found' })
   completeDisposal(
     @Param('id') id: string,
-    @Param('disposalId', ParseIntPipe) disposalId: number,
+    @Param('disposalId') disposalId: string,
     @Body() completeAssetDisposalDto: CompleteAssetDisposalDto,
     @Session() session: UserSession,
   ) {
