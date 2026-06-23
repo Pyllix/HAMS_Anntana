@@ -7,7 +7,7 @@ import Maintenance from "@/pages/Maintenance"
 import Track from "@/pages/Track"
 import History from "@/pages/History"
 import ManagePage from "@/pages/Borrow/ManagePage"
-import RequestPage from "@/pages/Borrow/RequestPage"
+import EquipmentBorrowPage from "@/pages/EquipmentBorrow/EquipmentBorrowPage"
 
 const router = createBrowserRouter([
   {
@@ -26,7 +26,7 @@ const router = createBrowserRouter([
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/2", element: <RequestPage /> }],
+            children: [{ path: "/2", element: <EquipmentBorrowPage /> }],
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
