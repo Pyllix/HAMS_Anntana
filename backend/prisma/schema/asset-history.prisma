@@ -1,0 +1,60 @@
+// asset-history.prisma
+// ประวัติการสูญหาย (Lost) และการจำหน่าย (Disposal) ของครุภัณฑ์
+// Asset ไม่มี soft delete — ใช้การเปลี่ยน asset_status_id + บันทึกประวัติลงตารางเหล่านี้แทน
+
+// ─── AssetLost ────────────────────────────────────────────────────────────────
+// บันทึกทุกครั้งที่ Asset ถูกรายงานว่าสูญหาย (One Asset → Many lost records)
+
+model AssetLost {
+  id               String   @id @default(uuid()) @map("lost_id")
+  discoveredAt     DateTime @map("discovered_at")
+  lastSeenLocation String   @map("last_seen_location") @db.VarChar(255)
+  reason           String   @db.Text
+
+  // FK scalars
+  asset_id  String @map("asset_id")
+  createdBy String @map("created_by")
+  updatedBy String @map("updated_by")
+
+  // Relations
+  asset   Asset @relation(fields: [asset_id], references: [id])
+  creator User  @relation("LostCreatedBy", fields: [createdBy], references: [id])
+  updater User  @relation("LostUpdatedBy", fields: [updatedBy], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("asset_lost")
+}
+
+// ─── AssetDisposal ────────────────────────────────────────────────────────────
+// บันทึก workflow การจำหน่าย 2 ขั้นตอนในระเบียนเดียว:
+//   ขั้น 1 → สร้างระเบียน: disposal_status = "รอจำหน่าย" (PENDING_DISPOSAL) + pendingReason
+//   ขั้น 2 → อัปเดตระเบียน: disposal_status = "จำหน่ายแล้ว" (DISPOSED) + disposalReason + remark
+
+model AssetDisposal {
+  id             String    @id @default(uuid()) @map("disposal_id")
+  pendingReason  String    @map("pending_reason") @db.Text
+  pendingAt      DateTime  @map("pending_at")
+  disposedAt     DateTime? @map("disposed_at")
+  disposalReason String?   @map("disposal_reason") @db.Text
+  remark         String?   @db.Text
+
+  // FK scalars
+  asset_id           String @map("asset_id")
+  disposal_status_id Int    @map("disposal_status_id")
+  createdBy          String @map("created_by")
+  updatedBy          String @map("updated_by")
+
+  // Relations
+  // disposal_status ชี้ไปที่ AssetStatus table เดิม (rows เช่น PENDING_DISPOSAL, DISPOSED)
+  asset          Asset       @relation(fields: [asset_id], references: [id])
+  disposalStatus AssetStatus @relation("DisposalStatus", fields: [disposal_status_id], references: [id])
+  creator        User        @relation("DisposalCreatedBy", fields: [createdBy], references: [id])
+  updater        User        @relation("DisposalUpdatedBy", fields: [updatedBy], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("asset_disposal")
+}
