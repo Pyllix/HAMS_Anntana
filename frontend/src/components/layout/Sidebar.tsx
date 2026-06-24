@@ -26,7 +26,7 @@ interface SidebarProps {
 
 const navItems: NavItem[] = [
   {
-    label: "ยืม - คืนครุภัณฑ์",
+    label: "จัดการยืม - คืนครุภัณฑ์",
     icon: FileCheck,
     path: "/",
     roles: ["admin"],
