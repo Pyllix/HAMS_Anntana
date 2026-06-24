@@ -37,7 +37,7 @@ export default function ManagePage() {
       const matchType =
         store.typeFilter === "ทั้งหมด" ||
         store.typeFilter === "" ||
-        item.categoryCode === store.typeFilter
+        item.categoryCode.code === store.typeFilter
 
       return matchSearch && matchStatus && matchType
     })

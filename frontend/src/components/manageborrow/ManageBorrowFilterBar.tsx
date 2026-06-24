@@ -47,7 +47,7 @@ export function ManageBorrowFilterBar() {
         <NativeSelectOption value="ทั้งหมด">ประเภท: ทั้งหมด</NativeSelectOption>
         {BORROW_CATEGORIES.map((c) => (
           <NativeSelectOption key={c.code} value={c.code}>
-            {c.code}-{c.name}
+            {c.name}
           </NativeSelectOption>
         ))}
       </NativeSelect>

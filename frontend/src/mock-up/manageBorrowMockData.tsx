@@ -14,7 +14,7 @@ export const mockManageBorrowAssets: Asset[] = [
   {
     id: "BP-2024-001",
     name: "เครื่องวัดความดัน (BP)",
-    categoryCode: "01-ครุภัณฑ์วิทยาศาสตร์และการแพทย์",
+    categoryCode: BORROW_CATEGORIES[0],
     borrower: "พญ. ใจดี รักษา\nER (ฉุกเฉิน)",
     borrowDate: "24 ก.พ. 2569",
     status: "กำลังยืม",
@@ -23,7 +23,7 @@ export const mockManageBorrowAssets: Asset[] = [
   {
     id: "AED-2024-005",
     name: "เครื่องกระตุกหัวใจ (AED)",
-    categoryCode: "01-ครุภัณฑ์วิทยาศาสตร์และการแพทย์",
+     categoryCode: BORROW_CATEGORIES[0],
     borrower: "-\nCentral Supply",
     borrowDate: "-",
     status: "ว่าง",
@@ -32,7 +32,7 @@ export const mockManageBorrowAssets: Asset[] = [
   {
     id: "WC-2023-012",
     name: "รถเข็นผู้ป่วย (Wheelchair)",
-    categoryCode: "01-ครุภัณฑ์วิทยาศาสตร์และการแพทย์",
+     categoryCode: BORROW_CATEGORIES[0],
     borrower: "ช่างเทคนิค\nฝ่ายซ่อมบำรุง",
     borrowDate: "20 ก.พ. 2569",
     status: "ส่งซ่อม",
