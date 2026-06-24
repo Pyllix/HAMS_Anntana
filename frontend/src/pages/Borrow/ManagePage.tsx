@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Search } from "lucide-react"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
@@ -5,6 +6,9 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group/input-group"
+import type { BorrowStatus } from "@/types/borrow"
+
+
 
 function ManagePage() {
   return (
@@ -19,7 +23,7 @@ function ManagePage() {
       </InputGroup>
       {/* เลือกสถานะ */}
       <NativeSelect className="">
-        <NativeSelectOption value="">Select status</NativeSelectOption>
+        <NativeSelectOption value="">สถานะ{}</NativeSelectOption>
         <NativeSelectOption value="todo">Todo</NativeSelectOption>
         <NativeSelectOption value="in-progress">In Progress</NativeSelectOption>
         <NativeSelectOption value="done">Done</NativeSelectOption>
