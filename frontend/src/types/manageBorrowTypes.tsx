@@ -1,10 +1,11 @@
+import type { AssetCategory } from "./common"
 export type BorrowAssetStatus = "ว่าง" | "กำลังยืม" | "ส่งซ่อม"
 export type BorrowStatusFilter = "ทั้งหมด" | BorrowAssetStatus
 
 export interface Asset {
   id: string
   name: string
-  categoryCode: string
+  categoryCode: AssetCategory
   borrower: string
   borrowDate: string
   status: BorrowAssetStatus

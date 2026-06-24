@@ -47,7 +47,7 @@ export function ManageBorrowTable({ assets, onBorrow, onReturn }: Props) {
           ) : (
             assets.map((asset) => {
               const cat = BORROW_CATEGORIES.find(
-                (c) => c.code === asset.categoryCode
+                (c) => c.code === asset.categoryCode.code
               )
               return (
                 <tr
@@ -76,7 +76,7 @@ export function ManageBorrowTable({ assets, onBorrow, onReturn }: Props) {
                   </td>
 
                   <td className="px-5 py-3.5 text-xs font-medium text-slate-500">
-                    {cat ? cat.name : asset.categoryCode}
+                    {cat ? cat.name : asset.categoryCode.code}
                   </td>
 
                   <td className="px-5 py-3.5 text-xs leading-relaxed font-semibold whitespace-pre-line text-slate-600">
@@ -98,21 +98,21 @@ export function ManageBorrowTable({ assets, onBorrow, onReturn }: Props) {
                           onClick={() => onBorrow(asset)}
                           className="h-8 w-20 rounded-lg bg-[#00966c] text-xs font-bold text-white shadow-sm transition-all hover:bg-[#007d5a] active:scale-95"
                         >
-                          ยืมคืน
+                          ยืมของ
                         </button>
                       ) : asset.status === "กำลังยืม" ? (
                         <button
                           onClick={() => onReturn(asset)}
                           className="h-8 w-20 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95"
                         >
-                          คืนสินค้า
+                          รับคืน
                         </button>
                       ) : (
                         <button
                           disabled
                           className="h-8 w-20 cursor-not-allowed rounded-lg bg-slate-100 text-xs font-medium text-slate-400"
                         >
-                          ส่งซ่อม
+                          งดยืม
                         </button>
                       )}
                     </div>
