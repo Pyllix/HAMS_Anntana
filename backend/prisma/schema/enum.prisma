@@ -19,3 +19,13 @@ enum ReturnMethod {
   self_return
   staff_pickup
 }
+
+enum RequestSource {
+  SELF_SERVICE
+  CENTER_SERVICE
+}
+
+enum DeliveryMethod {
+  PICKUP
+  DELIVERY
+}

@@ -13,8 +13,8 @@ import { UserRole } from '@prisma/client';
 @UseGuards(AuthGuard)
 @Controller('borrowings')
 export class AssetBorrowController {
-  constructor(private readonly assetBorrowService: AssetBorrowService) {}
-
+  constructor(private readonly assetBorrowService: AssetBorrowService) { }
+  // Create Borrowing
   @Post()
   @ApiOperation({ summary: 'Create a new borrow transaction' })
   @ApiResponse({ status: 201, description: 'Borrow transaction created' })
@@ -22,7 +22,7 @@ export class AssetBorrowController {
   async createBorrow(@Body() dto: CreateAssetBorrowDto, @Session() session: UserSession) {
     return this.assetBorrowService.createBorrow(dto, session.user);
   }
-
+  // Return Borrowing
   @Patch(':id/return')
   @ApiOperation({ summary: 'Return a borrowed asset' })
   @ApiResponse({ status: 200, description: 'Asset returned successfully' })
@@ -34,7 +34,7 @@ export class AssetBorrowController {
   ) {
     return this.assetBorrowService.returnAsset(id, dto, session.user);
   }
-
+  // Get All Borrowing
   @Get()
   @ApiOperation({ summary: 'List borrow transactions with pagination and filtering' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -45,7 +45,7 @@ export class AssetBorrowController {
   async findAll(@Query() query: BorrowFilterDto) {
     return this.assetBorrowService.findAll(query);
   }
-
+  // Get Borrowing By ID
   @Get(':id')
   @ApiOperation({ summary: 'Get details of a borrow transaction' })
   @ApiResponse({ status: 200, description: 'Transaction details returned' })

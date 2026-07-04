@@ -4,7 +4,7 @@ import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
-import { ReturnCondition, UserRole } from '@prisma/client';
+import { ReturnCondition, UserRole, RequestSource } from '@prisma/client';
 
 @Injectable()
 export class AssetBorrowService {
@@ -63,7 +63,8 @@ export class AssetBorrowService {
           asset_id: dto.assetId,
           borrower_id: borrowerId,
           borrow_status_id: borrowedTxStatusId,
-          return_method: dto.returnMethod,
+          request_source: dto.requestSource || (isSelfService ? RequestSource.SELF_SERVICE : RequestSource.CENTER_SERVICE),
+          delivery_method: dto.deliveryMethod,
         }
       });
 

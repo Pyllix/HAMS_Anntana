@@ -24,6 +24,9 @@ model BorrowTransaction {
   return_method    ReturnMethod?    @map("return_method")
   return_remark    String?          @map("return_remark") @db.Text
 
+  request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
+  delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations

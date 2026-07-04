@@ -304,6 +304,8 @@ Body: { asset_status_id: number }
 | `returned_by_user_id` | UUID | | USER | ผู้คืน (อาจไม่ใช่ผู้ยืม) |
 | `received_by_user_id` | UUID | | USER | เจ้าหน้าที่ผู้รับคืน |
 | `borrow_status_id` | INTEGER | ✅ | BORROW_STATUS | สถานะรายการยืม-คืน |
+| `request_source` | ENUM | ✅ | | แหล่งที่มาของการยืม: `SELF_SERVICE` / `CENTER_SERVICE` |
+| `delivery_method` | ENUM | ✅ | | วิธีรับครุภัณฑ์ตอนยืม: `PICKUP` / `DELIVERY` |
 | `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้างรายการ (= วันที่ยืม) |
 | `return_date` | TIMESTAMPTZ | | | วันเวลาที่คืน |
 | `return_condition` | ENUM | | | สภาพเครื่องตอนคืน: `Normal` / `Damage` |

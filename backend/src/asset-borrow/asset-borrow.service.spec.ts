@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
 import { PrismaService } from '../prisma.service';
-import { UserRole, ReturnCondition, ReturnMethod } from '@prisma/client';
+import { UserRole, ReturnCondition, ReturnMethod, DeliveryMethod, RequestSource } from '@prisma/client';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 
 const mockPrismaService = {
@@ -51,7 +51,7 @@ describe('AssetBorrowService', () => {
 
   describe('createBorrow', () => {
     const user = { sub: 'user-id-1', role: UserRole.DEPARTMENT_STAFF };
-    const dto = { assetId: 'asset-1', returnMethod: ReturnMethod.self_return };
+    const dto = { assetId: 'asset-1', deliveryMethod: DeliveryMethod.PICKUP, requestSource: RequestSource.SELF_SERVICE };
 
     it('should throw BadRequest if non-AC staff tries to borrow for someone else', async () => {
       const dtoOther = { ...dto, borrowerId: 'user-id-2' };
