@@ -21,15 +21,27 @@ export class AssetBorrowService {
   }
 
   async createBorrow(dto: CreateAssetBorrowDto, user: any) {
-    // Determine borrower
-    const isSelfService = !dto.borrowerId || dto.borrowerId === user.sub;
-    const borrowerId = dto.borrowerId || user.sub;
+    // Determine RequestSource from user role
+    let requestSource: RequestSource;
+    if (user.role === UserRole.PARCEL_STAFF || user.role === UserRole.DEPARTMENT_STAFF) {
+      requestSource = RequestSource.SELF_SERVICE;
+    } else if (user.role === UserRole.ASSET_CENTER_STAFF) {
+      requestSource = RequestSource.CENTER_SERVICE;
+    } else {
+      throw new BadRequestException('Only Parcel/Department Staff or Asset Center Staff can create a borrow transaction');
+    }
 
-    if (!isSelfService) {
-      // Only Asset Center Staff can borrow on behalf of someone else
-      if (user.role !== UserRole.ASSET_CENTER_STAFF) {
-        throw new BadRequestException('Only Asset Center Staff can create a borrow transaction for another user');
+    // Determine borrower
+    let borrowerId: string;
+    if (requestSource === RequestSource.SELF_SERVICE) {
+      // Self service: always use the user who created the transaction, ignore dto.borrowerId
+      borrowerId = user.id;
+    } else {
+      // Center service (Asset Center Staff): allow borrowing on behalf of someone else
+      if (!dto.borrowerId) {
+        throw new BadRequestException('Borrower ID is required when Asset Center Staff creates a transaction for someone else');
       }
+      borrowerId = dto.borrowerId || user.id;
     }
 
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
@@ -63,7 +75,7 @@ export class AssetBorrowService {
           asset_id: dto.assetId,
           borrower_id: borrowerId,
           borrow_status_id: borrowedTxStatusId,
-          request_source: dto.requestSource || (isSelfService ? RequestSource.SELF_SERVICE : RequestSource.CENTER_SERVICE),
+          request_source: requestSource,
           delivery_method: dto.deliveryMethod,
         }
       });
@@ -72,6 +84,7 @@ export class AssetBorrowService {
     });
   }
 
+
   async returnAsset(id: string, dto: ReturnAssetBorrowDto, user: any) {
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
     const returnedTxStatusId = await this.getStatusId('borrowStatus', 'RETURNED');
@@ -79,7 +92,7 @@ export class AssetBorrowService {
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true }
+        select: { id: true, asset_id: true, borrow_status_id: true, borrower_id: true }
       });
 
       if (!transaction) {
@@ -88,6 +101,16 @@ export class AssetBorrowService {
 
       if (transaction.borrow_status_id !== borrowedTxStatusId) {
         throw new BadRequestException(`This borrow transaction is not currently active (not BORROWED)`);
+      }
+
+      let receivedByUserId: string | null = null;
+      let returnedByUserId: string = user.id;
+
+      if (user.role === UserRole.ASSET_CENTER_STAFF) {
+        // Only Asset Center Staff acts as the receiver
+        receivedByUserId = user.id;
+        // If they specify who returned it in the DTO, use that; otherwise default to the original borrower
+        returnedByUserId = dto.returnedByUserId || transaction.borrower_id;
       }
 
       // Update transaction to RETURNED
@@ -99,8 +122,8 @@ export class AssetBorrowService {
           return_condition: dto.returnCondition,
           return_method: dto.returnMethod,
           return_remark: dto.returnRemark,
-          returned_by_user_id: user.sub,
-          received_by_user_id: user.sub, // By default, the person processing it (often AC staff) is the receiver
+          returned_by_user_id: returnedByUserId,
+          received_by_user_id: receivedByUserId,
         }
       });
 

@@ -50,34 +50,74 @@ describe('AssetBorrowService', () => {
   });
 
   describe('createBorrow', () => {
-    const user = { sub: 'user-id-1', role: UserRole.DEPARTMENT_STAFF };
-    const dto = { assetId: 'asset-1', deliveryMethod: DeliveryMethod.PICKUP, requestSource: RequestSource.SELF_SERVICE };
+    const parcelUser = { id: 'user-id-1', role: UserRole.PARCEL_STAFF };
+    const acStaffUser = { id: 'user-id-2', role: UserRole.ASSET_CENTER_STAFF };
+    const departmentUser = { id: 'user-id-3', role: UserRole.DEPARTMENT_STAFF };
+    const dto = { assetId: 'asset-1', deliveryMethod: DeliveryMethod.PICKUP };
 
-    it('should throw BadRequest if non-AC staff tries to borrow for someone else', async () => {
-      const dtoOther = { ...dto, borrowerId: 'user-id-2' };
-      await expect(service.createBorrow(dtoOther, user)).rejects.toThrow(BadRequestException);
+    it('should throw BadRequest if user role is invalid (e.g. MAINTENANCE_STAFF)', async () => {
+      const invalidUser = { id: 'user-id-4', role: UserRole.MAINTENANCE_STAFF };
+      await expect(service.createBorrow(dto, invalidUser)).rejects.toThrow(BadRequestException);
     });
 
-    it('should successfully create borrow transaction if asset is AVAILABLE', async () => {
+    it('should ignore dto.borrowerId and use user.id when user is PARCEL_STAFF (Self Service)', async () => {
       prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 10, code: 'AVAILABLE' });
       prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 11, code: 'BORROWED' });
       prisma.borrowStatus.findUnique.mockResolvedValueOnce({ id: 20, code: 'BORROWED' });
-      
-      prisma.$transaction.mockImplementation(async (cb: any) => {
-        return cb(prisma);
-      });
 
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
       prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 10 });
-      prisma.asset.update.mockResolvedValue({ id: 'asset-1', availability_status_id: 11 });
-      prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-1', asset_id: 'asset-1', borrow_status_id: 20 });
+      prisma.asset.update.mockResolvedValue({});
+      prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-1', request_source: RequestSource.SELF_SERVICE });
 
-      const result = await service.createBorrow(dto, user);
-      
-      expect(result).toBeDefined();
-      expect(prisma.asset.update).toHaveBeenCalledWith({
-        where: { id: 'asset-1' },
-        data: { availability_status_id: 11 }
-      });
+      const dtoOther = { ...dto, borrowerId: 'user-id-99' }; // Client maliciously passes another ID
+      await service.createBorrow(dtoOther, parcelUser);
+
+      // Verify it ignored user-id-99 and used parcelUser's own ID
+      expect(prisma.borrowTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ borrower_id: 'user-id-1', request_source: RequestSource.SELF_SERVICE }),
+        }),
+      );
+    });
+
+    it('should set request_source = SELF_SERVICE when user is PARCEL_STAFF', async () => {
+      prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 10, code: 'AVAILABLE' });
+      prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 11, code: 'BORROWED' });
+      prisma.borrowStatus.findUnique.mockResolvedValueOnce({ id: 20, code: 'BORROWED' });
+
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 10 });
+      prisma.asset.update.mockResolvedValue({});
+      prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-1', request_source: RequestSource.SELF_SERVICE });
+
+      await service.createBorrow(dto, parcelUser);
+
+      expect(prisma.borrowTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ request_source: RequestSource.SELF_SERVICE }),
+        }),
+      );
+    });
+
+    it('should set request_source = CENTER_SERVICE when user is ASSET_CENTER_STAFF', async () => {
+      prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 10, code: 'AVAILABLE' });
+      prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 11, code: 'BORROWED' });
+      prisma.borrowStatus.findUnique.mockResolvedValueOnce({ id: 20, code: 'BORROWED' });
+
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 10 });
+      prisma.asset.update.mockResolvedValue({});
+      prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-2', request_source: RequestSource.CENTER_SERVICE });
+
+      const dtoForOther = { ...dto, borrowerId: 'user-id-99' };
+      await service.createBorrow(dtoForOther, acStaffUser);
+
+      expect(prisma.borrowTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ request_source: RequestSource.CENTER_SERVICE }),
+        }),
+      );
     });
 
     it('should throw ConflictException if asset is not AVAILABLE', async () => {
@@ -85,13 +125,10 @@ describe('AssetBorrowService', () => {
       prisma.availabilityStatus.findUnique.mockResolvedValueOnce({ id: 11, code: 'BORROWED' });
       prisma.borrowStatus.findUnique.mockResolvedValueOnce({ id: 20, code: 'BORROWED' });
 
-      prisma.$transaction.mockImplementation(async (cb: any) => {
-        return cb(prisma);
-      });
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 11 }); // not AVAILABLE
 
-      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 11 }); // not 10
-
-      await expect(service.createBorrow(dto, user)).rejects.toThrow(ConflictException);
+      await expect(service.createBorrow(dto, parcelUser)).rejects.toThrow(ConflictException);
     });
   });
 });

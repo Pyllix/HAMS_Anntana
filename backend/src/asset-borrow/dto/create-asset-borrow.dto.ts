@@ -1,5 +1,5 @@
-import { IsUUID, IsOptional, IsEnum, IsString } from 'class-validator';
-import { RequestSource, DeliveryMethod } from '@prisma/client';
+import { IsUUID, IsOptional, IsEnum } from 'class-validator';
+import { DeliveryMethod } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAssetBorrowDto {
@@ -12,12 +12,8 @@ export class CreateAssetBorrowDto {
   @IsUUID()
   borrowerId?: string;
 
-  @ApiPropertyOptional({ enum: RequestSource, description: 'Source of the request (Self service or Center service)' })
-  @IsOptional()
-  @IsEnum(RequestSource)
-  requestSource?: RequestSource;
-
   @ApiProperty({ enum: DeliveryMethod, description: 'How the asset will be received (Pickup or Delivery)' })
   @IsEnum(DeliveryMethod)
   deliveryMethod: DeliveryMethod;
 }
+

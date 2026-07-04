@@ -15,4 +15,9 @@ export class ReturnAssetBorrowDto {
   @IsOptional()
   @IsString()
   returnRemark?: string;
+
+  @ApiPropertyOptional({ description: 'UUID of the user who returned the asset (used when AC staff processes return)' })
+  @IsOptional()
+  @IsString() // Use IsString or IsUUID if IsUUID is imported
+  returnedByUserId?: string;
 }
