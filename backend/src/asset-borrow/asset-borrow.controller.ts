@@ -34,6 +34,17 @@ export class AssetBorrowController {
   ) {
     return this.assetBorrowService.returnAsset(id, dto, session.user);
   }
+  // Cancel Borrowing
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Cancel a borrow transaction' })
+  @ApiResponse({ status: 200, description: 'Transaction cancelled successfully' })
+  @ApiResponse({ status: 400, description: 'Transaction cannot be cancelled or no permission' })
+  async cancelBorrow(
+    @Param('id') id: string,
+    @Session() session: UserSession
+  ) {
+    return this.assetBorrowService.cancelBorrow(id, session.user);
+  }
   // Get All Borrowing
   @Get()
   @ApiOperation({ summary: 'List borrow transactions with pagination and filtering' })

@@ -151,6 +151,50 @@ export class AssetBorrowService {
     });
   }
 
+  async cancelBorrow(id: string, user: any) {
+    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const cancelledTxStatusId = await this.getStatusId('borrowStatus', 'CANCELLED');
+    const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: { id: true, asset_id: true, borrow_status_id: true, borrower_id: true }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== borrowedTxStatusId) {
+        throw new BadRequestException(`This borrow transaction is not currently active (not BORROWED)`);
+      }
+
+      if (
+        user.id !== transaction.borrower_id &&
+        user.role !== UserRole.ASSET_CENTER_STAFF &&
+        user.role !== UserRole.ADMIN &&
+        user.role !== UserRole.MANAGER
+      ) {
+        throw new BadRequestException('You do not have permission to cancel this transaction');
+      }
+
+      const updatedTransaction = await tx.borrowTransaction.update({
+        where: { id },
+        data: {
+          borrow_status_id: cancelledTxStatusId,
+        }
+      });
+
+      await tx.asset.update({
+        where: { id: transaction.asset_id },
+        data: { availability_status_id: availableStatusId }
+      });
+
+      return updatedTransaction;
+    });
+  }
+
   async findAll(query: BorrowFilterDto): Promise<PaginatedResult<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
