@@ -10,6 +10,7 @@ import { AssetTypeModule } from './asset-type/asset-type.module';
 import { AssetStatusModule } from './asset-status/asset-status.module';
 import { AvailabilitiesModule } from './availabilities/availabilities.module';
 import { AssetModule } from './asset/asset.module';
+import { AssetBorrowModule } from './asset-borrow/asset-borrow.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AssetModule } from './asset/asset.module';
     AssetStatusModule,
     AvailabilitiesModule,
     AssetModule,
+    AssetBorrowModule,
   ],
   controllers: [],
   providers: [PrismaService],

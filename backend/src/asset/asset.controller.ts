@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, UseGuards, Query } from '@nestjs/common';
 import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
@@ -7,7 +7,8 @@ import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { CompleteAssetDisposalDto } from './dto/complete-asset-disposal.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
@@ -27,35 +28,47 @@ export class AssetController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Find all Assets', description: 'Find all assets' })
-  @ApiResponse({ status: 200, description: 'Assets found successfully' })
+  @ApiOperation({ summary: 'Find all Assets (paginated)', description: 'Find all assets with pagination and optional search by name, model or serial number' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of assets' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll() {
-    return this.assetService.findAll();
+  findAll(@Query() query: PaginationDto) {
+    return this.assetService.findAll(query);
   }
 
   @Get('lost')
-  @ApiOperation({ summary: 'Find all Lost Records', description: 'Find all lost event records across all assets' })
-  @ApiResponse({ status: 200, description: 'Lost records found successfully' })
+  @ApiOperation({ summary: 'Find all Lost Records (paginated)', description: 'Find all lost event records across all assets with pagination and optional search by asset name, model or serial number' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of lost records' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAllLostRecords() {
-    return this.assetService.findAllLostRecords();
+  findAllLostRecords(@Query() query: PaginationDto) {
+    return this.assetService.findAllLostRecords(query);
   }
 
   @Get('wait-disposal')
-  @ApiOperation({ summary: 'Find all Wait Disposal Records', description: 'Find all records currently in wait-disposal state across all assets' })
-  @ApiResponse({ status: 200, description: 'Wait Disposal records found successfully' })
+  @ApiOperation({ summary: 'Find all Wait Disposal Records (paginated)', description: 'Find all records currently in wait-disposal state across all assets with pagination and optional search by asset name, model or serial number' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of wait-disposal records' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAllWaitDisposalRecords() {
-    return this.assetService.findAllWaitDisposalRecords();
+  findAllWaitDisposalRecords(@Query() query: PaginationDto) {
+    return this.assetService.findAllWaitDisposalRecords(query);
   }
 
   @Get('disposal')
-  @ApiOperation({ summary: 'Find all Completed Disposal Records', description: 'Find all completed disposal records across all assets' })
-  @ApiResponse({ status: 200, description: 'Disposal records found successfully' })
+  @ApiOperation({ summary: 'Find all Completed Disposal Records (paginated)', description: 'Find all completed disposal records across all assets with pagination and optional search by asset name, model or serial number' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of completed disposal records' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAllCompletedDisposalRecords() {
-    return this.assetService.findAllCompletedDisposalRecords();
+  findAllCompletedDisposalRecords(@Query() query: PaginationDto) {
+    return this.assetService.findAllCompletedDisposalRecords(query);
   }
 
   @Get(':id')

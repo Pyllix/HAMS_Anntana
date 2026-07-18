@@ -33,6 +33,12 @@ const availabilityStatuses = [
   { code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
 ];
 
+const borrowStatuses = [
+  { code: 'BORROWED', name: 'กำลังยืม' },
+  { code: 'RETURNED', name: 'คืนแล้ว' },
+  { code: 'CANCELLED', name: 'ยกเลิก' },
+];
+
 const assetTypes = [
   { name: 'เครื่องมือแพทย์', useful_life: 5 },
   { name: 'คอมพิวเตอร์และอุปกรณ์', useful_life: 3 },
@@ -51,7 +57,7 @@ const sections = [
   { code: 'ICU', name: 'Intensive Care Unit', tel: '1200', building: 'Ward Building' },
 ];
 
-const adminUsers = [
+const systemUsers = [
   {
     userName: 'admin',
     firstname: 'System',
@@ -59,6 +65,51 @@ const adminUsers = [
     email: 'admin@hospital.go.th',
     password: 'Admin@1234',
     role: 'ADMIN' as const,
+    sectionCode: 'IT',
+  },
+  {
+    userName: 'manager',
+    firstname: 'System',
+    lastname: 'Manager',
+    email: 'manager@hospital.go.th',
+    password: 'Manager@1234',
+    role: 'MANAGER' as const,
+    sectionCode: 'IT',
+  },
+  {
+    userName: 'parcel',
+    firstname: 'System',
+    lastname: 'Parcel Staff',
+    email: 'parcel@hospital.go.th',
+    password: 'Parcel@1234',
+    role: 'PARCEL_STAFF' as const,
+    sectionCode: 'IT',
+  },
+  {
+    userName: 'assetcenter',
+    firstname: 'System',
+    lastname: 'Asset Center',
+    email: 'assetcenter@hospital.go.th',
+    password: 'AssetCenter@1234',
+    role: 'ASSET_CENTER_STAFF' as const,
+    sectionCode: 'IT',
+  },
+  {
+    userName: 'deptstaff',
+    firstname: 'System',
+    lastname: 'Dept Staff',
+    email: 'deptstaff@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'OPD',
+  },
+  {
+    userName: 'maintenance',
+    firstname: 'System',
+    lastname: 'Maintenance',
+    email: 'maintenance@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_STAFF' as const,
     sectionCode: 'IT',
   },
 ];
@@ -90,6 +141,18 @@ async function main() {
       create: a,
     });
     availMap[a.code] = res.id;
+  }
+
+  // 2.5 BorrowStatus
+  console.log('📂 Seeding BorrowStatus...');
+  const borrowStatusMap: Record<string, number> = {};
+  for (const b of borrowStatuses) {
+    const res = await prisma.borrowStatus.upsert({
+      where: { code: b.code },
+      update: { name: b.name },
+      create: b,
+    });
+    borrowStatusMap[b.code] = res.id;
   }
 
   // 3. Companies
@@ -127,10 +190,10 @@ async function main() {
     sectionMap[section.code] = section.id;
   }
 
-  // 6. Admin Users
-  console.log('👤 Seeding Admin Users...');
+  // 6. System Users
+  console.log('👤 Seeding System Users...');
   let adminId = '';
-  for (const data of adminUsers) {
+  for (const data of systemUsers) {
     let existing = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -228,6 +291,42 @@ async function main() {
       asset_type_id: typeMap['เฟอร์นิเจอร์'],
       asset_status_id: statusMap['UNDER_REPAIR'],
       availability_status_id: availMap['UNAVAILABLE'],
+    },
+    {
+      name: 'รถเข็นผู้ป่วย (Wheelchair)',
+      model: 'WC-Standard',
+      serialNo: 'SN-WC-001',
+      gmdn: '12345',
+      price: '5000',
+      warrantyDate: new Date('2028-05-01'),
+      receivedDate: new Date('2024-05-01'),
+      riskLevel: 1,
+      isMedicalDevice: true,
+      remark: 'พร้อมใช้งาน สามารถยืมได้',
+      imageUrl: '',
+      section_id: sectionMap['OPD'],
+      company_id: companyMap['COMP001'],
+      asset_type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['AVAILABLE'],
+    },
+    {
+      name: 'เครื่องฉายโปรเจคเตอร์',
+      model: 'Epson EB-X41',
+      serialNo: 'PJ-EPS-002',
+      gmdn: '',
+      price: '18000',
+      warrantyDate: new Date('2026-08-01'),
+      receivedDate: new Date('2023-08-01'),
+      riskLevel: 1,
+      isMedicalDevice: false,
+      remark: 'ใช้สำหรับห้องประชุม สามารถยืมได้',
+      imageUrl: '',
+      section_id: sectionMap['IT'],
+      company_id: companyMap['COMP002'],
+      asset_type_id: typeMap['คอมพิวเตอร์และอุปกรณ์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['AVAILABLE'],
     }
   ];
 
