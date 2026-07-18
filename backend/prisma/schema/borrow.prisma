@@ -1,0 +1,40 @@
+model BorrowStatus {
+  id        Int       @id @default(autoincrement()) @map("borrow_status_id")
+  code      String    @unique @default("") @map("status_code") @db.VarChar(20)
+  name      String    @default("") @map("status_name") @db.VarChar(50)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  transactions BorrowTransaction[]
+
+  @@map("borrow_status")
+}
+
+model BorrowTransaction {
+  id                  String  @id @default(uuid()) @map("borrow_transaction_id")
+  asset_id            String  @map("asset_id")
+  borrower_id         String  @map("borrower_id")
+  returned_by_user_id String? @map("returned_by_user_id")
+  received_by_user_id String? @map("received_by_user_id")
+  borrow_status_id    Int     @map("borrow_status_id")
+
+  return_date      DateTime?        @map("return_date")
+  return_condition ReturnCondition? @map("return_condition")
+  return_method    ReturnMethod?    @map("return_method")
+  return_remark    String?          @map("return_remark") @db.Text
+
+  request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
+  delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  asset          Asset        @relation(fields: [asset_id], references: [id])
+  borrower       User         @relation("BorrowerUser", fields: [borrower_id], references: [id])
+  returnedByUser User?        @relation("ReturnedByUser", fields: [returned_by_user_id], references: [id])
+  receivedByUser User?        @relation("ReceivedByUser", fields: [received_by_user_id], references: [id])
+  borrowStatus   BorrowStatus @relation(fields: [borrow_status_id], references: [id])
+
+  @@map("borrow_transaction")
+}
