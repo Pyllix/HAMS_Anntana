@@ -1,6 +1,7 @@
 # AGENT.md
 
 > This file guides AI agents and developers working on this codebase.
+> **CRITICAL RULE FOR ALL AI AGENTS:** You MUST read all `.md` files at the root of this project (e.g., `AGENT.md`, `ARCHITECTURE.md`, `CONTEXT.md`, `README.md`) using your `view_file` tool *every time* before starting any task, to ensure full context awareness.
 > Follow all rules here unless explicitly overridden in a task-specific instruction.
 
 ---

@@ -1,21 +1,11 @@
-export type AssetStatus = "ทั้งหมด" | "ว่าง" | "กำลังยืม" | "ส่งซ่อม"
-export type AssetType =
-  | "ทั้งหมด"
-  | "01-ครุภัณฑ์วิทยาศาสตร์และการแพทย์"
-  | "06-ครุภัณฑ์โฆษณาและเผยแพร่"
-  | "07-ครุภัณฑ์ยานพาหนะและขนส่ง"
+import type { AssetCategory } from "./common"
+export type BorrowAssetStatus = "ว่าง" | "กำลังยืม" | "ส่งซ่อม"
+export type BorrowStatusFilter = "ทั้งหมด" | BorrowAssetStatus
 
 export interface Asset {
   id: string
   code: string
   name: string
-<<<<<<< Updated upstream
-  type: AssetType
-  borrower: string
-  borrowDate: string
-  status: AssetStatus
-  image: string
-=======
   category: AssetCategory
   borrower?: string
   department?: string
@@ -23,7 +13,6 @@ export interface Asset {
   status: BorrowAssetStatus
   image?: string
   note?: string
->>>>>>> Stashed changes
 }
 
 export interface BorrowTransactionInput {

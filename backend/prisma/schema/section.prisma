@@ -12,6 +12,7 @@ model Section {
   deletedAt DateTime? @map("deleted_at")
 
   users User[]
+  asset Asset[]
 
   @@map("sections")
 }

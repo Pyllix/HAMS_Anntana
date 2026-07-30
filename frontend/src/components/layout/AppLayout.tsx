@@ -5,7 +5,8 @@ import Sidebar from "./Sidebar"
 
 const pageTitles: Record<string, string> = {
   "/": "จัดการการยืม-คืนครุภัณฑ์",
-  "/inventory": "คลังครุภัณฑ์",
+  "/2": "ทำรายการการยืม-คืนครุภัณฑ์",
+  "/inventory": "จัดการสต็อกครุภัณฑ์",
   "/requests": "จัดการสต็อกอะไหล่",
   "/settings": "ตั้งค่าระบบ",
 }
