@@ -7,15 +7,27 @@ export type AssetType =
 
 export interface Asset {
   id: string
+  code: string
   name: string
+<<<<<<< Updated upstream
   type: AssetType
   borrower: string
   borrowDate: string
   status: AssetStatus
   image: string
+=======
+  category: AssetCategory
+  borrower?: string
+  department?: string
+  borrowDate?: string
+  status: BorrowAssetStatus
+  image?: string
+  note?: string
+>>>>>>> Stashed changes
 }
 
 export interface BorrowTransactionInput {
+  assetId: string
   borrowerName: string
   department: string
   borrowDate: string
@@ -23,6 +35,7 @@ export interface BorrowTransactionInput {
 }
 
 export interface ReturnTransactionInput {
+  assetId: string
   returnerName: string
   condition: "ปกติ (พร้อมใช้งาน)" | "ชำรุด / ส่งซ่อม"
   returnDate: string
