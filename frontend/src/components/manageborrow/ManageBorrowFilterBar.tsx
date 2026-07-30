@@ -17,31 +17,25 @@ const BORROW_STATUS_OPTIONS: BorrowStatusFilter[] = [
 ]
 
 export function ManageBorrowFilterBar() {
-  const {
-    searchQuery,
-    statusFilter,
-    typeFilter,
-    setSearchQuery,
-    setStatusFilter,
-    setTypeFilter,
-  } = useManageBorrowStore()
+  const { filters, setFilters } = useManageBorrowStore()
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-3">
-      <InputGroup className="w-64 rounded-xl border border-slate-200 bg-slate-50">
+    <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-3">
+      <InputGroup className="w-64 border border-slate-200 bg-slate-50">
         <InputGroupInput
           placeholder="ค้นหาชื่อ, รหัส หรือผู้ยืมครุภัณฑ์..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={filters.search}
+          onChange={(e) => setFilters({ search: e.target.value })}
         />
         <InputGroupAddon>
           <Search className="h-4 w-4 text-slate-400" />
         </InputGroupAddon>
       </InputGroup>
 
+      {/* เลือกประเภท */}
       <NativeSelect
-        value={typeFilter}
-        onChange={(e) => setTypeFilter(e.target.value)}
+        value={filters.categoryCode}
+        onChange={(e) => setFilters({ categoryCode: e.target.value })}
         className="rounded-xl"
       >
         <NativeSelectOption value="ทั้งหมด">ประเภท: ทั้งหมด</NativeSelectOption>
@@ -52,9 +46,12 @@ export function ManageBorrowFilterBar() {
         ))}
       </NativeSelect>
 
+      {/* เลือกสถานะ */}
       <NativeSelect
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value as BorrowStatusFilter)}
+        value={filters.status}
+        onChange={(e) =>
+          setFilters({ status: e.target.value as BorrowStatusFilter })
+        }
         className="rounded-xl"
       >
         {BORROW_STATUS_OPTIONS.map((s) => (
