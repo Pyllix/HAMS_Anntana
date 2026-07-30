@@ -1,45 +1,69 @@
+import { mockManageBorrowAssets } from "@/mock-up/manageBorrowMockData"
 import type {
   Asset,
   BorrowTransactionInput,
   ReturnTransactionInput,
 } from "../types/manageBorrowTypes"
 
+// เก็บ State จำลองไว้ในไฟล์ Service (เสมือนเป็น Database ชั่วคราว)
+let localAssets = [...mockManageBorrowAssets]
+
 export const manageBorrowService = {
-  processBorrow: (
-    assets: Asset[],
-    id: string,
-    input: BorrowTransactionInput
-  ): Asset[] => {
-    return assets.map((asset) =>
-      asset.id === id
+  // ดึงข้อมูลรายการครุภัณฑ์ทั้งหมด (จำลอง async/await)
+  fetchAssets: async (): Promise<Asset[]> => {
+    await new Promise((res) => setTimeout(res, 300))
+    return [...localAssets]
+  },
+
+  // ทำรายการยืมครุภัณฑ์
+  borrowAsset: async (input: BorrowTransactionInput): Promise<boolean> => {
+    await new Promise((res) => setTimeout(res, 300))
+
+    localAssets = localAssets.map((asset) =>
+      asset.id === input.assetId
         ? {
             ...asset,
             status: "กำลังยืม",
-            borrower: `${input.borrowerName}\n${input.department}`,
+            borrower: input.borrowerName,
+            department: input.department,
             borrowDate: input.borrowDate,
+            note: undefined,
           }
         : asset
     )
+    return true
   },
 
-  processReturn: (
-    assets: Asset[],
-    id: string,
-    input: ReturnTransactionInput
-  ): Asset[] => {
-    return assets.map((asset) =>
-      asset.id === id
-        ? {
-            ...asset,
-            status: input.condition === "ชำรุด / ส่งซ่อม" ? "ส่งซ่อม" : "ว่าง",
-            borrower:
-              input.condition === "ชำรุด / ส่งซ่อม"
-                ? "ช่างเทคนิค\nฝ่ายซ่อมบำรุง"
-                : "-\nCentral Supply",
-            borrowDate:
-              input.condition === "ชำรุด / ส่งซ่อม" ? input.returnDate : "-",
-          }
-        : asset
-    )
+  // ทำรายการรับคืนครุภัณฑ์
+  returnAsset: async (input: ReturnTransactionInput): Promise<boolean> => {
+    await new Promise((res) => setTimeout(res, 300))
+
+    const isRepaired = input.condition === "ชำรุด / ส่งซ่อม"
+
+    localAssets = localAssets.map((asset) => {
+      if (asset.id !== input.assetId) return asset
+
+      // สภาพชำรุด -> ปรับสถานะเป็น "ส่งซ่อม" และย้ายสังกัดไปฝ่ายซ่อมบำรุง
+      if (isRepaired) {
+        return {
+          ...asset,
+          status: "ส่งซ่อม",
+          borrower: "ช่างเทคนิค",
+          department: "ฝ่ายซ่อมบำรุง",
+          borrowDate: input.returnDate,
+          note: input.note,
+        }
+      }
+
+      // สภาพปกติ -> ปรับสถานะเป็น "ว่าง" เพื่อให้ผู้อื่นยืมต่อได้
+      return {
+        ...asset,
+        status: "ว่าง",
+        borrower: "-",
+        department: "Central Supply",
+        borrowDate: "-",
+      }
+    })
+    return true
   },
 }
