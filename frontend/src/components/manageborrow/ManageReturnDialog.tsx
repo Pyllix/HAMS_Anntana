@@ -69,7 +69,7 @@ export function ManageReturnDialog({
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">
+          <h2 className="text-base font-semibold text-slate-800">
             ทำรายการรับคืนครุภัณฑ์
           </h2>
           <button
@@ -90,7 +90,7 @@ export function ManageReturnDialog({
               {asset.name}
             </p>
             <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
-              รหัส: {asset.id} • Status ปัจจุบัน:{" "}
+              รหัส: {asset.code} • สถานะปัจจุบัน:{" "}
               <span className="mt-0.5 text-[11px] font-semibold text-amber-600">
                 {asset.status}
               </span>
@@ -104,7 +104,7 @@ export function ManageReturnDialog({
           <span className="font-semibold text-slate-900">
             {asset.borrower} ({asset.department})
           </span>{" "}
-          • นำไปเมื่อ {asset.borrowDate}
+          • นำไปเมื่อ {asset.borrowDate} {asset.borrowTime}
         </div>
 
         {/* Form */}

@@ -86,7 +86,7 @@ export function ManageBorrowDialog({
               {asset.name}
             </p>
             <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
-              รหัส: {asset.id} • สถานะ:{" "}
+              รหัส: {asset.code} • สถานะ:{" "}
               <span className="mt-0.5 text-[11px] font-semibold text-emerald-600">
                 {asset.status}
               </span>
