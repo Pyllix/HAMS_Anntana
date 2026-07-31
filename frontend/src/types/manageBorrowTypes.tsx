@@ -10,6 +10,7 @@ export interface Asset {
   borrower?: string
   department?: string
   borrowDate?: string
+  borrowTime?: string
   status: BorrowAssetStatus
   image?: string
   note?: string
