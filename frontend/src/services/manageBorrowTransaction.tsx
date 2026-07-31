@@ -27,7 +27,7 @@ export const manageBorrowService = {
             borrower: input.borrowerName,
             department: input.department,
             borrowDate: input.borrowDate,
-            note: undefined,
+            borrowTime: input.borrowTime,
           }
         : asset
     )
@@ -62,6 +62,8 @@ export const manageBorrowService = {
         borrower: "-",
         department: "Central Supply",
         borrowDate: "-",
+        borrowTime: undefined,
+        deleteNote: undefined,
       }
     })
     return true
