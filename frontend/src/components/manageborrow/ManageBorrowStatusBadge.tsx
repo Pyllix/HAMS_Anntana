@@ -21,7 +21,7 @@ const STATUS_CONFIG: Record<
   ส่งซ่อม: {
     dot: "bg-white",
     text: "text-white",
-    bg: "bg-slate-900 border border-slate-900",
+    bg: "bg-slate-900 border border-slate-200",
   },
 }
 

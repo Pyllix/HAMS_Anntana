@@ -75,17 +75,17 @@ export function ManageBorrowTable({ assets, onBorrow, onReturn }: Props) {
                 {/*ผู้ยืม / แผนก */}
                 <td className="px-5 py-3">
                   <p className="font-medium text-slate-800">
-                    {asset.borrower || "-"}{" "}
+                    {asset.borrower}
                   </p>
-                  {asset.department && (
-                    <p className="text-xs text-slate-400">{asset.department}</p>
-                  )}
+                  <p className="text-xs text-slate-400">
+                    {asset.department}
+                    </p>
                 </td>
 
                 {/*วันที่ยืม */}
                 <td className="px-5 py-3">
-                  <p className="font-medium text-slate-800">
-                    {asset.borrowDate || "-"}
+                  <p className="font-sm text-slate-800">
+                    {asset.borrowDate}
                   </p>
                 </td>
 
