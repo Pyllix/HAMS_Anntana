@@ -6,6 +6,7 @@ import {
   SearchCheck,
   LogOut,
   FilePlus,
+  Network,
   type LucideIcon,
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
@@ -59,6 +60,12 @@ const navItems: NavItem[] = [
     label: "ประวัติการยืม",
     icon: History,
     path: "/history",
+    roles: ["admin"],
+  },
+  {
+    label: "จัดการแผนก",
+    icon: Network,
+    path: "/settings/departments",
     roles: ["admin"],
   },
 ]
