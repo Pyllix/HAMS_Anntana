@@ -7,6 +7,7 @@ import {
   LogOut,
   FilePlus,
   Network,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
@@ -66,6 +67,12 @@ const navItems: NavItem[] = [
     label: "จัดการแผนก",
     icon: Network,
     path: "/settings/departments",
+    roles: ["admin"],
+  },
+  {
+    label: "จัดการผู้ใช้งาน",
+    icon: Users,
+    path: "/settings/users",
     roles: ["admin"],
   },
 ]
