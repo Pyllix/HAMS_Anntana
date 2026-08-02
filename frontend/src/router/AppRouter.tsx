@@ -4,10 +4,10 @@ import AppLayout from "@/components/layout/AppLayout"
 import LoginPage from "@/pages/auth/LoginPage"
 import StockPage from "@/pages/Inventory/StockPage"
 import Maintenance from "@/pages/Maintenance"
-import Track from "@/pages/Track"
 import History from "@/pages/History"
 import ManagePage from "@/pages/Borrow/ManagePage"
 import EquipmentBorrowPage from "@/pages/EquipmentBorrow/EquipmentBorrowPage"
+import Track from "@/pages/Track/TrackPage"
 
 const router = createBrowserRouter([
   {
