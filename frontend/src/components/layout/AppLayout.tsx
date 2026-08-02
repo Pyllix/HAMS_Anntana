@@ -10,6 +10,7 @@ const pageTitles: Record<string, string> = {
   "/requests": "จัดการสต็อกอะไหล่",
   "/settings": "ตั้งค่าระบบ",
   "/settings/departments": "จัดการแผนก",
+  "/settings/users": "จัดการผู้ใช้งาน",
 }
 
 export default function AppLayout() {
