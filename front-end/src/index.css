@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  /* สีของพื้นหลัง App */
+  --color-bg-app: var(--color-slate-50);
+  /* สีของพื้นหลัง Component */
+  --color-bg-component: var(--color-white);
+}

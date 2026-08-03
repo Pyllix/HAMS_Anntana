@@ -1,4 +1,3 @@
-// src/components/Sidebar.tsx
 import {
   FileCheck,
   Package,
@@ -9,11 +8,10 @@ import {
   FilePlus,
   type LucideIcon,
 } from "lucide-react"
-import { NavLink } from "react-router-dom"
+import { NavLink, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import type { UserRole } from "@/types/user"
 import { useAuthStore } from "@/stores/authStore"
-import { useNavigate } from "react-router-dom"
 
 interface NavItem {
   label: string
@@ -34,7 +32,7 @@ const navItems: NavItem[] = [
     roles: ["admin"],
   },
   {
-    label: "ยืม - คืนครุภัณฑ์",
+    label: "ทำรายการยืม - คืนครุภัณฑ์",
     icon: FilePlus,
     path: "/2",
     roles: ["admin"],
@@ -69,9 +67,11 @@ export default function Sidebar({ userRole }: SidebarProps) {
   const { logout } = useAuthStore()
   const navigate = useNavigate()
 
-  const filtered = navItems.filter(
-    (item) => userRole && item.roles.includes(userRole as any)
-  )
+  const filtered = userRole
+    ? navItems.filter((item) =>
+        item.roles.includes(userRole as Exclude<UserRole, null>)
+      )
+    : []
 
   const handleLogout = () => {
     logout()
@@ -113,6 +113,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+
       {/* Logout Button */}
       <div className="px-3 py-4">
         <button

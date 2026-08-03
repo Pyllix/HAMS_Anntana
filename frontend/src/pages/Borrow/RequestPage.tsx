@@ -1,7 +1,5 @@
 function RequestPage() {
-  return (
-    <div>RequestPage</div>
-  )
+  return <div>RequestPage</div>
 }
 
 export default RequestPage
