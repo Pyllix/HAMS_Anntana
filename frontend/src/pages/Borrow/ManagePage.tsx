@@ -59,6 +59,47 @@ export default function ManagePage() {
       <div className="container mx-auto py-4">
         <DataTable columns={columns} data={equipments} />
       </div>
+      {/* table ค้าบ */}
+      {/* <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <ManageBorrowTable
+          assets={pagedAssets}
+          onBorrow={(asset) => {
+            setSelected(asset)
+            setModals((m) => ({ ...m, borrow: true }))
+          }}
+          onReturn={(asset) => {
+            setSelected(asset)
+            setModals((m) => ({ ...m, return: true }))
+          }}
+        />
+        <ManageBorrowPagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={filteredAssets.length}
+          onPageChange={setPage}
+        />
+      </div> */}
+
+      {/* Dialog */}
+      {/* <ManageBorrowDialog
+        isOpen={modals.borrow}
+        asset={selected}
+        onClose={() => setModals((m) => ({ ...m, borrow: false }))}
+        onConfirm={(data) => {
+          if (selected) store.checkOutAsset(selected.id, data)
+          setModals((m) => ({ ...m, borrow: false }))
+        }}
+      />
+
+      <ManageReturnDialog
+        isOpen={modals.return}
+        asset={selected}
+        onClose={() => setModals((m) => ({ ...m, return: false }))}
+        onConfirm={(data) => {
+          if (selected) store.checkInAsset(selected.id, data)
+          setModals((m) => ({ ...m, return: false }))
+        }}
+      /> */}
     </div>
   )
 }

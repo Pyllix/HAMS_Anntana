@@ -5,6 +5,9 @@ import { CreateAssetLostDto } from './dto/create-asset-lost.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { CompleteAssetDisposalDto } from './dto/complete-asset-disposal.dto';
 import { PrismaService } from 'src/prisma.service';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
+import { Prisma } from '@prisma/client';
 
 /**
  * Asset Status Transition Map
@@ -77,8 +80,33 @@ export class AssetService {
     });
   }
 
-  async findAll() {
-    return this.prisma.asset.findMany({ include: ASSET_INCLUDE });
+  async findAll(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AssetWhereInput = query.search
+      ? {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { model: { contains: query.search, mode: 'insensitive' } },
+            { serialNo: { contains: query.search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.asset.findMany({
+        where,
+        include: ASSET_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.asset.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
   async findOne(id: string) {
@@ -102,12 +130,36 @@ export class AssetService {
 
   // ─── Lost History ─────────────────────────────────────────────────────────
 
-  /** ดึงประวัติการสูญหายของ Asset ทั้งหมด */
-  async findAllLostRecords() {
-    return this.prisma.assetLost.findMany({
-      orderBy: { discoveredAt: 'desc' },
-      include: { asset: { include: ASSET_INCLUDE }, creator: true, updater: true },
-    });
+  /** ดึงประวัติการสูญหายของ Asset ทั้งหมด (paginated) */
+  async findAllLostRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AssetLostWhereInput = query.search
+      ? {
+          asset: {
+            OR: [
+              { name: { contains: query.search, mode: 'insensitive' } },
+              { model: { contains: query.search, mode: 'insensitive' } },
+              { serialNo: { contains: query.search, mode: 'insensitive' } },
+            ],
+          },
+        }
+      : {};
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.assetLost.findMany({
+        where,
+        orderBy: { discoveredAt: 'desc' },
+        include: { asset: { include: ASSET_INCLUDE }, creator: true, updater: true },
+        skip,
+        take: limit,
+      }),
+      this.prisma.assetLost.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
   /**
@@ -152,22 +204,74 @@ export class AssetService {
 
   // ─── Disposal Workflow ────────────────────────────────────────────────────
 
-  /** ดึงประวัติรอจำหน่ายทั้งหมด (WAIT_DISPOSAL) */
-  async findAllWaitDisposalRecords() {
-    return this.prisma.assetDisposal.findMany({
-      where: { disposalStatus: { code: 'WAIT_DISPOSAL' } },
-      orderBy: { pendingAt: 'desc' },
-      include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
-    });
+  /** ดึงประวัติรอจำหน่ายทั้งหมด (WAIT_DISPOSAL) (paginated) */
+  async findAllWaitDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AssetDisposalWhereInput = {
+      disposalStatus: { code: 'WAIT_DISPOSAL' },
+      ...(query.search
+        ? {
+            asset: {
+              OR: [
+                { name: { contains: query.search, mode: 'insensitive' } },
+                { model: { contains: query.search, mode: 'insensitive' } },
+                { serialNo: { contains: query.search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.assetDisposal.findMany({
+        where,
+        orderBy: { pendingAt: 'desc' },
+        include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
+        skip,
+        take: limit,
+      }),
+      this.prisma.assetDisposal.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
-  /** ดึงประวัติการจำหน่ายทั้งหมด (DISPOSAL) */
-  async findAllCompletedDisposalRecords() {
-    return this.prisma.assetDisposal.findMany({
-      where: { disposalStatus: { code: 'DISPOSAL' } },
-      orderBy: { disposedAt: 'desc' },
-      include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
-    });
+  /** ดึงประวัติการจำหน่ายทั้งหมด (DISPOSAL) (paginated) */
+  async findAllCompletedDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AssetDisposalWhereInput = {
+      disposalStatus: { code: 'DISPOSAL' },
+      ...(query.search
+        ? {
+            asset: {
+              OR: [
+                { name: { contains: query.search, mode: 'insensitive' } },
+                { model: { contains: query.search, mode: 'insensitive' } },
+                { serialNo: { contains: query.search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.assetDisposal.findMany({
+        where,
+        orderBy: { disposedAt: 'desc' },
+        include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
+        skip,
+        take: limit,
+      }),
+      this.prisma.assetDisposal.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
   /**

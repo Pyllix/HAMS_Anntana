@@ -16,12 +16,12 @@ const STATUS_CONFIG: Record<
   กำลังยืม: {
     dot: "bg-slate-500",
     text: "text-slate-700",
-    bg: "bg-white border border-slate-200",
+    bg: "bg-slate-50 border border-slate-200",
   },
   ส่งซ่อม: {
-    dot: "bg-red-500",
+    dot: "bg-white",
     text: "text-white",
-    bg: "bg-slate-900 border border-slate-900",
+    bg: "bg-slate-900 border border-slate-200",
   },
 }
 
