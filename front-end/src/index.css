@@ -1,6 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
+  /* font อิงตามเครื่อง */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   /* สีของพื้นหลัง App */
   --color-bg-app: var(--color-slate-50);
   /* สีของพื้นหลัง Component */
