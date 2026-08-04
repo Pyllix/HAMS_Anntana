@@ -9,9 +9,10 @@ async function bootstrap() {
     bodyParser: false, // Disable body parsing to allow apiReference to handle it
   });
 
-  // Enable CORS for the React frontend
+  // Enable CORS for all origins (reflects the request origin)
   app.enableCors({
-    origin: process.env.FRONTEND_URL, // React frontend URL
+    // origin: process.env.FRONTEND_URL,
+    origin: true,
     credentials: true,
   });
 
