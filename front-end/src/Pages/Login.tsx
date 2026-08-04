@@ -10,9 +10,10 @@ export default function Login() {
     password: "",
   });
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
-  const user = useAuthStore((state) => state.user);
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
@@ -22,15 +23,35 @@ export default function Login() {
     }));
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  //   e.preventDefault();
+  //   const userLogin = authLogin(formData.email, formData.password);
+  //   if (userLogin) {
+  //     login(userLogin);
+  //     console.log("authStore:", user);
+  //     navigate("/", { replace: true });
+  //   }
+  // }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const userLogin = authLogin(formData.email, formData.password);
-    if (userLogin) {
-      login(userLogin);
-      console.log("authStore:", user);
-      navigate("/", { replace: true })
+    setIsLoading(true);
+    try {
+      const loginData = await authLogin(formData.email, formData.password);
+
+      if (loginData) {
+        localStorage.setItem("token", loginData.token);
+
+        login(loginData.user, loginData.token);
+
+        console.log("Login Success!");
+        navigate("/", { replace: true });
+      }
+    } catch (error) {
+      console.error("Login Failed:", error);
+    } finally {
+      setIsLoading(false);
     }
-    
   }
 
   return (
