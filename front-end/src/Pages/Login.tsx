@@ -1,8 +1,38 @@
 import { Box, Mail, Lock } from "lucide-react";
 import { useState } from "react";
+import { authLogin } from "../services/authService";
+import { useAuthStore } from "../stores/authStore";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
-  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const navigate = useNavigate();
+  const login = useAuthStore((state) => state.login);
+  const user = useAuthStore((state) => state.user);
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const userLogin = authLogin(formData.email, formData.password);
+    if (userLogin) {
+      login(userLogin);
+      console.log("authStore:", user);
+      navigate("/", { replace: true })
+    }
+    
+  }
+
   return (
     /* container หลัก */
     <div className="min-h-screen w-full flex justify-center items-center bg-bg-app antialiased">
@@ -37,7 +67,7 @@ export default function Login() {
             </p>
           </div>
           {/* form */}
-          <form action="" className="space-y-3">
+          <form action="" className="space-y-3" onSubmit={handleSubmit}>
             {/* Input: ชื่อผู้ใช้ */}
             <div className="space-y-1.5">
               <label className="block text-sm font-semibold text-slate-700">
@@ -50,6 +80,9 @@ export default function Login() {
                 <input
                   type="email"
                   placeholder="admin@company.com"
+                  onChange={handleInputChange}
+                  name="email"
+                  value={formData.email}
                   className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -64,8 +97,11 @@ export default function Login() {
                   <Lock className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type="password"
                   placeholder="••••••••"
+                  onChange={handleInputChange}
+                  name="password"
+                  value={formData.password}
                   className="w-full pl-10 pr-12 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
               </div>
