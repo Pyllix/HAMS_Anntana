@@ -40,7 +40,9 @@ export default function Login() {
       const loginData = await authLogin(formData.email, formData.password);
 
       if (loginData) {
+
         localStorage.setItem("token", loginData.token);
+        localStorage.setItem("userId", loginData.user.id);
 
         login(loginData.user, loginData.token);
 

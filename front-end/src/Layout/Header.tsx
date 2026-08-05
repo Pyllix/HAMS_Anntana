@@ -18,7 +18,9 @@ export default function Header() {
           <h1 className="text-md font-semibold tracking-tight">
             {user?.firstname} {user?.lastname}
           </h1>
-          <p className="text-xs text-slate-500 font-light tracking-wide">{user?.role}</p>
+          <p className="text-xs text-slate-500 font-light tracking-wide">
+            {user?.role}
+          </p>
         </div>
       </div>
     </div>
