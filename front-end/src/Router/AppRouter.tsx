@@ -17,39 +17,20 @@ const router = createBrowserRouter([
     path: "/login",
     element: <Login />,
   },
-  // ชั้นที่ 1: เช็กแค่วาล็อกอินแล้วหรือยัง (Authentication)
   {
     element: <ProtectedRoute />,
     children: [
       {
-        element: <AppLayout />, // ทุกหน้าข้างในนี้จะอยู่ภายใต้ Layout หลัก
+        element: <AppLayout />,
         children: [
-          // ชั้นที่ 2: เช็ก Role สำหรับแต่ละหน้า (Authorization)
           {
-            element: <ProtectedRoute allowedRoles={["admin", "user"]} />,
+            element: <ProtectedRoute allowedRoles={["ADMIN", "user"]} />,
             children: [
               {
                 path: "borrow-return",
                 element: <BorrowReturn />,
               },
-              // เพิ่มหน้าอื่นๆ ที่นี่...
-              // { path: "asset-stock", element: <AssetStock /> },
             ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    element: <ProtectedRoute />,
-    children: [
-      {
-        path: "/",
-        element: <AppLayout />,
-        children: [
-          {
-            element: <ProtectedRoute />,
-            children: [{ path: "/borrow-return", element: <BorrowReturn /> }],
           },
         ],
       },

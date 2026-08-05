@@ -10,13 +10,13 @@ export default function Header() {
       {/* user */}
       <div className="flex items-center gap-4">
         <img
-          src={user?.image_url ?? undefined}
+          src={user?.imageUrl ?? undefined}
           alt="User"
           className="w-8 h-8 rounded-full shadow-md object-cover"
         />
         <div>
           <h1 className="text-md font-semibold tracking-tight">
-            {user?.first_name} {user?.last_name}
+            {user?.firstname} {user?.lastname}
           </h1>
           <p className="text-xs text-slate-500 font-light tracking-wide">{user?.role}</p>
         </div>

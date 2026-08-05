@@ -1,5 +1,5 @@
 export type UserRole =
-  | "admin"
+  | "ADMIN"
   | "inventory_officer"
   | "user"
   | "technician"
@@ -7,27 +7,15 @@ export type UserRole =
   | null;
 
 export interface User {
-  user_id: string;
-
-  user_name: string;
-
-  first_name: string;
-
-  last_name: string;
-
+  id: string;
+  userName: string;
+  firstname: string;
+  lastname: string;
   email: string;
-
-  password_hash: string;
-
+  emailVerified: boolean;
+  imageUrl: string | null;
   section_id: string;
-
-  role: UserRole;
-
-  image_url: string | null;
-
-  createdAt: Date | string;
-
-  updatedAt: Date | string;
-
-  deleteAt: Date | string | null;
+  role: UserRole
+  createdAt: string;
+  updatedAt: string;
 }
