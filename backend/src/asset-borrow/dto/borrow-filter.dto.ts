@@ -9,9 +9,9 @@ export class BorrowFilterDto extends PaginationDto {
   @IsUUID()
   assetId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by borrower UUID' })
+  @ApiPropertyOptional({ description: 'Filter by borrower UUID or Employee Code (รหัสพนักงาน)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   borrowerId?: string;
 
   @ApiPropertyOptional({ description: 'Filter by borrow status ID (1=BORROWED, 2=RETURNED, 3=CANCELLED)' })
