@@ -59,6 +59,7 @@ const sections = [
 
 const systemUsers = [
   {
+    employeeId: 'GOV-67001',
     userName: 'admin',
     firstname: 'System',
     lastname: 'Admin',
@@ -68,6 +69,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
+    employeeId: 'GOV-67002',
     userName: 'manager',
     firstname: 'System',
     lastname: 'Manager',
@@ -77,6 +79,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
+    employeeId: 'GOV-67003',
     userName: 'parcel',
     firstname: 'System',
     lastname: 'Parcel Staff',
@@ -86,6 +89,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
+    employeeId: 'GOV-67004',
     userName: 'assetcenter',
     firstname: 'System',
     lastname: 'Asset Center',
@@ -95,6 +99,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
+    employeeId: 'GOV-67005',
     userName: 'deptstaff',
     firstname: 'System',
     lastname: 'Dept Staff',
@@ -104,6 +109,7 @@ const systemUsers = [
     sectionCode: 'OPD',
   },
   {
+    employeeId: 'GOV-67006',
     userName: 'maintenance',
     firstname: 'System',
     lastname: 'Maintenance',
@@ -200,7 +206,11 @@ async function main() {
 
     if (existing) {
       adminId = existing.id;
-      console.log(`  ⚠️  User already exists: ${data.email}`);
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { employeeId: data.employeeId },
+      });
+      console.log(`  ⚠️  User already exists, updated employeeId (${data.employeeId}): ${data.email}`);
       continue;
     }
 
@@ -211,6 +221,7 @@ async function main() {
     await prisma.user.create({
       data: {
         id: adminId,
+        employeeId: data.employeeId,
         userName: data.userName,
         firstname: data.firstname,
         lastname: data.lastname,
