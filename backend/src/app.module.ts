@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaService } from './prisma.service';
-import { AuthModule } from '@thallesp/nestjs-better-auth';
+import { AuthModule, AuthGuard } from '@thallesp/nestjs-better-auth';
 import { auth } from './auth/auth';
 import { AuthFeatureModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -11,6 +12,7 @@ import { AssetStatusModule } from './asset-status/asset-status.module';
 import { AvailabilitiesModule } from './availabilities/availabilities.module';
 import { AssetModule } from './asset/asset.module';
 import { AssetBorrowModule } from './asset-borrow/asset-borrow.module';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -26,7 +28,17 @@ import { AssetBorrowModule } from './asset-borrow/asset-borrow.module';
     AssetBorrowModule,
   ],
   controllers: [],
-  providers: [PrismaService],
+  providers: [
+    PrismaService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
   exports: [PrismaService],
 })
 export class AppModule {}

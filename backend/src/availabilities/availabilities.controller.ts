@@ -4,6 +4,8 @@ import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Availabilities')
 @ApiBearerAuth()
@@ -14,6 +16,7 @@ export class AvailabilitiesController {
 
   // ─── Create ────────────────────────────────────────────────────────────────
   @Post()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create new availability status' })
   @ApiResponse({ status: 201, description: 'Availability Status created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
@@ -47,6 +50,7 @@ export class AvailabilitiesController {
 
   // ─── Update ────────────────────────────────────────────────────────────────
   @Patch(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update availability status by ID' })
   @ApiResponse({ status: 200, description: 'Return updated availability status' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -59,6 +63,7 @@ export class AvailabilitiesController {
   // ─── Soft Delete ───────────────────────────────────────────────────────────
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Soft Delete Availability Status by ID' })
   @ApiResponse({ status: 200, description: 'Availability Status deleted successfully (soft delete)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -70,6 +75,7 @@ export class AvailabilitiesController {
 
   // ─── Restore ───────────────────────────────────────────────────────────────
   @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restore a soft-deleted availability status' })
   @ApiResponse({ status: 200, description: 'Availability Status restored successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
