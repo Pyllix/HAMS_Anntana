@@ -40,7 +40,6 @@ export default function Login() {
       const loginData = await authLogin(formData.email, formData.password);
 
       if (loginData) {
-
         localStorage.setItem("token", loginData.token);
         localStorage.setItem("userId", loginData.user.id);
 
@@ -131,10 +130,11 @@ export default function Login() {
             </div>
             {/* ปุ่ม login */}
             <button
+              disabled={isLoading}
               type="submit"
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all mt-4"
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all mt-4 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              เข้าสู่ระบบ
+              {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
             </button>
           </form>
         </div>

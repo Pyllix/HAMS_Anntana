@@ -26,37 +26,37 @@ export default function Sidebar() {
       title: "ยืม-คืนครุภัณฑ์",
       path: "/borrow-return",
       icon: Repeat,
-      roles: ["ADMIN", "staff", "user"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
     },
     {
       title: "จัดการสต็อกครุภัณฑ์",
       path: "/asset-stock",
       icon: Archive,
-      roles: ["ADMIN", "staff"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF"],
     },
     {
       title: "จัดการสต็อกอะไหล่",
       path: "/part-stock",
       icon: Wrench,
-      roles: ["ADMIN", "staff"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF"],
     },
     {
       title: "แจ้งซ่อมครุภัณฑ์",
       path: "/maintenance-request",
       icon: Wrench,
-      roles: ["ADMIN", "staff", "user"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
     },
     {
       title: "ติดตามสถานะ",
       path: "/track-status",
       icon: History,
-      roles: ["ADMIN", "staff", "user"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
     },
     {
       title: "ประวัติการยืม",
       path: "/borrow-history",
       icon: History,
-      roles: ["ADMIN", "staff", "user"],
+      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
     },
   ];
 

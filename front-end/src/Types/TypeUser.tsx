@@ -1,6 +1,6 @@
 export type UserRole =
   | "ADMIN"
-  | "inventory_officer"
+  | "ASSET_CENTER_STAFF"
   | "user"
   | "technician"
   | "manager"

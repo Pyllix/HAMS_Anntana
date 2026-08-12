@@ -28,7 +28,7 @@ const router = createBrowserRouter([
         children: [
           {
             // FIX: Added "staff" role to match the sidebar navigation rules.
-            element: <ProtectedRoute allowedRoles={["ADMIN", "user"]} />,
+            element: <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />,
             children: [
               {
                 path: "borrow-return",
