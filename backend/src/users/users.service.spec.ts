@@ -247,7 +247,13 @@ describe('UsersService', () => {
       const result = await service.findOne('user-uuid-1');
 
       expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
-        where: { id: 'user-uuid-1', deletedAt: null },
+        where: {
+          deletedAt: null,
+          OR: [
+            { id: 'user-uuid-1' },
+            { employeeId: 'user-uuid-1' },
+          ],
+        },
         omit: { deletedAt: true },
       });
       expect(result).toEqual(mockUser);
@@ -257,7 +263,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne('nonexistent-id')).rejects.toThrow(
-        new NotFoundException('User not found with ID: nonexistent-id'),
+        new NotFoundException('User not found with ID or Employee Code: nonexistent-id'),
       );
     });
   });
@@ -338,7 +344,13 @@ describe('UsersService', () => {
       const result = await service.restore('user-uuid-1');
 
       expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
-        where: { id: 'user-uuid-1', deletedAt: { not: null } },
+        where: {
+          deletedAt: { not: null },
+          OR: [
+            { id: 'user-uuid-1' },
+            { employeeId: 'user-uuid-1' },
+          ],
+        },
       });
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
@@ -353,7 +365,7 @@ describe('UsersService', () => {
 
       await expect(service.restore('nonexistent-id')).rejects.toThrow(
         new NotFoundException(
-          'Deleted user not found with ID: nonexistent-id (may not exist or not deleted)',
+          'Deleted user not found with ID or Employee Code: nonexistent-id (may not exist or not deleted)',
         ),
       );
 
