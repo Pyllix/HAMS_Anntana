@@ -24,7 +24,7 @@ export default function BorrowReturn() {
   
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* search bar */}
       <div className="flex gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
         {/* กรอกคำค้นหา */}
@@ -32,7 +32,7 @@ export default function BorrowReturn() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="ค้นหาชื่อ, อีเมล หรือรหัสพนักงาน..."
+            placeholder="ค้นหา ..."
             onChange={(e) => setInputSearch(e.target.value)}
             value={inputSearch}
             className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"

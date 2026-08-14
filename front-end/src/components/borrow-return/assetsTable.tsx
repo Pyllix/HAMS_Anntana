@@ -106,27 +106,50 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
     header: "จัดการ",
     cell: (info) => {
       const row = info.row.original;
-      const isAvailable =
-        info.row.original.availabilityStatus?.code === "AVAILABLE";
+      const isAvailable = info.row.original.availabilityStatus?.code;
 
       const handleOpenModal = () => {
         useBorrowModalStore.getState().openForm(row);
-        console.log(useBorrowModalStore.getState().isFormOpen)
+        console.log(useBorrowModalStore.getState().isFormOpen);
         console.log(row);
       };
-      return (
-        <button
-          type="button"
-          onClick={handleOpenModal}
-          className={
-            isAvailable
-              ? "rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
-              : "rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
-          }
-        >
-          {isAvailable ? "ยืมของ" : "รับคืน"}
-        </button>
-      );
+
+      if (isAvailable === "AVAILABLE") {
+        return (
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            className="rounded-lg bg-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+          >
+            {"ยืมของ"}
+          </button>
+        );
+      }
+
+      if (isAvailable === "BORROWED") {
+        return (
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            className="rounded-lg border border-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
+          >
+            {"รับคืน"}
+          </button>
+        );
+      }
+
+      if (isAvailable === "UNAVAILABLE") {
+        return (
+          <button
+            disabled
+            type="button"
+            onClick={handleOpenModal}
+            className="rounded-lg border border-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
+          >
+            {"ไม่พร้อม"}
+          </button>
+        );
+      }
     },
   },
 ];
