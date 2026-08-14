@@ -99,15 +99,23 @@ export class UsersService {
 
   // ─── Read One ─────────────────────────────────────────────────────────────────
 
-  /** Retrieve a user by ID (excludes soft-deleted users) */
-  async findOne(id: string) {
+  /** Retrieve a user by ID or Employee Code (excludes soft-deleted users) */
+  async findOne(idOrEmployeeId: string) {
     const user = await this.prisma.user.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { id: idOrEmployeeId },
+          { employeeId: idOrEmployeeId },
+        ],
+      },
       omit: { deletedAt: true },
     });
 
     if (!user) {
-      throw new NotFoundException(`User not found with ID: ${id}`);
+      throw new NotFoundException(
+        `User not found with ID or Employee Code: ${idOrEmployeeId}`,
+      );
     }
 
     return user;
@@ -116,13 +124,13 @@ export class UsersService {
   // ─── Update ───────────────────────────────────────────────────────────────────
 
   /** Update user data (excluding email and password - use better-auth for those) */
-  async update(id: string, dto: UpdateUserDto) {
-    await this.findOne(id); // throws NotFoundException if not found
+  async update(idOrEmployeeId: string, dto: UpdateUserDto) {
+    const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found
 
     const { sectionId, ...rest } = dto;
 
     return this.prisma.user.update({
-      where: { id },
+      where: { id: user.id },
       data: {
         ...rest,
         ...(sectionId !== undefined && { section_id: sectionId }),
@@ -134,33 +142,39 @@ export class UsersService {
   // ─── Soft Delete ──────────────────────────────────────────────────────────────
 
   /** Soft delete: sets deletedAt instead of actual deletion */
-  async remove(id: string) {
-    await this.findOne(id); // throws NotFoundException if not found or already deleted
+  async remove(idOrEmployeeId: string) {
+    const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found or already deleted
 
     await this.prisma.user.update({
-      where: { id },
+      where: { id: user.id },
       data: { deletedAt: new Date() },
     });
 
-    return { message: `User ID: ${id} successfully deleted` };
+    return { message: `User ID: ${user.id} successfully deleted` };
   }
 
   // ─── Restore ──────────────────────────────────────────────────────────────────
 
   /** Restore a soft-deleted user */
-  async restore(id: string) {
+  async restore(idOrEmployeeId: string) {
     const user = await this.prisma.user.findFirst({
-      where: { id, deletedAt: { not: null } },
+      where: {
+        deletedAt: { not: null },
+        OR: [
+          { id: idOrEmployeeId },
+          { employeeId: idOrEmployeeId },
+        ],
+      },
     });
 
     if (!user) {
       throw new NotFoundException(
-        `Deleted user not found with ID: ${id} (may not exist or not deleted)`,
+        `Deleted user not found with ID or Employee Code: ${idOrEmployeeId} (may not exist or not deleted)`,
       );
     }
 
     return this.prisma.user.update({
-      where: { id },
+      where: { id: user.id },
       data: { deletedAt: null },
       omit: { deletedAt: true },
     });
