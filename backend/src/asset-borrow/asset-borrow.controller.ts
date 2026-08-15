@@ -18,7 +18,6 @@ export class AssetBorrowController {
   // Create Borrowing
   @Post()
   @Roles(
-    UserRole.ADMIN,
     UserRole.ASSET_CENTER_STAFF,
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
@@ -32,7 +31,6 @@ export class AssetBorrowController {
   // Return Borrowing
   @Patch(':id/return')
   @Roles(
-    UserRole.ADMIN,
     UserRole.ASSET_CENTER_STAFF,
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
@@ -50,7 +48,6 @@ export class AssetBorrowController {
   // Cancel Borrowing
   @Patch(':id/cancel')
   @Roles(
-    UserRole.ADMIN,
     UserRole.ASSET_CENTER_STAFF,
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
