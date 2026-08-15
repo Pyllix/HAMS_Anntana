@@ -50,6 +50,10 @@
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
   - ปรับปรุง `findAll` / `findOne` ใน `AssetService` และ `AssetBorrowService`
   - หาก `user.role === UserRole.DEPARTMENT_STAFF` ให้เพิ่มเงื่อนไข `where: { section_id: user.section_id }` โดยอัตโนมัติ
+- [ ] **3.2 User Lookup Endpoint สำหรับ Form/UI (`GET /users/lookup`)**:
+  - สร้าง Endpoint พิเศษเฉพาะดึงรายชื่อพนักงานสำหรับใส่ Dropdown ผู้ยืม/ผู้รับผิดชอบ ในหน้า Frontend (เพื่อไม่ต้องปลด `@Roles(ADMIN)` ออกจาก `GET /users`)
+- [ ] **3.3 Frontend RBAC Compatibility Audit**:
+  - ตรวจสอบ API Responses และแนบ Error handling กรณีเกิด 403 Forbidden บนหน้า Frontend Forms
 
 ### Phase 4: RBAC สำหรับ Use Cases ที่รอการพัฒนา (Planned Modules)
 - [ ] **UC4: จัดการสต็อกอะไหล่** (`[F]` ASSET_CENTER_STAFF, PARCEL_STAFF | `[R]` MAINTENANCE_STAFF)
@@ -77,6 +81,6 @@
 | **UC11: จัดการผู้ใช้** | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles(ADMIN)` บน Controller (Supertest passed) |
 | **M1: บริษัทผู้ค้า (Company)** | `[F]` | `[R]` | `[R]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **M2: หน่วยงาน (Sections)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles(ADMIN)` บน CUD และเปิด Read ทุก Role |
-| **M3: ประเภทครุภัณฑ์ (Asset Type)** | `[F]` | `[R]` | `[F]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
+| **M3: ประเภทครุภัณฑ์ (Asset Type)** | `[F]` | `[R]` | `[R]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **M4: สถานะครุภัณฑ์ (Asset Status)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **M5: ความพร้อมใช้งาน (Availabilities)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |

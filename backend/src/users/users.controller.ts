@@ -31,14 +31,14 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 @ApiTags('Users')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
-@Roles(UserRole.ADMIN)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   // ─── Create ────────────────────────────────────────────────────────────────
 
   @Post()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Create new User',
     description:
