@@ -44,8 +44,8 @@
 - [x] **2.3 UC1 & UC7: AssetBorrowController (`src/asset-borrow/asset-borrow.controller.ts`)**:
   - ระบุสิทธิ์ `@Roles(...)` บน endpoints `POST /borrowings`, `PATCH /borrowings/:id/return`, `PATCH /borrowings/:id/cancel`
 - [x] **2.4 Setup & Lookup Controllers** (`asset-status`, `asset-type`, `availabilities`, `company`, `sections`):
-  - ระบุสิทธิ์การแก้ไข/จัดการ master data เฉพาะ Admin / Parcel Staff / Asset Center Staff
-
+  - ระบุสิทธิ์การแก้ไข/จัดการ master data เฉพาะ Admin (หรือ Parcel Staff / Asset Center Staff ตามสิทธิ์ของแต่ละ Master Data)
+ 
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
   - ปรับปรุง `findAll` / `findOne` ใน `AssetService` และ `AssetBorrowService`
@@ -75,8 +75,8 @@
 | **UC9: อนุมัติรายจ่าย** | `[R]` | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | ⏳ รอพัฒนา Approval Module |
 | **UC10: ดูรายงาน** | `[R]` | `[F]` | `[R]` | `[R]` | `[-]` | `[Own]` | ⏳ รอพัฒนา Report Module |
 | **UC11: จัดการผู้ใช้** | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles(ADMIN)` บน Controller (Supertest passed) |
-| **M1: บริษัทผู้ค้า (Company)** | `[F]` | `[R]` | `[F]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
-| **M2: หน่วยงาน (Sections)** | `[F]` | `[R]` | `[F]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
+| **M1: บริษัทผู้ค้า (Company)** | `[F]` | `[R]` | `[R]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
+| **M2: หน่วยงาน (Sections)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles(ADMIN)` บน CUD และเปิด Read ทุก Role |
 | **M3: ประเภทครุภัณฑ์ (Asset Type)** | `[F]` | `[R]` | `[F]` | `[F]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **M4: สถานะครุภัณฑ์ (Asset Status)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **M5: ความพร้อมใช้งาน (Availabilities)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
