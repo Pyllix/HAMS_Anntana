@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react"
-import { Calendar, Clock, Package, Heart, ShieldAlert } from "lucide-react" // 👈 นำเข้าไอคอน Lucide
+import { Calendar, Clock, X } from "lucide-react"
 import type { Asset } from "../../types/manageBorrowTypes"
 
-interface Props {
+interface ReturnProps {
   isOpen: boolean
   asset: Asset | null
   onClose: () => void
-  onConfirm: (data: any) => void
+  onConfirm: (data: {
+    returnerName: string
+    condition: "ปกติ (พร้อมใช้งาน)" | "ชำรุด / ส่งซ่อม"
+    returnDate: string
+    returnTime: string
+    note?: string
+  }) => void
 }
 
 export function ManageReturnDialog({
@@ -14,7 +20,7 @@ export function ManageReturnDialog({
   asset,
   onClose,
   onConfirm,
-}: Props) {
+}: ReturnProps) {
   const [name, setName] = useState("")
   const [cond, setCond] = useState<"ปกติ (พร้อมใช้งาน)" | "ชำรุด / ส่งซ่อม">(
     "ปกติ (พร้อมใช้งาน)"
@@ -47,7 +53,7 @@ export function ManageReturnDialog({
 
   if (!isOpen || !asset) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     onConfirm({
       returnerName: name,
@@ -58,52 +64,54 @@ export function ManageReturnDialog({
     })
   }
 
-  const getAssetIcon = (id: string) => {
-    if (id.startsWith("BP")) return <Heart className="h-5 w-5 text-rose-500" />
-    if (id.startsWith("AED"))
-      return <ShieldAlert className="h-5 w-5 text-amber-500" />
-    return <Package className="h-5 w-5 text-slate-400" />
-  }
-
   return (
-    <div className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 duration-150">
-      <div className="relative w-full max-w-115 rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex items-center justify-between pb-4">
-          <h3 className="text-lg font-bold text-slate-800">
+    <div className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm duration-150">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-800">
             ทำรายการรับคืนครุภัณฑ์
-          </h3>
+          </h2>
           <button
             onClick={onClose}
-            className="text-xl text-slate-400 transition-colors hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
-       
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-slate-100 bg-[#f8fafc] p-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm">
-            {getAssetIcon(asset.id)}
+        {/* Asset Info Card */}
+        <div className="mb-3 flex items-center gap-3.5 rounded-xl bg-gray-50/80 p-3.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">
+            <div className="h-3.5 w-3.5 rounded border border-gray-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold text-slate-800">
+            <p className="mt-0.5 text-[14px] font-semibold text-slate-900">
               {asset.name}
-            </div>
-            <div className="mt-0.5 text-xs text-slate-500">
-              รหัส: {asset.id} • Status ปัจจุบัน:{" "}
-              <span className="font-semibold text-[#d97706]">กำลังยืม</span>
-            </div>
+            </p>
+            <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
+              รหัส: {asset.code} • สถานะปัจจุบัน:{" "}
+              <span className="mt-0.5 text-[11px] font-semibold text-amber-600">
+                {asset.status}
+              </span>
+            </p>
           </div>
         </div>
 
-        <div className="mb-4 rounded-lg border border-[#dcfce7] bg-[#f0fdf4] px-3.5 py-2.5 text-xs leading-relaxed font-medium text-[#166534]">
-          ข้อมูลการยืม: พญ. ใจดี รักษา (ER) • นำไปเมื่อ{" "}
-          {asset.borrowDate || "24 ก.พ. 2569"} 08:30 น.
+        {/* Borrow Info Banner */}
+        <div className="mb-4 rounded-xl border border-emerald-100/60 bg-[#f0fdf4] p-3 text-xs font-semibold text-slate-900">
+          ข้อมูลการยืม:{" "}
+          <span className="font-semibold text-slate-900">
+            {asset.borrower} ({asset.department})
+          </span>{" "}
+          • นำไปเมื่อ {asset.borrowDate} {asset.borrowTime}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* ชื่อ-นามสกุล */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
               ชื่อ-นามสกุลผู้คืน <span className="text-rose-500">*</span>
             </label>
             <input
@@ -112,78 +120,75 @@ export function ManageReturnDialog({
               placeholder="กรอกชื่อ-นามสกุล"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:border-[#00966c] focus:outline-none"
+              className="mt-0.5 w-full rounded-xl border border-gray-200 p-2.5 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#00966c]"
             />
           </div>
 
+          {/* สภาพครุภัณฑ์ */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
               สภาพครุภัณฑ์หลังใช้งาน <span className="text-rose-500">*</span>
             </label>
-            <div className="mt-2 flex items-center gap-6">
-              <label className="flex cursor-pointer items-center text-sm font-medium text-slate-700 select-none">
+            <div className="flex items-center gap-6">
+              <label className="flex cursor-pointer items-center gap-2 select-none">
                 <input
                   type="radio"
                   name="condition"
                   checked={cond === "ปกติ (พร้อมใช้งาน)"}
                   onChange={() => setCond("ปกติ (พร้อมใช้งาน)")}
-                  className="mr-2 h-4 w-4 accent-[#00966c]"
+                  className="h-4 w-4 accent-[#00966c]"
                 />
-                ปกติ (พร้อมใช้งาน)
+                <span className="text-[12px] font-semibold text-gray-500">
+                  ปกติ (พร้อมใช้งาน)
+                </span>
               </label>
-              <label className="flex cursor-pointer items-center text-sm font-medium text-slate-600 select-none">
+              <label className="flex cursor-pointer items-center gap-2 select-none">
                 <input
                   type="radio"
                   name="condition"
                   checked={cond === "ชำรุด / ส่งซ่อม"}
                   onChange={() => setCond("ชำรุด / ส่งซ่อม")}
-                  className="mr-2 h-4 w-4 accent-[#00966c]"
+                  className="h-4 w-4 accent-[#00966c]"
                 />
-                ชำรุด / ส่งซ่อม
+                <span className="text-[12px] font-semibold text-gray-500">
+                  ชำรุด / ส่งซ่อม
+                </span>
               </label>
             </div>
           </div>
 
-  
+          {/* วันที่และเวลาที่รับคืน */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
               วันที่และเวลาที่รับคืน <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative flex items-center">
-                <input
-                  type="text"
-                  value={currentDate}
-                  disabled
-                  className="h-10 w-full cursor-not-allowed rounded-lg border border-slate-100 bg-[#f8fafc] pr-9 pl-3 text-sm text-slate-500 select-none focus:outline-none"
-                />
-                <Calendar className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-gray-700">
+                <span>{currentDate}</span>
+                <Calendar size={16} className="shrink-0 text-gray-400" />
               </div>
-              <div className="relative flex items-center">
-                <input
-                  type="text"
-                  value={currentTime}
-                  disabled
-                  className="h-10 w-full cursor-not-allowed rounded-lg border border-slate-100 bg-[#f8fafc] pr-9 pl-3 text-sm text-slate-500 select-none focus:outline-none"
-                />
-                <Clock className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-gray-700">
+                <span>{currentTime}</span>
+                <Clock size={16} className="shrink-0 text-gray-400" />
               </div>
             </div>
           </div>
 
+          {/* หมายเหตุ */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
               หมายเหตุ (ถ้ามี)
             </label>
             <textarea
+              rows={2}
               placeholder="ระบุรายละเอียดเพิ่มเติม เช่น สายชาร์จชำรุด, มีรอยร้าว..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full resize-none rounded-lg border border-slate-200 p-3 text-sm text-slate-800 placeholder-slate-400 focus:border-[#00966c] focus:outline-none"
+              className="font-semi w-full resize-none rounded-xl border border-gray-200 p-2.5 text-gray-800 outline-none focus:border-[#00966c]"
             />
           </div>
 
+          {/* Action Buttons */}
           <div className="flex justify-end gap-2 border-t border-slate-50 pt-3">
             <button
               type="button"

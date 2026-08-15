@@ -72,7 +72,7 @@ export class UsersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get User by ID' })
-  @ApiParam({ name: 'id', description: 'User ID (CUID/UUID)' })
+  @ApiParam({ name: 'id', description: 'User ID (CUID/UUID) or Employee Code (รหัสพนักงาน)' })
   @ApiResponse({ status: 200, description: 'User data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })

@@ -2,6 +2,7 @@
 
 model User {
   id            String    @id
+  employeeId    String?   @unique @map("employee_id") @db.VarChar(50)
   userName      String    @default("") @map("user_name") @db.VarChar(50)
   firstname     String    @default("") @map("first_name") @db.VarChar(100)
   lastname      String    @default("") @map("last_name") @db.VarChar(100)

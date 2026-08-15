@@ -19,7 +19,8 @@ export function ManageBorrowPagination({
   const to = Math.min(safePage * pageSize, total)
 
   return (
-    <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+    <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+      {/* จำนวนแถว */}
       <p className="text-sm text-slate-400">
         แสดง <span className="font-medium text-slate-600">{from}</span> ถึง{" "}
         <span className="font-medium text-slate-600">{to}</span> จาก{" "}
@@ -29,6 +30,7 @@ export function ManageBorrowPagination({
         รายการ
       </p>
 
+      {/* ปุ่ม pagination */}
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(Math.max(1, safePage - 1))}
