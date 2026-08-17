@@ -10,6 +10,7 @@ import BorrowReturn from "../pages/borrow-return";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
 import axios from "axios";
+import AssetStock from "../pages/asset-stock";
 
 const router = createBrowserRouter([
   {
@@ -26,13 +27,60 @@ const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
+          // เพิ่มหน้าจอ
           {
-            // FIX: Added "staff" role to match the sidebar navigation rules.
-            element: <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />,
+            element: (
+              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
+            ),
             children: [
               {
                 path: "borrow-return",
                 element: <BorrowReturn />,
+              },
+            ],
+          },
+          // เพิ่มหน้าจอ
+          {
+            element: (
+              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
+            ),
+            children: [
+              {
+                path: "asset-stock",
+                element: <AssetStock />,
+              },
+            ],
+          },
+          {
+            element: (
+              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
+            ),
+            children: [
+              {
+                path: "part-stock",
+                element: <AssetStock />,
+              },
+            ],
+          },
+          {
+            element: (
+              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
+            ),
+            children: [
+              {
+                path: "borrow-return",
+                element: <BorrowReturn />,
+              },
+            ],
+          },
+          {
+            element: (
+              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
+            ),
+            children: [
+              {
+                path: "assets",
+                element: <AssetStock />,
               },
             ],
           },
@@ -68,7 +116,7 @@ export default function AppRouter() {
           login(userResponse.data, token);
         } catch (error) {
           console.error("Auto login failed, token might be expired.", error);
-          logout(); 
+          logout();
         }
       }
       setIsInitializing(false);

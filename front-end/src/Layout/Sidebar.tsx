@@ -58,6 +58,12 @@ export default function Sidebar() {
       icon: History,
       roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
     },
+    {
+      title: "ประวัติการยืม",
+      path: "/assets",
+      icon: History,
+      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
+    },
   ];
 
   const fillterNavItems = NAV_ITEMS.filter((item) => {

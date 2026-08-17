@@ -3,7 +3,9 @@ import { useReturnModalStore } from "../../stores/useReturnModalStore";
 
 export default function ReturnModal() {
   // ปิด Modal กับ รับ Asset
-  const { closeForm, selectedAsset } = useReturnModalStore();
+  const { closeForm, selectedAsset: asset } = useReturnModalStore();
+
+  const imgUrl = asset?.imageUrl as string;
 
   return (
     <div
@@ -28,11 +30,34 @@ export default function ReturnModal() {
             <X size={22} />
           </button>
         </div>
-        {/* Header */}
+        {/* Header End*/}
         {/* Content Form */}
-        {/* Content Form */}
+        <div className="p-6">
+          {/* กล่องข้อมูล Asset */}
+          <div className="flex items-center gap-4 p-4 mb-6 bg-gray-50 border border-gray-200 rounded-xl">
+            <img
+              className="flex items-center justify-center w-12 h-12 border-gray-200 rounded-lg shrink-0 shadow-sm"
+              src={imgUrl || "/placeholder.png"}
+              alt=""
+            />
+            <div>
+              <h4 className="font-bold text-gray-800">{asset?.name}</h4>
+              <p className="text-sm text-gray-500 mt-0.5">
+                รหัส: {asset?.serialNo || "AED-2024-005"}
+              </p>
+            </div>
+          </div>
+          {/* กล่องข้อมูล Asset End*/}
+          {/* Borrower Data */}
+          <div className="bg-emerald-100 w-full px-4 py-2">
+
+          </div>
+          {/* Borrower Data End*/}
+        </div>
+        {/* Content Form End*/}
       </div>
-      {/* กรอบของ Form  */}
+      {/* กรอบของ Form  End*/}
     </div>
+    // พื้นหลังดำๆ จร้า End
   );
 }
