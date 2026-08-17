@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { AssetDto } from "../types/TypeAsset";
+import { Asset } from "../types/TypeAsset";
 
 interface borrowModalState {
   isFormOpen: boolean;
-  selectedAsset: AssetDto | null;
-  openForm: (asset: AssetDto) => void;
+  selectedAsset: Asset | null;
+  openForm: (asset: Asset) => void;
   closeForm: () => void;
 }
 

@@ -12,3 +12,4 @@ export async function getUserById(id: string): Promise<User> {
 
   return res.data;
 }
+
