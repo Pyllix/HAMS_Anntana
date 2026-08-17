@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAssets } from "../../services/assetService";
 import { useMemo } from "react";
 import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
+import { useReturnModalStore } from "../../stores/useReturnModalStore";
 
 const features = tableFeatures({});
 
@@ -108,17 +109,19 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       const row = info.row.original;
       const isAvailable = info.row.original.availabilityStatus?.code;
 
-      const handleOpenModal = () => {
+      const handleOpenBorrowModal = () => {
         useBorrowModalStore.getState().openForm(row);
-        console.log(useBorrowModalStore.getState().isFormOpen);
-        console.log(row);
+      };
+
+      const handleOpenReturnModal = () => {
+        useReturnModalStore.getState().openForm(row);
       };
 
       if (isAvailable === "AVAILABLE") {
         return (
           <button
             type="button"
-            onClick={handleOpenModal}
+            onClick={handleOpenBorrowModal}
             className="rounded-lg bg-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
           >
             {"ยืมของ"}
@@ -130,7 +133,7 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
         return (
           <button
             type="button"
-            onClick={handleOpenModal}
+            onClick={handleOpenReturnModal}
             className="rounded-lg border border-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
           >
             {"รับคืน"}
@@ -143,7 +146,6 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
           <button
             disabled
             type="button"
-            onClick={handleOpenModal}
             className="rounded-lg border border-emerald-600 max-w-20 w-full px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
           >
             {"ไม่พร้อม"}

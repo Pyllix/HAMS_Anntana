@@ -9,7 +9,7 @@ export default function BorrowModal() {
   const queryClient = useQueryClient();
 
   // ตัวปิด Modal กับ Asset ที่รับเข้ามา
-  const { closeForm, selectedAsset } = useBorrowModalStore();
+  const { closeForm, selectedAsset: asset } = useBorrowModalStore();
 
   // ------------- ทำตัวเเปลของเวลา ------------------
   // 1. เพิ่มตัวแปรดึงเวลาปัจจุบันไว้ด้านบน (ก่อน return ภายในฟังก์ชัน BorrowModal)
@@ -49,7 +49,6 @@ export default function BorrowModal() {
     enabled: false,
   });
 
-
   // function ในปุ่มค้นหารหัสพนักงาน
   const handleFetchClick = () => {
     if (!employeeId.trim()) {
@@ -59,11 +58,11 @@ export default function BorrowModal() {
     refetchUser();
   };
 
-  // function ในปุ่มยืนยันการยืม 
+  // function ในปุ่มยืนยันการยืม
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedAsset?.id) {
+    if (!asset?.id) {
       alert("ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
       return;
     }
@@ -75,13 +74,13 @@ export default function BorrowModal() {
 
     // ส่ง Payload ไปยัง API
     handleBorrowSubmit({
-      assetId: selectedAsset.id,
+      assetId: asset.id,
       borrowerId: user.id,
       deliveryMethod: "PICKUP",
     });
   };
 
-  const imgUrl = selectedAsset?.imageUrl as string;
+  const imgUrl = asset?.imageUrl as string;
 
   return (
     <div
@@ -116,9 +115,9 @@ export default function BorrowModal() {
               alt=""
             />
             <div>
-              <h4 className="font-bold text-gray-800">{selectedAsset?.name}</h4>
+              <h4 className="font-bold text-gray-800">{asset?.name}</h4>
               <p className="text-sm text-gray-500 mt-0.5">
-                รหัส: {selectedAsset?.serialNo || "AED-2024-005"}
+                รหัส: {asset?.serialNo || "AED-2024-005"}
               </p>
             </div>
           </div>
@@ -168,8 +167,10 @@ export default function BorrowModal() {
                 disabled
                 type="text"
                 id="borrower"
-                className="w-full px-4 py-2.5 text-sm    bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder-gray-400"
-                placeholder="ชื่อ-นามสกุล"
+                className={`${user ? "bg-white text-gray-800 w-full px-4 py-2.5 text-sm  border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" : "w-full px-4 py-2.5 text-sm  bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent  text-gray-400"} `}
+                value={
+                  user ? user.firstname + " " + user.lastname : "ชื่อ-นามสกุล"
+                }
               />
             </div>
 
@@ -185,10 +186,10 @@ export default function BorrowModal() {
                 disabled
                 id="ward"
                 defaultValue=""
-                className="w-full px-4 py-2.5 text-sm text-gray-400 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className={`${user ? "bg-white text-gray-800 w-full px-4 py-2.5 text-sm  border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" : "w-full px-4 py-2.5 text-sm  bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent  text-gray-400"} `}
               >
                 <option value="" disabled className="text-gray-200">
-                  แผนกที่นำไปใช้...
+                  {user ? user.role : "เลือกเเผลก"}
                 </option>
               </select>
             </div>

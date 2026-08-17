@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { getAssetTypes, getAvailabilities } from "../services/assetService";
 import AssetsTable from "../components/borrow-return/assetsTable";
 import { useState } from "react";
-import BorrowModal from "../components/borrow-return/borrowModal";
+import BorrowModal from "../components/borrow-return/BorrowModal";
 import { useBorrowModalStore } from "../stores/useBorrowModalStore";
+import { useReturnModalStore } from "../stores/useReturnModalStore";
+import ReturnModal from "../components/borrow-return/returnModal";
 
 export default function BorrowReturn() {
   const { data: assetTypes } = useQuery({
@@ -21,7 +23,7 @@ export default function BorrowReturn() {
   const [category, setCategory] = useState("ALL");
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useBorrowModalStore();
-  
+  const { isFormOpen: isFormOpenReturn } = useReturnModalStore();
 
   return (
     <div className="space-y-2">
@@ -92,6 +94,7 @@ export default function BorrowReturn() {
 
       {/* เรียกใช้ Modal ที่นี่ */}
       {isFormOpen && <BorrowModal />}
+      {isFormOpenReturn && <ReturnModal />}
     </div>
   );
 }
