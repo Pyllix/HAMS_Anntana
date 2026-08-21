@@ -5,6 +5,9 @@ import type {
   ReturnTransactionInput,
 } from "../types/manageBorrowTypes"
 
+// เพิ่ม Import borrowHistoryService เพื่อสั่งงานข้ามไปหน้าประวัติ
+import { borrowHistoryService } from "../services/borrowHistoryTransaction"
+
 // เก็บ State จำลองไว้ในไฟล์ Service (เสมือนเป็น Database ชั่วคราว)
 let localAssets = [...mockManageBorrowAssets]
 
@@ -19,6 +22,9 @@ export const manageBorrowService = {
   borrowAsset: async (input: BorrowTransactionInput): Promise<boolean> => {
     await new Promise((res) => setTimeout(res, 300))
 
+    // หาครุภัณฑ์ที่จะยืมไว้ก่อน เพื่อเอา code และ name ไปลงประวัติ
+    const targetAsset = localAssets.find((a) => a.id === input.assetId)
+
     localAssets = localAssets.map((asset) =>
       asset.id === input.assetId
         ? {
@@ -31,6 +37,15 @@ export const manageBorrowService = {
           }
         : asset
     )
+    // เรียกสร้าง Record ประวัติการยืมใหม่
+    if (targetAsset) {
+      await borrowHistoryService.createHistoryRecord(
+        targetAsset.code,
+        targetAsset.name,
+        input
+      )
+    }
+
     return true
   },
 
@@ -66,6 +81,10 @@ export const manageBorrowService = {
         deleteNote: undefined,
       }
     })
+
+    // เรียกอัปเดตประวัติรายการนี้ให้เปลี่ยนสถานะเป็น "คืนแล้ว"
+    await borrowHistoryService.updateReturnRecord(input)
+
     return true
   },
 }

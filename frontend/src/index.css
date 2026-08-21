@@ -1,1 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@100;200;300;400;500;600;700&display=swap');
+
+
 @import "tailwindcss";
+
+@theme {
+    --font-sans: "IBM Plex Sans Thai", "Plus Jakarta Sans", sans-serif;
+}
+
+/* ปิดไอคอนที่ขึ้นอัตโนมัติ */
+input[type="password"]::-ms-reveal {
+    display: none;
+}
+input[type="password"]::-ms-clear {
+    display: none;
+}

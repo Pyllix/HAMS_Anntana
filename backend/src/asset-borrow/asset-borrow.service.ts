@@ -41,7 +41,19 @@ export class AssetBorrowService {
       if (!dto.borrowerId) {
         throw new BadRequestException('Borrower ID is required when Asset Center Staff creates a transaction for someone else');
       }
-      borrowerId = dto.borrowerId || user.id;
+      const targetUser = await this.prisma.user.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            { id: dto.borrowerId },
+            { employeeId: dto.borrowerId },
+          ],
+        },
+      });
+      if (!targetUser) {
+        throw new NotFoundException(`Borrower not found with ID or Employee Code: ${dto.borrowerId}`);
+      }
+      borrowerId = targetUser.id;
     }
 
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
@@ -106,11 +118,27 @@ export class AssetBorrowService {
       let receivedByUserId: string | null = null;
       let returnedByUserId: string = user.id;
 
+      if (dto.returnedByUserId) {
+        const retUser = await tx.user.findFirst({
+          where: {
+            deletedAt: null,
+            OR: [
+              { id: dto.returnedByUserId },
+              { employeeId: dto.returnedByUserId }
+            ]
+          }
+        });
+        if (!retUser) {
+          throw new NotFoundException(`Returned by user not found with ID or Employee Code: ${dto.returnedByUserId}`);
+        }
+        returnedByUserId = retUser.id;
+      } else if (user.role === UserRole.ASSET_CENTER_STAFF) {
+        returnedByUserId = transaction.borrower_id;
+      }
+
       if (user.role === UserRole.ASSET_CENTER_STAFF) {
         // Only Asset Center Staff acts as the receiver
         receivedByUserId = user.id;
-        // If they specify who returned it in the DTO, use that; otherwise default to the original borrower
-        returnedByUserId = dto.returnedByUserId || transaction.borrower_id;
       }
 
       // Update transaction to RETURNED
@@ -202,7 +230,18 @@ export class AssetBorrowService {
 
     const where: any = {};
     if (query.assetId) where.asset_id = query.assetId;
-    if (query.borrowerId) where.borrower_id = query.borrowerId;
+    if (query.borrowerId) {
+      const targetUser = await this.prisma.user.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            { id: query.borrowerId },
+            { employeeId: query.borrowerId }
+          ]
+        }
+      });
+      where.borrower_id = targetUser ? targetUser.id : query.borrowerId;
+    }
     if (query.borrowStatusId) where.borrow_status_id = query.borrowStatusId;
 
     const [data, total] = await this.prisma.$transaction([
@@ -213,7 +252,7 @@ export class AssetBorrowService {
         orderBy: { createdAt: 'desc' },
         include: {
           asset: { select: { id: true, name: true, model: true } },
-          borrower: { select: { id: true, firstname: true, lastname: true } },
+          borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
           borrowStatus: { select: { id: true, code: true, name: true } }
         }
       }),
@@ -228,9 +267,9 @@ export class AssetBorrowService {
       where: { id },
       include: {
         asset: { select: { id: true, name: true, model: true } },
-        borrower: { select: { id: true, firstname: true, lastname: true } },
-        returnedByUser: { select: { id: true, firstname: true, lastname: true } },
-        receivedByUser: { select: { id: true, firstname: true, lastname: true } },
+        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         borrowStatus: { select: { id: true, code: true, name: true } }
       }
     });

@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout"
 import LoginPage from "@/pages/auth/LoginPage"
 import StockPage from "@/pages/Inventory/StockPage"
 import Maintenance from "@/pages/Maintenance"
-import History from "@/pages/History"
+import BorrowHistoryPage from "@/pages/Borrow/BorrowHistoryPage"
 import ManagePage from "@/pages/Borrow/ManagePage"
 import EquipmentBorrowPage from "@/pages/EquipmentBorrow/EquipmentBorrowPage"
 // import DepartmentPage from "@/pages/settings/DepartmentPage"
@@ -48,15 +48,23 @@ const router = createBrowserRouter([
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/history", element: <History /> }],
+            children: [{ path: "/history", element: <BorrowHistoryPage /> }],
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
+<<<<<<< HEAD
             // children: [{ path: "/settings/departments", element: <DepartmentPage /> }],
+=======
+            children: [
+              { path: "/settings/departments", element: <DepartmentPage /> },
+            ],
+>>>>>>> 4917130a1727da42db9343ea06ff215e397d33d5
           },
           {
             element: <ProtectedRoute allowedRoles={["admin"]} />,
-            children: [{ path: "/settings/users", element: <UserManagementPage /> }],
+            children: [
+              { path: "/settings/users", element: <UserManagementPage /> },
+            ],
           },
         ],
       },

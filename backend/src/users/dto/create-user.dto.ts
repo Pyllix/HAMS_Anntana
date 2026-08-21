@@ -11,6 +11,11 @@ import {
 } from 'class-validator';
 
 export class CreateUserDto {
+  @ApiPropertyOptional({ example: 'GOV-67001', description: 'Government employee code' })
+  @IsString()
+  @IsOptional()
+  employeeId?: string;
+
   @ApiProperty({ example: 'jdoe', description: 'Unique username' })
   @IsString()
   userName: string;

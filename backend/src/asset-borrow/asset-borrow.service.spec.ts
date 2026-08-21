@@ -25,6 +25,9 @@ const mockPrismaService = {
   },
   assetStatus: {
     findUnique: jest.fn(),
+  },
+  user: {
+    findFirst: jest.fn(),
   }
 };
 
@@ -107,6 +110,7 @@ describe('AssetBorrowService', () => {
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
       prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', availability_status_id: 10 });
+      prisma.user.findFirst.mockResolvedValue({ id: 'user-id-99' });
       prisma.asset.update.mockResolvedValue({});
       prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-2', request_source: RequestSource.CENTER_SERVICE });
 
