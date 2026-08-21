@@ -1,30 +1,68 @@
-import { useState, useEffect } from "react"
-import { useManageBorrowStore } from "../../stores/manageBorrowStore"
-import type { Asset } from "../../types/manageBorrowTypes"
+import { useEffect } from "react"
+import { useEquipmentStore } from "@/stores/useEquipmentStore"
+// input seach
+import { Search } from "lucide-react"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 
-import { ManageBorrowFilterBar } from "../../components/manageborrow/ManageBorrowFilterBar"
-import { ManageBorrowTable } from "../../components/manageborrow/ManageBorrowTable"
-import { ManageBorrowPagination } from "../../components/manageborrow/ManageBorrowPagination"
-import { ManageBorrowDialog } from "../../components/manageborrow/ManageBorrowDialog"
-import { ManageReturnDialog } from "../../components/manageborrow/ManageReturnDialog"
+// selection
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+
+// Table
+import { columns } from "@/components/equipment/columns"
+import { DataTable } from "@/components/equipment/data-table"
 
 export default function ManagePage() {
-  const store = useManageBorrowStore()
-  const [selected, setSelected] = useState<Asset | null>(null)
-  const [modals, setModals] = useState({ borrow: false, return: false })
+  const equipments = useEquipmentStore((state) => state.equipments)
+  const status = useEquipmentStore((state) => state.equipmentStatus)
+  const category = useEquipmentStore((state) => state.equipmentCategories)
+  const fetchInitialData = useEquipmentStore((state) => state.fechInitailData)
 
   useEffect(() => {
-    store.fetchAssets()
-  }, [])
+    fetchInitialData()
+  }, [fetchInitialData])
 
   return (
-    <div className="flex w-full flex-col gap-5 bg-[#f8fafc] p-6">
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <ManageBorrowFilterBar />
-
-        {/* ดึง Paginated Data จาก Store มาแสดง */}
+    <div className="flex flex-col">
+      {/* กรอบ seach */}
+      <div className="flex h-16 items-center gap-4 rounded-xl border border-slate-200 bg-white px-6">
+        {/* ช่อง search */}
+        <InputGroup className="max-w-xs">
+          <InputGroupInput placeholder="Search..." />
+          <InputGroupAddon>
+            <Search className="text-slate-400" />
+          </InputGroupAddon>
+        </InputGroup>
+        {/* selection */}
+        <NativeSelect>
+          <NativeSelectOption value="all">สถานะ: ทั้งหมด</NativeSelectOption>
+          {Object.entries(status).map(([Key, label]) => (
+            <NativeSelectOption key={Key} value={Key}>
+              {label}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {/* selection */}
+        <NativeSelect>
+          <NativeSelectOption value="all">ประเภท: ทั้งหมด</NativeSelectOption>
+          {category.map((cat) => (
+            <NativeSelectOption key={cat} value={cat}>
+              {cat}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </div>
+      {/* กรอบ Table */}
+      <div className="container mx-auto py-4">
+        <DataTable columns={columns} data={equipments} />
+      </div>
+      {/* table ค้าบ */}
+      {/* <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <ManageBorrowTable
-          assets={store.getPaginatedAssets()}
+          assets={pagedAssets}
           onBorrow={(asset) => {
             setSelected(asset)
             setModals((m) => ({ ...m, borrow: true }))
@@ -34,24 +72,21 @@ export default function ManagePage() {
             setModals((m) => ({ ...m, return: true }))
           }}
         />
-
-        {/* ดึง State Pagination จาก Store*/}
         <ManageBorrowPagination
-          page={store.currentPage}
-          pageSize={store.pageSize}
-          total={store.getFilteredAssets().length}
-          onPageChange={(p: number) => store.setCurrentPage(p)}
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={filteredAssets.length}
+          onPageChange={setPage}
         />
-      </div>
+      </div> */}
 
-      <ManageBorrowDialog
+      {/* Dialog */}
+      {/* <ManageBorrowDialog
         isOpen={modals.borrow}
         asset={selected}
         onClose={() => setModals((m) => ({ ...m, borrow: false }))}
-        onConfirm={async (data) => {
-          if (selected) {
-            await store.borrowAsset({ assetId: selected.id, ...data })
-          }
+        onConfirm={(data) => {
+          if (selected) store.checkOutAsset(selected.id, data)
           setModals((m) => ({ ...m, borrow: false }))
         }}
       />
@@ -60,13 +95,11 @@ export default function ManagePage() {
         isOpen={modals.return}
         asset={selected}
         onClose={() => setModals((m) => ({ ...m, return: false }))}
-        onConfirm={async (data) => {
-          if (selected) {
-            await store.returnAsset({ assetId: selected.id, ...data })
-          }
+        onConfirm={(data) => {
+          if (selected) store.checkInAsset(selected.id, data)
           setModals((m) => ({ ...m, return: false }))
         }}
-      />
+      /> */}
     </div>
   )
 }

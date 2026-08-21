@@ -20,8 +20,13 @@ export function ManageBorrowFilterBar() {
   const { filters, setFilters } = useManageBorrowStore()
 
   return (
+<<<<<<< HEAD
+    <div className="flex h-16 items-center gap-4 rounded-lg border border-slate-200 bg-white px-6">
+      <InputGroup className="w-64 rounded-xl border border-slate-200 bg-slate-50">
+=======
     <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-3">
       <InputGroup className="w-64 border border-slate-200 bg-slate-50">
+>>>>>>> bd3eba2e4e4590b2f71a4647ee54562ce97502ea
         <InputGroupInput
           placeholder="ค้นหาชื่อ, รหัส หรือผู้ยืมครุภัณฑ์..."
           value={filters.search}

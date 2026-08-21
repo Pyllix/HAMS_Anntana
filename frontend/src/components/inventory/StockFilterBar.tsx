@@ -3,22 +3,16 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@/components/ui/input-group/input-group"
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select"
-import {
-  STOCK_CATEGORIES,
-  STOCK_DEPARTMENTS,
-} from "@/mock-up/MockStockData"
+} from "@/components/ui/input-group"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { STOCK_CATEGORIES, STOCK_DEPARTMENTS } from "@/mock-up/MockStockData"
 import type { StockStatusFilter } from "@/types/StockType"
 
 // export ออกมาให้ Inventory.tsx ใช้กำหนด state ได้ถูก type
 export interface StockFilters {
   search: string
   categoryCode: string // "" = ทั้งหมด
-  department: string   // "" = ทั้งหมด
+  department: string // "" = ทั้งหมด
   status: StockStatusFilter
 }
 
@@ -89,7 +83,9 @@ export function StockFilterBar({ filters, onChange }: Props) {
       {/* สถานะ */}
       <NativeSelect
         value={filters.status}
-        onChange={(e) => update({ status: e.target.value as StockStatusFilter })}
+        onChange={(e) =>
+          update({ status: e.target.value as StockStatusFilter })
+        }
       >
         {STATUS_OPTIONS.map((s) => (
           <NativeSelectOption key={s} value={s}>

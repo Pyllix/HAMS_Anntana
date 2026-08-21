@@ -1,0 +1,44 @@
+import axios from "axios";
+import type { AssetType, Asset, Availabilities } from "../types/TypeAsset";
+
+export async function getAssets(): Promise<Asset[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get("https://hams-anntana.onrender.com/asset", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return res.data.data;
+}
+
+export async function getAssetTypes(): Promise<AssetType[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/asset-type",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data;
+}
+
+export async function getAvailabilities(): Promise<Availabilities[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/availabilities",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data;
+}
