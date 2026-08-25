@@ -1,75 +1,15 @@
-import {
-  Box,
-  Repeat,
-  Archive,
-  Wrench,
-  History,
-  LucideIcon,
-  LogOut,
-} from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { NavLink } from "react-router-dom";
-
-interface NavItem {
-  title: string;
-  icon: LucideIcon;
-  path: string;
-  roles?: string[];
-}
+import { APP_ROUTE } from "../Router/routes.config";
+import { Box, LogOut } from "lucide-react";
 
 export default function Sidebar() {
   const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
 
-  const NAV_ITEMS: NavItem[] = [
-    {
-      title: "ยืม-คืนครุภัณฑ์",
-      path: "/borrow-return",
-      icon: Repeat,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
-    },
-    {
-      title: "จัดการสต็อกครุภัณฑ์",
-      path: "/asset-stock",
-      icon: Archive,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF"],
-    },
-    {
-      title: "จัดการสต็อกอะไหล่",
-      path: "/part-stock",
-      icon: Wrench,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF"],
-    },
-    {
-      title: "แจ้งซ่อมครุภัณฑ์",
-      path: "/maintenance-request",
-      icon: Wrench,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
-    },
-    {
-      title: "ติดตามสถานะ",
-      path: "/track-status",
-      icon: History,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
-    },
-    {
-      title: "ประวัติการยืม",
-      path: "/borrow-history",
-      icon: History,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
-    },
-    {
-      title: "ประวัติการยืม",
-      path: "/assets",
-      icon: History,
-      roles: ["ADMIN", "ASSET_CENTER_STAFF", "user"],
-    },
-  ];
-
-  const fillterNavItems = NAV_ITEMS.filter((item) => {
-    if (!item.roles) return true;
-    return role ? item.roles.includes(role) : false;
-  });
+  const navItems = APP_ROUTE.filter(
+    (item) => item.showInNav && role && item.roles.includes(role),
+  );
 
   return (
     // ตัวจัดการ layout ของ sidebar
@@ -83,7 +23,7 @@ export default function Sidebar() {
       </div>
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {fillterNavItems.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -97,7 +37,7 @@ export default function Sidebar() {
                 }`
               }
             >
-              <Icon className="w-5 h-5" />
+              {Icon && <Icon className="w-5 h-5" />}
               <span>{item.title}</span>
             </NavLink>
           );

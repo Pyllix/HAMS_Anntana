@@ -1,3 +1,5 @@
+import { RoleType } from "../Router/roles";
+
 export type UserRole =
   | "ADMIN"
   | "ASSET_CENTER_STAFF"
@@ -15,7 +17,7 @@ export interface User {
   emailVerified: boolean;
   imageUrl: string | null;
   section_id: string;
-  role: UserRole
+  role: RoleType
   createdAt: string;
   updatedAt: string;
 }

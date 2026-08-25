@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { User, UserRole } from "../types/TypeUser";
+import { RoleType } from "../Router/roles";
 
 interface AuthState {
   user: User | null;
-  role: UserRole | null;
+  role: RoleType | null;
   token: string | null;
   isAuthenticated: boolean;
   login: (user: User, token: string) => void;

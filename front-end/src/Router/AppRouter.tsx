@@ -4,19 +4,30 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import Login from "../Pages/Login";
-import ProtectedRoute from "../router/ProtectedRoute";
+import ProtectedRoute from "../Router/ProtectedRoute";
 import AppLayout from "../layout/AppLayout";
-import BorrowReturn from "../pages/borrow-return";
+import AdminBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
 import axios from "axios";
-import AssetStock from "../pages/asset-stock";
+import UserBorrowReturn from "../Pages/DepartMentBorrowReturn";
+import { APP_ROUTE } from "../Router/routes.config";
+
+// Function สำหรับหา Path ที่ User จะต้องไป
+function RootRedirect() {
+  const role = useAuthStore((state) => state.role);
+  const defaultRoute = APP_ROUTE.find(
+    (route) => role && route.roles.includes(role),
+  );
+  return (
+    <Navigate
+      to={defaultRoute ? `/${defaultRoute.path}` : "/unauthorized"}
+      replace
+    />
+  );
+}
 
 const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Navigate to="/borrow-return" replace />,
-  },
   {
     path: "/login",
     element: <Login />,
@@ -27,63 +38,19 @@ const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          // เพิ่มหน้าจอ
           {
-            element: (
-              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
-            ),
+            index: true,
+            element: <RootRedirect />,
+          },
+          ...APP_ROUTE.map((route) => ({
+            element: <ProtectedRoute allowedRoles={route.roles} />,
             children: [
               {
-                path: "borrow-return",
-                element: <BorrowReturn />,
+                path: route.path,
+                element: route.element,
               },
             ],
-          },
-          // เพิ่มหน้าจอ
-          {
-            element: (
-              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
-            ),
-            children: [
-              {
-                path: "asset-stock",
-                element: <AssetStock />,
-              },
-            ],
-          },
-          {
-            element: (
-              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
-            ),
-            children: [
-              {
-                path: "part-stock",
-                element: <AssetStock />,
-              },
-            ],
-          },
-          {
-            element: (
-              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
-            ),
-            children: [
-              {
-                path: "borrow-return",
-                element: <BorrowReturn />,
-              },
-            ],
-          },
-          {
-            element: (
-              <ProtectedRoute allowedRoles={["ADMIN", "ASSET_CENTER_STAFF"]} />
-            ),
-            children: [
-              {
-                path: "assets",
-                element: <AssetStock />,
-              },
-            ],
-          },
+          })),
         ],
       },
     ],
@@ -91,6 +58,10 @@ const router = createBrowserRouter([
   {
     path: "/unauthorized",
     element: <div>คุณไม่มีสิทธิ์เข้าถึงหน้านี้</div>,
+  },
+  {
+    path: "*",
+    element: <Navigate to="/" replace />,
   },
 ]);
 

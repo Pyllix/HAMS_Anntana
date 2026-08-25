@@ -8,7 +8,7 @@ import { useBorrowModalStore } from "../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../stores/useReturnModalStore";
 import ReturnModal from "../components/borrow-return/returnModal";
 
-export default function BorrowReturn() {
+export default function AssetCenterBorrowReturn() {
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
     queryFn: getAssetTypes,
