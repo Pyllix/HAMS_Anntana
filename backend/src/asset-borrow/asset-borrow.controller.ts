@@ -7,6 +7,7 @@ import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Borrowings')
 @ApiBearerAuth()
@@ -16,6 +17,11 @@ export class AssetBorrowController {
   constructor(private readonly assetBorrowService: AssetBorrowService) { }
   // Create Borrowing
   @Post()
+  @Roles(
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Create a new borrow transaction' })
   @ApiResponse({ status: 201, description: 'Borrow transaction created' })
   @ApiResponse({ status: 409, description: 'Asset not available' })
@@ -24,6 +30,11 @@ export class AssetBorrowController {
   }
   // Return Borrowing
   @Patch(':id/return')
+  @Roles(
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Return a borrowed asset' })
   @ApiResponse({ status: 200, description: 'Asset returned successfully' })
   @ApiResponse({ status: 400, description: 'Transaction is not BORROWED' })
@@ -36,6 +47,11 @@ export class AssetBorrowController {
   }
   // Cancel Borrowing
   @Patch(':id/cancel')
+  @Roles(
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Cancel a borrow transaction' })
   @ApiResponse({ status: 200, description: 'Transaction cancelled successfully' })
   @ApiResponse({ status: 400, description: 'Transaction cannot be cancelled or no permission' })
@@ -47,6 +63,13 @@ export class AssetBorrowController {
   }
   // Get All Borrowing
   @Get()
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'List borrow transactions with pagination and filtering' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -58,6 +81,13 @@ export class AssetBorrowController {
   }
   // Get Borrowing By ID
   @Get(':id')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Get details of a borrow transaction' })
   @ApiResponse({ status: 200, description: 'Transaction details returned' })
   @ApiResponse({ status: 404, description: 'Transaction not found' })

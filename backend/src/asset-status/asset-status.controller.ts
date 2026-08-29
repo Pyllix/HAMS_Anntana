@@ -4,6 +4,8 @@ import { CreateAssetStatusDto } from './dto/create-asset-status.dto';
 import { UpdateAssetStatusDto } from './dto/update-asset-status.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Asset Status')
 @ApiBearerAuth()
@@ -14,6 +16,7 @@ export class AssetStatusController {
 
   // ─── Create ────────────────────────────────────────────────────────────────
   @Post()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create new asset status' })
   @ApiResponse({ status: 201, description: 'Asset Status created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
@@ -47,6 +50,7 @@ export class AssetStatusController {
 
   // ─── Update ────────────────────────────────────────────────────────────────
   @Patch(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update asset status by ID' })
   @ApiResponse({ status: 200, description: 'Return updated asset status' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -59,6 +63,7 @@ export class AssetStatusController {
   // ─── Soft Delete ───────────────────────────────────────────────────────────
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Soft Delete Asset Status by ID' })
   @ApiResponse({ status: 200, description: 'Asset Status deleted successfully (soft delete)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -70,6 +75,7 @@ export class AssetStatusController {
 
   // ─── Restore ───────────────────────────────────────────────────────────────
   @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restore a soft-deleted asset status' })
   @ApiResponse({ status: 200, description: 'Asset Status restored successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

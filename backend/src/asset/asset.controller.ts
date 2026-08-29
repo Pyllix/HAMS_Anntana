@@ -9,6 +9,8 @@ import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
@@ -20,6 +22,7 @@ export class AssetController {
   // ─── Asset CRUD ────────────────────────────────────────────────────────────
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Create new Asset', description: 'Create a new asset' })
   @ApiResponse({ status: 201, description: 'Asset created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -28,6 +31,14 @@ export class AssetController {
   }
 
   @Get()
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Find all Assets (paginated)', description: 'Find all assets with pagination and optional search by name, model or serial number' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
@@ -39,6 +50,14 @@ export class AssetController {
   }
 
   @Get('lost')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Find all Lost Records (paginated)', description: 'Find all lost event records across all assets with pagination and optional search by asset name, model or serial number' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
@@ -50,6 +69,14 @@ export class AssetController {
   }
 
   @Get('wait-disposal')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Find all Wait Disposal Records (paginated)', description: 'Find all records currently in wait-disposal state across all assets with pagination and optional search by asset name, model or serial number' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
@@ -61,6 +88,14 @@ export class AssetController {
   }
 
   @Get('disposal')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Find all Completed Disposal Records (paginated)', description: 'Find all completed disposal records across all assets with pagination and optional search by asset name, model or serial number' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
@@ -72,6 +107,14 @@ export class AssetController {
   }
 
   @Get(':id')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({ summary: 'Find one Asset', description: 'Find one asset by ID' })
   @ApiResponse({ status: 200, description: 'Asset found successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -81,6 +124,7 @@ export class AssetController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Update one Asset', description: 'Update asset fields' })
   @ApiResponse({ status: 200, description: 'Asset updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -96,6 +140,7 @@ export class AssetController {
   // ─── Lost History ──────────────────────────────────────────────────────────
 
   @Post(':id/lost')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({
     summary: 'Report Asset as Lost',
     description:
@@ -117,6 +162,14 @@ export class AssetController {
   }
 
   @Get(':id/lost')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({
     summary: 'Get Lost History',
     description: 'Get all lost event records for an asset, ordered by most recent first.',
@@ -131,6 +184,7 @@ export class AssetController {
   // ─── Disposal Workflow ─────────────────────────────────────────────────────
 
   @Post(':id/disposal')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({
     summary: 'Create Disposal Record (Step 1: Pending)',
     description:
@@ -152,6 +206,7 @@ export class AssetController {
   }
 
   @Patch(':id/disposal/:disposalId')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({
     summary: 'Complete Disposal (Step 2: Disposed)',
     description:
@@ -174,6 +229,14 @@ export class AssetController {
   }
 
   @Get(':id/disposal')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
   @ApiOperation({
     summary: 'Get Disposal History',
     description: 'Get all disposal records for an asset, ordered by most recent first.',
