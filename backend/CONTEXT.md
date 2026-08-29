@@ -154,16 +154,19 @@ Asset records use **status-based lifecycle management** — no soft delete.
 | status_code   | status_name      | ความหมาย                              |
 |---------------|------------------|---------------------------------------|
 | `AVAILABLE`   | ว่าง             | พร้อมให้ยืม                             |
-| `BORROWED`    | ถูกยืม           | ถูกยืมอยู่                              |
+| `RESERVED`    | ถูกจอง/รออนุมัติ  | มีการขอเบิก/ยืม รอการอนุมัติหรือส่งมอบ     |
+| `BORROWED`    | ถูกยืม           | ถูกยืมและส่งมอบไปใช้งานอยู่               |
 | `UNAVAILABLE` | ไม่พร้อมใช้งาน   | ไม่พร้อมให้ยืม (ซ่อม/จำหน่าย/สูญหาย)    |
 
 ### BorrowStatus (สถานะรายการยืม-คืน)
 
-| status_code | status_name        | ความหมาย                    |
-|-------------|--------------------|-----------------------------|
-| `BORROWED`  | กำลังยืม           | ครุภัณฑ์ถูกยืมไปใช้งาน        |
-| `RETURNED`  | คืนแล้ว            | ครุภัณฑ์ถูกส่งคืนเรียบร้อย    |
-| `CANCELLED` | ยกเลิก             | รายการยืมถูกยกเลิก             |
+| status_code        | status_name        | ความหมาย                    |
+|--------------------|--------------------|-----------------------------|
+| `PENDING_APPROVAL` | รออนุมัติ           | ส่งคำขอยืม รอเจ้าหน้าที่ศูนย์อนุมัติ |
+| `BORROWED`         | กำลังยืม           | อนุมัติและส่งมอบครุภัณฑ์แล้ว    |
+| `RETURNED`         | คืนแล้ว            | ครุภัณฑ์ถูกส่งคืนเรียบร้อย    |
+| `REJECTED`         | ปฏิเสธ             | คำขอยืมถูกปฏิเสธ             |
+| `CANCELLED`        | ยกเลิก             | รายการยืมถูกยกเลิก             |
 
 ---
 
@@ -185,8 +188,9 @@ LOST          ──► END       (Terminal)
 ### AvailabilityStatus Transitions
 
 ```
-AVAILABLE   ──► BORROWED / UNAVAILABLE
-BORROWED    ──► AVAILABLE
+AVAILABLE   ──► RESERVED / BORROWED / UNAVAILABLE
+RESERVED    ──► BORROWED / AVAILABLE
+BORROWED    ──► AVAILABLE / UNAVAILABLE
 UNAVAILABLE ──► AVAILABLE
 ```
 
@@ -198,17 +202,20 @@ UNAVAILABLE ──► AVAILABLE
 
 > อ้างอิงจาก `docs/status_role.md`
 
-| # | Event | AssetStatus | AvailabilityStatus |
-|---|-------|-------------|--------------------|
-| 1 | **AssetStatus controls Availability** | — | เฉพาะ `NORMAL` เท่านั้นที่มี `AVAILABLE` หรือ `BORROWED` ได้ สถานะอื่น → `UNAVAILABLE` |
-| 2 | **ยืม (Borrow)** | ไม่เปลี่ยน | `AVAILABLE → BORROWED` |
-| 3 | **คืนปกติ (Return - Normal)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` |
-| 4 | **คืนชำรุด (Return - Damage)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` |
-| 5 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` |
-| 6 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` |
-| 7 | **รอจำหน่าย (Pending Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → WAIT_DISPOSAL` | `→ UNAVAILABLE` |
-| 8 | **จำหน่ายแล้ว (Disposal Completed)** | `WAIT_DISPOSAL → DISPOSAL` | คง `UNAVAILABLE` |
-| 9 | **สูญหาย (Asset Lost)** | `NORMAL/DAMAGED/UNDER_REPAIR → LOST` | `→ UNAVAILABLE` |
+| # | Event | AssetStatus | AvailabilityStatus | BorrowStatus |
+|---|-------|-------------|--------------------|--------------|
+| 1 | **AssetStatus controls Availability** | — | เฉพาะ `NORMAL` เท่านั้นที่มี `AVAILABLE`, `RESERVED` หรือ `BORROWED` ได้ สถานะอื่น → `UNAVAILABLE` | — |
+| 2 | **ยื่นขอยืม (Self-Service)** | ไม่เปลี่ยน | `AVAILABLE → RESERVED` | `→ PENDING_APPROVAL` |
+| 3 | **อนุมัติการยืม (Approve)** | ไม่เปลี่ยน | `RESERVED → BORROWED` | `PENDING_APPROVAL → BORROWED` |
+| 4 | **ยืมตรงที่ศูนย์ (Center-Service)** | ไม่เปลี่ยน | `AVAILABLE → BORROWED` | `→ BORROWED` |
+| 5 | **ปฏิเสธ/ยกเลิกคำขอ** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ REJECTED / CANCELLED` |
+| 6 | **คืนปกติ (Return - Normal)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED` |
+| 7 | **คืนชำรุด (Return - Damage)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED` |
+| 8 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — |
+| 9 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — |
+| 10 | **รอจำหน่าย (Pending Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → WAIT_DISPOSAL` | `→ UNAVAILABLE` | — |
+| 11 | **จำหน่ายแล้ว (Disposal Completed)** | `WAIT_DISPOSAL → DISPOSAL` | คง `UNAVAILABLE` | — |
+| 12 | **สูญหาย (Asset Lost)** | `NORMAL/DAMAGED/UNDER_REPAIR → LOST` | `→ UNAVAILABLE` | — |
 
 ---
 
@@ -290,31 +297,31 @@ Body: { asset_status_id: number }
   │                                                       │
   ├─ ระบบแสดงรายการครุภัณฑ์                                  │
   │  (รูปภาพ, ชื่อ/รหัส, ประเภท, สถานะ,                      │
-  │   ผู้ยืม/แผนก, วันที่ยืม, ปุ่มจัดการ)                      │
+  │   ผู้ยืม/แผนก, วันที่ยืม, currentBorrowing)              │
   │                                                       │
   ├─ กดปุ่ม "ยืมของ"                                       │
-  │  (เฉพาะครุภัณฑ์สถานะ "ว่าง")                              │
+  │  (เฉพาะครุภัณฑ์สถานะ "ว่าง / AVAILABLE")                  │
   │                                                       │
   ├─ ระบบแสดง Dialog "ทำรายการยืมครุภัณฑ์"                    │
   │                                                       │
   ├─ กรอกข้อมูลการยืม:                                      │
   │  • วิธีรับครุภัณฑ์ (บังคับ):                                │
-  │    ◇──[มารับด้วยตนเอง]──→ ผู้ยืมไปรับที่ศูนย์              │
-  │    └──[ให้เจ้าหน้าที่นำไปส่ง]──→ เจ้าหน้าที่ส่งไปที่แผนก    │
+  │    ◇──[มารับด้วยตนเอง: PICKUP]                           │
+  │    └──[ให้เจ้าหน้าที่นำไปส่ง: DELIVERY]                    │
   │                                                       │
   ├─ กดปุ่ม "ยืนยันการขอยืม"                                 │
+  │  (สร้าง Transaction: PENDING_APPROVAL                   │
+  │   Asset Availability: AVAILABLE → RESERVED)           │
   │                                            ┌──────────┤
-  │                                 ตรวจสอบสถานะครุภัณฑ์      │
+  │                                 ตรวจสอบคำขอ & จัดเตรียมของ │
   │                                           ◇           │
-  │                              ไม่ว่าง ◄──╱   ╲──► ว่าง   │
-  │                                 │     ╲   ╱     │     │
-  │                                 ▼      ╲ ╱      ▼     │
-  │                     แจ้งผู้ใช้ว่าครุภัณฑ์    อนุมัติรับ     │
-  │                    ไม่พร้อมใช้งาน ⊗    คำขอการยืม       │
-  │                                    AvailabilityStatus  │
-  │                                   AVAILABLE→BORROWED   │
-  │                                            │          │
-  ◄────────────────────────────────────────────┘          │
+  │                              ปฏิเสธ ◄───╱   ╲───► อนุมัติ│
+  │                                 │      ╲   ╱      │   │
+  │                                 ▼       ╲ ╱       ▼   │
+  │                         REJECTED        │      BORROWED
+  │                   Asset: AVAILABLE ◄────┘   Asset: BORROWED
+  │                                                       │
+  ◄───────────────────────────────────────────────────────┘
   ● End                                                   │
 ```
 
@@ -400,6 +407,7 @@ Body: { asset_status_id: number }
 | `return_condition` | ENUM | | | สภาพเครื่องตอนคืน: `Normal` / `Damage` |
 | `return_method` | ENUM | | | วิธีการคืน: `self_return` / `staff_pickup` |
 | `return_remark` | TEXT | | | หมายเหตุการคืน |
+| `reject_reason` | TEXT | | | เหตุผลการปฏิเสธคำขอยืม (เฉพาะกรณี REJECTED) |
 
 ## Data Model: BORROW_STATUS (Lookup Table)
 

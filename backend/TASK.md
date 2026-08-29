@@ -45,6 +45,13 @@
   - ระบุสิทธิ์ `@Roles(...)` บน endpoints `POST /borrowings`, `PATCH /borrowings/:id/return`, `PATCH /borrowings/:id/cancel`
 - [x] **2.4 Setup & Lookup Controllers** (`asset-status`, `asset-type`, `availabilities`, `company`, `sections`):
   - ระบุสิทธิ์การแก้ไข/จัดการ master data เฉพาะ Admin (หรือ Parcel Staff / Asset Center Staff ตามสิทธิ์ของแต่ละ Master Data)
+- [x] **2.5 Asset Table & currentBorrowing Relation (`src/asset/asset.service.ts`)**:
+  - แนบ `currentBorrowing` (ข้อมูลคำขอ/การยืมที่ active) ไปกับ `findAll` และ `findOne` ของ Asset เพื่อให้ตารางหน้าบ้านสามารถเปิด Dialog และกดยืนยันคืนได้ทันที
+- [x] **2.6 Approval Workflow & Status Transition (`src/asset-borrow/`)**:
+  - เพิ่มสถานะ `RESERVED` ใน `AvailabilityStatus` และ `PENDING_APPROVAL`, `REJECTED` ใน `BorrowStatus`
+  - ปรับปรุง `createBorrow`: สำหรับ Self-Service ให้เป็น `PENDING_APPROVAL` + `RESERVED`
+  - เพิ่ม Endpoint `PATCH /borrowings/:id/approve` และ `PATCH /borrowings/:id/reject` ควบคุมสิทธิ์ด้วย `@Roles(UserRole.ASSET_CENTER_STAFF)`
+  - ปรับปรุง `cancelBorrow` และ `returnAsset` ให้คืน Availability สอดคล้องกับสถานะใหม่
  
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
