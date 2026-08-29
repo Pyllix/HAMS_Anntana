@@ -286,6 +286,19 @@ Body: { asset_status_id: number }
 
 ---
 
+### Security & Permission Scoping Rules (กฎความปลอดภัยและการควบคุมสิทธิ์)
+
+1. **การคืนครุภัณฑ์ (`returnAsset`)**:
+   - อนุญาตเฉพาะ: ผู้ยืมคนนั้นเอง (`borrower_id`), เจ้าหน้าที่ศูนย์หรือผู้ดูแลระบบ (`ASSET_CENTER_STAFF`, `ADMIN`, `MANAGER`), หรือ **เจ้าหน้าที่ที่อยู่แผนกเดียวกัน** (`user.section_id === borrower.section_id`)
+2. **การยกเลิกรายการยืม (`cancelBorrow`)**:
+   - อนุญาตเฉพาะ: ผู้ยืมคนนั้นเอง (`borrower_id`), เจ้าหน้าที่ศูนย์หรือผู้ดูแลระบบ, หรือ **เจ้าหน้าที่ที่อยู่แผนกเดียวกัน** เพื่อป้องกันและช่วยเหลือกันภายในหน่วยงาน
+3. **การตรวจสอบสิทธิ์ความปลอดภัยในแผนก (DB Fallback Verification)**:
+   - ตรวจสอบ `section_id` ของผู้เรียกผ่าน Helper `getCallerSectionId`: ระบบจะอ่าน `user.section_id` จาก Session ก่อน หากไม่มี (เช่น Session เก่า) จะทำการตรวจสอบข้อมูลในฐานข้อมูล (`users.section_id`) แบบเรียลไทม์เพื่อป้องกันช่องโหว่การสวมสิทธิ์ข้ามแผนก
+4. **ข้อกำหนดสถานะสำหรับ Error Reporting**:
+   - การกระทำต่างๆ (`returnAsset`, `cancelBorrow`) จะต้องตรวจสอบความเข้ากันได้ของสถานะ Transaction เสมอ และส่ง Error status code และชื่อสถานะ (เช่น `PENDING_APPROVAL`, `RETURNED`) กลับไปที่ Frontend อย่างชัดเจนหากไม่เป็นไปตามขั้นตอนที่ถูกต้อง
+
+---
+
 ### Flow 1A: ยืมผ่านแอป (Self-Service Borrow)
 
 ```
