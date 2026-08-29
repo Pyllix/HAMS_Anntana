@@ -9,10 +9,12 @@ const mockPrismaService = {
   asset: {
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   },
   borrowTransaction: {
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     findUnique: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
@@ -47,6 +49,9 @@ describe('AssetBorrowService', () => {
     service = module.get<AssetBorrowService>(AssetBorrowService);
     prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
+
+    prisma.asset.updateMany.mockResolvedValue({ count: 1 });
+    prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('should be defined', () => {
@@ -85,9 +90,9 @@ describe('AssetBorrowService', () => {
       await service.createBorrow(dtoOther, parcelUser);
 
       // Verify it ignored user-id-99 and used parcelUser's own ID with RESERVED / PENDING_APPROVAL
-      expect(prisma.asset.update).toHaveBeenCalledWith(
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: { availability_status_id: 12 },
         }),
       );
@@ -115,17 +120,16 @@ describe('AssetBorrowService', () => {
       prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', asset_status_id: 1, availability_status_id: 10 });
       prisma.user.findFirst.mockResolvedValue({ id: 'user-id-99' });
-      prisma.asset.update.mockResolvedValue({});
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
       prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-2', request_source: RequestSource.CENTER_SERVICE });
 
       const dtoForOther = { ...dto, borrowerId: 'user-id-99' };
       await service.createBorrow(dtoForOther, acStaffUser);
 
-      expect(prisma.asset.update).toHaveBeenCalledWith(
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: { availability_status_id: 11 },
         }),
       );
@@ -153,7 +157,7 @@ describe('AssetBorrowService', () => {
       prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', asset_status_id: 1, availability_status_id: 11 }); // not AVAILABLE
+      prisma.asset.updateMany.mockResolvedValue({ count: 0 }); // simulate asset not available
 
       await expect(service.createBorrow(dto, parcelUser)).rejects.toThrow(ConflictException);
     });
@@ -167,22 +171,27 @@ describe('AssetBorrowService', () => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
         return { id: 20, code: 'BORROWED' };
       });
-      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 11, code: 'BORROWED' });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
+        return { id: 11, code: 'BORROWED' };
+      });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrow_status_id: 21,
-      });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1', borrow_status_id: 20 });
-      prisma.asset.update.mockResolvedValue({});
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrow_status_id: 21,
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 20 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.approveBorrow('tx-1', acStaffUser);
-      expect(result.borrow_status_id).toBe(20);
-      expect(prisma.asset.update).toHaveBeenCalledWith(
+      expect(result?.borrow_status_id).toBe(20);
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: { availability_status_id: 11 },
         }),
       );
@@ -193,7 +202,10 @@ describe('AssetBorrowService', () => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
         return { id: 20, code: 'BORROWED' };
       });
-      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 11, code: 'BORROWED' });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
+        return { id: 11, code: 'BORROWED' };
+      });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
       prisma.borrowTransaction.findUnique.mockResolvedValue({
@@ -214,31 +226,36 @@ describe('AssetBorrowService', () => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
         return { id: 22, code: 'REJECTED' };
       });
-      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
+        return { id: 10, code: 'AVAILABLE' };
+      });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrow_status_id: 21,
-      });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1', borrow_status_id: 22 });
-      prisma.asset.update.mockResolvedValue({});
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrow_status_id: 21,
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 22 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.rejectBorrow('tx-1', 'Not available for external loan', acStaffUser);
-      expect(result.borrow_status_id).toBe(22);
-      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+      expect(result?.borrow_status_id).toBe(22);
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'tx-1' },
+          where: expect.objectContaining({ id: 'tx-1' }),
           data: expect.objectContaining({
             borrow_status_id: 22,
             reject_reason: 'Not available for external loan',
           }),
         }),
       );
-      expect(prisma.asset.update).toHaveBeenCalledWith(
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: { availability_status_id: 10 },
         }),
       );
@@ -255,11 +272,7 @@ describe('AssetBorrowService', () => {
       prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.findUnique.mockResolvedValue({
-        id: 'asset-1',
-        asset_status_id: 2, // DAMAGED (not 1)
-        availability_status_id: 10, // AVAILABLE
-      });
+      prisma.asset.updateMany.mockResolvedValue({ count: 0 }); // updateMany count is 0 because condition is not NORMAL
 
       await expect(service.createBorrow(dto, parcelUser)).rejects.toThrow(ConflictException);
     });
@@ -280,29 +293,28 @@ describe('AssetBorrowService', () => {
         if (where.code === 'BORROWED') return { id: 20, code: 'BORROWED' };
         if (where.code === 'RETURNED') return { id: 23, code: 'RETURNED' };
       });
-      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'BORROWED') return { id: 11, code: 'BORROWED' };
+        return { id: 10, code: 'AVAILABLE' };
+      });
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.update.mockResolvedValue({});
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
     });
 
     it('should allow original borrower to return their asset', async () => {
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrower_id: 'user-id-1',
-        borrow_status_id: 20,
-        borrower: { section_id: 'sec-opd' },
-      });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 20,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 23 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
 
       await service.returnAsset('tx-1', returnDto, borrowerUser);
-      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            returned_by_user_id: 'user-id-1',
-          }),
-        }),
-      );
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalled();
     });
 
     it('should allow another staff in the same department to return the asset', async () => {
@@ -316,7 +328,7 @@ describe('AssetBorrowService', () => {
       prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
 
       await service.returnAsset('tx-1', returnDto, sameDeptUser);
-      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             returned_by_user_id: 'user-id-2',
@@ -345,13 +357,23 @@ describe('AssetBorrowService', () => {
         borrow_status_id: 20,
         borrower: { section_id: 'sec-opd' },
       });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 20,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', returned_by_user_id: 'user-id-1' });
 
       const maliciousDto = { ...returnDto, returnedByUserId: 'victim-id-99' };
       await service.returnAsset('tx-1', maliciousDto, borrowerUser);
 
       // Must be borrowerUser's own ID, ignoring victim-id-99
-      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             returned_by_user_id: 'user-id-1',
@@ -361,20 +383,23 @@ describe('AssetBorrowService', () => {
     });
 
     it('should allow ASSET_CENTER_STAFF to return for any borrower and specify returnedByUserId', async () => {
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrower_id: 'user-id-1',
-        borrow_status_id: 20,
-        borrower: { section_id: 'sec-opd' },
-      });
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 20,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1' });
       prisma.user.findFirst.mockResolvedValue({ id: 'user-id-99' });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
 
       const staffDto = { ...returnDto, returnedByUserId: 'user-id-99' };
       await service.returnAsset('tx-1', staffDto, acStaffUser);
 
-      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             returned_by_user_id: 'user-id-99',
@@ -400,19 +425,22 @@ describe('AssetBorrowService', () => {
 
     it('should fallback to DB lookup when user.section_id is missing from session', async () => {
       const userWithoutSectionInSession = { id: 'user-id-1', role: UserRole.DEPARTMENT_STAFF }; // no section_id in session
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrower_id: 'user-id-2',
-        borrow_status_id: 20,
-        borrower: { section_id: 'sec-opd' },
-      });
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-2',
+          borrow_status_id: 20,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1' });
       // DB lookup returns sec-opd
       prisma.user.findUnique.mockResolvedValue({ id: 'user-id-1', section_id: 'sec-opd' });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
 
       await service.returnAsset('tx-1', returnDto, userWithoutSectionInSession);
-      expect(prisma.borrowTransaction.update).toHaveBeenCalled();
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalled();
     });
   });
 
@@ -428,43 +456,65 @@ describe('AssetBorrowService', () => {
         if (where.code === 'BORROWED') return { id: 20, code: 'BORROWED' };
         if (where.code === 'CANCELLED') return { id: 24, code: 'CANCELLED' };
       });
-      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'AVAILABLE') return { id: 10, code: 'AVAILABLE' };
+        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
+        if (where.code === 'BORROWED') return { id: 11, code: 'BORROWED' };
+      });
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.update.mockResolvedValue({});
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
     });
 
     it('should allow borrower to cancel their pending transaction', async () => {
-      prisma.borrowTransaction.findUnique.mockResolvedValue({
-        id: 'tx-1',
-        asset_id: 'asset-1',
-        borrower_id: 'user-id-1',
-        borrow_status_id: 21,
-        borrower: { section_id: 'sec-opd' },
-      });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1', borrow_status_id: 24 });
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 21,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.cancelBorrow('tx-1', borrowerUser);
-      expect(result.borrow_status_id).toBe(24);
-      expect(prisma.asset.update).toHaveBeenCalledWith(
+      expect(result?.borrow_status_id).toBe(24);
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: { availability_status_id: 10 },
         }),
       );
     });
 
-    it('should allow another staff in the same department to cancel the transaction', async () => {
+    it('should allow another staff in the same department to cancel the pending transaction', async () => {
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 21,
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cancelBorrow('tx-1', sameDeptUser);
+      expect(result?.borrow_status_id).toBe(24);
+    });
+
+    it('should throw BadRequestException if DEPARTMENT_STAFF tries to cancel a BORROWED transaction', async () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue({
         id: 'tx-1',
         asset_id: 'asset-1',
         borrower_id: 'user-id-1',
-        borrow_status_id: 21,
+        borrow_status_id: 20, // BORROWED
         borrower: { section_id: 'sec-opd' },
       });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1', borrow_status_id: 24 });
 
-      const result = await service.cancelBorrow('tx-1', sameDeptUser);
-      expect(result.borrow_status_id).toBe(24);
+      await expect(service.cancelBorrow('tx-1', borrowerUser)).rejects.toThrow(
+        /Department staff can only cancel transactions that are pending approval/,
+      );
     });
 
     it('should throw BadRequestException if staff from a different department attempts to cancel', async () => {
@@ -479,18 +529,34 @@ describe('AssetBorrowService', () => {
       await expect(service.cancelBorrow('tx-1', diffDeptUser)).rejects.toThrow(BadRequestException);
     });
 
-    it('should allow ASSET_CENTER_STAFF to cancel transaction of any department', async () => {
+    it('should allow ASSET_CENTER_STAFF to cancel BORROWED or PENDING_APPROVAL transaction of any department', async () => {
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 20, // BORROWED
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cancelBorrow('tx-1', acStaffUser);
+      expect(result?.borrow_status_id).toBe(24);
+    });
+
+    it('should throw ConflictException if optimistic lock fails during cancelBorrow', async () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue({
         id: 'tx-1',
         asset_id: 'asset-1',
         borrower_id: 'user-id-1',
-        borrow_status_id: 20,
+        borrow_status_id: 21,
         borrower: { section_id: 'sec-opd' },
       });
-      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1', borrow_status_id: 24 });
+      // Simulate concurrent update: updateMany count is 0
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 0 });
 
-      const result = await service.cancelBorrow('tx-1', acStaffUser);
-      expect(result.borrow_status_id).toBe(24);
+      await expect(service.cancelBorrow('tx-1', borrowerUser)).rejects.toThrow(ConflictException);
     });
 
     it('should throw BadRequestException if transaction is already RETURNED or CANCELLED', async () => {

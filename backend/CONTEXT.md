@@ -291,11 +291,14 @@ Body: { asset_status_id: number }
 1. **การคืนครุภัณฑ์ (`returnAsset`)**:
    - อนุญาตเฉพาะ: ผู้ยืมคนนั้นเอง (`borrower_id`), เจ้าหน้าที่ศูนย์หรือผู้ดูแลระบบ (`ASSET_CENTER_STAFF`, `ADMIN`, `MANAGER`), หรือ **เจ้าหน้าที่ที่อยู่แผนกเดียวกัน** (`user.section_id === borrower.section_id`)
 2. **การยกเลิกรายการยืม (`cancelBorrow`)**:
-   - อนุญาตเฉพาะ: ผู้ยืมคนนั้นเอง (`borrower_id`), เจ้าหน้าที่ศูนย์หรือผู้ดูแลระบบ, หรือ **เจ้าหน้าที่ที่อยู่แผนกเดียวกัน** เพื่อป้องกันและช่วยเหลือกันภายในหน่วยงาน
-3. **การตรวจสอบสิทธิ์ความปลอดภัยในแผนก (DB Fallback Verification)**:
+   - **`DEPARTMENT_STAFF` / ผู้ยืม / เพื่อนร่วมแผนก**: สามารถกดยกเลิกคำขอได้เฉพาะตอนที่สถานะยังเป็น **`PENDING_APPROVAL` (รออนุมัติ)** เท่านั้น หากส่งมอบของไปแล้ว (`BORROWED`) จะต้องทำรายการคืน (`returnAsset`) เพื่อให้มีการตรวจรับสภาพของ
+   - **`ASSET_CENTER_STAFF` / `ADMIN` / `MANAGER`**: สามารถกดยกเลิกคำขอในสถานะ `BORROWED` หรือ `PENDING_APPROVAL` ได้สำหรับกรณีแก้ไขข้อผิดพลาดทางระบบ
+3. **การป้องกัน Concurrency & Race Condition (Optimistic Locking)**:
+   - การเปลี่ยนสถานะของ `BorrowTransaction` และ `Asset` ทั้งหมด (`createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, `returnAsset`) จะต้องใช้ Atomic Optimistic Locking (`updateMany` กับเงื่อนไขสถานะคาดหวังใน `where`) เพื่อป้องกันคำขอทำงานพร้อมกันชนกัน และจะโยน `409 ConflictException` เมื่อพบการประมวลผลซ้อน
+4. **การตรวจสอบสิทธิ์ความปลอดภัยในแผนก (DB Fallback Verification)**:
    - ตรวจสอบ `section_id` ของผู้เรียกผ่าน Helper `getCallerSectionId`: ระบบจะอ่าน `user.section_id` จาก Session ก่อน หากไม่มี (เช่น Session เก่า) จะทำการตรวจสอบข้อมูลในฐานข้อมูล (`users.section_id`) แบบเรียลไทม์เพื่อป้องกันช่องโหว่การสวมสิทธิ์ข้ามแผนก
-4. **ข้อกำหนดสถานะสำหรับ Error Reporting**:
-   - การกระทำต่างๆ (`returnAsset`, `cancelBorrow`) จะต้องตรวจสอบความเข้ากันได้ของสถานะ Transaction เสมอ และส่ง Error status code และชื่อสถานะ (เช่น `PENDING_APPROVAL`, `RETURNED`) กลับไปที่ Frontend อย่างชัดเจนหากไม่เป็นไปตามขั้นตอนที่ถูกต้อง
+5. **ข้อกำหนดสถานะสำหรับ Error Reporting**:
+   - การกระทำต่างๆ จะต้องตรวจสอบความเข้ากันได้ของสถานะ Transaction เสมอ และส่ง Error status code และชื่อสถานะ (เช่น `PENDING_APPROVAL`, `RETURNED`) กลับไปที่ Frontend อย่างชัดเจนหากไม่เป็นไปตามขั้นตอนที่ถูกต้อง
 
 ---
 

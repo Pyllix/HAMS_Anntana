@@ -61,6 +61,9 @@
   - ปรับปรุง `cancelBorrow` ให้อนุญาตให้เจ้าหน้าที่ในแผนกเดียวกัน (`borrower.section_id === user.section_id`) กดยกเลิกคำขอแทนกันได้
   - ปรับปรุง Error Message ใน `returnAsset` และ `cancelBorrow` ให้แจ้งสถานะปัจจุบันของคำขออย่างชัดเจน (เช่น `'PENDING_APPROVAL'`, `'RETURNED'`)
   - เพิ่ม Helper `getCallerSectionId` พร้อม Fallback ดึง `section_id` จาก DB เพื่อการันตีความถูกต้องของข้อมูลแผนก แม้ Session เก่าจะไม่มี `section_id`
+- [x] **2.9 Borrow Concurrency Protection & Business Rule Refinement (`src/asset-borrow/`)**:
+  - ปรับปรุง `cancelBorrow`: จำกัดสิทธิ์ `DEPARTMENT_STAFF` / ผู้ยืม ให้กดยกเลิกคำขอได้เฉพาะสถานะ `PENDING_APPROVAL` เท่านั้น (หาก `BORROWED` ต้องคืนผ่าน `returnAsset`)
+  - เพิ่ม Atomic Optimistic Locking (`updateMany` ร่วมกับสถานะคาดหวังใน `where`) ทั้งใน `createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, และ `returnAsset` ป้องกันคำขอประมวลผลซ้ำซ้อน / Race Condition 100%
  
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
