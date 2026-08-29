@@ -19,10 +19,16 @@ model BorrowTransaction {
   received_by_user_id String? @map("received_by_user_id")
   borrow_status_id    Int     @map("borrow_status_id")
 
+  approved_at   DateTime?        @map("approved_at")
+  handover_date DateTime?        @map("handover_date")
   return_date      DateTime?        @map("return_date")
+  cancelled_at     DateTime?        @map("cancelled_at")
+  rejected_at      DateTime?        @map("rejected_at")
+  cancel_reason    String?          @map("cancel_reason") @db.Text
   return_condition ReturnCondition? @map("return_condition")
   return_method    ReturnMethod?    @map("return_method")
   return_remark    String?          @map("return_remark") @db.Text
+  reject_reason    String?          @map("reject_reason") @db.Text
 
   request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
   delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")

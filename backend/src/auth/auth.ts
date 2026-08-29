@@ -32,6 +32,7 @@ export const auth = betterAuth({
         required: false,
         defaultValue: 'DEPARTMENT_STAFF',
       },
+      section_id: { type: 'string', required: false },
       imageUrl: { type: 'string', required: false },
     },
   },

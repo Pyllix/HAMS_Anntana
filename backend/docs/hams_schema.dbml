@@ -1,0 +1,485 @@
+// ============================================================================
+// HAMS (Hospital Asset Management System) — Database Schema
+// Generated from Data Dictionary CSV
+// ============================================================================
+// Notes for the reading AI agent — assumptions made while converting the
+// source data dictionary (which had some gaps/typos) into DBML:
+//
+// 1. Columns written as "createdBy(user_id)", "updateBy(user_id)",
+//    "borrower_id(user_id)", "reporter_id(user_id)", "receiver(user_id)",
+//    "add_by(user_id)", "txn_by(user_id)" in the source were normalized to
+//    plain snake_case column names (created_by, updated_by, borrower_id,
+//    reporter_id, receiver_id, add_by, txn_by) since DBML identifiers can't
+//    contain parentheses. They all reference USER.user_id.
+//
+// 2. Some tables had no PK explicitly marked in the source but clearly need
+//    one because other tables reference them as FK, or because the column is
+//    named "*_id" and is the obvious identifier. PK was inferred for:
+//      - SPAREPART_GROUP.group_id
+//      - SPAREPART_TXN.txn_id
+//      - TECH_CATEGORY.tech_category_id
+//      - TRANSFER.id
+//    These are flagged inline with "// inferred PK".
+//
+// 3. REPAIR_JOB.tech_category_id references a table spelled "TECH_CATAGORY"
+//    in the source (typo). Resolved to TECH_CATEGORY (the actual table name
+//    defined elsewhere in the dictionary).
+//
+// 4. ASSET.order_id is marked as FK (Y) in the source but no referenced
+//    table was specified. Left as a plain uuid column — needs clarification
+//    from the source team (likely a future PURCHASE_ORDER table).
+//
+// 5. SPAREPART_TXN.sparepart_id and SPAREPART_TXN.job_id are not marked FK
+//    in the source, but logically reference SPAREPART and REPAIR_JOB. Added
+//    as refs with a note flagging the inference.
+//
+// 6. ENUM value lists that were not specified in the source ("NA") were left
+//    as plain varchar columns with a note instead of inventing enum values
+//    (BORROW_TRANSACTION.request_source, delivery_method).
+//
+// 7. Soft-delete columns appear inconsistently named across tables in the
+//    source (deletedAt vs deleteAt). Kept exactly as given per table.
+// ============================================================================
+
+Project HAMS {
+  database_type: 'PostgreSQL'
+  Note: 'Hospital Asset Management System — asset lifecycle, borrowing, repair/maintenance jobs, spare parts and transfers.'
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+Enum pm_type_enum {
+  IM [note: 'Internal Maintenance']
+  EM [note: 'External Maintenance']
+}
+
+Enum cal_type_enum {
+  IC [note: 'Internal Calibration']
+  EC [note: 'External Calibration']
+}
+
+Enum risk_level_enum {
+  "สูง" [note: 'High']
+  "กลาง" [note: 'Medium']
+  "ต่ำ" [note: 'Low']
+  "ไม่ระบุความเสี่ยง" [note: 'Not specified']
+}
+
+Enum return_condition_enum {
+  Normal
+  Damage
+}
+
+Enum return_method_enum {
+  self_return
+  staff_pickup
+}
+
+Enum report_type_enum {
+  Repair [note: 'แจ้งซ่อมครุภัณฑ์ชำรุด — breakdown repair report']
+  Maintenance [note: 'บำรุงรักษาตามรอบ — scheduled maintenance']
+}
+
+Enum action_type_enum {
+  REPAIR [note: 'ตรวจซ่อม']
+  FABRICATE [note: 'สร้างใหม่']
+  MODIFY [note: 'ปรับปรุง']
+  PREVENTIVE [note: 'เชิงรุก']
+}
+
+Enum urgency_status_enum {
+  NORMAL [note: 'ปกติ']
+  URGENT [note: 'ด่วน']
+  EMERGENCY [note: 'เร่งด่วน']
+}
+
+Enum step_action_type_enum {
+  INTERNAL_STOCK
+  EXTERNAL_STOCK
+  OUTSOURCE
+  PURCHASE_REPLACEMENT
+  SELF_REPAIR
+}
+
+Enum user_role_enum {
+  ADMIN
+  MANAGER
+  PARCEL_STAFF
+  ASSET_CENTER_STAFF
+  DEPARTMENT_STAFF
+  MAINTENANCE_STAFF
+}
+
+// ----------------------------------------------------------------------------
+// Lookup / master tables
+// ----------------------------------------------------------------------------
+
+Table ACQ_TYPE {
+  acq_type_id   int         [pk, not null, note: 'ID ประเภทการได้รับมา']
+  acq_type_name varchar(100) [not null, note: 'ชื่อประเภทการได้รับมา']
+  is_active     boolean     [not null, note: 'ยังใช้ประเภทนี้อยู่ไหม']
+  description   text        [note: 'คำอธิบายเพิ่มเติม']
+  createdAt     timestamptz [not null, note: 'วันเวลาที่เพิ่มข้อมูลเข้าระบบ']
+  updatedAt     timestamptz [not null, note: 'วันเวลาที่แก้ไขข้อมูลล่าสุด']
+  deletedAt     timestamptz [note: 'วันเวลาที่ถูกลบ']
+
+  Note: 'ประเภทการได้รับครุภัณฑ์เข้ามา (เช่น ติดมากับตึก, รับโอน, บริจาค)'
+}
+
+Table ASSET_STATUS {
+  asset_status_id int         [pk, not null, note: 'ID ของสถานะครุภัณฑ์']
+  status_code     varchar(20)  [not null, note: 'รหัสของสถานะ (eng)']
+  status_name     varchar(50)  [not null, note: 'ชื่อของสถานะ (thai)']
+  createdAt       timestamptz [not null]
+  updatedAt       timestamptz [not null]
+  deleteAt        timestamptz
+
+  Note: 'สถานะของครุภัณฑ์'
+}
+
+Table ASSET_TYPE {
+  type_id     int         [pk, not null, note: 'ID ของประเภทครุภัณฑ์']
+  name        varchar(100) [not null, note: 'ชื่อของประเภทครุภัณฑ์']
+  useful_life int         [not null, note: 'อายุการใช้งานที่เป็นประโยชน์ (ปี)']
+  createdAt   timestamptz [not null]
+  updatedAt   timestamptz [not null]
+  deleteAt    timestamptz
+
+  Note: 'ประเภทของครุภัณฑ์'
+}
+
+Table AVAILABILITY_STATUS {
+  availability_status_id int         [pk, not null, note: 'ID ของสถานะการใช้งานครุภัณฑ์']
+  status_code             varchar(20) [not null]
+  status_name              varchar(50) [not null]
+  createdAt                timestamptz [not null]
+  updatedAt                timestamptz [not null]
+  deleteAt                 timestamptz
+
+  Note: 'สถานะการใช้งาน (พร้อมใช้ / ไม่พร้อมใช้ ฯลฯ) ของครุภัณฑ์'
+}
+
+Table BORROW_STATUS {
+  borrow_status_id int         [pk, not null, note: 'ID ของสถานะรายการยืม-คืน']
+  status_code       varchar(20) [not null]
+  status_name       varchar(50) [not null]
+  createdAt         timestamptz [not null]
+  updatedAt         timestamptz [not null]
+  deleteAt          timestamptz
+}
+
+Table BUDGET_TYPE {
+  budget_type_id int          [pk, not null, note: 'ID ของประเภทเงินทุน']
+  name           varchar(255) [not null, note: 'ชื่อของประเภทเงินทุน']
+  is_active      boolean      [not null, note: 'ยังใช้อยู่ไหม/ปิดงบไปหรือยัง']
+  fiscal_year    int          [note: 'ปีงบประมาณ']
+  description    text
+  createdAt      timestamptz  [not null]
+  updatedAt      timestamptz  [not null]
+  deleteAt       timestamptz
+}
+
+Table CAUSE {
+  cause_id   int          [pk, not null, note: 'ID วิเคราะห์มูลเหตุ']
+  cause_code varchar(10)  [not null, note: 'เช่น 01, 02, 03']
+  cause_name varchar(100) [not null]
+  createdAt  timestamptz  [not null]
+  updatedAt  timestamptz  [not null]
+  deleteAt   timestamptz
+}
+
+Table COMPANY {
+  company_id   uuid         [pk, not null, note: 'ID ของบริษัท']
+  company_code varchar(20)  [not null]
+  name         varchar(100) [not null]
+  tel          varchar(20)
+  address      text
+  fax          varchar(20)
+  "group"      varchar(50)  [note: 'หมวดหมู่ทางธุรกิจของบริษัทคู่ค้า']
+  remark       text
+  createdAt    timestamptz  [not null]
+  updatedAt    timestamptz  [not null]
+  deleteAt     timestamptz
+
+  Note: 'บริษัทคู่ค้า (ผู้ขาย/ผู้รับซ่อมภายนอก ฯลฯ)'
+}
+
+Table EQUIPMENT_TYPE {
+  equipment_id int          [pk, not null, note: 'ID ของประเภทเครื่องมือ']
+  name         varchar(100) [not null]
+  description  text
+  createdAt    timestamptz  [not null]
+  updatedAt    timestamptz  [not null]
+}
+
+Table JOB_STATUS {
+  job_status_id int          [pk, not null, note: 'ID สถานะงานซ่อม']
+  status_code   varchar(20)  [not null]
+  status_name   varchar(100) [not null]
+  createdAt     timestamptz  [not null]
+  updatedAt     timestamptz  [not null]
+  deletedAt     timestamptz
+}
+
+Table JOB_TYPE {
+  job_type_id int          [pk, not null, note: 'ID ประเภทงานซ่อม']
+  name        varchar(100) [not null]
+  createdAt   timestamptz  [not null]
+  updatedAt   timestamptz  [not null]
+  deletedAt   timestamptz
+}
+
+Table SPAREPART_GROUP {
+  group_id  int          [pk, not null, note: 'ID ประเภทกลุ่มของอะไหล่ // inferred PK']
+  name      varchar(100) [not null]
+  createdAt timestamptz  [not null]
+  updatedAt timestamptz  [not null]
+  deletedAt timestamptz
+}
+
+Table STEP_MASTER {
+  step_master_id int                    [pk, not null, note: 'ID แม่แบบขั้นตอนการซ่อม']
+  step_number    int                    [not null, note: 'หมายเลขขั้นตอนการซ่อม']
+  action_type    step_action_type_enum  [not null, note: 'ประเภทแม่แบบขั้นตอนการซ่อม']
+  label          varchar(100)           [not null, note: 'ชื่อขั้นตอน']
+
+  Note: 'แม่แบบขั้นตอนการซ่อม ใช้เป็นต้นแบบสร้าง REPAIR_JOB_STEP ตามสาขาของ action_type'
+}
+
+Table TECH_CATEGORY {
+  tech_category_id int         [pk, not null, note: 'ID หมวดช่าง // inferred PK']
+  category_code    varchar(20) [not null]
+  category_name    varchar(100) [not null]
+  is_active        boolean     [not null, note: 'สถานะความพร้อมของหมวดช่าง']
+  createdAt        timestamptz [not null]
+  updatedAt        timestamptz [not null]
+  deleteAt         timestamptz
+}
+
+// ----------------------------------------------------------------------------
+// Core / people tables
+// ----------------------------------------------------------------------------
+
+Table SECTION {
+  section_id   uuid         [pk, not null, note: 'ID ของแผนก']
+  section_code varchar(20)  [not null]
+  name         varchar(100) [not null]
+  tel          varchar(20)  [not null]
+  building     varchar(100) [not null, note: 'ตึกที่แผนกตั้งอยู่']
+  createdAt    timestamptz  [not null]
+  updatedAt    timestamptz  [not null]
+  deleteAt     timestamptz
+}
+
+Table "USER" {
+  user_id       uuid          [pk, not null, note: 'ID ของผู้ใช้']
+  emp_id        varchar(50)   [not null, note: 'ID พนักงานของผู้ใช้']
+  user_name     varchar(50)   [not null]
+  first_name    varchar(100)  [not null]
+  last_name     varchar(100)  [not null]
+  email         varchar(100)  [not null]
+  password_hash varchar(255)  [not null]
+  section_id    uuid          [not null, ref: > SECTION.section_id, note: 'ID ของแผนก']
+  role          user_role_enum [not null, note: 'บทบาทของ user']
+  image_url     text          [not null]
+  createdAt     timestamptz   [not null]
+  updatedAt     timestamptz   [not null]
+  deleteAt      timestamptz
+}
+
+// ----------------------------------------------------------------------------
+// Asset tables
+// ----------------------------------------------------------------------------
+
+Table ASSET {
+  asset_id                uuid          [pk, not null, note: 'ID ของครุภัณฑ์']
+  noid                    varchar(30)   [note: 'หมายเลขครุภัณฑ์']
+  name                    varchar(100)  [not null]
+  model                   varchar(100)  [not null]
+  serial_no               varchar(30)   [note: 'เลขประจำเครื่องครุภัณฑ์']
+  budget_type             varchar(100)  [not null, note: 'ประเภทเงินทุน เช่น เงินบริจาค เงินกู้ เงินงบประมาณ']
+  acq_type                varchar(100)  [not null, note: 'ประเภทการได้รับมา เช่น ติดมากับตึก รับโอน บริจาค']
+  type_id                 int           [not null, ref: > ASSET_TYPE.type_id]
+  section_id              uuid          [not null, ref: > SECTION.section_id]
+  company_id              uuid          [not null, ref: > COMPANY.company_id]
+  asset_status_id         int           [not null, ref: > ASSET_STATUS.asset_status_id]
+  availability_status_id  int           [ref: > AVAILABILITY_STATUS.availability_status_id]
+  receive_date            timestamptz   [not null, note: 'วันที่นำครุภัณฑ์เข้าคลัง']
+  price                   "numeric(15,2)" [not null]
+  acq_doc                 text          [not null, note: 'เอกสารการได้รับมา']
+  warranty_date           varchar(30)   [note: 'วันที่หมดประกันของครุภัณฑ์']
+  owner_id                uuid          [not null, ref: > "USER".user_id, note: 'ผู้รับผิดชอบ']
+  pm_type                 pm_type_enum  [not null, note: 'ประเภทการบำรุงรักษา; nullable']
+  pm_interval_month       int           [note: 'ความถี่การบำรุงรักษา (เดือน)']
+  cal_type                cal_type_enum [not null, note: 'ประเภทการสอบเทียบมาตรฐาน; nullable']
+  cal_interval_month      int           [note: 'ความถี่การสอบเทียบมาตรฐาน (เดือน)']
+  equipment_type          int           [ref: > EQUIPMENT_TYPE.equipment_id, note: 'ประเภทเครื่องมือ']
+  risk_level               risk_level_enum [not null, note: 'ระดับความเสี่ยง']
+  is_special               boolean      [not null, note: 'ใช่เครื่องมีพิเศษไหม']
+  is_backup                boolean      [not null, note: 'ใช่เครื่องมีสำรองไหม']
+  remark                   text
+  image_url                text         [not null]
+  createdAt                timestamptz  [not null]
+  created_by                uuid        [not null, ref: > "USER".user_id, note: 'source column: createdBy(user_id)']
+  updatedAt                timestamptz  [not null]
+  updated_by                uuid        [not null, ref: > "USER".user_id, note: 'source column: updateBy(user_id)']
+
+  Note: 'ตารางหลักของครุภัณฑ์'
+}
+
+Table DISPOSAL {
+  disposal_id      uuid         [pk, not null, note: 'ID ประจำรายการจำหน่ายครุภัณฑ์']
+  disposal_doc_no  varchar(255) [not null, note: 'หมายเลขเอกสารการจำหน่าย']
+  approved_date    timestamptz  [not null, note: 'วันที่อนุมัติ']
+  asset_id         uuid         [not null, ref: > ASSET.asset_id]
+  createdAt        timestamptz  [not null]
+  updatedAt        timestamptz  [not null]
+  deleteAt         timestamptz
+}
+
+Table TRANSFER {
+  id               uuid          [pk, not null, note: 'ID การโอนย้าย // inferred PK']
+  asset_id         uuid          [not null, ref: > ASSET.asset_id]
+  transfer_doc_no  varchar(255)  [not null, note: 'หมายเลขเอกสารการโอนย้าย']
+  transfer_date    timestamptz   [not null]
+  from_section_id  uuid          [ref: > SECTION.section_id, note: 'แผนกต้นทาง']
+  to_section_id    uuid          [ref: > SECTION.section_id, note: 'แผนกปลายทาง']
+  from_location    varchar(255)  [note: 'สถานที่ต้นทาง']
+  to_location      varchar(255)  [note: 'สถานที่ปลายทาง']
+  requested_by     uuid          [not null, ref: > "USER".user_id, note: 'ผู้ที่ร้องขอ']
+  approved_by      uuid          [not null, ref: > "USER".user_id, note: 'ผู้ที่อนุมัติ']
+  received_by      uuid          [not null, ref: > "USER".user_id, note: 'ผู้รับ']
+  transfer_status  varchar(100)  [not null]
+  remark           text
+  createdAt        timestamptz   [not null]
+  updatedAt        timestamptz   [not null]
+  deletedAt        timestamptz
+}
+
+// ----------------------------------------------------------------------------
+// Borrow / return
+// ----------------------------------------------------------------------------
+
+Table BORROW_TRANSACTION {
+  borrow_transaction_id uuid                  [pk, not null, note: 'ID ของรายการยืม-คืน']
+  asset_id               uuid                  [not null, ref: > ASSET.asset_id]
+  borrower_id             uuid                  [not null, ref: > "USER".user_id, note: 'source column: borrower_id(user_id)']
+  returned_by_user_id     uuid                  [ref: > "USER".user_id, note: 'ID ของผู้คืน']
+  received_by_user_id     uuid                  [ref: > "USER".user_id, note: 'ID ของผู้รับคืน']
+  borrow_status_id        int                   [not null, ref: > BORROW_STATUS.borrow_status_id]
+  createdAt                timestamptz           [not null]
+  approved_at              timestamptz           [note: 'วันเวลาที่อนุมัติคำขอยืม']
+  handover_date            timestamptz           [note: 'วันเวลาที่ส่งมอบครุภัณฑ์จริง']
+  return_date              timestamptz           [note: 'วันเวลาที่คืน']
+  cancelled_at             timestamptz           [note: 'วันเวลาที่ยกเลิกรายการ']
+  rejected_at              timestamptz           [note: 'วันเวลาที่ปฏิเสธคำขอยืม']
+  cancel_reason            text                  [note: 'เหตุผลการยกเลิกรายการ']
+  request_source           varchar(100)          [note: 'วิธีการสร้างรายการยืม — enum values not specified in source']
+  delivery_method          varchar(100)          [note: 'วิธีการรับครุภัณฑ์ — enum values not specified in source']
+  return_condition         return_condition_enum [note: 'สภาพเครื่องตอนคืน']
+  return_method            return_method_enum    [note: 'วิธีการคืน']
+  return_remark            text
+  reject_remark            text                  [note: 'หมายเหตุการไม่อนุมัติการยืม']
+}
+
+// ----------------------------------------------------------------------------
+// Repair / maintenance
+// ----------------------------------------------------------------------------
+
+Table REPAIR_JOB {
+  job_id             uuid                [pk, not null, note: 'ID ของงานซ่อม']
+  job_no             varchar(255)        [not null, note: 'รหัสของงานซ่อม']
+  asset_id           uuid                [not null, ref: > ASSET.asset_id]
+  section_id         uuid                [not null, ref: > SECTION.section_id]
+  reporter_id         uuid                [not null, ref: > "USER".user_id, note: 'source column: reporter_id(user_id)']
+  job_type_id        int                 [not null, ref: > JOB_TYPE.job_type_id]
+  report_type        report_type_enum    [not null, note: 'หน่วยงานซ่อม']
+  job_status_id      int                 [not null, ref: > JOB_STATUS.job_status_id]
+  company_id         uuid                [not null, ref: > COMPANY.company_id]
+  bill_no            text                [note: 'เลขใบเสร็จ']
+  diagnosis          text                [note: 'อาการ/สาเหตุ']
+  symptom            text                [note: 'บันทึกส่งซ่อม']
+  solution           text                [note: 'วิธีการแก้ไข']
+  cause_id           int                 [not null, ref: > CAUSE.cause_id]
+  action_type        action_type_enum    [not null, note: 'ประเภทการดำเนินการ']
+  urgency_status     urgency_status_enum [not null, note: 'ความเร่งด่วน']
+  due_date           timestamptz         [note: 'กำหนดการ']
+  return_date        timestamptz         [note: 'วันที่รับคืน']
+  is_repeat_repair   boolean             [note: 'ซ่อมซ้ำไหม']
+  tech_category_id   int                 [not null, ref: > TECH_CATEGORY.tech_category_id, note: 'source spelled referenced table "TECH_CATAGORY" (typo) — resolved to TECH_CATEGORY']
+  receiver_id         uuid                [not null, ref: > "USER".user_id, note: 'source column: receiver(user_id), ผู้รับคืน']
+  createdAt           timestamptz         [not null]
+  created_by           uuid                [not null, ref: > "USER".user_id, note: 'source column: createdBy(user_id)']
+  updatedAt            timestamptz         [not null]
+  updated_by            uuid                [not null, ref: > "USER".user_id, note: 'source column: updateBy(user_id)']
+
+  Note: 'งานแจ้งซ่อม/บำรุงรักษาครุภัณฑ์'
+}
+
+Table REPAIR_JOB_STEP {
+  step_id         int         [pk, not null, note: 'ID ของ step งานซ่อม']
+  job_id          uuid        [not null, ref: > REPAIR_JOB.job_id]
+  step_master_id  int         [not null, ref: > STEP_MASTER.step_master_id]
+  completeAt      timestamptz [note: 'วันเวลาที่ step ถูกทำเสร็จ']
+
+  Note: 'ขั้นตอนย่อยของงานซ่อม สร้างจาก STEP_MASTER ตามสาขา action_type ของงาน'
+}
+
+Table MECHANIC_REPAIR {
+  mechanic_repair_id int         [pk, not null, note: 'ID ของช่างที่รับงานซ่อม']
+  job_id             uuid        [not null, ref: > REPAIR_JOB.job_id]
+  user_id            uuid        [not null, ref: > "USER".user_id]
+  createdAt          timestamptz [not null]
+  updatedAt          timestamptz [not null]
+  deleteAt           timestamptz
+
+  Note: 'ผู้รับผิดชอบ/ช่างที่ถูกมอบหมายให้กับงานซ่อม (many-to-many ระหว่าง REPAIR_JOB กับ USER)'
+}
+
+// ----------------------------------------------------------------------------
+// Spare parts
+// ----------------------------------------------------------------------------
+
+Table SPAREPART {
+  sparepart_id   int          [pk, not null, note: 'ID ของอะไหล่']
+  sparepart_code varchar(100) [not null]
+  name           varchar(100) [not null]
+  unit           int          [not null, note: 'จำนวนอะไหล่']
+  price          "numeric(15,2)" [not null, note: 'ราคาต่อหน่วย']
+  min_stock      int          [not null, note: 'จำนวนขั้นต่ำ']
+  qty_in_stock   int          [not null, note: 'จำนวนที่มีในคลัง']
+  group_id       int          [not null, ref: > SPAREPART_GROUP.group_id]
+  createdAt      timestamptz  [not null]
+  updatedAt      timestamptz  [not null]
+  deletedAt      timestamptz
+}
+
+Table SPAREPART_ADD {
+  sparepart_add_id  int          [pk, not null, note: 'ID ใบสั่งซื้ออะไหล่']
+  sparepart_id      int          [not null, ref: > SPAREPART.sparepart_id]
+  qty               int          [not null, note: 'จำนวนอะไหล่ที่เพิ่ม']
+  total_price       "numeric(15,2)" [not null, note: 'ราคาของอะไหล่ทั้งหมดที่นำเข้ามา']
+  sparepart_add_doc varchar(100) [not null, note: 'เลขเอกสารการนำเข้าอะไหล่หรือใบเสร็จ']
+  add_by             uuid         [not null, ref: > "USER".user_id, note: 'source column: add_by(user_id)']
+  createdAt          timestamptz  [not null]
+  updatedAt          timestamptz  [not null]
+  deletedAt          timestamptz
+
+  Note: 'ใบนำเข้า/สั่งซื้ออะไหล่เข้าคลัง'
+}
+
+Table SPAREPART_TXN {
+  txn_id     int             [pk, not null, note: 'ID อ้างอิงของรายการเบิก-จ่ายอะไหล่ // inferred PK']
+  sparepart_id int           [not null, ref: > SPAREPART.sparepart_id]
+  job_id      uuid           [not null, ref: > REPAIR_JOB.job_id]
+  txn_type    varchar(100)   [not null, note: 'ประเภทรายการ เช่น เบิกออก / คืนเข้าคลัง']
+  qty         int            [not null, note: 'จำนวนอะไหล่ที่เบิก/คืนในรายการนี้']
+  unit_price  "numeric(15,2)" [not null]
+  txn_date    timestamptz    [not null]
+  txn_by       uuid           [not null, ref: > "USER".user_id, note: 'source column: txn_by(user_id)']
+  createdAt    timestamptz    [not null]
+
+  Note: 'รายการเบิก-จ่าย/คืนอะไหล่ (transaction log ของสต๊อกอะไหล่)'
+}

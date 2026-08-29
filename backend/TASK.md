@@ -45,6 +45,32 @@
   - ระบุสิทธิ์ `@Roles(...)` บน endpoints `POST /borrowings`, `PATCH /borrowings/:id/return`, `PATCH /borrowings/:id/cancel`
 - [x] **2.4 Setup & Lookup Controllers** (`asset-status`, `asset-type`, `availabilities`, `company`, `sections`):
   - ระบุสิทธิ์การแก้ไข/จัดการ master data เฉพาะ Admin (หรือ Parcel Staff / Asset Center Staff ตามสิทธิ์ของแต่ละ Master Data)
+- [x] **2.5 Asset Table & currentBorrowing Relation (`src/asset/asset.service.ts`)**:
+  - แนบ `currentBorrowing` (ข้อมูลคำขอ/การยืมที่ active) ไปกับ `findAll` และ `findOne` ของ Asset เพื่อให้ตารางหน้าบ้านสามารถเปิด Dialog และกดยืนยันคืนได้ทันที
+- [x] **2.6 Approval Workflow & Status Transition (`src/asset-borrow/`)**:
+  - เพิ่มสถานะ `RESERVED` ใน `AvailabilityStatus` และ `PENDING_APPROVAL`, `REJECTED` ใน `BorrowStatus`
+  - ปรับปรุง `createBorrow`: สำหรับ Self-Service ให้เป็น `PENDING_APPROVAL` + `RESERVED`
+  - เพิ่ม Endpoint `PATCH /borrowings/:id/approve` และ `PATCH /borrowings/:id/reject` ควบคุมสิทธิ์ด้วย `@Roles(UserRole.ASSET_CENTER_STAFF)`
+  - ปรับปรุง `cancelBorrow` และ `returnAsset` ให้คืน Availability สอดคล้องกับสถานะใหม่
+- [x] **2.7 Borrow Security & Authorization Hardening (`src/asset-borrow/`)**:
+  - ปรับปรุงสิทธิ์การกดคืน `returnAsset`: อนุญาตให้ผู้ยืมหรือเจ้าหน้าที่ที่อยู่ใน **แผนกเดียวกัน (`user.section_id === borrower.section_id`)** หรือเจ้าหน้าที่ศูนย์/ผู้ดูแลระบบ สามารถทำรายการคืนได้
+  - ป้องกันการสวมรอยระบุ `dto.returnedByUserId` จากผู้ใช้ทั่วไป
+  - ตรวจสอบความพร้อมทางกายภาพของครุภัณฑ์ `asset.asset_status === 'NORMAL'` ก่อนสร้างการยืม
+  - ขอบเขตการมองเห็นรายการยืม-คืน `findAll` / `findOne` สำหรับ `DEPARTMENT_STAFF` ให้เห็นของแผนกตนเอง (`borrower.section_id`)
+- [x] **2.8 Borrow Security Audit Hardening - Round 2 (`src/asset-borrow/`)**:
+  - ปรับปรุง `cancelBorrow` ให้อนุญาตให้เจ้าหน้าที่ในแผนกเดียวกัน (`borrower.section_id === user.section_id`) กดยกเลิกคำขอแทนกันได้
+  - ปรับปรุง Error Message ใน `returnAsset` และ `cancelBorrow` ให้แจ้งสถานะปัจจุบันของคำขออย่างชัดเจน (เช่น `'PENDING_APPROVAL'`, `'RETURNED'`)
+  - เพิ่ม Helper `getCallerSectionId` พร้อม Fallback ดึง `section_id` จาก DB เพื่อการันตีความถูกต้องของข้อมูลแผนก แม้ Session เก่าจะไม่มี `section_id`
+- [x] **2.9 Borrow Concurrency Protection & Business Rule Refinement (`src/asset-borrow/`)**:
+  - ปรับปรุง `cancelBorrow`: จำกัดสิทธิ์ `DEPARTMENT_STAFF` / ผู้ยืม ให้กดยกเลิกคำขอได้เฉพาะสถานะ `PENDING_APPROVAL` เท่านั้น (หาก `BORROWED` ต้องคืนผ่าน `returnAsset`)
+  - เพิ่ม Atomic Optimistic Locking (`updateMany` ร่วมกับสถานะคาดหวังใน `where`) ทั้งใน `createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, และ `returnAsset` ป้องกันคำขอประมวลผลซ้ำซ้อน / Race Condition 100%
+- [x] **2.10 Borrow State Workflow & Audit Timestamps (`src/asset-borrow/`)**:
+  - เพิ่มสถานะ `APPROVED` ใน `BorrowStatus` (Seed + DB)
+  - เพิ่มฟิลด์ `approved_at`, `handover_date`, `cancelled_at`, `rejected_at` และ `cancel_reason` ใน `BorrowTransaction`
+  - ปรับ `approveBorrow` ให้เปลี่ยนสถานะเป็น `APPROVED` พร้อมบันทึก `approved_at` (Asset คงสถานะ `RESERVED`)
+  - เพิ่ม Endpoint `PATCH /borrowings/:id/handover` สำหรับส่งมอบของจริง (เปลี่ยนเป็น `BORROWED` + บันทึก `handover_date` + เปลี่ยน Asset เป็น `BORROWED`)
+  - ปรับ `rejectBorrow` ให้บันทึก `rejected_at`
+  - ปรับ `cancelBorrow` ให้อัปเดต `cancelled_at` และ `cancel_reason` โดยอนุญาตให้เจ้าหน้าที่ศูนย์ฯ ยกเลิกคำขอสถานะ `APPROVED` ได้ (กรณี Approve ผิดพลาดแต่ยังไม่ได้ส่งมอบของจริง) และปิดการยกเลิกสถานะ `BORROWED` ทุก Role
  
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
