@@ -4,6 +4,8 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Company')
 @ApiBearerAuth()
@@ -14,6 +16,7 @@ export class CompanyController {
 
   // ─── Create ────────────────────────────────────────────────────────────────
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Create new company' })
   @ApiResponse({ status: 201, description: 'Company created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
@@ -47,6 +50,7 @@ export class CompanyController {
 
   // ─── Update ────────────────────────────────────────────────────────────────
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Update company by ID' })
   @ApiResponse({ status: 200, description: 'Return updated company' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -59,6 +63,7 @@ export class CompanyController {
   // ─── Soft Delete ───────────────────────────────────────────────────────────
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Soft Delete Company by ID' })
   @ApiResponse({ status: 200, description: 'Company deleted successfully (soft delete)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -70,6 +75,7 @@ export class CompanyController {
 
   // ─── Restore ───────────────────────────────────────────────────────────────
   @Patch(':id/restore')
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Restore a soft-deleted company' })
   @ApiResponse({ status: 200, description: 'Company restored successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

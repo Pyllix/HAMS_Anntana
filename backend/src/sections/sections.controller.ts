@@ -21,16 +21,20 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
+
 @ApiTags('Section')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller('sections')
 export class SectionsController {
-  constructor(private readonly sectionsService: SectionsService) {}
+  constructor(private readonly sectionsService: SectionsService) { }
 
   // ─── Create ────────────────────────────────────────────────────────────────
 
   @Post()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Create new Section',
     description: 'Create new Section',
@@ -76,6 +80,7 @@ export class SectionsController {
   // ─── Update ────────────────────────────────────────────────────────────────
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Update Section by ID',
     description: 'Update Section by ID',
@@ -92,6 +97,7 @@ export class SectionsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Soft Delete Section by ID',
     description: 'Soft Delete Section by ID',
@@ -110,6 +116,7 @@ export class SectionsController {
   // ─── Restore ───────────────────────────────────────────────────────────────
 
   @Patch(':id/restore')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Restore a soft-deleted Section',
     description: 'Restore a soft-deleted section back to active status',

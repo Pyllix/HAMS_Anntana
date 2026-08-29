@@ -4,10 +4,14 @@ import Header from "./Header"
 import Sidebar from "./Sidebar"
 
 const pageTitles: Record<string, string> = {
-  "/equipment-borrow": "จัดการการยืม-คืนครุภัณฑ์",
+  "/": "จัดการการยืม-คืนครุภัณฑ์",
+  "/2": "ทำรายการการยืม-คืนครุภัณฑ์",
   "/inventory": "จัดการสต็อกครุภัณฑ์",
   "/requests": "จัดการสต็อกอะไหล่",
   "/settings": "ตั้งค่าระบบ",
+  "/settings/departments": "จัดการแผนก",
+  "/settings/users": "จัดการผู้ใช้งาน",
+  "/history": "ประวัติการยืมครุภัณฑ์",
 }
 
 export default function AppLayout() {

@@ -14,6 +14,42 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 - **Audit (การตรวจนับครุภัณฑ์)**: The process of verifying physical asset counts against system records.
 - **User Roles**: Categorized accesses including Parcel Staff, Asset Center Staff, Department Staff, Maintenance Staff, Managers, and Admins.
 
+---
+
+## Role Permission Matrix (ตารางสิทธิ์การใช้งานระบบ)
+
+> อ้างอิงจาก `docs/usecase-diagram.pdf` และ `docs/Usecase_Hams.md` (UC1 ถึง UC11)
+
+### Permission Scopes (คำอธิบายระดับสิทธิ์)
+- `[F]` **Full Access**: อ่าน เพิ่ม แก้ไข ลบ และดำเนินรายการทั้งหมดใน Use Case นั้นได้
+- `[R]` **Read-Only**: เข้าถึงเพื่ออ่านหรือตรวจสอบข้อมูลได้อย่างเดียว
+- `[Req]` **Requisition**: ตั้งเรื่องขอซื้อ/ขออนุมัติจัดหาพัสดุหรืออะไหล่
+- `[Approve]` **Approve**: อนุมัติรายการหรืออนุมัติสั่งซื้อ
+- `[Own]` **Own Scope**: อ่าน/ดำเนินรายการได้เฉพาะข้อมูลของตนเอง หรือแผนก/หน่วยงานของตนเองเท่านั้น
+- `[-]` **No Access**: ไม่มีสิทธิ์เข้าถึงข้อมูลหรือฟังก์ชันใน Use Case นั้น
+
+### Permission Matrix Table
+
+| Use Case ID & Name | ADMIN | MANAGER | ASSET_CENTER_STAFF | PARCEL_STAFF | MAINTENANCE_STAFF | DEPARTMENT_STAFF |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **UC1: จัดการยืม/คืนครุภัณฑ์ (Center-Service)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` |
+| **UC2: ตรวจสอบครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[Own]` |
+| **UC3: ส่งซ่อมครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[F]` | `[Own]` |
+| **UC4: จัดการสต็อกอะไหล่** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[-]` |
+| **UC5: สั่งซื้ออะไหล่** | `[R]` | `[Approve]` | `[Req]` | `[F]` | `[Req]` | `[-]` |
+| **UC6: จัดการสต็อกครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` |
+| **UC7: ยืม/คืนครุภัณฑ์ (Self-Service)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[Own]` |
+| **UC8: จัดการการซ่อม/บำรุงรักษา** | `[R]` | `[R]` | `[R]` | `[R]` | `[F]` | `[-]` |
+| **UC9: อนุมัติรายจ่าย** | `[R]` | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` |
+| **UC10: ดูรายงาน & Dashboard** | `[R]` | `[F]` | `[R]` | `[R]` | `[-]` | `[Own]` |
+| **UC11: จัดการผู้ใช้** | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | `[-]` |
+| **M1: จัดการบริษัท/ผู้ขาย (Company)** | `[F]` | `[R]` | `[R]` | `[F]` | `[R]` | `[R]` |
+| **M2: จัดการหน่วยงาน/แผนก (Sections)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` |
+| **M3: จัดการประเภทครุภัณฑ์ (Asset Type)** | `[F]` | `[R]` | `[R]` | `[F]` | `[R]` | `[R]` |
+| **M4: จัดการสถานะครุภัณฑ์ (Asset Status)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` |
+| **M5: จัดการความพร้อมใช้งาน (Availabilities)** | `[F]` | `[R]` | `[R]` | `[R]` | `[R]` | `[R]` |
+
+
 ## Technology Stack
 - TypeScript
 - Node.js

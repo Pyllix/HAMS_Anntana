@@ -4,16 +4,19 @@ import { CreateAssetTypeDto } from './dto/create-asset-type.dto';
 import { UpdateAssetTypeDto } from './dto/update-asset-type.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
+import { UserRole } from '@prisma/client';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Asset Type')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller('asset-type')
 export class AssetTypeController {
-  constructor(private readonly assetTypeService: AssetTypeService) {}
+  constructor(private readonly assetTypeService: AssetTypeService) { }
 
   // ─── Create ────────────────────────────────────────────────────────────────
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Create new asset type' })
   @ApiResponse({ status: 201, description: 'Asset Type created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
@@ -46,6 +49,7 @@ export class AssetTypeController {
 
   // ─── Update ────────────────────────────────────────────────────────────────
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Update asset type by ID' })
   @ApiResponse({ status: 200, description: 'Return updated asset type' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -58,6 +62,7 @@ export class AssetTypeController {
   // ─── Soft Delete ───────────────────────────────────────────────────────────
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Soft Delete Asset Type by ID' })
   @ApiResponse({ status: 200, description: 'Asset Type deleted successfully (soft delete)' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -69,6 +74,7 @@ export class AssetTypeController {
 
   // ─── Restore ───────────────────────────────────────────────────────────────
   @Patch(':id/restore')
+  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Restore a soft-deleted asset type' })
   @ApiResponse({ status: 200, description: 'Asset Type restored successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

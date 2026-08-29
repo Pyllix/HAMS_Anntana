@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Calendar, Clock, Package, Heart, ShieldAlert } from "lucide-react" // 👈 นำเข้าไอคอน Lucide
+import { Calendar, Clock, X, ChevronDown } from "lucide-react"
 import type { Asset } from "../../types/manageBorrowTypes"
 
 interface BorrowProps {
@@ -48,62 +48,58 @@ export function ManageBorrowDialog({
 
   if (!isOpen || !asset) return null
 
-  
-  const getAssetIcon = (id: string) => {
-    if (id.startsWith("BP")) return <Heart className="h-5 w-5 text-rose-500" />
-    if (id.startsWith("AED"))
-      return <ShieldAlert className="h-5 w-5 text-amber-500" />
-    return <Package className="h-5 w-5 text-slate-400" />
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    onConfirm({
+      borrowerName: name,
+      department: dept,
+      borrowDate: currentDate,
+      borrowTime: currentTime,
+    })
+    setName("")
+    setDept("")
   }
 
   return (
-    <div className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 duration-150">
-      <div className="relative w-full max-w-115 rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex items-center justify-between pb-4">
-          <h3 className="text-lg font-bold text-slate-800">
+    <div className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm duration-150">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-800">
             ทำรายการยืมครุภัณฑ์
-          </h3>
+          </h2>
           <button
             onClick={onClose}
-            className="text-xl text-slate-400 transition-colors hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
-
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-slate-100 bg-[#f8fafc] p-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm">
-            {getAssetIcon(asset.id)}
+        {/* Asset Info Card */}
+        <div className="mb-5 flex items-center gap-3.5 rounded-xl bg-gray-50/80 p-3.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">
+            <div className="h-3.5 w-3.5 rounded border border-gray-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold text-slate-800">
+            <p className="mt-0.5 text-[14px] font-semibold text-slate-900">
               {asset.name}
-            </div>
-            <div className="mt-0.5 text-xs text-slate-500">
-              รหัส: {asset.id} • สถานะ:{" "}
-              <span className="font-semibold text-emerald-600">ว่าง</span>
-            </div>
+            </p>
+            <p className="mt-0.5 text-[11px] font-semibold text-gray-500">
+              รหัส: {asset.code} • สถานะ:{" "}
+              <span className="mt-0.5 text-[11px] font-semibold text-emerald-600">
+                {asset.status}
+              </span>
+            </p>
           </div>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            onConfirm({
-              borrowerName: name,
-              department: dept,
-              borrowDate: currentDate,
-              borrowTime: currentTime,
-            })
-            setName("")
-            setDept("")
-          }}
-          className="space-y-4"
-        >
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* ชื่อ-นามสกุล */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
-              ชื่อ-นามสกุลผู้ยืม <span className="text-rose-500">*</span>
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
+              ชื่อ-นามสกุลผู้ยืม <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -111,59 +107,54 @@ export function ManageBorrowDialog({
               placeholder="กรอกชื่อ-นามสกุล"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:border-[#00966c] focus:outline-none"
+              className="mt-0.5 w-full rounded-xl border border-gray-200 p-2.5 text-[12px] font-semibold text-slate-800 outline-none focus:border-[#00966c]"
             />
           </div>
 
+          {/* แผนก / วอร์ด */}
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-700">
-              แผนก / วอร์ด (Ward) <span className="text-rose-500">*</span>
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
+              แผนก / วอร์ด (Ward) <span className="text-red-500">*</span>
             </label>
-            <select
-              required
-              value={dept}
-              onChange={(e) => setDept(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-[#00966c] focus:outline-none"
-            >
-              <option value="">เลือกแผนกที่นำไปใช้...</option>
-              <option value="ER (ฉุกเฉิน)">ER (ฉุกเฉิน)</option>
-              <option value="Central Supply">Central Supply</option>
-              <option value="ICU">ICU</option>
-            </select>
+            <div className="relative">
+              <select
+                required
+                value={dept}
+                onChange={(e) => setDept(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white p-2.5 pr-8 font-semibold text-gray-700 outline-none focus:border-[#00966c]"
+              >
+                <option value="" disabled>
+                  เลือกแผนกที่นำไปใช้...
+                </option>
+                <option value="ER (ฉุกเฉิน)">ER (ฉุกเฉิน)</option>
+                <option value="OR (ห้องผ่าตัด)">OR (ห้องผ่าตัด)</option>
+                <option value="ICU">ICU</option>
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"
+              />
+            </div>
           </div>
 
-      
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                วันที่ยืม <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="text"
-                  value={currentDate}
-                  disabled
-                  className="h-10 w-full cursor-not-allowed rounded-lg border border-slate-100 bg-[#f8fafc] pr-9 pl-3 text-sm text-slate-500 select-none focus:outline-none"
-                />
-                <Calendar className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+          {/* วันที่และเวลาที่ยืม */}
+          <div>
+            <label className="mt-0.5 mb-1 block text-[14px] font-semibold text-slate-800">
+              วันที่และเวลาที่ยืม <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-gray-700">
+                <span>{currentDate}</span>
+                <Calendar size={16} className="shrink-0 text-gray-400" />
               </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                เวลาที่ยืม <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type="text"
-                  value={currentTime}
-                  disabled
-                  className="h-10 w-full cursor-not-allowed rounded-lg border border-slate-100 bg-[#f8fafc] pr-9 pl-3 text-sm text-slate-500 select-none focus:outline-none"
-                />
-                <Clock className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/50 px-3 py-2 text-gray-700">
+                <span>{currentTime}</span>
+                <Clock size={16} className="shrink-0 text-gray-400" />
               </div>
             </div>
           </div>
 
+          {/* Actions */}
           <div className="flex justify-end gap-2 border-t border-slate-50 pt-3">
             <button
               type="button"

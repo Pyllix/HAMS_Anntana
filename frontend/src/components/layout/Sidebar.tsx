@@ -6,6 +6,8 @@ import {
   SearchCheck,
   LogOut,
   FilePlus,
+  Network,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
@@ -26,7 +28,7 @@ interface SidebarProps {
 
 const navItems: NavItem[] = [
   {
-    label: "ยืม - คืนครุภัณฑ์",
+    label: "จัดการยืม - คืนครุภัณฑ์",
     icon: FileCheck,
     path: "/",
     roles: ["admin"],
@@ -59,6 +61,18 @@ const navItems: NavItem[] = [
     label: "ประวัติการยืม",
     icon: History,
     path: "/history",
+    roles: ["admin"],
+  },
+  {
+    label: "จัดการแผนก",
+    icon: Network,
+    path: "/settings/departments",
+    roles: ["admin"],
+  },
+  {
+    label: "จัดการผู้ใช้งาน",
+    icon: Users,
+    path: "/settings/users",
     roles: ["admin"],
   },
 ]
