@@ -57,8 +57,21 @@ export class AssetBorrowService {
     }
 
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
     const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+
+    const targetAvailabilityId =
+      requestSource === RequestSource.SELF_SERVICE
+        ? reservedAvailabilityId
+        : borrowedAvailabilityId;
+
+    const targetTxStatusId =
+      requestSource === RequestSource.SELF_SERVICE
+        ? pendingTxStatusId
+        : borrowedTxStatusId;
 
     return this.prisma.$transaction(async (tx) => {
       // Find asset and ensure it is AVAILABLE
@@ -78,7 +91,7 @@ export class AssetBorrowService {
       // Update Asset availability
       await tx.asset.update({
         where: { id: dto.assetId },
-        data: { availability_status_id: borrowedAvailabilityId }
+        data: { availability_status_id: targetAvailabilityId }
       });
 
       // Create BorrowTransaction
@@ -86,7 +99,7 @@ export class AssetBorrowService {
         data: {
           asset_id: dto.assetId,
           borrower_id: borrowerId,
-          borrow_status_id: borrowedTxStatusId,
+          borrow_status_id: targetTxStatusId,
           request_source: requestSource,
           delivery_method: dto.deliveryMethod,
         }
@@ -96,6 +109,76 @@ export class AssetBorrowService {
     });
   }
 
+  async approveBorrow(id: string, user: any) {
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: { id: true, asset_id: true, borrow_status_id: true }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== pendingTxStatusId) {
+        throw new BadRequestException(`Only transactions in PENDING_APPROVAL status can be approved`);
+      }
+
+      const updatedTransaction = await tx.borrowTransaction.update({
+        where: { id },
+        data: {
+          borrow_status_id: borrowedTxStatusId,
+        }
+      });
+
+      await tx.asset.update({
+        where: { id: transaction.asset_id },
+        data: { availability_status_id: borrowedAvailabilityId }
+      });
+
+      return updatedTransaction;
+    });
+  }
+
+  async rejectBorrow(id: string, reason: string | undefined, user: any) {
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const rejectedTxStatusId = await this.getStatusId('borrowStatus', 'REJECTED');
+    const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: { id: true, asset_id: true, borrow_status_id: true }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== pendingTxStatusId) {
+        throw new BadRequestException(`Only transactions in PENDING_APPROVAL status can be rejected`);
+      }
+
+      const updatedTransaction = await tx.borrowTransaction.update({
+        where: { id },
+        data: {
+          borrow_status_id: rejectedTxStatusId,
+          reject_reason: reason,
+        }
+      });
+
+      await tx.asset.update({
+        where: { id: transaction.asset_id },
+        data: { availability_status_id: availableStatusId }
+      });
+
+      return updatedTransaction;
+    });
+  }
 
   async returnAsset(id: string, dto: ReturnAssetBorrowDto, user: any) {
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
@@ -180,6 +263,7 @@ export class AssetBorrowService {
   }
 
   async cancelBorrow(id: string, user: any) {
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
     const cancelledTxStatusId = await this.getStatusId('borrowStatus', 'CANCELLED');
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
@@ -194,8 +278,11 @@ export class AssetBorrowService {
         throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
       }
 
-      if (transaction.borrow_status_id !== borrowedTxStatusId) {
-        throw new BadRequestException(`This borrow transaction is not currently active (not BORROWED)`);
+      if (
+        transaction.borrow_status_id !== borrowedTxStatusId &&
+        transaction.borrow_status_id !== pendingTxStatusId
+      ) {
+        throw new BadRequestException(`Only active (BORROWED) or pending (PENDING_APPROVAL) transactions can be cancelled`);
       }
 
       if (

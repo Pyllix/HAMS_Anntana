@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@ne
 import { AssetBorrowService } from './asset-borrow.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
+import { RejectBorrowDto } from './dto/reject-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
@@ -28,6 +29,33 @@ export class AssetBorrowController {
   async createBorrow(@Body() dto: CreateAssetBorrowDto, @Session() session: UserSession) {
     return this.assetBorrowService.createBorrow(dto, session.user);
   }
+  // Approve Borrowing
+  @Patch(':id/approve')
+  @Roles(UserRole.ASSET_CENTER_STAFF)
+  @ApiOperation({ summary: 'Approve a borrow request' })
+  @ApiResponse({ status: 200, description: 'Borrow request approved' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  async approveBorrow(
+    @Param('id') id: string,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.approveBorrow(id, session.user);
+  }
+
+  // Reject Borrowing
+  @Patch(':id/reject')
+  @Roles(UserRole.ASSET_CENTER_STAFF)
+  @ApiOperation({ summary: 'Reject a borrow request' })
+  @ApiResponse({ status: 200, description: 'Borrow request rejected' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  async rejectBorrow(
+    @Param('id') id: string,
+    @Body() dto: RejectBorrowDto,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.rejectBorrow(id, dto?.reason, session.user);
+  }
+
   // Return Borrowing
   @Patch(':id/return')
   @Roles(
@@ -45,6 +73,7 @@ export class AssetBorrowController {
   ) {
     return this.assetBorrowService.returnAsset(id, dto, session.user);
   }
+
   // Cancel Borrowing
   @Patch(':id/cancel')
   @Roles(

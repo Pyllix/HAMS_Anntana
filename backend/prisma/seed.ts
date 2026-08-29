@@ -29,13 +29,16 @@ const assetStatuses = [
 
 const availabilityStatuses = [
   { code: 'AVAILABLE', name: 'ว่าง/พร้อมใช้งาน' },
+  { code: 'RESERVED', name: 'ถูกจอง / รออนุมัติ' },
   { code: 'BORROWED', name: 'ถูกยืม' },
   { code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
 ];
 
 const borrowStatuses = [
+  { code: 'PENDING_APPROVAL', name: 'รออนุมัติ' },
   { code: 'BORROWED', name: 'กำลังยืม' },
   { code: 'RETURNED', name: 'คืนแล้ว' },
+  { code: 'REJECTED', name: 'ปฏิเสธ' },
   { code: 'CANCELLED', name: 'ยกเลิก' },
 ];
 

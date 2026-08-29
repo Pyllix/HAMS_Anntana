@@ -33,7 +33,39 @@ const ASSET_INCLUDE = {
   type: { select: { id: true, name: true } },
   section: { select: { id: true, code: true, name: true, building: true } },
   company: { select: { id: true, name: true } },
-} as const;
+  borrowTransactions: {
+    where: {
+      borrowStatus: {
+        code: { in: ['BORROWED', 'PENDING_APPROVAL'] as string[] },
+      },
+    },
+    take: 1,
+    orderBy: { createdAt: 'desc' as const },
+    select: {
+      id: true,
+      borrower_id: true,
+      borrow_status_id: true,
+      request_source: true,
+      delivery_method: true,
+      createdAt: true,
+      borrower: {
+        select: {
+          id: true,
+          employeeId: true,
+          firstname: true,
+          lastname: true,
+        },
+      },
+      borrowStatus: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.AssetInclude;
 
 /**
  * แปลง date string “2022-01-01” → Date object สำหรับทุก DateTime field ของ Asset
@@ -72,12 +104,24 @@ export class AssetService {
 
   // ─── Asset CRUD ───────────────────────────────────────────────────────────
 
+  private transformAsset(asset: any) {
+    if (!asset) return asset;
+    const { borrowTransactions, ...rest } = asset;
+    return {
+      ...rest,
+      currentBorrowing: Array.isArray(borrowTransactions) && borrowTransactions.length > 0
+        ? borrowTransactions[0]
+        : null,
+    };
+  }
+
   async create(createAssetDto: CreateAssetDto, userId: string) {
     const { createdBy: _ignore, ...dto } = createAssetDto as any;
-    return this.prisma.asset.create({
+    const asset = await this.prisma.asset.create({
       data: { ...toAssetDates(dto), createdBy: userId, updatedBy: userId } as any,
       include: ASSET_INCLUDE,
     });
+    return this.transformAsset(asset);
   }
 
   async findAll(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
@@ -106,7 +150,8 @@ export class AssetService {
       this.prisma.asset.count({ where }),
     ]);
 
-    return paginate(data as Record<string, unknown>[], total, page, limit);
+    const formattedData = data.map((item) => this.transformAsset(item));
+    return paginate(formattedData as Record<string, unknown>[], total, page, limit);
   }
 
   async findOne(id: string) {
@@ -115,17 +160,18 @@ export class AssetService {
       include: ASSET_INCLUDE,
     });
     if (!asset) throw new NotFoundException(`Asset #${id} not found`);
-    return asset;
+    return this.transformAsset(asset);
   }
 
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
     await this.findOne(id);
     const { createdBy: _ignore, ...dto } = updateAssetDto as any;
-    return this.prisma.asset.update({
+    const asset = await this.prisma.asset.update({
       where: { id },
       data: { ...toAssetDates(dto), updatedBy: userId } as any,
       include: ASSET_INCLUDE,
     });
+    return this.transformAsset(asset);
   }
 
   // ─── Lost History ─────────────────────────────────────────────────────────
