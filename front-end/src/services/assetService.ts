@@ -1,5 +1,11 @@
 import axios from "axios";
-import type { AssetType, Asset, Availabilities } from "../types/TypeAsset";
+import type {
+  AssetType,
+  Asset,
+  Availabilities,
+  AssetStatus,
+  Section,
+} from "../types/TypeAsset";
 
 export async function getAssets(): Promise<Asset[]> {
   const token = localStorage.getItem("token");
@@ -42,3 +48,34 @@ export async function getAvailabilities(): Promise<Availabilities[]> {
 
   return res.data;
 }
+
+export async function getAssetStatuses(): Promise<AssetStatus[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/asset-status",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data;
+}
+
+export async function getSections(): Promise<Section[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/sections",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data;
+}
+
