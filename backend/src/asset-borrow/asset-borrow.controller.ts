@@ -105,8 +105,8 @@ export class AssetBorrowController {
   @ApiQuery({ name: 'assetId', required: false, type: String })
   @ApiQuery({ name: 'borrowerId', required: false, type: String })
   @ApiQuery({ name: 'borrowStatusId', required: false, type: Number })
-  async findAll(@Query() query: BorrowFilterDto) {
-    return this.assetBorrowService.findAll(query);
+  async findAll(@Query() query: BorrowFilterDto, @Session() session: UserSession) {
+    return this.assetBorrowService.findAll(query, session.user);
   }
   // Get Borrowing By ID
   @Get(':id')
@@ -120,7 +120,7 @@ export class AssetBorrowController {
   @ApiOperation({ summary: 'Get details of a borrow transaction' })
   @ApiResponse({ status: 200, description: 'Transaction details returned' })
   @ApiResponse({ status: 404, description: 'Transaction not found' })
-  async findOne(@Param('id') id: string) {
-    return this.assetBorrowService.findOne(id);
+  async findOne(@Param('id') id: string, @Session() session: UserSession) {
+    return this.assetBorrowService.findOne(id, session.user);
   }
 }

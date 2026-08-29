@@ -8,7 +8,7 @@ import { ReturnCondition, UserRole, RequestSource } from '@prisma/client';
 
 @Injectable()
 export class AssetBorrowService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   private async getStatusId(model: 'availabilityStatus' | 'borrowStatus' | 'assetStatus', code: string): Promise<number> {
     const status = await (this.prisma[model] as any).findUnique({
@@ -18,6 +18,19 @@ export class AssetBorrowService {
       throw new Error(`Status code '${code}' not found in ${model}`);
     }
     return status.id;
+  }
+
+  private async getCallerSectionId(user: any, tx?: any): Promise<string | null> {
+    if (user?.section_id) return user.section_id;
+    if (user?.id) {
+      const client = tx || this.prisma;
+      const dbUser = await client.user.findUnique({
+        where: { id: user.id },
+        select: { section_id: true },
+      });
+      return dbUser?.section_id ?? null;
+    }
+    return null;
   }
 
   async createBorrow(dto: CreateAssetBorrowDto, user: any) {
@@ -56,6 +69,7 @@ export class AssetBorrowService {
       borrowerId = targetUser.id;
     }
 
+    const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
     const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
     const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
@@ -74,18 +88,18 @@ export class AssetBorrowService {
         : borrowedTxStatusId;
 
     return this.prisma.$transaction(async (tx) => {
-      // Find asset and ensure it is AVAILABLE
+      // Find asset and ensure it is in NORMAL condition and AVAILABLE
       const asset = await tx.asset.findUnique({
         where: { id: dto.assetId },
-        select: { id: true, availability_status_id: true }
+        select: { id: true, asset_status_id: true, availability_status_id: true }
       });
 
       if (!asset) {
         throw new NotFoundException(`Asset with ID ${dto.assetId} not found`);
       }
 
-      if (asset.availability_status_id !== availableStatusId) {
-        throw new ConflictException(`Asset with ID ${dto.assetId} is not available for borrowing. Race condition detected or asset already in use.`);
+      if (asset.asset_status_id !== normalAssetStatusId || asset.availability_status_id !== availableStatusId) {
+        throw new ConflictException(`Asset with ID ${dto.assetId} is not available for borrowing (must be in NORMAL condition and AVAILABLE).`);
       }
 
       // Update Asset availability
@@ -187,7 +201,18 @@ export class AssetBorrowService {
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true, borrower_id: true }
+        select: {
+          id: true,
+          asset_id: true,
+          borrow_status_id: true,
+          borrower_id: true,
+          borrower: {
+            select: { section_id: true }
+          },
+          borrowStatus: {
+            select: { code: true, name: true }
+          }
+        }
       });
 
       if (!transaction) {
@@ -195,13 +220,34 @@ export class AssetBorrowService {
       }
 
       if (transaction.borrow_status_id !== borrowedTxStatusId) {
-        throw new BadRequestException(`This borrow transaction is not currently active (not BORROWED)`);
+        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        throw new BadRequestException(
+          `Cannot return asset: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`
+        );
+      }
+
+      const isStaffOverride =
+        user.role === UserRole.ASSET_CENTER_STAFF ||
+        user.role === UserRole.ADMIN ||
+        user.role === UserRole.MANAGER;
+
+      const callerSectionId = await this.getCallerSectionId(user, tx);
+
+      const isSameDepartment =
+        callerSectionId &&
+        transaction.borrower?.section_id &&
+        callerSectionId === transaction.borrower.section_id;
+
+      const isBorrower = user.id === transaction.borrower_id;
+
+      if (!isStaffOverride && !isBorrower && !isSameDepartment) {
+        throw new BadRequestException('You do not have permission to return this borrowed asset (must be in the same department as the borrower)');
       }
 
       let receivedByUserId: string | null = null;
       let returnedByUserId: string = user.id;
 
-      if (dto.returnedByUserId) {
+      if (isStaffOverride && dto.returnedByUserId) {
         const retUser = await tx.user.findFirst({
           where: {
             deletedAt: null,
@@ -248,7 +294,7 @@ export class AssetBorrowService {
       } else if (dto.returnCondition === ReturnCondition.Damage) {
         const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
         const damagedStatusId = await this.getStatusId('assetStatus', 'DAMAGED');
-        
+
         await tx.asset.update({
           where: { id: transaction.asset_id },
           data: {
@@ -271,7 +317,18 @@ export class AssetBorrowService {
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true, borrower_id: true }
+        select: {
+          id: true,
+          asset_id: true,
+          borrow_status_id: true,
+          borrower_id: true,
+          borrower: {
+            select: { section_id: true }
+          },
+          borrowStatus: {
+            select: { code: true, name: true }
+          }
+        }
       });
 
       if (!transaction) {
@@ -282,16 +339,28 @@ export class AssetBorrowService {
         transaction.borrow_status_id !== borrowedTxStatusId &&
         transaction.borrow_status_id !== pendingTxStatusId
       ) {
-        throw new BadRequestException(`Only active (BORROWED) or pending (PENDING_APPROVAL) transactions can be cancelled`);
+        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        throw new BadRequestException(
+          `Only active (BORROWED) or pending (PENDING_APPROVAL) transactions can be cancelled. Current status is '${currentStatusCode}'.`
+        );
       }
 
-      if (
-        user.id !== transaction.borrower_id &&
-        user.role !== UserRole.ASSET_CENTER_STAFF &&
-        user.role !== UserRole.ADMIN &&
-        user.role !== UserRole.MANAGER
-      ) {
-        throw new BadRequestException('You do not have permission to cancel this transaction');
+      const isStaffOverride =
+        user.role === UserRole.ASSET_CENTER_STAFF ||
+        user.role === UserRole.ADMIN ||
+        user.role === UserRole.MANAGER;
+
+      const callerSectionId = await this.getCallerSectionId(user, tx);
+
+      const isSameDepartment =
+        callerSectionId &&
+        transaction.borrower?.section_id &&
+        callerSectionId === transaction.borrower.section_id;
+
+      const isBorrower = user.id === transaction.borrower_id;
+
+      if (!isStaffOverride && !isBorrower && !isSameDepartment) {
+        throw new BadRequestException('You do not have permission to cancel this transaction (must be borrower or in the same department)');
       }
 
       const updatedTransaction = await tx.borrowTransaction.update({
@@ -310,14 +379,23 @@ export class AssetBorrowService {
     });
   }
 
-  async findAll(query: BorrowFilterDto): Promise<PaginatedResult<any>> {
+  async findAll(query: BorrowFilterDto, user?: any): Promise<PaginatedResult<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (query.assetId) where.asset_id = query.assetId;
-    if (query.borrowerId) {
+
+    if (user?.role === UserRole.DEPARTMENT_STAFF) {
+      const callerSectionId = await this.getCallerSectionId(user);
+      // Department staff can view borrowings in their department (or their own)
+      if (callerSectionId) {
+        where.borrower = { section_id: callerSectionId };
+      } else {
+        where.borrower_id = user.id;
+      }
+    } else if (query.borrowerId) {
       const targetUser = await this.prisma.user.findFirst({
         where: {
           deletedAt: null,
@@ -329,6 +407,7 @@ export class AssetBorrowService {
       });
       where.borrower_id = targetUser ? targetUser.id : query.borrowerId;
     }
+
     if (query.borrowStatusId) where.borrow_status_id = query.borrowStatusId;
 
     const [data, total] = await this.prisma.$transaction([
@@ -339,7 +418,7 @@ export class AssetBorrowService {
         orderBy: { createdAt: 'desc' },
         include: {
           asset: { select: { id: true, name: true, model: true } },
-          borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
           borrowStatus: { select: { id: true, code: true, name: true } }
         }
       }),
@@ -349,12 +428,12 @@ export class AssetBorrowService {
     return paginate(data, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: any) {
     const transaction = await this.prisma.borrowTransaction.findUnique({
       where: { id },
       include: {
         asset: { select: { id: true, name: true, model: true } },
-        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
         returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         borrowStatus: { select: { id: true, code: true, name: true } }
@@ -363,6 +442,19 @@ export class AssetBorrowService {
 
     if (!transaction) {
       throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+    }
+    // [AuthZ] Check Permission
+    if (user?.role === UserRole.DEPARTMENT_STAFF) {
+      const callerSectionId = await this.getCallerSectionId(user);
+      const isOwner = transaction.borrower_id === user.id;
+      const isSameDept =
+        callerSectionId &&
+        transaction.borrower?.section_id &&
+        callerSectionId === transaction.borrower.section_id;
+
+      if (!isOwner && !isSameDept) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
     }
 
     return transaction;

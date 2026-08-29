@@ -52,6 +52,15 @@
   - ปรับปรุง `createBorrow`: สำหรับ Self-Service ให้เป็น `PENDING_APPROVAL` + `RESERVED`
   - เพิ่ม Endpoint `PATCH /borrowings/:id/approve` และ `PATCH /borrowings/:id/reject` ควบคุมสิทธิ์ด้วย `@Roles(UserRole.ASSET_CENTER_STAFF)`
   - ปรับปรุง `cancelBorrow` และ `returnAsset` ให้คืน Availability สอดคล้องกับสถานะใหม่
+- [x] **2.7 Borrow Security & Authorization Hardening (`src/asset-borrow/`)**:
+  - ปรับปรุงสิทธิ์การกดคืน `returnAsset`: อนุญาตให้ผู้ยืมหรือเจ้าหน้าที่ที่อยู่ใน **แผนกเดียวกัน (`user.section_id === borrower.section_id`)** หรือเจ้าหน้าที่ศูนย์/ผู้ดูแลระบบ สามารถทำรายการคืนได้
+  - ป้องกันการสวมรอยระบุ `dto.returnedByUserId` จากผู้ใช้ทั่วไป
+  - ตรวจสอบความพร้อมทางกายภาพของครุภัณฑ์ `asset.asset_status === 'NORMAL'` ก่อนสร้างการยืม
+  - ขอบเขตการมองเห็นรายการยืม-คืน `findAll` / `findOne` สำหรับ `DEPARTMENT_STAFF` ให้เห็นของแผนกตนเอง (`borrower.section_id`)
+- [x] **2.8 Borrow Security Audit Hardening - Round 2 (`src/asset-borrow/`)**:
+  - ปรับปรุง `cancelBorrow` ให้อนุญาตให้เจ้าหน้าที่ในแผนกเดียวกัน (`borrower.section_id === user.section_id`) กดยกเลิกคำขอแทนกันได้
+  - ปรับปรุง Error Message ใน `returnAsset` และ `cancelBorrow` ให้แจ้งสถานะปัจจุบันของคำขออย่างชัดเจน (เช่น `'PENDING_APPROVAL'`, `'RETURNED'`)
+  - เพิ่ม Helper `getCallerSectionId` พร้อม Fallback ดึง `section_id` จาก DB เพื่อการันตีความถูกต้องของข้อมูลแผนก แม้ Session เก่าจะไม่มี `section_id`
  
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:
