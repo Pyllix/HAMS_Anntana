@@ -166,14 +166,11 @@ describe('AssetBorrowService', () => {
   describe('approveBorrow', () => {
     const acStaffUser = { id: 'user-id-2', role: UserRole.ASSET_CENTER_STAFF };
 
-    it('should approve transaction in PENDING_APPROVAL status', async () => {
+    it('should approve transaction in PENDING_APPROVAL status (sets APPROVED and approved_at)', async () => {
       prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
+        if (where.code === 'APPROVED') return { id: 25, code: 'APPROVED' };
         return { id: 20, code: 'BORROWED' };
-      });
-      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
-        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
-        return { id: 11, code: 'BORROWED' };
       });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
@@ -183,16 +180,18 @@ describe('AssetBorrowService', () => {
           asset_id: 'asset-1',
           borrow_status_id: 21,
         })
-        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 20 });
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 25 });
       prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
-      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.approveBorrow('tx-1', acStaffUser);
-      expect(result?.borrow_status_id).toBe(20);
-      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
+      expect(result?.borrow_status_id).toBe(25);
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ id: 'asset-1' }),
-          data: { availability_status_id: 11 },
+          where: { id: 'tx-1', borrow_status_id: 21 },
+          data: expect.objectContaining({
+            borrow_status_id: 25,
+            approved_at: expect.any(Date),
+          }),
         }),
       );
     });
@@ -201,10 +200,6 @@ describe('AssetBorrowService', () => {
       prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
         return { id: 20, code: 'BORROWED' };
-      });
-      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
-        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
-        return { id: 11, code: 'BORROWED' };
       });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
@@ -215,6 +210,66 @@ describe('AssetBorrowService', () => {
       });
 
       await expect(service.approveBorrow('tx-1', acStaffUser)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('handoverAsset', () => {
+    const acStaffUser = { id: 'user-id-2', role: UserRole.ASSET_CENTER_STAFF };
+
+    it('should handover transaction in APPROVED status (sets BORROWED, handover_date, and asset to BORROWED)', async () => {
+      prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'APPROVED') return { id: 25, code: 'APPROVED' };
+        if (where.code === 'BORROWED') return { id: 20, code: 'BORROWED' };
+      });
+      prisma.availabilityStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'RESERVED') return { id: 12, code: 'RESERVED' };
+        if (where.code === 'BORROWED') return { id: 11, code: 'BORROWED' };
+      });
+
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrow_status_id: 25, // APPROVED
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 20 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      prisma.asset.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.handoverAsset('tx-1', acStaffUser);
+      expect(result?.borrow_status_id).toBe(20);
+      expect(prisma.borrowTransaction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'tx-1', borrow_status_id: 25 },
+          data: expect.objectContaining({
+            borrow_status_id: 20,
+            handover_date: expect.any(Date),
+          }),
+        }),
+      );
+      expect(prisma.asset.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'asset-1', availability_status_id: 12 }),
+          data: { availability_status_id: 11 },
+        }),
+      );
+    });
+
+    it('should throw BadRequestException if transaction is not in APPROVED status', async () => {
+      prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'APPROVED') return { id: 25, code: 'APPROVED' };
+        return { id: 21, code: 'PENDING_APPROVAL' };
+      });
+
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        asset_id: 'asset-1',
+        borrow_status_id: 21, // PENDING_APPROVAL
+      });
+
+      await expect(service.handoverAsset('tx-1', acStaffUser)).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -453,6 +508,7 @@ describe('AssetBorrowService', () => {
     beforeEach(() => {
       prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
         if (where.code === 'PENDING_APPROVAL') return { id: 21, code: 'PENDING_APPROVAL' };
+        if (where.code === 'APPROVED') return { id: 25, code: 'APPROVED' };
         if (where.code === 'BORROWED') return { id: 20, code: 'BORROWED' };
         if (where.code === 'CANCELLED') return { id: 24, code: 'CANCELLED' };
       });
@@ -477,11 +533,11 @@ describe('AssetBorrowService', () => {
         .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
       prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
 
-      const result = await service.cancelBorrow('tx-1', borrowerUser);
+      const result = await service.cancelBorrow('tx-1', { cancelReason: 'No longer needed' }, borrowerUser);
       expect(result?.borrow_status_id).toBe(24);
       expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ id: 'asset-1' }),
+          where: expect.objectContaining({ id: 'asset-1', availability_status_id: 12 }),
           data: { availability_status_id: 10 },
         }),
       );
@@ -499,11 +555,41 @@ describe('AssetBorrowService', () => {
         .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
       prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
 
-      const result = await service.cancelBorrow('tx-1', sameDeptUser);
+      const result = await service.cancelBorrow('tx-1', {}, sameDeptUser);
       expect(result?.borrow_status_id).toBe(24);
     });
 
-    it('should throw BadRequestException if DEPARTMENT_STAFF tries to cancel a BORROWED transaction', async () => {
+    it('should throw BadRequestException if DEPARTMENT_STAFF tries to cancel an APPROVED transaction', async () => {
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        asset_id: 'asset-1',
+        borrower_id: 'user-id-1',
+        borrow_status_id: 25, // APPROVED
+        borrower: { section_id: 'sec-opd' },
+      });
+
+      await expect(service.cancelBorrow('tx-1', {}, borrowerUser)).rejects.toThrow(
+        /Department staff can only cancel transactions that are pending approval/,
+      );
+    });
+
+    it('should allow ASSET_CENTER_STAFF to cancel an APPROVED transaction (e.g. approved by mistake)', async () => {
+      prisma.borrowTransaction.findUnique
+        .mockResolvedValueOnce({
+          id: 'tx-1',
+          asset_id: 'asset-1',
+          borrower_id: 'user-id-1',
+          borrow_status_id: 25, // APPROVED
+          borrower: { section_id: 'sec-opd' },
+        })
+        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
+      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.cancelBorrow('tx-1', { cancelReason: 'Wrong approval' }, acStaffUser);
+      expect(result?.borrow_status_id).toBe(24);
+    });
+
+    it('should throw BadRequestException if anyone (including staff) attempts to cancel a BORROWED transaction', async () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue({
         id: 'tx-1',
         asset_id: 'asset-1',
@@ -512,8 +598,8 @@ describe('AssetBorrowService', () => {
         borrower: { section_id: 'sec-opd' },
       });
 
-      await expect(service.cancelBorrow('tx-1', borrowerUser)).rejects.toThrow(
-        /Department staff can only cancel transactions that are pending approval/,
+      await expect(service.cancelBorrow('tx-1', {}, acStaffUser)).rejects.toThrow(
+        /Cannot cancel a transaction that has already been dispatched \(BORROWED\)/,
       );
     });
 
@@ -526,23 +612,7 @@ describe('AssetBorrowService', () => {
         borrower: { section_id: 'sec-opd' },
       });
 
-      await expect(service.cancelBorrow('tx-1', diffDeptUser)).rejects.toThrow(BadRequestException);
-    });
-
-    it('should allow ASSET_CENTER_STAFF to cancel BORROWED or PENDING_APPROVAL transaction of any department', async () => {
-      prisma.borrowTransaction.findUnique
-        .mockResolvedValueOnce({
-          id: 'tx-1',
-          asset_id: 'asset-1',
-          borrower_id: 'user-id-1',
-          borrow_status_id: 20, // BORROWED
-          borrower: { section_id: 'sec-opd' },
-        })
-        .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 24 });
-      prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
-
-      const result = await service.cancelBorrow('tx-1', acStaffUser);
-      expect(result?.borrow_status_id).toBe(24);
+      await expect(service.cancelBorrow('tx-1', {}, diffDeptUser)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException if optimistic lock fails during cancelBorrow', async () => {
@@ -556,7 +626,7 @@ describe('AssetBorrowService', () => {
       // Simulate concurrent update: updateMany count is 0
       prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.cancelBorrow('tx-1', borrowerUser)).rejects.toThrow(ConflictException);
+      await expect(service.cancelBorrow('tx-1', {}, borrowerUser)).rejects.toThrow(ConflictException);
     });
 
     it('should throw BadRequestException if transaction is already RETURNED or CANCELLED', async () => {
@@ -569,8 +639,8 @@ describe('AssetBorrowService', () => {
         borrower: { section_id: 'sec-opd' },
       });
 
-      await expect(service.cancelBorrow('tx-1', borrowerUser)).rejects.toThrow(
-        /Only active \(BORROWED\) or pending \(PENDING_APPROVAL\) transactions can be cancelled/,
+      await expect(service.cancelBorrow('tx-1', {}, borrowerUser)).rejects.toThrow(
+        /Only pending \(PENDING_APPROVAL\) or approved \(APPROVED\) transactions can be cancelled/,
       );
     });
   });

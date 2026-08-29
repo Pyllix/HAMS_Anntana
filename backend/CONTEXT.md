@@ -163,7 +163,8 @@ Asset records use **status-based lifecycle management** — no soft delete.
 | status_code        | status_name        | ความหมาย                    |
 |--------------------|--------------------|-----------------------------|
 | `PENDING_APPROVAL` | รออนุมัติ           | ส่งคำขอยืม รอเจ้าหน้าที่ศูนย์อนุมัติ |
-| `BORROWED`         | กำลังยืม           | อนุมัติและส่งมอบครุภัณฑ์แล้ว    |
+| `APPROVED`         | อนุมัติแล้ว         | เจ้าหน้าที่ศูนย์อนุมัติแล้ว รอส่งมอบของจริง |
+| `BORROWED`         | กำลังยืม           | ส่งมอบครุภัณฑ์จริงแล้ว (อยู่ระหว่างใช้งาน) |
 | `RETURNED`         | คืนแล้ว            | ครุภัณฑ์ถูกส่งคืนเรียบร้อย    |
 | `REJECTED`         | ปฏิเสธ             | คำขอยืมถูกปฏิเสธ             |
 | `CANCELLED`        | ยกเลิก             | รายการยืมถูกยกเลิก             |
@@ -194,28 +195,28 @@ BORROWED    ──► AVAILABLE / UNAVAILABLE
 UNAVAILABLE ──► AVAILABLE
 ```
 
-
-
 ---
 
 ## Business Rules (Status Coupling)
 
 > อ้างอิงจาก `docs/status_role.md`
 
-| # | Event | AssetStatus | AvailabilityStatus | BorrowStatus |
-|---|-------|-------------|--------------------|--------------|
-| 1 | **AssetStatus controls Availability** | — | เฉพาะ `NORMAL` เท่านั้นที่มี `AVAILABLE`, `RESERVED` หรือ `BORROWED` ได้ สถานะอื่น → `UNAVAILABLE` | — |
-| 2 | **ยื่นขอยืม (Self-Service)** | ไม่เปลี่ยน | `AVAILABLE → RESERVED` | `→ PENDING_APPROVAL` |
-| 3 | **อนุมัติการยืม (Approve)** | ไม่เปลี่ยน | `RESERVED → BORROWED` | `PENDING_APPROVAL → BORROWED` |
-| 4 | **ยืมตรงที่ศูนย์ (Center-Service)** | ไม่เปลี่ยน | `AVAILABLE → BORROWED` | `→ BORROWED` |
-| 5 | **ปฏิเสธ/ยกเลิกคำขอ** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ REJECTED / CANCELLED` |
-| 6 | **คืนปกติ (Return - Normal)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED` |
-| 7 | **คืนชำรุด (Return - Damage)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED` |
-| 8 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — |
-| 9 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — |
-| 10 | **รอจำหน่าย (Pending Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → WAIT_DISPOSAL` | `→ UNAVAILABLE` | — |
-| 11 | **จำหน่ายแล้ว (Disposal Completed)** | `WAIT_DISPOSAL → DISPOSAL` | คง `UNAVAILABLE` | — |
-| 12 | **สูญหาย (Asset Lost)** | `NORMAL/DAMAGED/UNDER_REPAIR → LOST` | `→ UNAVAILABLE` | — |
+| # | Event | AssetStatus | AvailabilityStatus | BorrowStatus | หมายเหตุ |
+|---|-------|-------------|--------------------|--------------|---|
+| 1 | **AssetStatus controls Availability** | — | เฉพาะ `NORMAL` เท่านั้นที่มี `AVAILABLE`, `RESERVED` หรือ `BORROWED` ได้ สถานะอื่น → `UNAVAILABLE` | — | กฎบังคับพื้นฐาน |
+| 2 | **ยื่นขอยืม (Self-Service)** | ไม่เปลี่ยน | `AVAILABLE → RESERVED` | `→ PENDING_APPROVAL` | บันทึก `createdAt` |
+| 3 | **อนุมัติการยืม (Approve)** | ไม่เปลี่ยน | คง `RESERVED` | `PENDING_APPROVAL → APPROVED` | บันทึก `approved_at` |
+| 4 | **ส่งมอบของจริง (Handover/Dispatch)** | ไม่เปลี่ยน | `RESERVED → BORROWED` | `APPROVED → BORROWED` | บันทึก `handover_date` |
+| 5 | **ยืมตรงที่ศูนย์ (Center-Service)** | ไม่เปลี่ยน | `AVAILABLE → BORROWED` | `→ BORROWED` | บันทึก `approved_at`, `handover_date` ทันที |
+| 6 | **ปฏิเสธคำขอ (Reject)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ REJECTED` | บันทึก `reject_reason` |
+| 7 | **ยกเลิกคำขอ (Cancel - Pending/Approved)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ CANCELLED` | เฉพาะก่อนส่งมอบของ |
+| 8 | **คืนปกติ (Return - Normal)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED` | บันทึก `return_date` |
+| 9 | **คืนชำรุด (Return - Damage)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED` | บันทึก `return_date` |
+| 10 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — | |
+| 11 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — | |
+| 12 | **รอจำหน่าย (Pending Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → WAIT_DISPOSAL` | `→ UNAVAILABLE` | — | |
+| 13 | **จำหน่ายแล้ว (Disposal Completed)** | `WAIT_DISPOSAL → DISPOSAL` | คง `UNAVAILABLE` | — | |
+| 14 | **สูญหาย (Asset Lost)** | `NORMAL/DAMAGED/UNDER_REPAIR → LOST` | `→ UNAVAILABLE` | — | |
 
 ---
 
@@ -291,14 +292,15 @@ Body: { asset_status_id: number }
 1. **การคืนครุภัณฑ์ (`returnAsset`)**:
    - อนุญาตเฉพาะ: ผู้ยืมคนนั้นเอง (`borrower_id`), เจ้าหน้าที่ศูนย์หรือผู้ดูแลระบบ (`ASSET_CENTER_STAFF`, `ADMIN`, `MANAGER`), หรือ **เจ้าหน้าที่ที่อยู่แผนกเดียวกัน** (`user.section_id === borrower.section_id`)
 2. **การยกเลิกรายการยืม (`cancelBorrow`)**:
-   - **`DEPARTMENT_STAFF` / ผู้ยืม / เพื่อนร่วมแผนก**: สามารถกดยกเลิกคำขอได้เฉพาะตอนที่สถานะยังเป็น **`PENDING_APPROVAL` (รออนุมัติ)** เท่านั้น หากส่งมอบของไปแล้ว (`BORROWED`) จะต้องทำรายการคืน (`returnAsset`) เพื่อให้มีการตรวจรับสภาพของ
-   - **`ASSET_CENTER_STAFF` / `ADMIN` / `MANAGER`**: สามารถกดยกเลิกคำขอในสถานะ `BORROWED` หรือ `PENDING_APPROVAL` ได้สำหรับกรณีแก้ไขข้อผิดพลาดทางระบบ
+   - **`DEPARTMENT_STAFF` / ผู้ยืม / เพื่อนร่วมแผนก**: สามารถกดยกเลิกคำขอได้เฉพาะตอนที่สถานะยังเป็น **`PENDING_APPROVAL` (รออนุมัติ)** เท่านั้น
+   - **`ASSET_CENTER_STAFF` / `ADMIN` / `MANAGER`**: สามารถกดยกเลิกคำขอได้ในสถานะ **`PENDING_APPROVAL`** และ **`APPROVED`** (กรณีอนุมัติผิดพลาด แต่ยังไม่ได้ส่งมอบของจริง)
+   - **ทุก Role ไม่สามารถกดยกเลิกสถานะ `BORROWED` ได้**: หากส่งมอบของจริงไปแล้ว จะต้องทำรายการคืน (`returnAsset`) เท่านั้น เพื่อให้มีการตรวจรับสภาพครุภัณฑ์และบันทึกประวัติการส่งคืน
 3. **การป้องกัน Concurrency & Race Condition (Optimistic Locking)**:
-   - การเปลี่ยนสถานะของ `BorrowTransaction` และ `Asset` ทั้งหมด (`createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, `returnAsset`) จะต้องใช้ Atomic Optimistic Locking (`updateMany` กับเงื่อนไขสถานะคาดหวังใน `where`) เพื่อป้องกันคำขอทำงานพร้อมกันชนกัน และจะโยน `409 ConflictException` เมื่อพบการประมวลผลซ้อน
+   - การเปลี่ยนสถานะของ `BorrowTransaction` และ `Asset` ทั้งหมด (`createBorrow`, `approveBorrow`, `handoverAsset`, `rejectBorrow`, `cancelBorrow`, `returnAsset`) จะต้องใช้ Atomic Optimistic Locking (`updateMany` กับเงื่อนไขสถานะคาดหวังใน `where`) เพื่อป้องกันคำขอทำงานพร้อมกันชนกัน และจะโยน `409 ConflictException` เมื่อพบการประมวลผลซ้อน
 4. **การตรวจสอบสิทธิ์ความปลอดภัยในแผนก (DB Fallback Verification)**:
    - ตรวจสอบ `section_id` ของผู้เรียกผ่าน Helper `getCallerSectionId`: ระบบจะอ่าน `user.section_id` จาก Session ก่อน หากไม่มี (เช่น Session เก่า) จะทำการตรวจสอบข้อมูลในฐานข้อมูล (`users.section_id`) แบบเรียลไทม์เพื่อป้องกันช่องโหว่การสวมสิทธิ์ข้ามแผนก
 5. **ข้อกำหนดสถานะสำหรับ Error Reporting**:
-   - การกระทำต่างๆ จะต้องตรวจสอบความเข้ากันได้ของสถานะ Transaction เสมอ และส่ง Error status code และชื่อสถานะ (เช่น `PENDING_APPROVAL`, `RETURNED`) กลับไปที่ Frontend อย่างชัดเจนหากไม่เป็นไปตามขั้นตอนที่ถูกต้อง
+   - การกระทำต่างๆ จะต้องตรวจสอบความเข้ากันได้ของสถานะ Transaction เสมอ และส่ง Error status code และชื่อสถานะ (เช่น `PENDING_APPROVAL`, `APPROVED`, `RETURNED`) กลับไปที่ Frontend อย่างชัดเจนหากไม่เป็นไปตามขั้นตอนที่ถูกต้อง
 
 ---
 
@@ -327,15 +329,23 @@ Body: { asset_status_id: number }
   │                                                       │
   ├─ กดปุ่ม "ยืนยันการขอยืม"                                 │
   │  (สร้าง Transaction: PENDING_APPROVAL                   │
-  │   Asset Availability: AVAILABLE → RESERVED)           │
+  │   Asset Availability: AVAILABLE → RESERVED              │
+  │   Timestamp: createdAt)                                │
   │                                            ┌──────────┤
   │                                 ตรวจสอบคำขอ & จัดเตรียมของ │
   │                                           ◇           │
   │                              ปฏิเสธ ◄───╱   ╲───► อนุมัติ│
   │                                 │      ╲   ╱      │   │
   │                                 ▼       ╲ ╱       ▼   │
-  │                         REJECTED        │      BORROWED
-  │                   Asset: AVAILABLE ◄────┘   Asset: BORROWED
+  │                         REJECTED        │      APPROVED
+  │                   Asset: AVAILABLE ◄────┘   (Asset: RESERVED,
+  │                                              approved_at)
+  │                                                       │
+  │                                             ส่งมอบของจริง (Handover)
+  │                                                       ▼
+  │                                                    BORROWED
+  │                                              (Asset: BORROWED,
+  │                                               handover_date)
   │                                                       │
   ◄───────────────────────────────────────────────────────┘
   ● End                                                   │
@@ -356,9 +366,10 @@ Body: { asset_status_id: number }
   │                                   • วิธีรับครุภัณฑ์       │
   │                                                       │
   │                                   ตรวจสอบสถานะ          │
-  │                                   + สร้างรายการยืม       │
+  │                                   + สร้างรายการยืม (BORROWED)
   │                                   + AvailabilityStatus  │
   │                                     AVAILABLE→BORROWED  │
+  │                                   + approved_at, handover_date
   │                                                       │
   │  ◄──── ระบบแจ้งเตือนผู้ยืม ────────┘                     │
 ```
@@ -400,6 +411,7 @@ Body: { asset_status_id: number }
   │                               └──────┬──────┘         │
   │                                      ▼                │
   │                              อัปเดตสถานะครุภัณฑ์        │
+  │                              (บันทึก return_date)     │
   ◄──────────────────────────────────────┘                │
   ● End                                                   │
 ```
@@ -418,8 +430,13 @@ Body: { asset_status_id: number }
 | `borrow_status_id` | INTEGER | ✅ | BORROW_STATUS | สถานะรายการยืม-คืน |
 | `request_source` | ENUM | ✅ | | `SELF_SERVICE` / `CENTER_SERVICE` |
 | `delivery_method` | ENUM | ✅ | | `PICKUP` / `DELIVERY` |
-| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้างรายการ (= วันที่ยืม) |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้างรายการ (= วันที่ยื่นคำขอ) |
+| `approved_at` | TIMESTAMPTZ | | | วันเวลาที่เจ้าหน้าที่กดอนุมัติคำขอ |
+| `handover_date` | TIMESTAMPTZ | | | วันเวลาที่ส่งมอบครุภัณฑ์จริง (เริ่มยืมจริง) |
 | `return_date` | TIMESTAMPTZ | | | วันเวลาที่คืน |
+| `cancelled_at` | TIMESTAMPTZ | | | วันเวลาที่คำขอถูกยกเลิก |
+| `rejected_at` | TIMESTAMPTZ | | | วันเวลาที่คำขอถูกปฏิเสธ |
+| `cancel_reason` | TEXT | | | เหตุผลการยกเลิกรายการ |
 | `return_condition` | ENUM | | | สภาพเครื่องตอนคืน: `Normal` / `Damage` |
 | `return_method` | ENUM | | | วิธีการคืน: `self_return` / `staff_pickup` |
 | `return_remark` | TEXT | | | หมายเหตุการคืน |

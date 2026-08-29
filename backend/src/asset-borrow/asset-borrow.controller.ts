@@ -4,6 +4,7 @@ import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
 import { RejectBorrowDto } from './dto/reject-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
+import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -56,6 +57,19 @@ export class AssetBorrowController {
     return this.assetBorrowService.rejectBorrow(id, dto?.reason, session.user);
   }
 
+  // Handover / Dispatch Asset (APPROVED -> BORROWED)
+  @Patch(':id/handover')
+  @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Handover/dispatch asset to borrower (APPROVED -> BORROWED)' })
+  @ApiResponse({ status: 200, description: 'Asset handed over successfully' })
+  @ApiResponse({ status: 400, description: 'Transaction is not in APPROVED status' })
+  async handoverAsset(
+    @Param('id') id: string,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.handoverAsset(id, session.user);
+  }
+
   // Return Borrowing
   @Patch(':id/return')
   @Roles(
@@ -86,9 +100,10 @@ export class AssetBorrowController {
   @ApiResponse({ status: 400, description: 'Transaction cannot be cancelled or no permission' })
   async cancelBorrow(
     @Param('id') id: string,
+    @Body() dto: CancelBorrowDto,
     @Session() session: UserSession
   ) {
-    return this.assetBorrowService.cancelBorrow(id, session.user);
+    return this.assetBorrowService.cancelBorrow(id, dto, session.user);
   }
   // Get All Borrowing
   @Get()

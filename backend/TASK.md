@@ -64,6 +64,13 @@
 - [x] **2.9 Borrow Concurrency Protection & Business Rule Refinement (`src/asset-borrow/`)**:
   - ปรับปรุง `cancelBorrow`: จำกัดสิทธิ์ `DEPARTMENT_STAFF` / ผู้ยืม ให้กดยกเลิกคำขอได้เฉพาะสถานะ `PENDING_APPROVAL` เท่านั้น (หาก `BORROWED` ต้องคืนผ่าน `returnAsset`)
   - เพิ่ม Atomic Optimistic Locking (`updateMany` ร่วมกับสถานะคาดหวังใน `where`) ทั้งใน `createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, และ `returnAsset` ป้องกันคำขอประมวลผลซ้ำซ้อน / Race Condition 100%
+- [x] **2.10 Borrow State Workflow & Audit Timestamps (`src/asset-borrow/`)**:
+  - เพิ่มสถานะ `APPROVED` ใน `BorrowStatus` (Seed + DB)
+  - เพิ่มฟิลด์ `approved_at`, `handover_date`, `cancelled_at`, `rejected_at` และ `cancel_reason` ใน `BorrowTransaction`
+  - ปรับ `approveBorrow` ให้เปลี่ยนสถานะเป็น `APPROVED` พร้อมบันทึก `approved_at` (Asset คงสถานะ `RESERVED`)
+  - เพิ่ม Endpoint `PATCH /borrowings/:id/handover` สำหรับส่งมอบของจริง (เปลี่ยนเป็น `BORROWED` + บันทึก `handover_date` + เปลี่ยน Asset เป็น `BORROWED`)
+  - ปรับ `rejectBorrow` ให้บันทึก `rejected_at`
+  - ปรับ `cancelBorrow` ให้อัปเดต `cancelled_at` และ `cancel_reason` โดยอนุญาตให้เจ้าหน้าที่ศูนย์ฯ ยกเลิกคำขอสถานะ `APPROVED` ได้ (กรณี Approve ผิดพลาดแต่ยังไม่ได้ส่งมอบของจริง) และปิดการยกเลิกสถานะ `BORROWED` ทุก Role
  
 ### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
 - [ ] **3.1 Department Scope Filter ใน Service Layer**:

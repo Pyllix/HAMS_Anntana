@@ -36,6 +36,7 @@ const availabilityStatuses = [
 
 const borrowStatuses = [
   { code: 'PENDING_APPROVAL', name: 'รออนุมัติ' },
+  { code: 'APPROVED', name: 'อนุมัติแล้ว/รอส่งมอบ' },
   { code: 'BORROWED', name: 'กำลังยืม' },
   { code: 'RETURNED', name: 'คืนแล้ว' },
   { code: 'REJECTED', name: 'ปฏิเสธ' },

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
+import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
 import { ReturnCondition, UserRole, RequestSource } from '@prisma/client';
 
@@ -87,6 +88,8 @@ export class AssetBorrowService {
         ? pendingTxStatusId
         : borrowedTxStatusId;
 
+    const now = new Date();
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Update Asset availability atomically only if NORMAL and AVAILABLE
       const assetUpdate = await tx.asset.updateMany({
@@ -110,6 +113,8 @@ export class AssetBorrowService {
           borrow_status_id: targetTxStatusId,
           request_source: requestSource,
           delivery_method: dto.deliveryMethod,
+          approved_at: requestSource === RequestSource.CENTER_SERVICE ? now : null,
+          handover_date: requestSource === RequestSource.CENTER_SERVICE ? now : null,
         }
       });
 
@@ -119,9 +124,7 @@ export class AssetBorrowService {
 
   async approveBorrow(id: string, user: any) {
     const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
-    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -137,17 +140,57 @@ export class AssetBorrowService {
         throw new BadRequestException(`Only transactions in PENDING_APPROVAL status can be approved`);
       }
 
-      // Optimistic lock on BorrowTransaction update
+      // Optimistic lock on BorrowTransaction update to APPROVED
       const txUpdate = await tx.borrowTransaction.updateMany({
         where: { id, borrow_status_id: pendingTxStatusId },
-        data: { borrow_status_id: borrowedTxStatusId }
+        data: {
+          borrow_status_id: approvedTxStatusId,
+          approved_at: new Date(),
+        }
       });
 
       if (txUpdate.count === 0) {
         throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
       }
 
-      // Optimistic lock on Asset update
+      return tx.borrowTransaction.findUnique({ where: { id } });
+    });
+  }
+
+  async handoverAsset(id: string, user: any) {
+    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
+    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
+    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: { id: true, asset_id: true, borrow_status_id: true }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== approvedTxStatusId) {
+        throw new BadRequestException(`Only transactions in APPROVED status can be handed over (marked as BORROWED)`);
+      }
+
+      // Optimistic lock on BorrowTransaction update to BORROWED
+      const txUpdate = await tx.borrowTransaction.updateMany({
+        where: { id, borrow_status_id: approvedTxStatusId },
+        data: {
+          borrow_status_id: borrowedTxStatusId,
+          handover_date: new Date(),
+        }
+      });
+
+      if (txUpdate.count === 0) {
+        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+      }
+
+      // Optimistic lock on Asset update: RESERVED -> BORROWED
       const assetUpdate = await tx.asset.updateMany({
         where: { id: transaction.asset_id, availability_status_id: reservedAvailabilityId },
         data: { availability_status_id: borrowedAvailabilityId }
@@ -187,6 +230,7 @@ export class AssetBorrowService {
         data: {
           borrow_status_id: rejectedTxStatusId,
           reject_reason: reason,
+          rejected_at: new Date(),
         }
       });
 
@@ -323,12 +367,12 @@ export class AssetBorrowService {
     });
   }
 
-  async cancelBorrow(id: string, user: any) {
+  async cancelBorrow(id: string, dto: CancelBorrowDto, user: any) {
     const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
     const cancelledTxStatusId = await this.getStatusId('borrowStatus', 'CANCELLED');
     const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
 
     return this.prisma.$transaction(async (tx) => {
@@ -357,20 +401,27 @@ export class AssetBorrowService {
         user.role === UserRole.ADMIN ||
         user.role === UserRole.MANAGER;
 
-      // Business Rule: Department Staff / Borrower can only cancel PENDING_APPROVAL transactions
-      if (!isStaffOverride && transaction.borrow_status_id === borrowedTxStatusId) {
+      // Business Rule: BORROWED status cannot be cancelled by anyone (must use returnAsset)
+      if (transaction.borrow_status_id === borrowedTxStatusId) {
         throw new BadRequestException(
-          'Department staff can only cancel transactions that are pending approval. Borrowed assets must be returned instead.'
+          'Cannot cancel a transaction that has already been dispatched (BORROWED). The asset must be returned via return flow.'
+        );
+      }
+
+      // Business Rule: Department Staff / Borrower can only cancel PENDING_APPROVAL transactions
+      if (!isStaffOverride && transaction.borrow_status_id === approvedTxStatusId) {
+        throw new BadRequestException(
+          'Department staff can only cancel transactions that are pending approval. Please contact Asset Center Staff to cancel an approved request.'
         );
       }
 
       if (
-        transaction.borrow_status_id !== borrowedTxStatusId &&
+        transaction.borrow_status_id !== approvedTxStatusId &&
         transaction.borrow_status_id !== pendingTxStatusId
       ) {
         const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Only active (BORROWED) or pending (PENDING_APPROVAL) transactions can be cancelled. Current status is '${currentStatusCode}'.`
+          `Only pending (PENDING_APPROVAL) or approved (APPROVED) transactions can be cancelled. Current status is '${currentStatusCode}'.`
         );
       }
 
@@ -395,6 +446,8 @@ export class AssetBorrowService {
         },
         data: {
           borrow_status_id: cancelledTxStatusId,
+          cancelled_at: new Date(),
+          cancel_reason: dto?.cancelReason || null,
         }
       });
 
@@ -402,12 +455,11 @@ export class AssetBorrowService {
         throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
       }
 
-      // Optimistic lock on Asset update
-      const validAssetAvailabilityIds = [reservedAvailabilityId, borrowedAvailabilityId];
+      // Optimistic lock on Asset update: return RESERVED -> AVAILABLE
       await tx.asset.updateMany({
         where: {
           id: transaction.asset_id,
-          availability_status_id: { in: validAssetAvailabilityIds }
+          availability_status_id: reservedAvailabilityId,
         },
         data: { availability_status_id: availableStatusId }
       });
