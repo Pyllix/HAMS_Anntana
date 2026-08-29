@@ -268,8 +268,8 @@ export default function StockAssetsTable({
                 type="button"
                 onClick={() => setCurrentPage(page)}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${currentPage === page
-                    ? "bg-emerald-600 font-semibold text-white shadow-sm"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  ? "bg-emerald-600 font-semibold text-white shadow-sm"
+                  : "border border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
               >
                 {page}
