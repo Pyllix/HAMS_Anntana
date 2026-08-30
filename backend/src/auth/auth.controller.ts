@@ -20,6 +20,7 @@ import type { Request } from 'express';
 import type { Session as BetterAuthSession } from 'better-auth/types';
 import { auth } from './auth';
 import { SignInDto } from './dto/sign-in.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -100,6 +101,45 @@ export class AuthController {
     return { message: 'Signed out successfully' };
   }
 
+  // ─── Change Password (Self-Service) ───────────────────────────────────────
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change password (Self-Service)',
+    description:
+      'Change own password by verifying current password — revokes other sessions by default',
+  })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid current password or password policy violation',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req: Request) {
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value)
+        headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+    }
+
+    const result = await auth.api.changePassword({
+      headers,
+      body: {
+        currentPassword: dto.currentPassword,
+        newPassword: dto.newPassword,
+        revokeOtherSessions: true,
+      },
+    });
+
+    return {
+      message: 'Password changed successfully',
+      ...result,
+    };
+  }
+
   // ─── Get Session ───────────────────────────────────────────────────────────
 
   @Get('session')
@@ -121,3 +161,4 @@ export class AuthController {
     };
   }
 }
+
