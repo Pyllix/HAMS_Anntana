@@ -63,7 +63,7 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 | Framework | NestJS | Confirmed | Configured in package.json |
 | Language | TypeScript | Confirmed | Configured in package.json |
 | ORM | Prisma | Confirmed | Known decision; pending codebase integration |
-| Auth | BetterAuth | Confirmed | Known decision; pending codebase integration |
+| Auth | BetterAuth | Confirmed | Integrated with uppercase roles configuration (ADMIN, etc.) and custom session/password management |
 
 ## High-Level Architecture
 The system follows a standard Layered Architecture pattern specific to NestJS (Module -> Controller -> Service).

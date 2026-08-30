@@ -42,7 +42,11 @@
   - [x] เพิ่มระบบ Full Actor Audit Trail บันทึก `created_by_user_id`, `approved_by_user_id`, `handover_by_user_id`, `rejected_by_user_id`, `cancelled_by_user_id` อัตโนมัติจาก Login Session
   - [x] ปรับปรุงระบบการคืน 2 รูปแบบ (Staff Pickup with Job Claiming/IN_PICKUP vs. Walk-in Desk Return) พร้อมการตรวจสอบสิทธิ์แผนก `returnedByUserId` เข้มงวด
 - [x] **2.3 Unit & E2E Tests Validation**:
-  - [x] อัปเดต Mock Data และรัน Test Suite (`pnpm test` - 15/15 test suites, 72 tests passed)
+  - [x] อัปเดต Mock Data และรัน Test Suite (`pnpm test` - 15/15 test suites, 75 tests passed)
+- [x] **2.4 User & Password Management Update**:
+  - [x] จัดทำ API `POST /auth/change-password` สำหรับผู้ใช้เปลี่ยนรหัสผ่านเอง โดยกำหนด `revokeOtherSessions: true` เป็นดีฟอลต์อัตโนมัติเพื่อความปลอดภัยของระบบ
+  - [x] จัดทำ API `PATCH /users/:id/reset-password` สำหรับ ADMIN ในการรีเซ็ตรหัสผ่าน โดยส่งผ่าน `headers` ให้กับ Better-Auth Admin API และตัดการเชื่อมต่อโดยการลบทุก Active Session ในฐานข้อมูล
+  - [x] ปรับแต่ง Better-Auth Config (`auth.ts`) และ Jest Mock ให้รองรับการตรวจสอบสิทธิ์แบบ Case-Sensitive ด้วย Case-Insensitive Roles Map (`ADMIN`, `DEPARTMENT_STAFF`, ฯลฯ)
 
 ---
 
