@@ -2,10 +2,12 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { PrismaService } from '../prisma.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
+import { RequestReturnBorrowDto } from './dto/request-return-borrow.dto';
+import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
-import { ReturnCondition, UserRole, RequestSource } from '@prisma/client';
+import { ReturnCondition, ReturnMethod, UserRole, RequestSource } from '@prisma/client';
 
 @Injectable()
 export class AssetBorrowService {
@@ -283,6 +285,235 @@ export class AssetBorrowService {
     });
   }
 
+  async requestReturn(id: string, dto: RequestReturnBorrowDto, user: any) {
+    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
+    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          asset_id: true,
+          borrow_status_id: true,
+          borrower_id: true,
+          borrower: { select: { section_id: true } },
+          borrowStatus: { select: { code: true, name: true } },
+        },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== borrowedTxStatusId) {
+        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        throw new BadRequestException(
+          `Cannot request return: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`
+        );
+      }
+
+      const isStaffOverride =
+        user.role === UserRole.ASSET_CENTER_STAFF ||
+        user.role === UserRole.ADMIN ||
+        user.role === UserRole.MANAGER;
+
+      const callerSectionId = await this.getCallerSectionId(user, tx);
+      const isSameDepartment =
+        callerSectionId &&
+        transaction.borrower?.section_id &&
+        callerSectionId === transaction.borrower.section_id;
+      const isBorrower = user.id === transaction.borrower_id;
+
+      if (!isStaffOverride && !isBorrower && !isSameDepartment) {
+        throw new BadRequestException(
+          'You do not have permission to request return for this transaction (must be the borrower or belong to the same department)'
+        );
+      }
+
+      let combinedRemark = dto.remark || null;
+      if (dto.pickupLocation) {
+        combinedRemark = combinedRemark
+          ? `จุดรับ: ${dto.pickupLocation} | ${combinedRemark}`
+          : `จุดรับ: ${dto.pickupLocation}`;
+      }
+
+      // 1. Optimistic lock on BorrowTransaction update
+      const txUpdate = await tx.borrowTransaction.updateMany({
+        where: { id, borrow_status_id: borrowedTxStatusId },
+        data: {
+          borrow_status_id: pendingReturnTxStatusId,
+          return_method: ReturnMethod.staff_pickup,
+          returned_by_user_id: user.id,
+          return_date: new Date(),
+          return_remark: combinedRemark,
+        },
+      });
+
+      if (txUpdate.count === 0) {
+        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+      }
+
+      // 2. Lock Asset availability to UNAVAILABLE
+      const assetUpdate = await tx.asset.updateMany({
+        where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
+        data: { availability_status_id: unavailableAvailabilityId },
+      });
+
+      if (assetUpdate.count === 0) {
+        throw new ConflictException(
+          `Failed to lock asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`
+        );
+      }
+
+      return tx.borrowTransaction.findUnique({ where: { id } });
+    });
+  }
+
+  async claimPickup(id: string, user: any) {
+    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
+    const inPickupTxStatusId = await this.getStatusId('borrowStatus', 'IN_PICKUP');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          asset_id: true,
+          borrow_status_id: true,
+          borrowStatus: { select: { code: true, name: true } },
+        },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (transaction.borrow_status_id !== pendingReturnTxStatusId) {
+        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        throw new BadRequestException(
+          `Cannot claim pickup: transaction is currently in '${currentStatusCode}' status (expected PENDING_RETURN).`
+        );
+      }
+
+      // Optimistic lock on BorrowTransaction update
+      const txUpdate = await tx.borrowTransaction.updateMany({
+        where: { id, borrow_status_id: pendingReturnTxStatusId },
+        data: {
+          borrow_status_id: inPickupTxStatusId,
+          received_by_user_id: user.id,
+        },
+      });
+
+      if (txUpdate.count === 0) {
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been claimed or status changed`
+        );
+      }
+
+      return tx.borrowTransaction.findUnique({ where: { id } });
+    });
+  }
+
+  async completeReturn(id: string, dto: CompleteReturnBorrowDto, user: any) {
+    const inPickupTxStatusId = await this.getStatusId('borrowStatus', 'IN_PICKUP');
+    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
+    const returnedTxStatusId = await this.getStatusId('borrowStatus', 'RETURNED');
+    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          asset_id: true,
+          borrow_status_id: true,
+          return_remark: true,
+          borrowStatus: { select: { code: true, name: true } },
+        },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      }
+
+      if (
+        transaction.borrow_status_id !== inPickupTxStatusId &&
+        transaction.borrow_status_id !== pendingReturnTxStatusId
+      ) {
+        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        throw new BadRequestException(
+          `Cannot complete return: transaction is currently in '${currentStatusCode}' status (expected IN_PICKUP or PENDING_RETURN).`
+        );
+      }
+
+      let updatedRemark = transaction.return_remark;
+      if (dto.returnRemark) {
+        updatedRemark = updatedRemark
+          ? `${updatedRemark} | ตรวจรับ: ${dto.returnRemark}`
+          : `ตรวจรับ: ${dto.returnRemark}`;
+      }
+
+      // 1. Optimistic lock on BorrowTransaction update
+      const txUpdate = await tx.borrowTransaction.updateMany({
+        where: {
+          id,
+          borrow_status_id: transaction.borrow_status_id,
+        },
+        data: {
+          borrow_status_id: returnedTxStatusId,
+          received_by_user_id: user.id,
+          return_condition: dto.returnCondition,
+          return_remark: updatedRemark,
+        },
+      });
+
+      if (txUpdate.count === 0) {
+        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+      }
+
+      // 2. Update Asset Availability and Status
+      if (dto.returnCondition === ReturnCondition.Normal) {
+        const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+        const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
+
+        const assetUpdate = await tx.asset.updateMany({
+          where: { id: transaction.asset_id },
+          data: {
+            availability_status_id: availableStatusId,
+            asset_status_id: normalAssetStatusId,
+          },
+        });
+
+        if (assetUpdate.count === 0) {
+          throw new ConflictException(
+            `Failed to update asset availability for asset ${transaction.asset_id}`
+          );
+        }
+      } else if (dto.returnCondition === ReturnCondition.Damage) {
+        const damagedStatusId = await this.getStatusId('assetStatus', 'DAMAGED');
+
+        const assetUpdate = await tx.asset.updateMany({
+          where: { id: transaction.asset_id },
+          data: {
+            availability_status_id: unavailableAvailabilityId,
+            asset_status_id: damagedStatusId,
+          },
+        });
+
+        if (assetUpdate.count === 0) {
+          throw new ConflictException(
+            `Failed to update asset availability and status for asset ${transaction.asset_id}`
+          );
+        }
+      }
+
+      return tx.borrowTransaction.findUnique({ where: { id } });
+    });
+  }
+
   async returnAsset(id: string, dto: ReturnAssetBorrowDto, user: any) {
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
     const returnedTxStatusId = await this.getStatusId('borrowStatus', 'RETURNED');
@@ -297,12 +528,12 @@ export class AssetBorrowService {
           borrow_status_id: true,
           borrower_id: true,
           borrower: {
-            select: { section_id: true }
+            select: { section_id: true },
           },
           borrowStatus: {
-            select: { code: true, name: true }
-          }
-        }
+            select: { code: true, name: true },
+          },
+        },
       });
 
       if (!transaction) {
@@ -321,42 +552,42 @@ export class AssetBorrowService {
         user.role === UserRole.ADMIN ||
         user.role === UserRole.MANAGER;
 
-      const callerSectionId = await this.getCallerSectionId(user, tx);
+      if (!isStaffOverride) {
+        throw new BadRequestException(
+          'Desk return can only be performed by Asset Center Staff or Admins'
+        );
+      }
 
-      const isSameDepartment =
-        callerSectionId &&
+      // Validate returnedByUserId
+      if (!dto.returnedByUserId) {
+        throw new BadRequestException('Returned by user ID or Employee Code is required for desk return');
+      }
+
+      const retUser = await tx.user.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            { id: dto.returnedByUserId },
+            { employeeId: dto.returnedByUserId },
+          ],
+        },
+        select: { id: true, section_id: true },
+      });
+
+      if (!retUser) {
+        throw new NotFoundException(`Returned by user not found with ID or Employee Code: ${dto.returnedByUserId}`);
+      }
+
+      const isOwner = retUser.id === transaction.borrower_id;
+      const isSameDept =
+        retUser.section_id &&
         transaction.borrower?.section_id &&
-        callerSectionId === transaction.borrower.section_id;
+        retUser.section_id === transaction.borrower.section_id;
 
-      const isBorrower = user.id === transaction.borrower_id;
-
-      if (!isStaffOverride && !isBorrower && !isSameDepartment) {
-        throw new BadRequestException('You do not have permission to return this borrowed asset (must be in the same department as the borrower)');
-      }
-
-      let receivedByUserId: string | null = null;
-      let returnedByUserId: string = user.id;
-
-      if (isStaffOverride && dto.returnedByUserId) {
-        const retUser = await tx.user.findFirst({
-          where: {
-            deletedAt: null,
-            OR: [
-              { id: dto.returnedByUserId },
-              { employeeId: dto.returnedByUserId }
-            ]
-          }
-        });
-        if (!retUser) {
-          throw new NotFoundException(`Returned by user not found with ID or Employee Code: ${dto.returnedByUserId}`);
-        }
-        returnedByUserId = retUser.id;
-      } else if (user.role === UserRole.ASSET_CENTER_STAFF) {
-        returnedByUserId = transaction.borrower_id;
-      }
-
-      if (user.role === UserRole.ASSET_CENTER_STAFF) {
-        receivedByUserId = user.id;
+      if (!isOwner && !isSameDept) {
+        throw new BadRequestException(
+          'The person returning the asset must be the borrower or belong to the same department as the borrower'
+        );
       }
 
       // Optimistic lock on BorrowTransaction update
@@ -366,11 +597,11 @@ export class AssetBorrowService {
           borrow_status_id: returnedTxStatusId,
           return_date: new Date(),
           return_condition: dto.returnCondition,
-          return_method: dto.returnMethod,
-          return_remark: dto.returnRemark,
-          returned_by_user_id: returnedByUserId,
-          received_by_user_id: receivedByUserId,
-        }
+          return_method: ReturnMethod.self_return,
+          return_remark: dto.returnRemark || null,
+          returned_by_user_id: retUser.id,
+          received_by_user_id: user.id,
+        },
       });
 
       if (txUpdate.count === 0) {
@@ -382,7 +613,7 @@ export class AssetBorrowService {
         const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
         const assetUpdate = await tx.asset.updateMany({
           where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
-          data: { availability_status_id: availableStatusId }
+          data: { availability_status_id: availableStatusId },
         });
 
         if (assetUpdate.count === 0) {
@@ -398,8 +629,8 @@ export class AssetBorrowService {
           where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
           data: {
             availability_status_id: unavailableStatusId,
-            asset_status_id: damagedStatusId
-          }
+            asset_status_id: damagedStatusId,
+          },
         });
 
         if (assetUpdate.count === 0) {

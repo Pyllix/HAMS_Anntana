@@ -38,10 +38,11 @@
   - [x] ปรับปรุง API `POST /asset/:id/disposal` ให้สอดคล้องกับโมเดล `Disposal` ใหม่
 - [x] **2.2 Asset Borrowing Service & DTOs**:
   - [x] ปรับปรุง DTOs และ Services ให้ใช้ `reject_remark`
-  - [x] รองรับ Flow การยืม-คืน 6 สถานะหลัก (`PENDING_APPROVE`, `APPROVED`, `BORROWED`, `RETURNED`, `REJECTED`, `CANCELLED`)
+  - [x] รองรับ Flow การยืม-คืน 8 สถานะหลัก (`PENDING_APPROVE`, `APPROVED`, `BORROWED`, `PENDING_RETURN`, `IN_PICKUP`, `RETURNED`, `REJECTED`, `CANCELLED`)
   - [x] เพิ่มระบบ Full Actor Audit Trail บันทึก `created_by_user_id`, `approved_by_user_id`, `handover_by_user_id`, `rejected_by_user_id`, `cancelled_by_user_id` อัตโนมัติจาก Login Session
+  - [x] ปรับปรุงระบบการคืน 2 รูปแบบ (Staff Pickup with Job Claiming/IN_PICKUP vs. Walk-in Desk Return) พร้อมการตรวจสอบสิทธิ์แผนก `returnedByUserId` เข้มงวด
 - [x] **2.3 Unit & E2E Tests Validation**:
-  - [x] อัปเดต Mock Data และรัน Test Suite (`pnpm test` - 15/15 test suites, 70 tests passed)
+  - [x] อัปเดต Mock Data และรัน Test Suite (`pnpm test` - 15/15 test suites, 72 tests passed)
 
 ---
 

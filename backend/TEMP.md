@@ -1,223 +1,164 @@
-# HAMS Asset Borrowing API Documentation (สำหรับ Frontend)
+# 📝 สรุปการปรับปรุงระบบและสถาปัตยกรรม (TEMP.md - อัปเดตล่าสุด)
 
-เอกสารฉบับนี้ใช้สำหรับให้นักพัฒนา Frontend นำไปใช้อ่านและเข้าใจกระบวนการทำงานรวมถึงการเรียกใช้ API ในการจัดการยืม-คืนครุภัณฑ์ (Asset Borrowing Flow)
+เอกสารนี้สรุปภาพรวมของสถาปัตยกรรมระบบการยืม-คืนครุภัณฑ์ (`AssetBorrow`) กฎระเบียบการกดยกเลิก/อนุมัติ/คืนในแต่ละสถานะ ความแตกต่างระหว่าง Cancel vs Reject ข้อกำหนดทางเทคนิค และ Frontend Best Practices ที่เป็นปัจจุบันทั้งหมด
 
 ---
 
-## 🔄 State Machine & Workflow (ขั้นตอนสถานะ)
+## 1. สถาปัตยกรรมการยืม-คืนครุภัณฑ์ และสิทธิ์การกดยกเลิก (Status & Cancellation Matrix)
 
-กระบวนการยืม-คืนมี 2 รูปแบบหลัก:
+วงจรชีวิตของการยืม-คืนมีทั้งหมด **8 สถานะหลัก (`BorrowStatus`)** โดยมีเงื่อนไขสิทธิ์การทำรายการและการกดยกเลิก (`cancelBorrow`) ในแต่ละสถานะดังนี้:
 
-### 1. การยืมผ่านแอปโดยผู้ใช้ทั่วไป (Self-Service Flow)
 ```
-[ผู้ยืม] ยื่นคำขอยืม          [AC Staff] กดอนุมัติ          [AC Staff] ส่งมอบของจริง       [ผู้ยืม/Staff] ส่งคืน
-PENDING_APPROVAL   ───────►      APPROVED      ───────►      BORROWED      ───────►      RETURNED
-(Asset: RESERVED)             (Asset: RESERVED)             (Asset: BORROWED)             (Asset: AVAILABLE)
+                  ┌─────────────────────────────────────────────────────────┐
+                  │                 วงจรชีวิตคำขอยืม-คืนครุภัณฑ์             │
+                  └────────────────────────────┬────────────────────────────┘
+                                               │
+                                       [PENDING_APPROVE] ─── (Reject) ───► [REJECTED] 🛑
+                                               │
+                                           (Approve)
+                                               │
+                                           [APPROVED]
+                                               │
+                                           (Handover)
+                                               │
+                                           [BORROWED]
+                                               │
+                       ┌───────────────────────┴───────────────────────┐
+      (Walk-in Desk Return)                                    (Request Pickup)
+                       │                                               │
+                       │                                       [PENDING_RETURN]
+                       │                                               │
+                       │                                        (Claim Pickup)
+                       │                                               │
+                       │                                         [IN_PICKUP]
+                       │                                               │
+                       │                                       (Complete Return)
+                       │                                               │
+                       └───────────────────────┬───────────────────────┘
+                                               ▼
+                                          [RETURNED] 🏁
 ```
 
-* **การยกเลิกคำขอ (`cancelBorrow`)**:
-  * เมื่ออยู่สถานะ `PENDING_APPROVAL`: ผู้ยืม หรือเพื่อนร่วมแผนกเดียวกัน หรือเจ้าหน้าที่ศูนย์ฯ สามารถยกเลิกได้
-  * เมื่ออยู่สถานะ `APPROVED`: เฉพาะเจ้าหน้าที่ศูนย์ฯ (Asset Center) เท่านั้นที่จะยกเลิกได้ (กรณีอนุมัติผิดพลาด)
-  * เมื่ออยู่สถานะ `BORROWED`: **ไม่สามารถยกเลิกได้** ต้องทำกระบวนการคืน (`returnAsset`) เท่านั้น
+### 📋 ตารางสรุปสิทธิ์การกดยกเลิก (`cancelBorrow`) และการทำรายการในแต่ละสถานะ
 
-### 2. การทำเรื่องยืมโดยตรงที่ศูนย์ครุภัณฑ์ (Center-Service Flow)
-กรณีผู้ยืมมาติดต่อที่ศูนย์ และเจ้าหน้าที่ทำให้ตรงนั้น:
-```
-[AC Staff] ทำเรื่องยืมแทน 
-      BORROWED (ข้ามขั้นตอนอนุมัติ) ➔ บันทึก approved_at และ handover_date ทันที
-```
-
----
-
-## 📡 API Endpoints
-
-ทุก Endpoint จำเป็นต้องแนบ **Bearer Token** ใน Header (`Authorization: Bearer <token>`)
+| สถานะ (`BorrowStatus`) | ใครกดยกเลิก (`cancelBorrow`) ได้บ้าง? | สิทธิ์การทำรายการอื่นในสถานะนี้ | หมายเหตุ |
+|---|---|---|---|
+| **1. `PENDING_APPROVE`**<br>(รออนุมัติ) | ✅ **ผู้ยืม** หรือ **คนในแผนกเดียวกัน**<br>✅ **เจ้าหน้าที่ศูนย์ฯ / Admin / Manager** | • ศูนย์ฯ กดอนุมัติ (`approve`) ➔ `APPROVED`<br>• ศูนย์ฯ กดปฏิเสธ (`reject`) ➔ `REJECTED` | เป็นสถานะเดียวที่ฝั่งวอร์ด/ผู้ยืมกดยกเลิกเองได้ |
+| **2. `APPROVED`**<br>(อนุมัติแล้ว/รอส่งมอบ) | ❌ **วอร์ด/ผู้ยืม กดยกเลิกไม่ได้**<br>✅ **เฉพาะเจ้าหน้าที่ศูนย์ฯ / Admin เท่านั้น** | • ศูนย์ฯ กดส่งมอบเครื่อง (`handover`) ➔ `BORROWED` | หากวอร์ดเปลี่ยนใจต้องติดต่อศูนย์ฯ ให้ศูนย์ฯ เป็นผู้กดยกเลิก |
+| **3. `BORROWED`**<br>(กำลังยืม) | 🚫 **ไม่มีใครกดยกเลิกได้เลย (ทั้งวอร์ดและศูนย์ฯ)** | • วอร์ดกดแจ้งคืน (`request-return`) ➔ `PENDING_RETURN`<br>• ศูนย์ฯ รับคืนที่เคาน์เตอร์ (`return`) ➔ `RETURNED` | เครื่องถูกส่งมอบออกไปแล้ว ไม่สามารถยกเลิกย้อนหลังได้ ต้องเข้า Flow ส่งคืนเท่านั้น |
+| **4. `PENDING_RETURN`**<br>(รอรับคืน - วอร์ดแจ้งให้ไปรับ) | 🚫 **ไม่มีใครกดยกเลิกได้เลย** | • ศูนย์ฯ กดรับเรื่องว่าจะไปเอา (`claim-pickup`) ➔ `IN_PICKUP` | เครื่องถูกล็อกเป็น `UNAVAILABLE` อยู่ในกระบวนการส่งคืน |
+| **5. `IN_PICKUP`**<br>(กำลังไปรับเครื่อง) | 🚫 **ไม่มีใครกดยกเลิกได้เลย** | • ศูนย์ฯ นำเข้าคลัง & ตรวจรับ (`complete-return`) ➔ `RETURNED` | เจ้าหน้าที่ศูนย์ฯ ล็อกงานกำลังเดินทางไปรับเครื่องที่วอร์ด |
+| **6. `RETURNED`**<br>(คืนแล้ว) | 🚫 **สถานะสิ้นสุด (Terminal State)** | *(ไม่มี)* | ตรวจรับเข้าคลังเรียบร้อยแล้ว ไม่สามารถทำรายการซ้ำได้ |
+| **7. `REJECTED`**<br>(ปฏิเสธ) | 🚫 **สถานะสิ้นสุด (Terminal State)** | *(ไม่มี)* | คำขอถูกปฏิเสธแล้ว ไม่สามารถทำรายการซ้ำได้ |
+| **8. `CANCELLED`**<br>(ยกเลิก) | 🚫 **สถานะสิ้นสุด (Terminal State)** | *(ไม่มี)* | คำขอถูกยกเลิกแล้ว ไม่สามารถทำรายการซ้ำได้ |
 
 ---
 
-### 1. ยื่นคำขอยืมครุภัณฑ์ (Create Borrow Request)
-* **Endpoint:** `POST /borrowings`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `DEPARTMENT_STAFF`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF`
-* **Request Body:**
-  ```json
-  {
-    "assetId": "uuid-ของครุภัณฑ์",
-    "deliveryMethod": "PICKUP", // หรือ "DELIVERY"
-    "borrowerId": "uuid-ของผู้ยืม" // ส่งเฉพาะเมื่อ ASSET_CENTER_STAFF ทำเรื่องแทนผู้อื่น
-  }
-  ```
-* **รายละเอียดการทำงาน:**
-  * หากเรียกโดยผู้ยืมทั่วไป ระบบจะตั้ง `borrower_id` เป็นไอดีผู้ใช้คนนั้นโดยอัตโนมัติ (และข้าม `borrowerId` ที่ส่งมา)
-  * สถานะจะเริ่มต้นเป็น `PENDING_APPROVAL` (กรณี Self-Service) หรือ `BORROWED` (กรณี Center-Service)
+## 2. ความแตกต่างระหว่าง Cancel (`CANCELLED`) กับ Reject (`REJECTED`)
 
----
+แม้ว่าทั้งสองสถานะจะส่งผลให้คำขอสิ้นสุดลง และคลายการจองครุภัณฑ์จาก `RESERVED` กลับคืนเป็น `AVAILABLE` เหมือนกัน แต่มีความแตกต่างกันในด้านผู้กระทำ เจตนา และกระบวนการทำงานดังนี้:
 
-### 2. อนุมัติคำขอยืม (Approve Request)
-* **Endpoint:** `PATCH /borrowings/:id/approve`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `ASSET_CENTER_STAFF` (เจ้าหน้าที่ศูนย์)
-* **รายละเอียดการทำงาน:**
-  - อัปเดตสถานะจาก `PENDING_APPROVAL` เป็น `APPROVED`
-  - บันทึกเวลาอนุมัติลงฟิลด์ `approved_at`
-  - ตัวครุภัณฑ์ (Asset) จะคงสถานะ `RESERVED` (จองไว้ ยังไม่ส่งมอบ)
-
----
-
-### 3. ส่งมอบครุภัณฑ์จริง (Handover / Dispatch Asset)
-* **Endpoint:** `PATCH /borrowings/:id/handover`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `ASSET_CENTER_STAFF`, `ADMIN`, `MANAGER`
-* **รายละเอียดการทำงาน:**
-  - อัปเดตสถานะจาก `APPROVED` เป็น `BORROWED`
-  - บันทึกเวลาส่งมอบลงฟิลด์ `handover_date` (ถือเป็นจุดเริ่มต้นเวลาการยืม)
-  - ปรับสถานะครุภัณฑ์จริง (Asset) จาก `RESERVED` เป็น `BORROWED`
-
----
-
-### 4. ปฏิเสธคำขอยืม (Reject Request)
-* **Endpoint:** `PATCH /borrowings/:id/reject`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `ASSET_CENTER_STAFF`
-* **Request Body:**
-  ```json
-  {
-    "reason": "เหตุผลที่ไม่อนุมัติการยืม เช่น ครุภัณฑ์ต้องนำไปบำรุงรักษาด่วน"
-  }
-  ```
-* **รายละเอียดการทำงาน:**
-  - เปลี่ยนสถานะจาก `PENDING_APPROVAL` เป็น `REJECTED`
-  - คืนค่าสถานะตัวครุภัณฑ์จาก `RESERVED` กลับเป็น `AVAILABLE` (ว่างพร้อมใช้งาน)
-  - บันทึกวันเวลาปฏิเสธในฟิลด์ `rejected_at`
-
----
-
-### 5. คืนครุภัณฑ์ (Return Asset)
-* **Endpoint:** `PATCH /borrowings/:id/return`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `ASSET_CENTER_STAFF`, `PARCEL_STAFF`, `DEPARTMENT_STAFF`
-* **Request Body:**
-  ```json
-  {
-    "returnCondition": "Normal", // หรือ "Damage"
-    "returnMethod": "self_return", // หรือ "staff_pickup"
-    "returnRemark": "หมายเหตุเพิ่มเติม (ถ้ามี)",
-    "returnedByUserId": "uuid-หรือ-รหัสพนักงาน" // ส่งเฉพาะเมื่อเจ้าหน้าที่ศูนย์กดรับคืนและประสงค์ระบุตัวคนคืน
-  }
-  ```
-* **รายละเอียดการทำงาน:**
-  - เปลี่ยนสถานะคำขอเป็น `RETURNED` และบันทึก `return_date`
-  - **หากสภาพเครื่องปกติ (`Normal`):** คืนสถานะครุภัณฑ์เป็น `AVAILABLE`
-  - **หากสภาพเครื่องชำรุด (`Damage`):** เปลี่ยนสภาพครุภัณฑ์เป็น `DAMAGED` และตั้งค่า AvailabilityStatus เป็น `UNAVAILABLE`
-
----
-
-### 6. ยกเลิกรายการยืม (Cancel Request)
-* **Endpoint:** `PATCH /borrowings/:id/cancel`
-* **สิทธิ์ผู้ใช้งาน (Roles):** `DEPARTMENT_STAFF`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF`
-* **Request Body:**
-  ```json
-  {
-    "cancelReason": "เหตุผลที่ขอยกเลิกรายการ (ส่งมาหรือไม่ส่งก็ได้)"
-  }
-  ```
-* **รายละเอียดการทำงาน:**
-  - เปลี่ยนสถานะคำขอเป็น `CANCELLED` บันทึก `cancelled_at` และ `cancel_reason`
-  - คืนสถานะตัวครุภัณฑ์จาก `RESERVED` กลับเป็น `AVAILABLE`
-  - **ข้อจำกัด:** 
-    - `DEPARTMENT_STAFF` ยกเลิกได้เฉพาะตอนสถานะ `PENDING_APPROVAL` เท่านั้น
-    - เจ้าหน้าที่ศูนย์ฯ ยกเลิกได้ทั้งตอน `PENDING_APPROVAL` และ `APPROVED`
-    - ทุก Role ห้ามยกเลิกเมื่อเข้าสู่สถานะ `BORROWED`
-
----
-
-### 7. ดึงรายการประวัติการยืม (List Borrowings)
-* **Endpoint:** `GET /borrowings`
-* **Query Parameters (ตัวกรอง):**
-  - `page` (number): หน้าที่ต้องการดึง
-  - `limit` (number): จำนวนรายการต่อหน้า
-  - `assetId` (string)
-  - `borrowerId` (string)
-  - `borrowStatusId` (number)
-* **สิทธิ์การมองเห็น (Scope):**
-  - หากเข้าใช้งานด้วยสิทธิ์ `DEPARTMENT_STAFF` ระบบจะกรองให้เห็นเฉพาะรายการที่เป็นของ **แผนกเดียวกันกับตนเอง** โดยอัตโนมัติเพื่อป้องกันข้อมูลแผนกอื่นรั่วไหล
-
----
-
----
-
-### 8. ดึงรายละเอียดของรายการยืมแบบเจาะจง (Get Borrowing Details)
-* **Endpoint:** `GET /borrowings/:id`
-* **รายละเอียดการทำงาน:**
-  - ส่งรายละเอียดเชิงลึกของคำขอนั้นๆ รวมถึงวันเวลาสำคัญ (`createdAt`, `approved_at`, `handover_date`, `return_date`, `cancelled_at`, `rejected_at`)
-  - คุ้มครองความปลอดภัย หากเป็น `DEPARTMENT_STAFF` จะดึงข้อมูลได้เฉพาะคำขอที่อยู่ในแผนกเดียวกันเท่านั้น (ถ้าเรียกข้ามแผนกจะได้ `403 Forbidden`)
-
----
-
-## 📋 ฟิลด์ข้อมูลที่เพิ่มขึ้นมาใหม่ (New Database Fields)
-
-ในตารางประวัติการยืม-คืน (`BorrowTransaction`) มีการเพิ่มฟิลด์เหล่านี้ขึ้นมาจากระบบเดิม เพื่อใช้ในการบันทึกเวลาทำรายการ (Audit timestamps) และบันทึกเหตุผลยกเลิก:
-
-| ฟิลด์ใหม่ (API property) | ประเภทข้อมูล | ความหมาย / การบันทึกค่า |
+| ประเด็นเปรียบเทียบ | 🚫 Cancel (`CANCELLED` - ยกเลิกคำขอ) | 🛑 Reject (`REJECTED` - ปฏิเสธคำขอ) |
 |---|---|---|
-| **`approved_at`** | `DateTime?` | บันทึกเวลาที่เจ้าหน้าที่กดอนุมัติคำขอ (เปลี่ยนสถานะเป็น `APPROVED`) |
-| **`handover_date`** | `DateTime?` | บันทึกเวลาที่ส่งมอบครุภัณฑ์จริงให้กับผู้ยืม (เปลี่ยนสถานะเป็น `BORROWED`) |
-| **`cancelled_at`** | `DateTime?` | บันทึกเวลาที่ทำการยกเลิกคำขอสำเร็จ (เปลี่ยนสถานะเป็น `CANCELLED`) |
-| **`rejected_at`** | `DateTime?` | บันทึกเวลาที่เจ้าหน้าที่กดปฏิเสธคำขอ (เปลี่ยนสถานะเป็น `REJECTED`) |
-| **`cancel_reason`** | `String?` | เก็บข้อความระบุเหตุผลในการกดยกเลิกรายการ |
-
-*หมายเหตุ: ฟิลด์ทั้งหมดด้านบนเป็นประเภท **Nullable** (สามารถส่งค่าคืนกลับมาเป็น `null` ได้ หากคำขอยังไม่ดำเนินมาถึงขั้นตอนนั้นๆ เช่น หากคำขอเพิ่งสร้าง จะมีเพียง `createdAt` ส่วนฟิลด์ที่เหลือจะเป็น `null` ทั้งหมด)*
-
----
-
-## 🔒 การจองสถานะครุภัณฑ์ (`RESERVED`)
-
-เพื่อป้องกันไม่ให้ผู้ใช้คนอื่นเข้ามากดยืมครุภัณฑ์ชิ้นเดียวกันซ้ำซ้อนในระหว่างที่คำขอยังคงค้างอยู่ในระบบ:
-
-1. **เมื่อยื่นคำขอยืมสำเร็จ (`PENDING_APPROVAL`)**:
-   - ระบบจะสลับ AvailabilityStatus ของตัวครุภัณฑ์ (Asset) ตัวนั้นจาก **`AVAILABLE`** (ว่างพร้อมใช้งาน) ➔ **`RESERVED`** (ถูกจอง/รออนุมัติ) โดยทันที
-2. **เมื่อคำขอได้รับการอนุมัติ (`APPROVED`)**:
-   - ตัวครุภัณฑ์จะยังคงล็อกอยู่ที่สถานะ **`RESERVED`** ต่อไป เพื่อรอขั้นตอนการมาส่งมอบหรือมารับของจริง
-3. **เมื่อมีการส่งมอบของจริงสำเร็จ (`BORROWED`)**:
-   - สถานะ AvailabilityStatus ของครุภัณฑ์จะเปลี่ยนเป็น **`BORROWED`** (ถูกยืม)
-4. **กรณีคำขอถูกยกเลิก หรือถูกปฏิเสธ (`CANCELLED` / `REJECTED`)**:
-   - ตัวครุภัณฑ์จะคลายการจอง และสลับจาก **`RESERVED`** ➔ กลับมาเป็น **`AVAILABLE`** (ว่างพร้อมใช้งาน) ทันที เพื่อให้ผู้ใช้อื่นสามารถกดยืมต่อได้
-
-* **Frontend Best Practice:** บน UI ของการแสดงรายการครุภัณฑ์ หากตัวเครื่องมีสถานะเป็น `RESERVED` ควรปิดปุ่มกดขอยืม (Disable) และแสดงป้ายสถานะ เช่น **"ถูกจอง / รอส่งมอบ"** เพื่อป้องกันผู้ใช้ส่งคำขอซ้ำซ้อนเข้ามา
+| **แนวคิด / เจตนา (Intent)** | **"ผู้ยืมเปลี่ยนใจไม่ขอยืมแล้ว"**<br>(ถอนคำขอเนื่องจากหมดความจำเป็น) | **"เจ้าหน้าที่ศูนย์ฯ ไม่อนุมัติคำขอ"**<br>(ไม่อนุมัติเนื่องจากไม่ผ่านเงื่อนไข) |
+| **ผู้มีสิทธิ์ทำรายการ** | • **ฝั่งผู้ยืม/วอร์ด**: ยกเลิกได้ในสถานะ `PENDING_APPROVE`<br>• **เจ้าหน้าที่ศูนย์ฯ**: ยกเลิกแทนผู้ยืมได้ในสถานะ `PENDING_APPROVE` และ `APPROVED` | • **เฉพาะเจ้าหน้าที่ศูนย์ฯ (`ASSET_CENTER_STAFF`, `ADMIN`) เท่านั้น**<br>(ผู้ยืม/วอร์ดไม่มีสิทธิ์ปฏิเสธคำขอตนเอง) |
+| **สถานะที่รองรับ** | ทำรายการได้ในสถานะ **`PENDING_APPROVE`** และ **`APPROVED`** | ทำรายการได้เฉพาะในสถานะ **`PENDING_APPROVE`** (ก่อนอนุมัติ) |
+| **สาเหตุทั่วไป** | • ผู้ป่วยย้ายห้อง<br>• วอร์ดพบเครื่องสำรองอื่นใช้งานแทนแล้ว<br>• คีย์ข้อมูลวันที่ยืมผิดพลาดต้องการยกเลิกสร้างใหม่ <br>• (cancel จากเจ้าหน้าที่ศูนย์) หลังจากอนุมัติแล้วเครื่องพังกระทันหัน|• คำขอระบุวัตถุประสงค์ไม่ชัดเจน/ผิดระเบียบ |
+| **API Endpoint & DTO** | `PATCH /borrowings/:id/cancel`<br>(`CancelBorrowDto`: `reason`) | `PATCH /borrowings/:id/reject`<br>(`RejectBorrowDto`: `reason`) |
+| **ฟิลด์ Audit Trail ที่บันทึก** | `cancelled_by_user_id`, `cancelled_at`, `cancel_reason` | `rejected_by_user_id`, `rejected_at`, `reject_remark` |
 
 ---
 
-### 9. การดึงข้อมูลรายการยืม (Transaction) จากข้อมูลครุภัณฑ์ (Asset)
-ในบางกรณีหน้า Frontend อาจมีข้อมูลของตัวครุภัณฑ์ (Asset) อยู่แล้ว และต้องการทราบว่า "ครุภัณฑ์ชิ้นนี้กำลังถูกใครยืมอยู่หรือไม่ หรือมีคำขอที่ค้างรออนุมัติอยู่ไหม"
-* **การทำงานฝั่ง Backend:**
-  * เมื่อ Frontend เรียกดูข้อมูลครุภัณฑ์ผ่าน `GET /assets` หรือ `GET /assets/:id` ระบบจะทำการดึงข้อมูลรายการยืมล่าสุดที่ยังไม่สิ้นสุดพ่วงมาด้วยในฟิลด์ **`currentBorrowing`** โดยอัตโนมัติ
-* **ข้อมูลใน Object ของ Asset (`currentBorrowing`):**
-  * หากครุภัณฑ์นั้นว่างอยู่และไม่มีคำขอยืมใดๆ ค้างอยู่:
-    `currentBorrowing` จะมีค่าเป็น `null`
-  * หากครุภัณฑ์นั้นมีสถานะการยืมเป็น `BORROWED` (กำลังยืม) หรือ `PENDING_APPROVAL` (กำลังรออนุมัติ):
-    `currentBorrowing` จะมี Object รายละเอียดการยืมล่าสุดแนบมาด้วย ตัวอย่างรูปแบบข้อมูล:
-    ```json
-    {
-      "id": "uuid-ของ-transaction",
-      "borrower_id": "uuid-ของผู้ยืม",
-      "borrow_status_id": 21,
-      "request_source": "SELF_SERVICE",
-      "delivery_method": "PICKUP",
-      "createdAt": "2026-08-30T02:00:00Z",
-      "borrower": {
-        "id": "uuid-ของผู้ยืม",
-        "employeeId": "GOV-67005",
-        "firstname": "System",
-        "lastname": "Dept Staff"
-      },
-      "borrowStatus": {
-        "id": 21,
-        "code": "PENDING_APPROVAL",
-        "name": "รออนุมัติ"
-      }
-    }
-    ```
-* **Frontend Best Practice:** 
-  * สำหรับหน้าแสดงรายการครุภัณฑ์ (Asset List) หรือหน้ารายละเอียดครุภัณฑ์ (Asset Detail) สามารถเช็กค่า `asset.currentBorrowing` เพื่อนำข้อมูลผู้ยืมล่าสุดหรือสถานะคำขอยื่นยืมขึ้นมาแสดงผลคู่กับตัวเครื่องได้ทันทีโดยไม่ต้องทำการยิง API แยกไปที่ฝั่ง `/borrowings` อีกรอบ
+## 3. ฟังก์ชันการคืนครุภัณฑ์ 2 รูปแบบ (The 2-Case Return Model)
+
+### 🚚 รูปแบบที่ 1: วอร์ดแจ้งให้ไปรับเครื่อง (`staff_pickup` - 3 Steps Dispatch)
+ใช้สำหรับเครื่องมือแพทย์ชิ้นใหญ่ หรือวอร์ดติดเคสผู้ป่วยไม่สะดวกเดินมาส่งเอง
+1. **วอร์ดแจ้งคืน (`PATCH /borrowings/:id/request-return`)**
+   - ผู้ทำรายการ: `DEPARTMENT_STAFF`, `PARCEL_STAFF` (ผู้ยืมหรือคนในแผนกเดียวกัน)
+   - สถานะ: `BORROWED` ➔ `PENDING_RETURN` (รอรับคืน)
+   - ครุภัณฑ์: ปรับเป็น `UNAVAILABLE` (ล็อกเครื่อง ป้องกันการยืมซ้ำ)
+   - บันทึก: `returned_by_user_id = session.user.id`, `return_method = staff_pickup`, `return_date = now`
+2. **เจ้าหน้าที่ศูนย์ฯ กดรับเรื่องว่าจะไปเอาเครื่อง (`PATCH /borrowings/:id/claim-pickup`)**
+   - ผู้ทำรายการ: `ASSET_CENTER_STAFF`, `ADMIN`
+   - สถานะ: `PENDING_RETURN` ➔ `IN_PICKUP` (กำลังไปรับเครื่อง)
+   - บันทึก: `received_by_user_id = session.user.id` (ล็อกเจ้าหน้าที่ศูนย์ฯ ผู้รับผิดชอบ เพื่อป้องกันเจ้าหน้าที่ท่านอื่นเดินไปหยิบเครื่องซ้ำซ้อน)
+3. **เจ้าหน้าที่ศูนย์ฯ นำเครื่องเข้าคลัง & ตรวจรับเสร็จสิ้น (`PATCH /borrowings/:id/complete-return`)**
+   - ผู้ทำรายการ: `ASSET_CENTER_STAFF`, `ADMIN`
+   - สถานะ: `IN_PICKUP` ➔ `RETURNED`
+   - บันทึก: `returnCondition` (`Normal` | `Damage`) และ `returnRemark`
+   - ครุภัณฑ์: ปรับเป็น `AVAILABLE` + `NORMAL` (กรณีปกติ) หรือ `UNAVAILABLE` + `DAMAGED` (กรณีชำรุด)
+
+### 🏥 รูปแบบที่ 2: วอร์ดเดินมาส่งเองที่เคาน์เตอร์ (`self_return` - 1 Step Desk Return)
+ใช้สำหรับเครื่องชิ้นเล็ก พกพาง่าย ถือมาส่งที่เคาน์เตอร์ศูนย์ฯ โดยไม่ต้องกดแจ้งล่วงหน้า
+- **รับคืนหน้าเคาน์เตอร์ (`PATCH /borrowings/:id/return`)**
+  - ผู้ทำรายการ: `ASSET_CENTER_STAFF`, `ADMIN`
+  - บังคับระบุ: `returnedByUserId` (รหัสพนักงานผู้นำของมาส่ง) และ `returnCondition`
+  - บันทึก: `return_method = self_return`, `returned_by_user_id = retUser.id`, `received_by_user_id = session.user.id`
+  - สถานะ: `BORROWED` ➔ `RETURNED` ทันทีในคลิกเดียว
 
 ---
 
-## ⚠️ การจัดการ Error รหัส 409 (Race Condition Protection)
-ระบบมีกลไกป้องกันการกดย้ำหรือการกดพร้อมกันจากผู้ใช้หลายคน (เช่น คนนึงกดอนุมัติ อีกคนกดยกเลิกพร้อมกัน)
-* หากกระบวนการมีปัญหาเนื่องจากสถานะเปลี่ยนไปก่อนแล้ว ระบบจะตอบกลับด้วยสถานะ **`HTTP 409 Conflict`**
-* **Frontend Best Practice:** หากได้รับ HTTP 409 ให้แสดงข้อความแจ้งเตือนผู้ใช้ เช่น *"รายการนี้ได้รับการประมวลผลไปก่อนหน้านี้แล้ว กรุณารีเฟรชหน้าจอเพื่ออัปเดตข้อมูล"* แทนการแจ้งพังทั่วไป
+## 4. การปิดช่องโหว่ความปลอดภัย (Security & Integrity Fixes)
+
+1. **ปิดช่องโหว่ `returnedByUserId` (Department Scoping & Zero Fallback)**
+   - **บังคับระบุ `returnedByUserId`**: ในการคืนหน้าเคาน์เตอร์ (`ReturnAssetBorrowDto`) ต้องระบุรหัสพนักงานเสมอ
+   - **ตัด False Fallback**: ยกเลิกการดึง `borrower_id` มาใส่แทนอัตโนมัติอย่างถาวร
+   - **ตรวจสอบแผนกเข้มงวด**: ระบบตรวจสอบว่าผู้ที่นำของมาส่ง (`retUser`) ต้องเป็น **ผู้ยืมตัวจริง** หรือ **สังกัดแผนกเดียวกันกับผู้ยืม** เท่านั้น หากระบุคนข้ามแผนกจะโดนปฏิเสธด้วย `BadRequestException`
+2. **ป้องกัน Silent Fail (Optimistic Locking & State Safeguards)**
+   - ตรวจสอบ `assetUpdate.count > 0` ในทุกขั้นตอนการปรับสถานะครุภัณฑ์ (`rejectBorrow`, `cancelBorrow`, `requestReturn`, `completeReturn`, `returnAsset`) หากเกิด Concurrency Conflict จะ Throw `ConflictException` และ Rollback ทันที
+3. **ป้องกันการสวมรอยขอยืม (`createBorrow`)**
+   - ตรวจสอบการมีอยู่ของ Asset ก่อน (`tx.asset.findUnique`) หากไม่พบให้ HTTP 404
+   - หาก Asset ไม่พร้อมยืม จะแจ้งรายละเอียดสถานะและสภาพจริงให้ผู้ใช้ทราบด้วย HTTP 409
+
+---
+
+## 5. ระบบ Full Actor Audit Trail
+
+ทุก Event ในวงจรชีวิต `BorrowTransaction` จะบันทึกทั้ง **เวลา (`at`/`date`)** และ **ผู้ทำรายการ (`by_user_id`)** จาก Login Session อัตโนมัติ:
+- `created_by_user_id`: ผู้คีย์สร้างเอกสารคำขอ
+- `approved_by_user_id`: เจ้าหน้าที่ศูนย์ฯ ผู้อนุมัติคำขอ
+- `handover_by_user_id`: เจ้าหน้าที่ศูนย์ฯ ผู้ส่งมอบ/จ่ายเครื่อง
+- `returned_by_user_id`: พยาบาล/ผู้ส่งมอบเครื่องฝั่งวอร์ด
+- `received_by_user_id`: เจ้าหน้าที่ศูนย์ฯ ผู้รับตรวจรับเครื่องเข้าคลัง
+- `rejected_by_user_id`: เจ้าหน้าที่ศูนย์ฯ ผู้กดปฏิเสธคำขอ
+- `cancelled_by_user_id`: ผู้กดยกเลิกคำขอ
+
+*หมายเหตุ: ฟิลด์ประวัติทั้งหมดเป็นประเภท **Nullable** (ส่งคืนค่า `null` หากรายการยังดำเนินมาไม่ถึงขั้นตอนนั้นๆ)*
+
+---
+
+## 6. การจองสถานะครุภัณฑ์ (`RESERVED`) & การแสดงผลหน้าบ้าน
+
+เพื่อป้องกันไม่ให้ผู้ใช้คนอื่นเข้ามากดยืมครุภัณฑ์ชิ้นเดียวกันซ้อนในระหว่างที่คำขอยังค้างในระบบ:
+1. **ยื่นคำขอยืมสำเร็จ (`PENDING_APPROVE`)**: เครื่องสลับจาก `AVAILABLE` ➔ `RESERVED`
+2. **อนุมัติแล้ว (`APPROVED`)**: เครื่องยังคงล็อกอยู่ที่ `RESERVED` เพื่อรอการส่งมอบ
+3. **ส่งมอบเครื่อง (`BORROWED`)**: เครื่องสลับจาก `RESERVED` ➔ `BORROWED`
+4. **ถูกยกเลิก หรือ ปฏิเสธ (`CANCELLED` / `REJECTED`)**: คลายการจอง คืนสลับจาก `RESERVED` ➔ กลับมาเป็น `AVAILABLE` ทันที
+
+* **Frontend Best Practice:** บน UI การแสดงรายการครุภัณฑ์ หากตัวเครื่องมีสถานะเป็น `RESERVED` หรือ `BORROWED` ควรปิดปุ่มกดขอยืม (Disable) และแสดงป้ายสถานะ เช่น **"ถูกจอง / รอส่งมอบ"** หรือ **"กำลังถูกยืม"**
+
+---
+
+## 7. การดึงข้อมูลรายการยืมล่าสุดผ่านตัวครุภัณฑ์ (`currentBorrowing`)
+
+เมื่อเรียกดูข้อมูลครุภัณฑ์ผ่าน `GET /assets` หรือ `GET /assets/:id` ระบบจะแนบข้อมูลรายการยืมล่าสุดที่ยังไม่สิ้นสุดมาในฟิลด์ **`currentBorrowing`** โดยอัตโนมัติ:
+- หากครุภัณฑ์ว่าง (`AVAILABLE`): `currentBorrowing` มีค่าเป็น `null`
+- หากครุภัณฑ์ถูกยืม/จองอยู่ (`BORROWED`, `RESERVED`, `PENDING_APPROVE`, `PENDING_RETURN`, `IN_PICKUP`): จะแนบ Object รายละเอียดคำขอยืมพร้อมข้อมูลผู้ยืมและสถานะล่าสุด
+
+* **Frontend Best Practice:** สามารถเช็ก `asset.currentBorrowing` เพื่อนำข้อมูลผู้ยืมล่าสุดหรือสถานะคำขอขึ้นมาแสดงผลคู่กับตัวเครื่องได้ทันทีโดยไม่ต้องยิง API แยกไปที่ `/borrowings` ซ้ำอีกรอบ
+
+---
+
+## 8. การจัดการ Error รหัส HTTP 409 (Race Condition Protection)
+
+ระบบมีกลไกป้องกันการกดปุ่มย้ำหรือการกดพร้อมกันจากผู้ใช้หลายคน (เช่น คนหนึ่งกดอนุมัติ อีกคนกดยกเลิกพร้อมกัน)
+- หากเกิดปัญหา Concurrency ระบบจะตอบกลับด้วย **`HTTP 409 Conflict`**
+- **Frontend Best Practice:** หากได้รับ HTTP 409 ให้แสดงข้อความแจ้งเตือนผู้ใช้ เช่น *"รายการนี้ได้รับการประมวลผลไปก่อนหน้านี้แล้ว กรุณารีเฟรชหน้าจอเพื่ออัปเดตข้อมูล"*
+
+---
+
+## 9. สรุปผลการทดสอบ (Verification Status)
+
+- **Database Seed**: `pnpm tsx prisma/seed.ts` (Seeded 8 BorrowStatuses และข้อมูลจำลองสมบูรณ์)
+- **TypeScript Check**: `pnpm tsc --noEmit` (0 errors)
+- **Unit Tests**: `pnpm test` (**15/15 Test Suites passed, 72/72 Tests passed**)

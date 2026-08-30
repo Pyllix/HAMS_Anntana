@@ -38,6 +38,8 @@ const borrowStatuses = [
   { code: 'PENDING_APPROVE', name: 'รออนุมัติ' },
   { code: 'APPROVED', name: 'อนุมัติแล้ว/รอส่งมอบ' },
   { code: 'BORROWED', name: 'กำลังยืม' },
+  { code: 'PENDING_RETURN', name: 'รอรับคืน' },
+  { code: 'IN_PICKUP', name: 'กำลังไปรับเครื่อง' },
   { code: 'RETURNED', name: 'คืนแล้ว' },
   { code: 'REJECTED', name: 'ปฏิเสธ' },
   { code: 'CANCELLED', name: 'ยกเลิก' },
