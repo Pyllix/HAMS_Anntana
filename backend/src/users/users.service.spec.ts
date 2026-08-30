@@ -10,9 +10,11 @@ jest.mock('../auth/auth', () => ({
   auth: {
     api: {
       signUpEmail: jest.fn(),
+      setUserPassword: jest.fn(),
     },
   },
 }));
+
 
 import { auth } from '../auth/auth';
 
@@ -25,6 +27,9 @@ const mockPrismaService = {
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+  },
+  session: {
+    deleteMany: jest.fn(),
   },
   $transaction: jest.fn(),
 };
@@ -289,6 +294,18 @@ describe('UsersService', () => {
       expect(result).toEqual(updatedUser);
     });
 
+    it('should throw ConflictException if new email is already in use by another user', async () => {
+      mockPrismaService.user.findFirst
+        .mockResolvedValueOnce(mockUser) // findOne
+        .mockResolvedValueOnce({ id: 'other-uuid', email: 'taken@hospital.go.th' }); // findFirst email check
+
+      await expect(
+        service.update('user-uuid-1', { email: 'taken@hospital.go.th' } as any),
+      ).rejects.toThrow(new ConflictException('Email taken@hospital.go.th is already in use'));
+
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
     it('should throw NotFoundException when user does not exist', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
@@ -299,6 +316,42 @@ describe('UsersService', () => {
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // adminResetPassword()
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('adminResetPassword()', () => {
+    it('should reset user password via better-auth and delete existing sessions', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
+      mockPrismaService.session.deleteMany.mockResolvedValue({ count: 2 } as any);
+      jest.mocked(auth.api.setUserPassword).mockResolvedValue({} as any);
+
+      const result = await service.adminResetPassword('user-uuid-1', 'NewPassword123');
+
+      expect(auth.api.setUserPassword).toHaveBeenCalledWith({
+        headers: expect.any(Headers),
+        body: {
+          userId: 'user-uuid-1',
+          newPassword: 'NewPassword123',
+        },
+      });
+      expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-1' },
+      });
+      expect(result).toEqual({
+        message: 'Password for user jdoe has been successfully reset',
+      });
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.adminResetPassword('nonexistent-id', 'NewPassword123'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
 
   // ───────────────────────────────────────────────────────────────────────────
   // remove()

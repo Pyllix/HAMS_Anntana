@@ -10,6 +10,7 @@ import { auth } from '../auth/auth';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
 import { Prisma } from '@prisma/client';
+import type { Request } from 'express';
 
 @Injectable()
 export class UsersService {
@@ -123,20 +124,72 @@ export class UsersService {
 
   // ─── Update ───────────────────────────────────────────────────────────────────
 
-  /** Update user data (excluding email and password - use better-auth for those) */
+  /** Update user data (Admin only for email, password changed via dedicated endpoints) */
   async update(idOrEmployeeId: string, dto: UpdateUserDto) {
     const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found
 
-    const { sectionId, ...rest } = dto;
+    const { sectionId, email, ...rest } = dto;
+
+    if (email && email !== user.email) {
+      const emailExists = await this.prisma.user.findFirst({
+        where: {
+          email,
+          id: { not: user.id },
+        },
+      });
+
+      if (emailExists) {
+        throw new ConflictException(`Email ${email} is already in use`);
+      }
+    }
 
     return this.prisma.user.update({
       where: { id: user.id },
       data: {
         ...rest,
+        ...(email !== undefined && { email }),
         ...(sectionId !== undefined && { section_id: sectionId }),
       },
       omit: { deletedAt: true },
     });
+  }
+
+  // ─── Admin Reset Password ──────────────────────────────────────────────────
+
+  /** Admin resets/sets a user's password and revokes all active sessions */
+  async adminResetPassword(
+    idOrEmployeeId: string,
+    newPassword: string,
+    req?: Request,
+  ) {
+    const user = await this.findOne(idOrEmployeeId);
+
+    // Forward headers so better-auth admin plugin can verify admin session
+    const headers = new Headers();
+    if (req?.headers) {
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (value)
+          headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+      }
+    }
+
+    // Use better-auth admin API to update the user password
+    await auth.api.setUserPassword({
+      headers,
+      body: {
+        userId: user.id,
+        newPassword,
+      },
+    });
+
+    // Revoke all existing sessions for this user for security
+    await this.prisma.session.deleteMany({
+      where: { userId: user.id },
+    });
+
+    return {
+      message: `Password for user ${user.userName || user.email} has been successfully reset`,
+    };
   }
 
   // ─── Soft Delete ──────────────────────────────────────────────────────────────

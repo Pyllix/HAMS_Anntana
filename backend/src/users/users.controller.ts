@@ -9,8 +9,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -27,6 +29,8 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
+
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -83,17 +87,40 @@ export class UsersController {
   // ─── Update ────────────────────────────────────────────────────────────────
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Update User',
+    summary: 'Update User Profile / Email (Admin only)',
     description:
-      'Update user data excluding email and password (use better-auth for those)',
+      'Update user data including corporate email (excluding password) — Admin only',
   })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 409, description: 'Email already in use' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
+  }
+
+  // ─── Admin Reset Password ──────────────────────────────────────────────────
+
+  @Patch(':id/reset-password')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Admin Reset Password',
+    description:
+      'Admin sets a new password for a user without needing old password — revokes all user sessions',
+  })
+  @ApiParam({ name: 'id', description: 'User ID or Employee Code' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  adminResetPassword(
+    @Param('id') id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @Req() req: Request,
+  ) {
+    return this.usersService.adminResetPassword(id, dto.newPassword, req);
   }
 
   // ─── Soft Delete ───────────────────────────────────────────────────────────
