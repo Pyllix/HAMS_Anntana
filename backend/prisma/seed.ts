@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, RiskLevel, PmType, CalType } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { hashPassword } from 'better-auth/crypto';
@@ -38,7 +38,10 @@ const borrowStatuses = [
   { code: 'PENDING_APPROVAL', name: 'รออนุมัติ' },
   { code: 'APPROVED', name: 'อนุมัติแล้ว/รอส่งมอบ' },
   { code: 'BORROWED', name: 'กำลังยืม' },
+  { code: 'PENDING_VERIFICATION', name: 'รอตรวจสอบสภาพ' },
   { code: 'RETURNED', name: 'คืนแล้ว' },
+  { code: 'RETURNED_OPERATIONAL', name: 'คืนแล้ว (สภาพปกติ)' },
+  { code: 'RETURNED_DAMAGED', name: 'คืนแล้ว (ชำรุด)' },
   { code: 'REJECTED', name: 'ปฏิเสธ' },
   { code: 'CANCELLED', name: 'ยกเลิก' },
 ];
@@ -48,6 +51,27 @@ const assetTypes = [
   { name: 'คอมพิวเตอร์และอุปกรณ์', useful_life: 3 },
   { name: 'เฟอร์นิเจอร์', useful_life: 10 },
   { name: 'ยานพาหนะ', useful_life: 8 },
+];
+
+const acqTypes = [
+  { name: 'ติดมากับตึก', description: 'ครุภัณฑ์ที่ติดตั้งพร้อมอาคารสถานที่', isActive: true },
+  { name: 'รับโอน', description: 'รับโอนจากหน่วยงานอื่น', isActive: true },
+  { name: 'บริจาค', description: 'ได้รับบริจาคจากผู้มีจิตศรัทธา', isActive: true },
+  { name: 'จัดซื้อ', description: 'จัดซื้อตามงบประมาณประจำปี', isActive: true },
+];
+
+const budgetTypes = [
+  { name: 'เงินงบประมาณแผ่นดิน', fiscalYear: 2567, description: 'งบประมาณสนับสนุนจากรัฐ', isActive: true },
+  { name: 'เงินบำรุงโรงพยาบาล', fiscalYear: 2567, description: 'เงินรายได้ของโรงพยาบาล', isActive: true },
+  { name: 'เงินบริจาค', fiscalYear: 2567, description: 'เงินบริจาคเฉพาะกิจ', isActive: true },
+  { name: 'เงินกู้', fiscalYear: 2567, description: 'เงินกู้เพื่อการพัฒนา', isActive: true },
+];
+
+const equipmentTypes = [
+  { name: 'เครื่องมือการแพทย์ทั่วไป', description: 'อุปกรณ์และเครื่องมือแพทย์พื้นฐาน' },
+  { name: 'เครื่องมือตรวจวิเคราะห์', description: 'เครื่องมือตรวจในห้องปฏิบัติการ' },
+  { name: 'เครื่องมือช่วยชีวิต', description: 'อุปกรณ์ช่วยชีวิตฉุกเฉิน' },
+  { name: 'อุปกรณ์สำนักงานและไอที', description: 'อุปกรณ์สำนักงานทั่วไป' },
 ];
 
 const companies = [
@@ -165,6 +189,35 @@ async function main() {
     borrowStatusMap[b.code] = res.id;
   }
 
+  // 2.6 AcqType
+  console.log('📂 Seeding AcqType...');
+  for (const acq of acqTypes) {
+    const existing = await prisma.acqType.findFirst({ where: { name: acq.name } });
+    if (!existing) {
+      await prisma.acqType.create({ data: acq });
+    }
+  }
+
+  // 2.7 BudgetType
+  console.log('📂 Seeding BudgetType...');
+  for (const bt of budgetTypes) {
+    const existing = await prisma.budgetType.findFirst({ where: { name: bt.name } });
+    if (!existing) {
+      await prisma.budgetType.create({ data: bt });
+    }
+  }
+
+  // 2.8 EquipmentType
+  console.log('📂 Seeding EquipmentType...');
+  const eqTypeMap: Record<string, number> = {};
+  for (const eq of equipmentTypes) {
+    let existing = await prisma.equipmentType.findFirst({ where: { name: eq.name } });
+    if (!existing) {
+      existing = await prisma.equipmentType.create({ data: eq });
+    }
+    eqTypeMap[eq.name] = existing.id;
+  }
+
   // 3. Companies
   console.log('🏢 Seeding Companies...');
   const companyMap: Record<string, string> = {};
@@ -203,13 +256,15 @@ async function main() {
   // 6. System Users
   console.log('👤 Seeding System Users...');
   let adminId = '';
+  const userMap: Record<string, string> = {};
   for (const data of systemUsers) {
     let existing = await prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existing) {
-      adminId = existing.id;
+      userMap[data.userName] = existing.id;
+      if (data.role === 'ADMIN') adminId = existing.id;
       await prisma.user.update({
         where: { id: existing.id },
         data: { employeeId: data.employeeId },
@@ -220,11 +275,13 @@ async function main() {
 
     const sectionId = sectionMap[data.sectionCode];
     const hashedPassword = await hashPassword(data.password);
-    adminId = randomUUID();
+    const userId = randomUUID();
+    if (data.role === 'ADMIN') adminId = userId;
+    userMap[data.userName] = userId;
 
     await prisma.user.create({
       data: {
-        id: adminId,
+        id: userId,
         employeeId: data.employeeId,
         userName: data.userName,
         firstname: data.firstname,
@@ -254,94 +311,144 @@ async function main() {
   console.log('💻 Seeding Mock Assets...');
   const mockAssets = [
     {
+      noid: 'EQ-2567-0001',
       name: 'เครื่องวัดความดันโลหิต',
       model: 'BP-1000',
       serialNo: 'SN-BP-001',
-      gmdn: '16157',
+      budgetType: 'เงินงบประมาณแผ่นดิน',
+      acqType: 'จัดซื้อ',
+      acqDoc: 'DOC-2567-010',
       price: '15000',
-      warrantyDate: new Date('2028-01-01'),
+      warrantyDate: '2028-01-01',
       receivedDate: new Date('2024-01-01'),
-      riskLevel: 2,
-      isMedicalDevice: true,
+      pmType: PmType.IM,
+      pmIntervalMonth: 6,
+      calType: CalType.IC,
+      calIntervalMonth: 12,
+      equipment_type_id: eqTypeMap['เครื่องมือการแพทย์ทั่วไป'],
+      riskLevel: RiskLevel.MEDIUM,
+      isSpecial: false,
+      isBackup: true,
       remark: 'ใช้งานปกติ',
-      imageUrl: '',
+      imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef',
       section_id: sectionMap['OPD'],
       company_id: companyMap['COMP001'],
-      asset_type_id: typeMap['เครื่องมือแพทย์'],
+      type_id: typeMap['เครื่องมือแพทย์'],
       asset_status_id: statusMap['NORMAL'],
       availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['deptstaff'] || adminId,
     },
     {
+      noid: 'EQ-2567-0002',
       name: 'เครื่องคอมพิวเตอร์พกพา (Laptop)',
       model: 'ThinkPad T14',
       serialNo: 'PF-12345',
-      gmdn: '',
+      budgetType: 'เงินบำรุงโรงพยาบาล',
+      acqType: 'จัดซื้อ',
+      acqDoc: 'DOC-2567-015',
       price: '35000',
-      warrantyDate: new Date('2027-06-01'),
+      warrantyDate: '2027-06-01',
       receivedDate: new Date('2024-06-01'),
-      riskLevel: 1,
-      isMedicalDevice: false,
+      pmType: PmType.IM,
+      pmIntervalMonth: 12,
+      calType: CalType.IC,
+      calIntervalMonth: 0,
+      equipment_type_id: eqTypeMap['อุปกรณ์สำนักงานและไอที'],
+      riskLevel: RiskLevel.LOW,
+      isSpecial: false,
+      isBackup: false,
       remark: 'สำหรับเจ้าหน้าที่ IT',
-      imageUrl: '',
+      imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8',
       section_id: sectionMap['IT'],
       company_id: companyMap['COMP002'],
-      asset_type_id: typeMap['คอมพิวเตอร์และอุปกรณ์'],
+      type_id: typeMap['คอมพิวเตอร์และอุปกรณ์'],
       asset_status_id: statusMap['NORMAL'],
       availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['parcel'] || adminId,
     },
     {
+      noid: 'EQ-2567-0003',
       name: 'เตียงผู้ป่วย ICU',
       model: 'ICU-BED-Pro',
       serialNo: 'SN-BED-009',
-      gmdn: '34923',
+      budgetType: 'เงินงบประมาณแผ่นดิน',
+      acqType: 'จัดซื้อ',
+      acqDoc: 'DOC-2567-002',
       price: '120000',
-      warrantyDate: new Date('2029-01-01'),
+      warrantyDate: '2029-01-01',
       receivedDate: new Date('2024-02-01'),
-      riskLevel: 3,
-      isMedicalDevice: true,
+      pmType: PmType.EM,
+      pmIntervalMonth: 3,
+      calType: CalType.EC,
+      calIntervalMonth: 6,
+      equipment_type_id: eqTypeMap['เครื่องมือช่วยชีวิต'],
+      riskLevel: RiskLevel.HIGH,
+      isSpecial: true,
+      isBackup: false,
       remark: 'เตียงมีปัญหา รอซ่อมมอเตอร์',
-      imageUrl: '',
+      imageUrl: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d',
       section_id: sectionMap['ICU'],
       company_id: companyMap['COMP001'],
-      asset_type_id: typeMap['เฟอร์นิเจอร์'],
+      type_id: typeMap['เฟอร์นิเจอร์'],
       asset_status_id: statusMap['UNDER_REPAIR'],
       availability_status_id: availMap['UNAVAILABLE'],
+      owner_id: userMap['deptstaff'] || adminId,
     },
     {
+      noid: 'EQ-2567-0004',
       name: 'รถเข็นผู้ป่วย (Wheelchair)',
       model: 'WC-Standard',
       serialNo: 'SN-WC-001',
-      gmdn: '12345',
+      budgetType: 'เงินบริจาค',
+      acqType: 'บริจาค',
+      acqDoc: 'DOC-2567-088',
       price: '5000',
-      warrantyDate: new Date('2028-05-01'),
+      warrantyDate: '2028-05-01',
       receivedDate: new Date('2024-05-01'),
-      riskLevel: 1,
-      isMedicalDevice: true,
+      pmType: PmType.IM,
+      pmIntervalMonth: 6,
+      calType: CalType.IC,
+      calIntervalMonth: 0,
+      equipment_type_id: eqTypeMap['เครื่องมือการแพทย์ทั่วไป'],
+      riskLevel: RiskLevel.LOW,
+      isSpecial: false,
+      isBackup: true,
       remark: 'พร้อมใช้งาน สามารถยืมได้',
-      imageUrl: '',
+      imageUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982',
       section_id: sectionMap['OPD'],
       company_id: companyMap['COMP001'],
-      asset_type_id: typeMap['เครื่องมือแพทย์'],
+      type_id: typeMap['เครื่องมือแพทย์'],
       asset_status_id: statusMap['NORMAL'],
       availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['deptstaff'] || adminId,
     },
     {
+      noid: 'EQ-2567-0005',
       name: 'เครื่องฉายโปรเจคเตอร์',
       model: 'Epson EB-X41',
       serialNo: 'PJ-EPS-002',
-      gmdn: '',
+      budgetType: 'เงินบำรุงโรงพยาบาล',
+      acqType: 'จัดซื้อ',
+      acqDoc: 'DOC-2566-102',
       price: '18000',
-      warrantyDate: new Date('2026-08-01'),
+      warrantyDate: '2026-08-01',
       receivedDate: new Date('2023-08-01'),
-      riskLevel: 1,
-      isMedicalDevice: false,
+      pmType: PmType.IM,
+      pmIntervalMonth: 12,
+      calType: CalType.IC,
+      calIntervalMonth: 0,
+      equipment_type_id: eqTypeMap['อุปกรณ์สำนักงานและไอที'],
+      riskLevel: RiskLevel.LOW,
+      isSpecial: false,
+      isBackup: false,
       remark: 'ใช้สำหรับห้องประชุม สามารถยืมได้',
-      imageUrl: '',
+      imageUrl: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c',
       section_id: sectionMap['IT'],
       company_id: companyMap['COMP002'],
-      asset_type_id: typeMap['คอมพิวเตอร์และอุปกรณ์'],
+      type_id: typeMap['คอมพิวเตอร์และอุปกรณ์'],
       asset_status_id: statusMap['NORMAL'],
       availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['parcel'] || adminId,
     }
   ];
 

@@ -21,12 +21,14 @@ model User {
   section       Section?  @relation(fields: [section_id], references: [id])
   createdAssets Asset[]   @relation("CreatedBy")
   updatedAssets Asset[]   @relation("UpdatedBy")
+  ownedAssets   Asset[]   @relation("AssetOwner")
 
-  //Asset history relations
-  createdLostRecords     AssetLost[]         @relation("LostCreatedBy")
-  updatedLostRecords     AssetLost[]         @relation("LostUpdatedBy")
-  createdDisposalRecords AssetDisposal[]     @relation("DisposalCreatedBy")
-  updatedDisposalRecords AssetDisposal[]     @relation("DisposalUpdatedBy")
+  //Transfer relations
+  requestedTransfers Transfer[] @relation("TransferRequestedBy")
+  approvedTransfers  Transfer[] @relation("TransferApprovedBy")
+  receivedTransfers  Transfer[] @relation("TransferReceivedBy")
+
+  //Borrow relations
   borrowedTransactions   BorrowTransaction[] @relation("BorrowerUser")
   returnedTransactions   BorrowTransaction[] @relation("ReturnedByUser")
   receivedTransactions   BorrowTransaction[] @relation("ReceivedByUser")

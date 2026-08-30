@@ -9,8 +9,6 @@ model AssetStatus {
   deletedAt       DateTime?       @map("deleted_at")
   //relations (One-to-Many: AssetStatus มีได้หลาย Asset)
   assets          Asset[]
-  // AssetDisposal ใช้ AssetStatus เพื่อบอกสถานะการจำหน่าย (รอจำหน่าย, จำหน่ายแล้ว)
-  disposalRecords AssetDisposal[] @relation("DisposalStatus")
 
   @@map("asset_status")
 }

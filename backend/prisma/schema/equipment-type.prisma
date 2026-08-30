@@ -1,0 +1,13 @@
+// Equipment Type model (ประเภทเครื่องมือ)
+
+model EquipmentType {
+  id          Int      @id @default(autoincrement()) @map("equipment_id")
+  name        String   @map("name") @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  assets Asset[]
+
+  @@map("equipment_type")
+}

@@ -13,6 +13,8 @@ model Section {
 
   users User[]
   asset Asset[]
+  transfersFrom Transfer[] @relation("TransferFromSection")
+  transfersTo   Transfer[] @relation("TransferToSection")
 
   @@map("sections")
 }

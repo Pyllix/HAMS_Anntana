@@ -28,7 +28,7 @@ model BorrowTransaction {
   return_condition ReturnCondition? @map("return_condition")
   return_method    ReturnMethod?    @map("return_method")
   return_remark    String?          @map("return_remark") @db.Text
-  reject_reason    String?          @map("reject_reason") @db.Text
+  reject_remark    String?          @map("reject_remark") @db.Text
 
   request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
   delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")
