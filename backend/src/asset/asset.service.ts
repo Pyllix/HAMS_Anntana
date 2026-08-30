@@ -150,15 +150,48 @@ export class AssetService {
     return this.transformAsset(asset);
   }
 
+  private async getConsistentAvailabilityStatusId(targetStatusCode: string): Promise<number | undefined> {
+    let targetAvailabilityCode: string;
+    if (['DAMAGED', 'UNDER_REPAIR', 'WAIT_DISPOSAL', 'DISPOSAL', 'LOST'].includes(targetStatusCode)) {
+      targetAvailabilityCode = 'UNAVAILABLE';
+    } else if (targetStatusCode === 'NORMAL') {
+      targetAvailabilityCode = 'AVAILABLE';
+    } else {
+      return undefined;
+    }
+
+    const avail = await this.prisma.availabilityStatus.findUnique({
+      where: { code: targetAvailabilityCode },
+    });
+    return avail?.id;
+  }
+
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
-    await this.findOne(id);
+    const asset = await this.findOne(id);
     const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = updateAssetDto as any;
-    const asset = await this.prisma.asset.update({
+
+    let autoAvailabilityId: number | undefined = undefined;
+    if (dto.asset_status_id && !dto.availability_status_id) {
+      const targetStatus = await this.prisma.assetStatus.findUnique({
+        where: { id: dto.asset_status_id },
+      });
+      if (targetStatus) {
+        this.validateStatusTransition(asset.status.code, targetStatus.code);
+        autoAvailabilityId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
+      }
+    }
+
+    const payload = toAssetDates(dto);
+    const updated = await this.prisma.asset.update({
       where: { id },
-      data: { ...toAssetDates(dto), updatedBy: userId },
+      data: {
+        ...payload,
+        ...(autoAvailabilityId !== undefined && { availability_status_id: autoAvailabilityId }),
+        updatedBy: userId,
+      },
       include: ASSET_INCLUDE,
     });
-    return this.transformAsset(asset);
+    return this.transformAsset(updated);
   }
 
   // ─── Status Edit ──────────────────────────────────────────────────────────
@@ -174,9 +207,15 @@ export class AssetService {
 
     this.validateStatusTransition(asset.status.code, targetStatus.code);
 
+    const availabilityStatusId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
+
     const updated = await this.prisma.asset.update({
       where: { id },
-      data: { asset_status_id: assetStatusId, updatedBy: userId },
+      data: {
+        asset_status_id: assetStatusId,
+        ...(availabilityStatusId !== undefined && { availability_status_id: availabilityStatusId }),
+        updatedBy: userId,
+      },
       include: ASSET_INCLUDE,
     });
     return this.transformAsset(updated);
