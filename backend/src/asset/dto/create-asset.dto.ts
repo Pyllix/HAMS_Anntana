@@ -201,11 +201,11 @@ export class CreateAssetDto {
 
     @ApiProperty({
         example: 1,
-        description: 'รหัสประเภทครุภัณฑ์',
+        description: 'รหัสประเภทครุภัณฑ์ (Asset Type ID)',
     })
     @IsInt()
     @IsNotEmpty()
-    asset_type_id: number;
+    type_id: number;
 
     @ApiProperty({
         example: 1,
