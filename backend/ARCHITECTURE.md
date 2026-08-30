@@ -108,6 +108,15 @@ HTTP Request
 - A `RolesGuard` checks role on each protected route via `@Roles()` decorator
 - Permission is role-based (RBAC) — no fine-grained permission flags at this stage
 
+### Password & Session Management
+- **Self-Service Change Password (`POST /auth/change-password`)**:
+  - Requires the current password and the new password.
+  - Automatically revokes other active sessions (`revokeOtherSessions: true` is hardcoded for safety) to log out other devices.
+- **Admin Reset Password (`PATCH /users/:id/reset-password`)**:
+  - Restricted to the `ADMIN` role.
+  - The admin sets a new password without needing the user's current password.
+  - Revokes all active sessions for the target user by removing them directly from the `sessions` table in PostgreSQL via Prisma.
+
 ---
 
 ## Feature Modules
