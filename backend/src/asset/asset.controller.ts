@@ -5,7 +5,7 @@ import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -100,6 +100,19 @@ export class AssetController {
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Update Asset Status directly', description: 'Directly update asset status (e.g. WAIT_DISPOSAL, NORMAL, LOST)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        asset_status_id: {
+          type: 'integer',
+          example: 4,
+          description: 'รหัสสถานะครุภัณฑ์ใหม่ที่ต้องการเปลี่ยนไป (เช่น 1=NORMAL, 4=WAIT_DISPOSAL, 6=LOST)'
+        }
+      },
+      required: ['asset_status_id']
+    }
+  })
   @ApiResponse({ status: 200, description: 'Asset status updated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
