@@ -2,23 +2,22 @@ import { IsString, IsNotEmpty, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO สำหรับสร้างระเบียนการจำหน่าย — ขั้นตอนที่ 1: รอจำหน่าย (WAIT_DISPOSAL)
+ * DTO สำหรับบันทึกรายการจำหน่ายครุภัณฑ์ (Disposal) ตาม hams_schema.dbml
  */
 export class CreateAssetDisposalDto {
-
     @ApiProperty({
-        example: 'ครุภัณฑ์หมดอายุการใช้งาน ไม่คุ้มค่าในการซ่อมแซม',
-        description: 'เหตุผลที่ต้องรอจำหน่าย',
+        example: 'DISP-2567-001',
+        description: 'หมายเลขเอกสารการจำหน่าย',
     })
     @IsString()
     @IsNotEmpty()
-    pendingReason: string;
+    disposalDocNo: string;
 
     @ApiProperty({
         example: '2024-06-01T00:00:00.000Z',
-        description: 'วันที่เริ่มรอจำหน่าย',
+        description: 'วันที่อนุมัติการจำหน่าย',
     })
     @IsDateString()
     @IsNotEmpty()
-    pendingAt: string;
+    approvedDate: string;
 }

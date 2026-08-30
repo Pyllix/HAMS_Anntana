@@ -229,7 +229,7 @@ export class AssetBorrowService {
         where: { id, borrow_status_id: pendingTxStatusId },
         data: {
           borrow_status_id: rejectedTxStatusId,
-          reject_reason: reason,
+          reject_remark: reason,
           rejected_at: new Date(),
         }
       });

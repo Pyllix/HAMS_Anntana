@@ -304,7 +304,7 @@ describe('AssetBorrowService', () => {
           where: expect.objectContaining({ id: 'tx-1' }),
           data: expect.objectContaining({
             borrow_status_id: 22,
-            reject_reason: 'Not available for external loan',
+            reject_remark: 'Not available for external loan',
           }),
         }),
       );

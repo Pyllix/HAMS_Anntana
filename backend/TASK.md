@@ -1,92 +1,57 @@
-# TASK.md - HAMS Backend Status & RBAC Implementation Checklist
+# TASK.md - HAMS Backend Status & Implementation Roadmap
 
 ## Overview
-เอกสารนี้เป็นบันทึกสรุปสถานะการพัฒนาระบบสิทธิ์และการเข้าถึงข้อมูล (Role-Based Access Control: RBAC) ของระบบ HAMS อ้างอิงตาม **Permission Matrix ใน [CONTEXT.md](file:///f:/BUU/HAMS/HAMS_Anntana/backend/CONTEXT.md)**
+เอกสารนี้เป็นบันทึกสรุปสถานะการพัฒนาและการปรับปรุงระบบ HAMS อ้างอิงตาม Data Dictionary ใน `docs/hams_schema.dbml` และ **[CONTEXT.md](file:///f:/BUU/HAMS/HAMS_Anntana/backend/CONTEXT.md)**
 
 ---
 
-## 1. สถานะการกำหนด RBAC ปัจจุบัน (สิ่งที่ทำไปแล้ว)
+## 1. งานปรับปรุงโครงสร้างฐานข้อมูล (Schema Alignment with `hams_schema.dbml`)
 
-- [x] **Prisma Schema Role Enum (`UserRole`)**:
-  - กำหนด enum `UserRole` 6 บทบาทใน [enum.prisma](file:///f:/BUU/HAMS/HAMS_Anntana/backend/prisma/schema/enum.prisma):
-    - `ADMIN`
-    - `MANAGER`
-    - `PARCEL_STAFF`
-    - `ASSET_CENTER_STAFF`
-    - `DEPARTMENT_STAFF`
-    - `MAINTENANCE_STAFF`
-- [x] **User Model Support**:
-  - ฟิลด์ `role UserRole @default(DEPARTMENT_STAFF)` ใน [user.prisma](file:///f:/BUU/HAMS/HAMS_Anntana/backend/prisma/schema/user.prisma)
-- [x] **Authentication Guard**:
-  - ติดตั้งและนำ `@UseGuards(AuthGuard)` มาใช้ในทุก Controller หลักเพื่อยืนยันตัวตน (Authentication) ผ่าน `@thallesp/nestjs-better-auth`
-- [x] **Inline Business Logic Role Checks (บางส่วน)**:
-  - ใน [asset-borrow.service.ts](file:///f:/BUU/HAMS/HAMS_Anntana/backend/src/asset-borrow/asset-borrow.service.ts):
-    - ตรวจสอบ `requestSource` (`SELF_SERVICE` vs `CENTER_SERVICE`) จาก `user.role`
-    - ตรวจสอบสิทธิ์การยืมแทนผู้คืน (`received_by_user_id`) เฉพาะ `ASSET_CENTER_STAFF`
+### Phase 1: Database Models & Prisma Schema Alignment (เสร็จสิ้น)
+- [x] **1.1 Enum Updates (`prisma/schema/enum.prisma`)**:
+  - [x] เพิ่ม `RiskLevel` enum (`HIGH` / สูง, `MEDIUM` / กลาง, `LOW` / ต่ำ, `UNSPECIFIED` / ไม่ระบุความเสี่ยง)
+  - [x] เพิ่ม `PmType` enum (`IM` / Internal Maintenance, `EM` / External Maintenance)
+  - [x] เพิ่ม `CalType` enum (`IC` / Internal Calibration, `EC` / External Calibration)
+- [x] **1.2 Master / Lookup Models (`prisma/schema/`)**:
+  - [x] สร้าง `AcqType` model (`acq_type_id`, `acq_type_name`, `is_active`, `description`) ใน `prisma/schema/acq-type.prisma`
+  - [x] สร้าง `BudgetType` model (`budget_type_id`, `name`, `is_active`, `fiscal_year`, `description`) ใน `prisma/schema/budget-type.prisma`
+  - [x] สร้าง `EquipmentType` model (`equipment_id`, `name`, `description`) ใน `prisma/schema/equipment-type.prisma`
+  - [x] ตรวจสอบ `AssetStatus` (คง `WAIT_DISPOSAL` ไว้) และ `BorrowStatus` (เพิ่ม `PENDING_VERIFICATION`, `RETURNED_OPERATIONAL`, `RETURNED_DAMAGED`)
+- [x] **1.3 Asset Model Alignment (`prisma/schema/asset.prisma`)**:
+  - [x] เพิ่มฟิลด์: `noid`, `owner_id` (FK → `User`), `budget_type`, `acq_type`, `acq_doc`, `pm_type`, `pm_interval_month`, `cal_type`, `cal_interval_month`, `equipment_type` (FK → `EquipmentType`), `risk_level` (Enum), `is_special`, `is_backup`
+  - [x] นำฟิลด์เก่าที่ไม่ตรงกับ DBML ออก: `gmdn`, `isMedicalDevice`, `disposalApprovedDate`
+- [x] **1.4 Disposal Model Migration (`prisma/schema/asset-history.prisma` ➔ `prisma/schema/disposal.prisma`)**:
+  - [x] ปรับตาราง `AssetDisposal` ให้เป็น `Disposal` (`disposal_id`, `disposal_doc_no`, `approved_date`, `asset_id`, `createdAt`, `updatedAt`, `deleteAt`) ตาม `hams_schema.dbml`
+  - [x] ยกเลิกตาราง `AssetLost` (บันทึกสถานะสูญหายผ่าน `asset_status_id = LOST` บนตัว Asset โดยตรง)
+- [x] **1.5 Transfer Model Creation (`prisma/schema/transfer.prisma`)**:
+  - [x] สร้าง `Transfer` model (`id`, `asset_id`, `transfer_doc_no`, `transfer_date`, `from_section_id`, `to_section_id`, `from_location`, `to_location`, `requested_by`, `approved_by`, `received_by`, `transfer_status`, `remark`)
+- [x] **1.6 Borrow Transaction Alignment (`prisma/schema/borrow.prisma`)**:
+  - [x] ปรับชื่อฟิลด์ `reject_reason` ➔ `reject_remark` ใน `BorrowTransaction` ให้ตรงกับ DBML
+- [x] **1.7 Database Migration & Seed (`prisma/seed.ts`)**:
+  - [x] รัน `pnpm prisma db push` และ Generate Prisma Client
+  - [x] อัปเดต `seed.ts` ให้ครอบคลุม Lookup data (`AcqType`, `BudgetType`, `EquipmentType`, Statuses ทั้งหมด) และข้อมูลจำลอง
+
+### Phase 2: Service & DTO Layer Updates (เสร็จสิ้น)
+- [x] **2.1 Asset DTO & Service**:
+  - [x] ปรับปรุง Create/Update Asset DTO ให้รองรับฟิลด์ใหม่ทั้งหมด
+  - [x] ปรับปรุง `AssetService` และ Controller ให้บันทึก/ดึงข้อมูลตาม Schema ใหม่
+  - [x] ปรับปรุง API `POST /asset/:id/disposal` ให้สอดคล้องกับโมเดล `Disposal` ใหม่
+- [x] **2.2 Asset Borrowing Service & DTOs**:
+  - [x] ปรับปรุง DTOs และ Services ให้ใช้ `reject_remark`
+  - [x] รองรับสถานะการคืน `PENDING_VERIFICATION`, `RETURNED_OPERATIONAL`, `RETURNED_DAMAGED`
+- [x] **2.3 Unit & E2E Tests Validation**:
+  - [x] อัปเดต Mock Data และรัน Test Suite (`pnpm test` - 15/15 test suites passed)
 
 ---
 
-## 2. รายการสิ่งที่ยังขาดและต้องดำเนินการเพิ่ม (Gap Analysis & Todo)
+## 2. โมเดลและฟังก์ชันที่รอการพัฒนาในเฟสถัดไป (Deferred Modules)
 
-### Phase 1: Core RBAC Infrastructure (ส่วนโครงสร้างสิทธิ์)
-- [x] **1.1 Custom Decorator `@Roles(...)`**:
-  - สร้าง `src/common/decorators/roles.decorator.ts` เพื่อใช้ระบุ Role ที่อนุญาตบน Endpoint/Controller
-- [x] **1.2 Custom Guard `RolesGuard`**:
-  - สร้าง `src/common/guards/roles.guard.ts` (Implement `CanActivate` อ่าน Metadata จาก `@Roles()` และตรวจสอบกับ `req.user.role`)
-- [x] **1.3 Global หรือ Controller-Level Guard Binding**:
-  - เปิดใช้งาน `RolesGuard` ควบคู่กับ `AuthGuard` globally ใน `AppModule`
-
-### Phase 2: Endpoint Authorization Annotations (การผูกสิทธิ์บน Endpoints)
-- [x] **2.1 UC11: UsersController (`src/users/users.controller.ts`)**:
-  - เพิ่ม `@Roles(UserRole.ADMIN)` สำหรับการสร้าง/แก้ไข/ลบ/คืนค่าผู้ใช้งาน
-- [x] **2.2 UC2 & UC6: AssetController (`src/asset/asset.controller.ts`)**:
-  - ระบุสิทธิ์ `@Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)` บน Endpoints ที่สร้าง/แก้ไข/รายงานชำรุด/จำหน่าย
-- [x] **2.3 UC1 & UC7: AssetBorrowController (`src/asset-borrow/asset-borrow.controller.ts`)**:
-  - ระบุสิทธิ์ `@Roles(...)` บน endpoints `POST /borrowings`, `PATCH /borrowings/:id/return`, `PATCH /borrowings/:id/cancel`
-- [x] **2.4 Setup & Lookup Controllers** (`asset-status`, `asset-type`, `availabilities`, `company`, `sections`):
-  - ระบุสิทธิ์การแก้ไข/จัดการ master data เฉพาะ Admin (หรือ Parcel Staff / Asset Center Staff ตามสิทธิ์ของแต่ละ Master Data)
-- [x] **2.5 Asset Table & currentBorrowing Relation (`src/asset/asset.service.ts`)**:
-  - แนบ `currentBorrowing` (ข้อมูลคำขอ/การยืมที่ active) ไปกับ `findAll` และ `findOne` ของ Asset เพื่อให้ตารางหน้าบ้านสามารถเปิด Dialog และกดยืนยันคืนได้ทันที
-- [x] **2.6 Approval Workflow & Status Transition (`src/asset-borrow/`)**:
-  - เพิ่มสถานะ `RESERVED` ใน `AvailabilityStatus` และ `PENDING_APPROVAL`, `REJECTED` ใน `BorrowStatus`
-  - ปรับปรุง `createBorrow`: สำหรับ Self-Service ให้เป็น `PENDING_APPROVAL` + `RESERVED`
-  - เพิ่ม Endpoint `PATCH /borrowings/:id/approve` และ `PATCH /borrowings/:id/reject` ควบคุมสิทธิ์ด้วย `@Roles(UserRole.ASSET_CENTER_STAFF)`
-  - ปรับปรุง `cancelBorrow` และ `returnAsset` ให้คืน Availability สอดคล้องกับสถานะใหม่
-- [x] **2.7 Borrow Security & Authorization Hardening (`src/asset-borrow/`)**:
-  - ปรับปรุงสิทธิ์การกดคืน `returnAsset`: อนุญาตให้ผู้ยืมหรือเจ้าหน้าที่ที่อยู่ใน **แผนกเดียวกัน (`user.section_id === borrower.section_id`)** หรือเจ้าหน้าที่ศูนย์/ผู้ดูแลระบบ สามารถทำรายการคืนได้
-  - ป้องกันการสวมรอยระบุ `dto.returnedByUserId` จากผู้ใช้ทั่วไป
-  - ตรวจสอบความพร้อมทางกายภาพของครุภัณฑ์ `asset.asset_status === 'NORMAL'` ก่อนสร้างการยืม
-  - ขอบเขตการมองเห็นรายการยืม-คืน `findAll` / `findOne` สำหรับ `DEPARTMENT_STAFF` ให้เห็นของแผนกตนเอง (`borrower.section_id`)
-- [x] **2.8 Borrow Security Audit Hardening - Round 2 (`src/asset-borrow/`)**:
-  - ปรับปรุง `cancelBorrow` ให้อนุญาตให้เจ้าหน้าที่ในแผนกเดียวกัน (`borrower.section_id === user.section_id`) กดยกเลิกคำขอแทนกันได้
-  - ปรับปรุง Error Message ใน `returnAsset` และ `cancelBorrow` ให้แจ้งสถานะปัจจุบันของคำขออย่างชัดเจน (เช่น `'PENDING_APPROVAL'`, `'RETURNED'`)
-  - เพิ่ม Helper `getCallerSectionId` พร้อม Fallback ดึง `section_id` จาก DB เพื่อการันตีความถูกต้องของข้อมูลแผนก แม้ Session เก่าจะไม่มี `section_id`
-- [x] **2.9 Borrow Concurrency Protection & Business Rule Refinement (`src/asset-borrow/`)**:
-  - ปรับปรุง `cancelBorrow`: จำกัดสิทธิ์ `DEPARTMENT_STAFF` / ผู้ยืม ให้กดยกเลิกคำขอได้เฉพาะสถานะ `PENDING_APPROVAL` เท่านั้น (หาก `BORROWED` ต้องคืนผ่าน `returnAsset`)
-  - เพิ่ม Atomic Optimistic Locking (`updateMany` ร่วมกับสถานะคาดหวังใน `where`) ทั้งใน `createBorrow`, `approveBorrow`, `rejectBorrow`, `cancelBorrow`, และ `returnAsset` ป้องกันคำขอประมวลผลซ้ำซ้อน / Race Condition 100%
-- [x] **2.10 Borrow State Workflow & Audit Timestamps (`src/asset-borrow/`)**:
-  - เพิ่มสถานะ `APPROVED` ใน `BorrowStatus` (Seed + DB)
-  - เพิ่มฟิลด์ `approved_at`, `handover_date`, `cancelled_at`, `rejected_at` และ `cancel_reason` ใน `BorrowTransaction`
-  - ปรับ `approveBorrow` ให้เปลี่ยนสถานะเป็น `APPROVED` พร้อมบันทึก `approved_at` (Asset คงสถานะ `RESERVED`)
-  - เพิ่ม Endpoint `PATCH /borrowings/:id/handover` สำหรับส่งมอบของจริง (เปลี่ยนเป็น `BORROWED` + บันทึก `handover_date` + เปลี่ยน Asset เป็น `BORROWED`)
-  - ปรับ `rejectBorrow` ให้บันทึก `rejected_at`
-  - ปรับ `cancelBorrow` ให้อัปเดต `cancelled_at` และ `cancel_reason` โดยอนุญาตให้เจ้าหน้าที่ศูนย์ฯ ยกเลิกคำขอสถานะ `APPROVED` ได้ (กรณี Approve ผิดพลาดแต่ยังไม่ได้ส่งมอบของจริง) และปิดการยกเลิกสถานะ `BORROWED` ทุก Role
- 
-### Phase 3: Data-Level Ownership & Department Scoping (`[Own]`)
-- [ ] **3.1 Department Scope Filter ใน Service Layer**:
-  - ปรับปรุง `findAll` / `findOne` ใน `AssetService` และ `AssetBorrowService`
-  - หาก `user.role === UserRole.DEPARTMENT_STAFF` ให้เพิ่มเงื่อนไข `where: { section_id: user.section_id }` โดยอัตโนมัติ
-- [ ] **3.2 User Lookup Endpoint สำหรับ Form/UI (`GET /users/lookup`)**:
-  - สร้าง Endpoint พิเศษเฉพาะดึงรายชื่อพนักงานสำหรับใส่ Dropdown ผู้ยืม/ผู้รับผิดชอบ ในหน้า Frontend (เพื่อไม่ต้องปลด `@Roles(ADMIN)` ออกจาก `GET /users`)
-- [ ] **3.3 Frontend RBAC Compatibility Audit**:
-  - ตรวจสอบ API Responses และแนบ Error handling กรณีเกิด 403 Forbidden บนหน้า Frontend Forms
-
-### Phase 4: RBAC สำหรับ Use Cases ที่รอการพัฒนา (Planned Modules)
-- [ ] **UC4: จัดการสต็อกอะไหล่** (`[F]` ASSET_CENTER_STAFF, PARCEL_STAFF | `[R]` MAINTENANCE_STAFF)
-- [ ] **UC5: สั่งซื้ออะไหล่** (`[F]` PARCEL_STAFF | `[Req]` ASSET_CENTER_STAFF, MAINTENANCE_STAFF | `[Approve]` MANAGER)
-- [ ] **UC8: จัดการงานซ่อมบำรุง** (`[F]` MAINTENANCE_STAFF | `[R]` ASSET_CENTER_STAFF, PARCEL_STAFF)
-- [ ] **UC9: อนุมัติรายจ่าย** (`[F]` MANAGER)
-- [ ] **UC10: ดูรายงาน & Dashboard** (`[F]` MANAGER | `[R]` ASSET_CENTER_STAFF, PARCEL_STAFF | `[Own]` DEPARTMENT_STAFF)
+- [ ] **Repair & Maintenance Ecosystem**:
+  - โมเดล: `RepairJob`, `RepairJobStep`, `StepMaster`, `MechanicRepair`, `Cause`, `JobStatus`, `JobType`, `TechCategory`
+- [ ] **Spare Parts Ecosystem**:
+  - โมเดล: `Sparepart`, `SparepartGroup`, `SparepartAdd`, `SparepartTxn`
+- [ ] **Transfer Management Module**:
+  - Module/Controller/Service สำหรับจัดการเอกสารการโอนย้ายครุภัณฑ์ (`Transfer`)
 
 ---
 
@@ -95,11 +60,11 @@
 | Use Case | ADMIN | MANAGER | ASSET_CENTER_STAFF | PARCEL_STAFF | MAINTENANCE_STAFF | DEPARTMENT_STAFF | Status |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|---|
 | **UC1: ยืม/คืน (Center)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
-| **UC2: ตรวจสอบครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[Own]` | ⚠️ ขาด Department Filter [Own] |
+| **UC2: ตรวจสอบครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[Own]` | ⚠️ รอปรับฟิลด์ใหม่ + Department Filter [Own] |
 | **UC3: ส่งซ่อมครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[F]` | `[Own]` | ⏳ รอพัฒนา Repair Module |
 | **UC4: สต็อกอะไหล่** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[-]` | ⏳ รอพัฒนา Spare Parts Module |
 | **UC5: สั่งซื้ออะไหล่** | `[R]` | `[Approve]` | `[Req]` | `[F]` | `[Req]` | `[-]` | ⏳ รอพัฒนา Purchase Module |
-| **UC6: สต็อกครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
+| **UC6: สต็อกครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ⚠️ รอปรับฟิลด์ Asset ใหม่ |
 | **UC7: ยืม/คืน (Self)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[Own]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **UC8: งานซ่อมบำรุง** | `[R]` | `[R]` | `[R]` | `[R]` | `[F]` | `[-]` | ⏳ รอพัฒนา Repair Module |
 | **UC9: อนุมัติรายจ่าย** | `[R]` | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | ⏳ รอพัฒนา Approval Module |

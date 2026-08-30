@@ -1,9 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
-import { CreateAssetLostDto } from './dto/create-asset-lost.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
-import { CompleteAssetDisposalDto } from './dto/complete-asset-disposal.dto';
 import { PrismaService } from 'src/prisma.service';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
@@ -12,18 +10,11 @@ import { Prisma } from '@prisma/client';
 /**
  * Asset Status Transition Map
  * กำหนดว่าแต่ละ target status รับ transition มาจาก status ใดได้บ้าง
- * อ้างอิงจาก asset_status_rule.md
- *
- * หมายเหตุ: DAMAGED → LOST / WAIT_DISPOSAL และ UNDER_REPAIR → LOST / WAIT_DISPOSAL
- * ถูกรวมไว้แต่ยังไม่มี endpoint สำหรับการเปลี่ยนไป DAMAGED / UNDER_REPAIR
  */
 const ALLOWED_FROM: Record<string, string[]> = {
-  // สูญหาย: มาจาก NORMAL, DAMAGED, UNDER_REPAIR ได้
   LOST: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR'],
-  // รอจำหน่าย: มาจาก NORMAL, DAMAGED, UNDER_REPAIR ได้
   WAIT_DISPOSAL: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR'],
-  // จำหน่าย: มาจาก WAIT_DISPOSAL เท่านั้น
-  DISPOSAL: ['WAIT_DISPOSAL'],
+  DISPOSAL: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR', 'WAIT_DISPOSAL'],
 };
 
 /** Include block ที่ใช้ซ้ำทุก asset query */
@@ -31,8 +22,10 @@ const ASSET_INCLUDE = {
   status: { select: { id: true, code: true, name: true } },
   availabilityStatus: { select: { id: true, code: true, name: true } },
   type: { select: { id: true, name: true } },
+  equipmentType: { select: { id: true, name: true } },
   section: { select: { id: true, code: true, name: true, building: true } },
   company: { select: { id: true, name: true } },
+  owner: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
   borrowTransactions: {
     where: {
       borrowStatus: {
@@ -68,28 +61,21 @@ const ASSET_INCLUDE = {
 } satisfies Prisma.AssetInclude;
 
 /**
- * แปลง date string “2022-01-01” → Date object สำหรับทุก DateTime field ของ Asset
- * Prisma ต้องการ Date object หรือ ISO-8601 แบบเต็ม — date-only string จะล้ม (premature end of input)
+ * แปลง date string → Date object สำหรับ DateTime field ของ Asset
  */
 function toAssetDates(dto: Record<string, any>) {
   return {
     ...dto,
     receivedDate: dto.receivedDate ? new Date(dto.receivedDate) : undefined,
-    warrantyDate: dto.warrantyDate ? new Date(dto.warrantyDate) : undefined,
-    disposalApprovedDate: dto.disposalApprovedDate ? new Date(dto.disposalApprovedDate) : undefined,
   };
 }
 
 @Injectable()
 export class AssetService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Status Transition Guard ─────────────────────────────────────────────
 
-  /**
-   * ตรวจสอบว่า asset สามารถเปลี่ยนไปยัง targetStatusCode ได้หรือไม่
-   * ตาม transition map ที่กำหนดใน asset_status_rule.md
-   */
   private validateStatusTransition(
     currentStatusCode: string,
     targetStatusCode: string,
@@ -116,7 +102,7 @@ export class AssetService {
   }
 
   async create(createAssetDto: CreateAssetDto, userId: string) {
-    const { createdBy: _ignore, ...dto } = createAssetDto as any;
+    const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = createAssetDto as any;
     const asset = await this.prisma.asset.create({
       data: { ...toAssetDates(dto), createdBy: userId, updatedBy: userId } as any,
       include: ASSET_INCLUDE,
@@ -135,6 +121,7 @@ export class AssetService {
             { name: { contains: query.search, mode: 'insensitive' } },
             { model: { contains: query.search, mode: 'insensitive' } },
             { serialNo: { contains: query.search, mode: 'insensitive' } },
+            { noid: { contains: query.search, mode: 'insensitive' } },
           ],
         }
       : {};
@@ -165,252 +152,117 @@ export class AssetService {
 
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
     await this.findOne(id);
-    const { createdBy: _ignore, ...dto } = updateAssetDto as any;
+    const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = updateAssetDto as any;
     const asset = await this.prisma.asset.update({
       where: { id },
-      data: { ...toAssetDates(dto), updatedBy: userId } as any,
+      data: { ...toAssetDates(dto), updatedBy: userId },
       include: ASSET_INCLUDE,
     });
     return this.transformAsset(asset);
   }
 
-  // ─── Lost History ─────────────────────────────────────────────────────────
+  // ─── Status Edit ──────────────────────────────────────────────────────────
 
-  /** ดึงประวัติการสูญหายของ Asset ทั้งหมด (paginated) */
-  async findAllLostRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async updateStatus(id: string, assetStatusId: number, userId: string) {
+    const asset = await this.findOne(id);
+    const targetStatus = await this.prisma.assetStatus.findUnique({
+      where: { id: assetStatusId },
+    });
+    if (!targetStatus) {
+      throw new NotFoundException(`AssetStatus #${assetStatusId} not found`);
+    }
+
+    this.validateStatusTransition(asset.status.code, targetStatus.code);
+
+    const updated = await this.prisma.asset.update({
+      where: { id },
+      data: { asset_status_id: assetStatusId, updatedBy: userId },
+      include: ASSET_INCLUDE,
+    });
+    return this.transformAsset(updated);
+  }
+
+  // ─── Disposal ─────────────────────────────────────────────────────────────
+
+  /** ดึงประวัติการจำหน่ายทั้งหมด (DISPOSAL) (paginated) */
+  async findAllDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AssetLostWhereInput = query.search
+    const where: Prisma.DisposalWhereInput = query.search
       ? {
-          asset: {
-            OR: [
-              { name: { contains: query.search, mode: 'insensitive' } },
-              { model: { contains: query.search, mode: 'insensitive' } },
-              { serialNo: { contains: query.search, mode: 'insensitive' } },
-            ],
-          },
+          OR: [
+            { disposalDocNo: { contains: query.search, mode: 'insensitive' } },
+            {
+              asset: {
+                OR: [
+                  { name: { contains: query.search, mode: 'insensitive' } },
+                  { model: { contains: query.search, mode: 'insensitive' } },
+                  { serialNo: { contains: query.search, mode: 'insensitive' } },
+                  { noid: { contains: query.search, mode: 'insensitive' } },
+                ],
+              },
+            },
+          ],
         }
       : {};
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.assetLost.findMany({
+      this.prisma.disposal.findMany({
         where,
-        orderBy: { discoveredAt: 'desc' },
-        include: { asset: { include: ASSET_INCLUDE }, creator: true, updater: true },
+        orderBy: { approvedDate: 'desc' },
+        include: { asset: { include: ASSET_INCLUDE } },
         skip,
         take: limit,
       }),
-      this.prisma.assetLost.count({ where }),
+      this.prisma.disposal.count({ where }),
     ]);
 
     return paginate(data as Record<string, unknown>[], total, page, limit);
   }
 
   /**
-   * รายงานครุภัณฑ์สูญหาย
-   * บันทึกลง asset_lost พร้อมรายละเอียดเหตุการณ์
-   */
-  async reportLost(id: string, dto: CreateAssetLostDto, userId: string) {
-    const asset = await this.findOne(id);
-    this.validateStatusTransition(asset.status.code, 'LOST');
-
-    const lostStatus = await this.prisma.assetStatus.findUnique({ where: { code: 'LOST' } });
-    if (!lostStatus) throw new NotFoundException('Status LOST not found');
-
-    return this.prisma.$transaction(async (prisma) => {
-      await prisma.asset.update({
-        where: { id },
-        data: { asset_status_id: lostStatus.id, updatedBy: userId },
-      });
-      return prisma.assetLost.create({
-        data: {
-          asset_id: id,
-          discoveredAt: new Date(dto.discoveredAt),
-          lastSeenLocation: dto.lastSeenLocation,
-          reason: dto.reason,
-          createdBy: userId,
-          updatedBy: userId,
-        },
-        include: { asset: { include: ASSET_INCLUDE }, creator: true },
-      });
-    });
-  }
-
-  /** ดึงประวัติการสูญหายของ Asset */
-  async findLostRecords(id: string) {
-    await this.findOne(id);
-    return this.prisma.assetLost.findMany({
-      where: { asset_id: id },
-      orderBy: { discoveredAt: 'desc' },
-      include: { creator: true, updater: true },
-    });
-  }
-
-  // ─── Disposal Workflow ────────────────────────────────────────────────────
-
-  /** ดึงประวัติรอจำหน่ายทั้งหมด (WAIT_DISPOSAL) (paginated) */
-  async findAllWaitDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.AssetDisposalWhereInput = {
-      disposalStatus: { code: 'WAIT_DISPOSAL' },
-      ...(query.search
-        ? {
-            asset: {
-              OR: [
-                { name: { contains: query.search, mode: 'insensitive' } },
-                { model: { contains: query.search, mode: 'insensitive' } },
-                { serialNo: { contains: query.search, mode: 'insensitive' } },
-              ],
-            },
-          }
-        : {}),
-    };
-
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.assetDisposal.findMany({
-        where,
-        orderBy: { pendingAt: 'desc' },
-        include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
-        skip,
-        take: limit,
-      }),
-      this.prisma.assetDisposal.count({ where }),
-    ]);
-
-    return paginate(data as Record<string, unknown>[], total, page, limit);
-  }
-
-  /** ดึงประวัติการจำหน่ายทั้งหมด (DISPOSAL) (paginated) */
-  async findAllCompletedDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.AssetDisposalWhereInput = {
-      disposalStatus: { code: 'DISPOSAL' },
-      ...(query.search
-        ? {
-            asset: {
-              OR: [
-                { name: { contains: query.search, mode: 'insensitive' } },
-                { model: { contains: query.search, mode: 'insensitive' } },
-                { serialNo: { contains: query.search, mode: 'insensitive' } },
-              ],
-            },
-          }
-        : {}),
-    };
-
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.assetDisposal.findMany({
-        where,
-        orderBy: { disposedAt: 'desc' },
-        include: { asset: { include: ASSET_INCLUDE }, disposalStatus: true, creator: true, updater: true },
-        skip,
-        take: limit,
-      }),
-      this.prisma.assetDisposal.count({ where }),
-    ]);
-
-    return paginate(data as Record<string, unknown>[], total, page, limit);
-  }
-
-  /**
-   * ขั้นตอนที่ 1: สร้างระเบียนรอจำหน่าย (PENDING_DISPOSAL)
-   * disposal_status_id ต้องชี้ไปที่ AssetStatus ที่มี code = 'PENDING_DISPOSAL'
+   * สร้างระเบียนจำหน่าย (Disposal) พร้อมปรับสถานะ Asset เป็น DISPOSAL
    */
   async createDisposal(id: string, dto: CreateAssetDisposalDto, userId: string) {
     const asset = await this.findOne(id);
-    this.validateStatusTransition(asset.status.code, 'WAIT_DISPOSAL');
-
-    const waitDisposalStatus = await this.prisma.assetStatus.findUnique({ where: { code: 'WAIT_DISPOSAL' } });
-    if (!waitDisposalStatus) throw new NotFoundException('Status WAIT_DISPOSAL not found');
-
-    return this.prisma.$transaction(async (prisma) => {
-      await prisma.asset.update({
-        where: { id },
-        data: { asset_status_id: waitDisposalStatus.id, updatedBy: userId },
-      });
-      return prisma.assetDisposal.create({
-        data: {
-          asset_id: id,
-          disposal_status_id: waitDisposalStatus.id,
-          pendingReason: dto.pendingReason,
-          pendingAt: new Date(dto.pendingAt),
-          createdBy: userId,
-          updatedBy: userId,
-        },
-        include: {
-          asset: { include: ASSET_INCLUDE },
-          disposalStatus: true,
-          creator: true,
-        },
-      });
-    });
-  }
-
-  /**
-   * ขั้นตอนที่ 2: อัปเดตระเบียนเป็นจำหน่ายแล้ว (DISPOSED)
-   * ตรวจสอบว่า disposal record มีอยู่จริงและเป็น PENDING ก่อนเสมอ
-   */
-  async completeDisposal(
-    assetId: string,
-    disposalId: string,
-    dto: CompleteAssetDisposalDto,
-    userId: string,
-  ) {
-    const asset = await this.findOne(assetId);
     this.validateStatusTransition(asset.status.code, 'DISPOSAL');
 
     const disposalStatus = await this.prisma.assetStatus.findUnique({ where: { code: 'DISPOSAL' } });
     if (!disposalStatus) throw new NotFoundException('Status DISPOSAL not found');
 
-    const disposal = await this.prisma.assetDisposal.findFirst({
-      where: { id: disposalId, asset_id: assetId },
-      include: { disposalStatus: true },
-    });
-    if (!disposal) {
-      throw new NotFoundException(`Disposal record #${disposalId} not found for asset #${assetId}`);
-    }
-    if (disposal.disposedAt !== null) {
-      throw new BadRequestException(`Disposal record #${disposalId} is already completed`);
-    }
+    const unavailableStatus = await this.prisma.availabilityStatus.findUnique({ where: { code: 'UNAVAILABLE' } });
+
     return this.prisma.$transaction(async (prisma) => {
       await prisma.asset.update({
-        where: { id: assetId },
-        data: { asset_status_id: disposalStatus.id, updatedBy: userId },
-      });
-      return prisma.assetDisposal.update({
-        where: { id: disposalId },
+        where: { id },
         data: {
-          disposal_status_id: disposalStatus.id,
-          disposedAt: new Date(dto.disposedAt),
-          disposalReason: dto.disposalReason,
-          remark: dto.remark,
+          asset_status_id: disposalStatus.id,
+          availability_status_id: unavailableStatus?.id,
           updatedBy: userId,
+        },
+      });
+
+      return prisma.disposal.create({
+        data: {
+          asset_id: id,
+          disposalDocNo: dto.disposalDocNo,
+          approvedDate: new Date(dto.approvedDate),
         },
         include: {
           asset: { include: ASSET_INCLUDE },
-          disposalStatus: true,
-          creator: true,
-          updater: true,
         },
       });
     });
   }
 
-  /** ดึงประวัติการจำหน่ายของ Asset */
+  /** ดึงประวัติการจำหน่ายของ Asset รายเครื่อง */
   async findDisposalRecords(id: string) {
     await this.findOne(id);
-    return this.prisma.assetDisposal.findMany({
+    return this.prisma.disposal.findMany({
       where: { asset_id: id },
-      orderBy: { pendingAt: 'desc' },
-      include: { disposalStatus: true, creator: true, updater: true },
+      orderBy: { approvedDate: 'desc' },
     });
   }
 }
