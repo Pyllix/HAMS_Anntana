@@ -75,7 +75,7 @@ export class AssetBorrowService {
     const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
     const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
 
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
 
     const targetAvailabilityId =
@@ -91,7 +91,28 @@ export class AssetBorrowService {
     const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update Asset availability atomically only if NORMAL and AVAILABLE
+      // 1. Verify Asset exists and is eligible
+      const existingAsset = await tx.asset.findUnique({
+        where: { id: dto.assetId },
+        include: { status: true, availabilityStatus: true },
+      });
+
+      if (!existingAsset) {
+        throw new NotFoundException(`Asset with ID ${dto.assetId} not found`);
+      }
+
+      if (
+        existingAsset.asset_status_id !== normalAssetStatusId ||
+        existingAsset.availability_status_id !== availableStatusId
+      ) {
+        const availName = existingAsset.availabilityStatus?.name || 'Not Available';
+        const statusName = existingAsset.status?.name || 'Unknown';
+        throw new ConflictException(
+          `Asset with ID ${dto.assetId} is not available for borrowing (Current Availability: '${availName}', Physical Status: '${statusName}'). Must be in NORMAL condition and AVAILABLE.`
+        );
+      }
+
+      // 2. Update Asset availability atomically only if NORMAL and AVAILABLE
       const assetUpdate = await tx.asset.updateMany({
         where: {
           id: dto.assetId,
@@ -102,19 +123,24 @@ export class AssetBorrowService {
       });
 
       if (assetUpdate.count === 0) {
-        throw new ConflictException(`Asset with ID ${dto.assetId} is not available for borrowing (must be in NORMAL condition and AVAILABLE).`);
+        throw new ConflictException(
+          `Asset with ID ${dto.assetId} has just been borrowed or reserved by another transaction.`
+        );
       }
 
-      // 2. Create BorrowTransaction
+      // 3. Create BorrowTransaction
       const transaction = await tx.borrowTransaction.create({
         data: {
           asset_id: dto.assetId,
           borrower_id: borrowerId,
+          created_by_user_id: user.id,
           borrow_status_id: targetTxStatusId,
           request_source: requestSource,
           delivery_method: dto.deliveryMethod,
           approved_at: requestSource === RequestSource.CENTER_SERVICE ? now : null,
+          approved_by_user_id: requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
           handover_date: requestSource === RequestSource.CENTER_SERVICE ? now : null,
+          handover_by_user_id: requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
         }
       });
 
@@ -123,7 +149,7 @@ export class AssetBorrowService {
   }
 
   async approveBorrow(id: string, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
     const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
 
     return this.prisma.$transaction(async (tx) => {
@@ -137,7 +163,7 @@ export class AssetBorrowService {
       }
 
       if (transaction.borrow_status_id !== pendingTxStatusId) {
-        throw new BadRequestException(`Only transactions in PENDING_APPROVAL status can be approved`);
+        throw new BadRequestException(`Only transactions in PENDING_APPROVE status can be approved`);
       }
 
       // Optimistic lock on BorrowTransaction update to APPROVED
@@ -146,6 +172,7 @@ export class AssetBorrowService {
         data: {
           borrow_status_id: approvedTxStatusId,
           approved_at: new Date(),
+          approved_by_user_id: user.id,
         }
       });
 
@@ -183,6 +210,7 @@ export class AssetBorrowService {
         data: {
           borrow_status_id: borrowedTxStatusId,
           handover_date: new Date(),
+          handover_by_user_id: user.id,
         }
       });
 
@@ -205,7 +233,7 @@ export class AssetBorrowService {
   }
 
   async rejectBorrow(id: string, reason: string | undefined, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
     const rejectedTxStatusId = await this.getStatusId('borrowStatus', 'REJECTED');
     const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
     const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
@@ -221,7 +249,7 @@ export class AssetBorrowService {
       }
 
       if (transaction.borrow_status_id !== pendingTxStatusId) {
-        throw new BadRequestException(`Only transactions in PENDING_APPROVAL status can be rejected`);
+        throw new BadRequestException(`Only transactions in PENDING_APPROVE status can be rejected`);
       }
 
       // Optimistic lock on BorrowTransaction update
@@ -231,6 +259,7 @@ export class AssetBorrowService {
           borrow_status_id: rejectedTxStatusId,
           reject_remark: reason,
           rejected_at: new Date(),
+          rejected_by_user_id: user.id,
         }
       });
 
@@ -239,10 +268,16 @@ export class AssetBorrowService {
       }
 
       // Optimistic lock on Asset update
-      await tx.asset.updateMany({
+      const assetUpdate = await tx.asset.updateMany({
         where: { id: transaction.asset_id, availability_status_id: reservedAvailabilityId },
         data: { availability_status_id: availableStatusId }
       });
+
+      if (assetUpdate.count === 0) {
+        throw new ConflictException(
+          `Failed to restore asset availability for asset ${transaction.asset_id}: asset availability has already changed`
+        );
+      }
 
       return tx.borrowTransaction.findUnique({ where: { id } });
     });
@@ -321,7 +356,6 @@ export class AssetBorrowService {
       }
 
       if (user.role === UserRole.ASSET_CENTER_STAFF) {
-        // Only Asset Center Staff acts as the receiver
         receivedByUserId = user.id;
       }
 
@@ -346,21 +380,33 @@ export class AssetBorrowService {
       // Update Asset Availability and Status
       if (dto.returnCondition === ReturnCondition.Normal) {
         const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
-        await tx.asset.updateMany({
+        const assetUpdate = await tx.asset.updateMany({
           where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
           data: { availability_status_id: availableStatusId }
         });
+
+        if (assetUpdate.count === 0) {
+          throw new ConflictException(
+            `Failed to update asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`
+          );
+        }
       } else if (dto.returnCondition === ReturnCondition.Damage) {
         const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
         const damagedStatusId = await this.getStatusId('assetStatus', 'DAMAGED');
 
-        await tx.asset.updateMany({
+        const assetUpdate = await tx.asset.updateMany({
           where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
           data: {
             availability_status_id: unavailableStatusId,
             asset_status_id: damagedStatusId
           }
         });
+
+        if (assetUpdate.count === 0) {
+          throw new ConflictException(
+            `Failed to update asset availability and status for asset ${transaction.asset_id}: asset is not in BORROWED status`
+          );
+        }
       }
 
       return tx.borrowTransaction.findUnique({ where: { id } });
@@ -368,7 +414,7 @@ export class AssetBorrowService {
   }
 
   async cancelBorrow(id: string, dto: CancelBorrowDto, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVAL');
+    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
     const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
     const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
     const cancelledTxStatusId = await this.getStatusId('borrowStatus', 'CANCELLED');
@@ -408,7 +454,7 @@ export class AssetBorrowService {
         );
       }
 
-      // Business Rule: Department Staff / Borrower can only cancel PENDING_APPROVAL transactions
+      // Business Rule: Department Staff / Borrower can only cancel PENDING_APPROVE transactions
       if (!isStaffOverride && transaction.borrow_status_id === approvedTxStatusId) {
         throw new BadRequestException(
           'Department staff can only cancel transactions that are pending approval. Please contact Asset Center Staff to cancel an approved request.'
@@ -421,7 +467,7 @@ export class AssetBorrowService {
       ) {
         const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Only pending (PENDING_APPROVAL) or approved (APPROVED) transactions can be cancelled. Current status is '${currentStatusCode}'.`
+          `Only pending (PENDING_APPROVE) or approved (APPROVED) transactions can be cancelled. Current status is '${currentStatusCode}'.`
         );
       }
 
@@ -447,6 +493,7 @@ export class AssetBorrowService {
         data: {
           borrow_status_id: cancelledTxStatusId,
           cancelled_at: new Date(),
+          cancelled_by_user_id: user.id,
           cancel_reason: dto?.cancelReason || null,
         }
       });
@@ -456,13 +503,19 @@ export class AssetBorrowService {
       }
 
       // Optimistic lock on Asset update: return RESERVED -> AVAILABLE
-      await tx.asset.updateMany({
+      const assetUpdate = await tx.asset.updateMany({
         where: {
           id: transaction.asset_id,
           availability_status_id: reservedAvailabilityId,
         },
         data: { availability_status_id: availableStatusId }
       });
+
+      if (assetUpdate.count === 0) {
+        throw new ConflictException(
+          `Failed to restore asset availability for asset ${transaction.asset_id}: asset is not in RESERVED status`
+        );
+      }
 
       return tx.borrowTransaction.findUnique({ where: { id } });
     });
@@ -523,8 +576,13 @@ export class AssetBorrowService {
       include: {
         asset: { select: { id: true, name: true, model: true } },
         borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
+        createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         borrowStatus: { select: { id: true, code: true, name: true } }
       }
     });

@@ -35,7 +35,7 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Approve a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request approved' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
   async approveBorrow(
     @Param('id') id: string,
     @Session() session: UserSession,
@@ -48,7 +48,7 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Reject a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request rejected' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
   async rejectBorrow(
     @Param('id') id: string,
     @Body() dto: RejectBorrowDto,

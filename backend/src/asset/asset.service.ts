@@ -12,9 +12,12 @@ import { Prisma } from '@prisma/client';
  * กำหนดว่าแต่ละ target status รับ transition มาจาก status ใดได้บ้าง
  */
 const ALLOWED_FROM: Record<string, string[]> = {
+  NORMAL: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR'],
   LOST: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR'],
   WAIT_DISPOSAL: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR'],
   DISPOSAL: ['NORMAL', 'DAMAGED', 'UNDER_REPAIR', 'WAIT_DISPOSAL'],
+  DAMAGED: ['NORMAL'],
+  UNDER_REPAIR: ['DAMAGED', 'NORMAL'],
 };
 
 /** Include block ที่ใช้ซ้ำทุก asset query */
@@ -29,7 +32,7 @@ const ASSET_INCLUDE = {
   borrowTransactions: {
     where: {
       borrowStatus: {
-        code: { in: ['BORROWED', 'PENDING_APPROVAL'] as string[] },
+        code: { in: ['BORROWED', 'PENDING_APPROVE'] as string[] },
       },
     },
     take: 1,

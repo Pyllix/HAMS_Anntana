@@ -35,13 +35,10 @@ const availabilityStatuses = [
 ];
 
 const borrowStatuses = [
-  { code: 'PENDING_APPROVAL', name: 'รออนุมัติ' },
+  { code: 'PENDING_APPROVE', name: 'รออนุมัติ' },
   { code: 'APPROVED', name: 'อนุมัติแล้ว/รอส่งมอบ' },
   { code: 'BORROWED', name: 'กำลังยืม' },
-  { code: 'PENDING_VERIFICATION', name: 'รอตรวจสอบสภาพ' },
   { code: 'RETURNED', name: 'คืนแล้ว' },
-  { code: 'RETURNED_OPERATIONAL', name: 'คืนแล้ว (สภาพปกติ)' },
-  { code: 'RETURNED_DAMAGED', name: 'คืนแล้ว (ชำรุด)' },
   { code: 'REJECTED', name: 'ปฏิเสธ' },
   { code: 'CANCELLED', name: 'ยกเลิก' },
 ];

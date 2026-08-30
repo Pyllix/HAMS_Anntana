@@ -29,9 +29,14 @@ model User {
   receivedTransfers  Transfer[] @relation("TransferReceivedBy")
 
   //Borrow relations
-  borrowedTransactions   BorrowTransaction[] @relation("BorrowerUser")
-  returnedTransactions   BorrowTransaction[] @relation("ReturnedByUser")
-  receivedTransactions   BorrowTransaction[] @relation("ReceivedByUser")
+  borrowedTransactions        BorrowTransaction[] @relation("BorrowerUser")
+  createdBorrowTransactions   BorrowTransaction[] @relation("BorrowCreatedBy")
+  approvedBorrowTransactions  BorrowTransaction[] @relation("BorrowApprovedBy")
+  handoverBorrowTransactions  BorrowTransaction[] @relation("BorrowHandoverBy")
+  returnedTransactions        BorrowTransaction[] @relation("ReturnedByUser")
+  receivedTransactions        BorrowTransaction[] @relation("ReceivedByUser")
+  rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
+  cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
 
   @@map("users")
 }
