@@ -2,6 +2,8 @@ import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@ne
 import { AssetBorrowService } from './asset-borrow.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
+import { RequestReturnBorrowDto } from './dto/request-return-borrow.dto';
+import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { RejectBorrowDto } from './dto/reject-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
@@ -35,7 +37,7 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Approve a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request approved' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
   async approveBorrow(
     @Param('id') id: string,
     @Session() session: UserSession,
@@ -48,7 +50,7 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Reject a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request rejected' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVAL' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
   async rejectBorrow(
     @Param('id') id: string,
     @Body() dto: RejectBorrowDto,
@@ -70,20 +72,63 @@ export class AssetBorrowController {
     return this.assetBorrowService.handoverAsset(id, session.user);
   }
 
-  // Return Borrowing
-  @Patch(':id/return')
+  // Request Return / Call Pickup (BORROWED -> PENDING_RETURN) by Department Staff
+  @Patch(':id/request-return')
   @Roles(
-    UserRole.ASSET_CENTER_STAFF,
-    UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
   )
-  @ApiOperation({ summary: 'Return a borrowed asset' })
-  @ApiResponse({ status: 200, description: 'Asset returned successfully' })
-  @ApiResponse({ status: 400, description: 'Transaction is not BORROWED' })
+  @ApiOperation({ summary: 'Ward requests pickup return for borrowed asset (BORROWED -> PENDING_RETURN)' })
+  @ApiResponse({ status: 200, description: 'Return request submitted successfully' })
+  @ApiResponse({ status: 400, description: 'Transaction is not BORROWED or no permission' })
+  async requestReturn(
+    @Param('id') id: string,
+    @Body() dto: RequestReturnBorrowDto,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.requestReturn(id, dto, session.user);
+  }
+
+  // Claim Pickup Job (PENDING_RETURN -> IN_PICKUP) by Asset Center Staff
+  @Patch(':id/claim-pickup')
+  @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Asset Center Staff claims pickup job (PENDING_RETURN -> IN_PICKUP)' })
+  @ApiResponse({ status: 200, description: 'Pickup job claimed successfully' })
+  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_RETURN' })
+  async claimPickup(
+    @Param('id') id: string,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.claimPickup(id, session.user);
+  }
+
+  // Complete Return / Receive in Warehouse (IN_PICKUP / PENDING_RETURN -> RETURNED) by Asset Center Staff
+  @Patch(':id/complete-return')
+  @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Asset Center Staff inspects and completes return in warehouse (IN_PICKUP -> RETURNED)' })
+  @ApiResponse({ status: 200, description: 'Asset return completed and verified' })
+  @ApiResponse({ status: 400, description: 'Transaction is not in IN_PICKUP status' })
+  async completeReturn(
+    @Param('id') id: string,
+    @Body() dto: CompleteReturnBorrowDto,
+    @Session() session: UserSession,
+  ) {
+    return this.assetBorrowService.completeReturn(id, dto, session.user);
+  }
+
+  // Walk-in Desk Return (BORROWED -> RETURNED) by Asset Center Staff
+  @Patch(':id/return')
+  @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Walk-in desk return at Asset Center (BORROWED -> RETURNED in 1 step)' })
+  @ApiResponse({ status: 200, description: 'Asset returned successfully at desk' })
+  @ApiResponse({ status: 400, description: 'Transaction is not BORROWED or cross-department invalid' })
   async returnAsset(
     @Param('id') id: string,
     @Body() dto: ReturnAssetBorrowDto,
-    @Session() session: UserSession
+    @Session() session: UserSession,
   ) {
     return this.assetBorrowService.returnAsset(id, dto, session.user);
   }

@@ -6,10 +6,21 @@ import {
     IsBoolean,
     IsDateString,
     IsUUID,
+    IsEnum,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { RiskLevel, PmType, CalType } from '@prisma/client';
 
 export class CreateAssetDto {
+    @ApiProperty({
+        example: 'EQ-2567-0001',
+        description: 'หมายเลขครุภัณฑ์',
+        required: false,
+    })
+    @IsString()
+    @IsOptional()
+    noid?: string;
+
     @ApiProperty({
         example: 'เครื่องวัดความดัน',
         description: 'ชื่อครุภัณฑ์',
@@ -29,18 +40,35 @@ export class CreateAssetDto {
     @ApiProperty({
         example: '123456789012345',
         description: 'หมายเลขซีเรียลนัมเบอร์ของครุภัณฑ์',
+        required: false,
     })
     @IsString()
     @IsOptional()
     serialNo?: string;
 
     @ApiProperty({
-        example: '53202',
-        description: 'GMDN Code',
+        example: 'เงินงบประมาณแผ่นดิน',
+        description: 'ประเภทเงินทุน',
     })
     @IsString()
-    @IsOptional()
-    gmdn?: string;
+    @IsNotEmpty()
+    budgetType: string;
+
+    @ApiProperty({
+        example: 'จัดซื้อ',
+        description: 'ประเภทการได้รับมา',
+    })
+    @IsString()
+    @IsNotEmpty()
+    acqType: string;
+
+    @ApiProperty({
+        example: 'DOC-2567-001',
+        description: 'เอกสารการได้รับมา',
+    })
+    @IsString()
+    @IsNotEmpty()
+    acqDoc: string;
 
     @ApiProperty({
         example: '1000',
@@ -50,41 +78,89 @@ export class CreateAssetDto {
     @IsNotEmpty()
     price: string;
 
-    //   @ApiProperty({
-    //     example: '2022-01-01',
-    //     description: 'วันที่อนุมัติการจำหน่าย',
-    //   })
-    @IsDateString()
-    @IsOptional()
-    disposalApprovedDate?: string;
-
     @ApiProperty({
-        example: '2022-01-01',
+        example: '2028-01-01',
         description: 'วันที่หมดประกัน',
+        required: false,
     })
-    @IsDateString()
+    @IsString()
     @IsOptional()
     warrantyDate?: string;
 
     @ApiProperty({
-        example: 1,
-        description: 'ระดับความเสี่ยง',
+        enum: PmType,
+        example: PmType.IM,
+        description: 'ประเภทการบำรุงรักษา (IM / EM)',
     })
-    @IsInt()
+    @IsEnum(PmType)
     @IsNotEmpty()
-    riskLevel: number;
+    pmType: PmType;
 
     @ApiProperty({
-        example: true,
-        description: 'เป็นเครื่องมือแพทย์หรือไม่',
+        example: 6,
+        description: 'ความถี่การบำรุงรักษา (เดือน)',
+        required: false,
+    })
+    @IsInt()
+    @IsOptional()
+    pmIntervalMonth?: number;
+
+    @ApiProperty({
+        enum: CalType,
+        example: CalType.IC,
+        description: 'ประเภทการสอบเทียบมาตรฐาน (IC / EC)',
+    })
+    @IsEnum(CalType)
+    @IsNotEmpty()
+    calType: CalType;
+
+    @ApiProperty({
+        example: 12,
+        description: 'ความถี่การสอบเทียบมาตรฐาน (เดือน)',
+        required: false,
+    })
+    @IsInt()
+    @IsOptional()
+    calIntervalMonth?: number;
+
+    @ApiProperty({
+        example: 1,
+        description: 'รหัสประเภทเครื่องมือ',
+        required: false,
+    })
+    @IsInt()
+    @IsOptional()
+    equipment_type_id?: number;
+
+    @ApiProperty({
+        enum: RiskLevel,
+        example: RiskLevel.MEDIUM,
+        description: 'ระดับความเสี่ยง',
+    })
+    @IsEnum(RiskLevel)
+    @IsNotEmpty()
+    riskLevel: RiskLevel;
+
+    @ApiProperty({
+        example: false,
+        description: 'เป็นเครื่องมือพิเศษหรือไม่',
     })
     @IsBoolean()
     @IsOptional()
-    isMedicalDevice?: boolean;
+    isSpecial?: boolean;
+
+    @ApiProperty({
+        example: true,
+        description: 'เป็นเครื่องมือสำรองหรือไม่',
+    })
+    @IsBoolean()
+    @IsOptional()
+    isBackup?: boolean;
 
     @ApiProperty({
         example: 'หมายเหตุ',
         description: 'หมายเหตุ',
+        required: false,
     })
     @IsString()
     @IsOptional()
@@ -93,13 +169,14 @@ export class CreateAssetDto {
     @ApiProperty({
         example: 'https://example.com/image.jpg',
         description: 'URL ของรูปภาพครุภัณฑ์',
+        required: false,
     })
     @IsString()
     @IsOptional()
     imageUrl?: string;
 
     @ApiProperty({
-        example: '2022-01-01',
+        example: '2024-01-01',
         description: 'วันที่รับครุภัณฑ์',
     })
     @IsDateString()
@@ -124,11 +201,11 @@ export class CreateAssetDto {
 
     @ApiProperty({
         example: 1,
-        description: 'รหัสประเภทครุภัณฑ์',
+        description: 'รหัสประเภทครุภัณฑ์ (Asset Type ID)',
     })
     @IsInt()
     @IsNotEmpty()
-    asset_type_id: number;
+    type_id: number;
 
     @ApiProperty({
         example: 1,
@@ -141,8 +218,17 @@ export class CreateAssetDto {
     @ApiProperty({
         example: 1,
         description: 'รหัสสถานะความพร้อมใช้งาน',
+        required: false,
     })
     @IsInt()
+    @IsOptional()
+    availability_status_id?: number;
+
+    @ApiProperty({
+        example: '9c05939c-956b-46f4-a4bd-f5dccc56df89',
+        description: 'ผู้รับผิดชอบครุภัณฑ์ (User UUID)',
+    })
+    @IsUUID()
     @IsNotEmpty()
-    availability_status_id: number;
+    owner_id: string;
 }

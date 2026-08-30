@@ -29,3 +29,20 @@ enum DeliveryMethod {
   PICKUP
   DELIVERY
 }
+
+enum RiskLevel {
+  HIGH
+  MEDIUM
+  LOW
+  UNSPECIFIED
+}
+
+enum PmType {
+  IM
+  EM
+}
+
+enum CalType {
+  IC
+  EC
+}

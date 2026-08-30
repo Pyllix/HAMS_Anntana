@@ -5,12 +5,11 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 
 ## Business Domain
 - **Asset (ครุภัณฑ์)**: Physical equipment or property owned by the hospital managed within the system. Asset records are **never deleted** — lifecycle changes are handled by updating `asset_status_id` to statuses such as Lost or Disposal.
-- **AssetStatus (สถานะครุภัณฑ์)**: Lookup table driving all asset lifecycle states (e.g. In Use, Lost, Pending Disposal, Disposed). Shared by both `Asset` and `AssetDisposal` models.
-- **AssetLost (ประวัติการสูญหาย)**: History record capturing details each time an asset is reported lost (date discovered, last seen location, reason).
-- **AssetDisposal (ประวัติการจำหน่าย)**: History record tracking the two-phase disposal workflow — Pending Disposal → Disposed.
+- **AssetStatus (สถานะครุภัณฑ์)**: Lookup table driving all asset lifecycle states (e.g. Normal, Damaged, Under Repair, Disposal, Lost).
+- **Disposal (การจำหน่ายครุภัณฑ์)**: Record capturing asset disposal documentation (`disposal_doc_no`, `approved_date`, `asset_id`).
 - **Department (หน่วยงาน / แผนก)**: Internal hospital units or wards where assets are stationed or utilized.
 - **Spare Part (อะไหล่)**: Inventory items and parts used specifically for the repair and maintenance of assets.
-- **Maintenance Ticket (ใบแจ้งซ่อม / งานซ่อม)**: A documented request generated when an asset requires repair or scheduled maintenance.
+- **Maintenance Ticket / Repair Job (ใบแจ้งซ่อม / งานซ่อม)**: A documented request generated when an asset requires repair or scheduled maintenance.
 - **Audit (การตรวจนับครุภัณฑ์)**: The process of verifying physical asset counts against system records.
 - **User Roles**: Categorized accesses including Parcel Staff, Asset Center Staff, Department Staff, Maintenance Staff, Managers, and Admins.
 
@@ -130,13 +129,14 @@ Asset records use **status-based lifecycle management** — no soft delete.
 
 - **No `deletedAt`** on the `Asset` model.
 - Asset state changes are performed by updating `asset_status_id` (FK → `AssetStatus` table).
-- `AssetStatus` is also reused as `disposal_status_id` in `AssetDisposal` to avoid a separate enum.
+- เมื่อจำหน่ายครุภัณฑ์ จะสร้างระเบียนในตาราง `Disposal` พร้อมอัปเดต `asset_status_id` เป็น `DISPOSAL`
+- เมื่อสูญหาย จะอัปเดต `asset_status_id` เป็น `LOST` โดยไม่มีการเก็บตารางประวัติสูญหายแยกต่างหาก
 
 ---
 
 ## Status Tables (Lookup Tables)
 
-ทั้งสาม Status เป็น Lookup Tables ใน Database ที่ Seed ไว้ตั้งแต่ต้น โดยมี column ชื่อ `status_code` (VARCHAR 20) และ `status_name` (VARCHAR 50) เหมือนกันทุกตาราง
+Lookup Tables ใน Database ที่ Seed ไว้ตั้งแต่ต้น โดยมี column ชื่อ `status_code` (VARCHAR 20) และ `status_name` (VARCHAR 50) เหมือนกันทุกตาราง
 
 ### AssetStatus (สถานะครุภัณฑ์ — สภาพของตัวครุภัณฑ์)
 
@@ -160,14 +160,17 @@ Asset records use **status-based lifecycle management** — no soft delete.
 
 ### BorrowStatus (สถานะรายการยืม-คืน)
 
-| status_code        | status_name        | ความหมาย                    |
-|--------------------|--------------------|-----------------------------|
-| `PENDING_APPROVAL` | รออนุมัติ           | ส่งคำขอยืม รอเจ้าหน้าที่ศูนย์อนุมัติ |
-| `APPROVED`         | อนุมัติแล้ว         | เจ้าหน้าที่ศูนย์อนุมัติแล้ว รอส่งมอบของจริง |
-| `BORROWED`         | กำลังยืม           | ส่งมอบครุภัณฑ์จริงแล้ว (อยู่ระหว่างใช้งาน) |
-| `RETURNED`         | คืนแล้ว            | ครุภัณฑ์ถูกส่งคืนเรียบร้อย    |
-| `REJECTED`         | ปฏิเสธ             | คำขอยืมถูกปฏิเสธ             |
-| `CANCELLED`        | ยกเลิก             | รายการยืมถูกยกเลิก             |
+| status_code             | status_name        | ความหมาย                    |
+|-------------------------|--------------------|-----------------------------|
+| `PENDING_APPROVAL`      | รออนุมัติ           | ส่งคำขอยืม รอเจ้าหน้าที่ศูนย์อนุมัติ |
+| `APPROVED`              | อนุมัติแล้ว         | เจ้าหน้าที่ศูนย์อนุมัติแล้ว รอส่งมอบของจริง |
+| `BORROWED`              | กำลังยืม           | ส่งมอบครุภัณฑ์จริงแล้ว (อยู่ระหว่างใช้งาน) |
+| `PENDING_VERIFICATION`  | รอตรวจสอบสภาพ       | ผู้ยืมส่งคืนแล้ว รอเจ้าหน้าที่ศูนย์ตรวจรับและยืนยันสภาพ |
+| `RETURNED`              | คืนแล้ว            | ครุภัณฑ์ถูกส่งคืนเรียบร้อย (สถานะกลาง) |
+| `RETURNED_OPERATIONAL`  | คืนแล้ว (สภาพปกติ)  | คืนเรียบร้อย สภาพใช้งานได้ปกติ |
+| `RETURNED_DAMAGED`      | คืนแล้ว (ชำรุด)     | คืนเรียบร้อย สภาพชำรุด |
+| `REJECTED`              | ปฏิเสธ             | คำขอยืมถูกปฏิเสธ             |
+| `CANCELLED`             | ยกเลิก             | รายการยืมถูกยกเลิก             |
 
 ---
 
@@ -176,14 +179,15 @@ Asset records use **status-based lifecycle management** — no soft delete.
 ### AssetStatus Transitions
 
 ```
-NORMAL        ──► DAMAGED / WAIT_DISPOSAL / LOST
-DAMAGED       ──► UNDER_REPAIR / WAIT_DISPOSAL / LOST
-UNDER_REPAIR  ──► NORMAL / WAIT_DISPOSAL / LOST
-WAIT_DISPOSAL ──► DISPOSAL  (Terminal → END)
+NORMAL        ──► DAMAGED / WAIT_DISPOSAL / DISPOSAL / LOST
+DAMAGED       ──► UNDER_REPAIR / WAIT_DISPOSAL / DISPOSAL / LOST
+UNDER_REPAIR  ──► NORMAL / WAIT_DISPOSAL / DISPOSAL / LOST
+WAIT_DISPOSAL ──► DISPOSAL / NORMAL
 DISPOSAL      ──► END       (Terminal)
 LOST          ──► END       (Terminal)
 ```
 
+> **Direct Status Editing**: การเปลี่ยนสถานะเป็น `WAIT_DISPOSAL`, `DISPOSAL`, `LOST` สามารถปรับแก้ได้โดยตรงผ่าน API แก้ไขสถานะของครุภัณฑ์ (`PATCH /assets/:id/status`) เพื่อให้สอดคล้องกับระบบหลักภายนอก
 > **Terminal States**: `DISPOSAL` และ `LOST` ไม่สามารถเปลี่ยนกลับได้ ยกเว้น Admin ดำเนินการแก้ไขพร้อม Audit Log
 
 ### AvailabilityStatus Transitions
@@ -199,7 +203,7 @@ UNAVAILABLE ──► AVAILABLE
 
 ## Business Rules (Status Coupling)
 
-> อ้างอิงจาก `docs/status_role.md`
+> อ้างอิงจาก `docs/status_role.md` และระเบียบการทำงานของโรงพยาบาล
 
 | # | Event | AssetStatus | AvailabilityStatus | BorrowStatus | หมายเหตุ |
 |---|-------|-------------|--------------------|--------------|---|
@@ -208,14 +212,14 @@ UNAVAILABLE ──► AVAILABLE
 | 3 | **อนุมัติการยืม (Approve)** | ไม่เปลี่ยน | คง `RESERVED` | `PENDING_APPROVAL → APPROVED` | บันทึก `approved_at` |
 | 4 | **ส่งมอบของจริง (Handover/Dispatch)** | ไม่เปลี่ยน | `RESERVED → BORROWED` | `APPROVED → BORROWED` | บันทึก `handover_date` |
 | 5 | **ยืมตรงที่ศูนย์ (Center-Service)** | ไม่เปลี่ยน | `AVAILABLE → BORROWED` | `→ BORROWED` | บันทึก `approved_at`, `handover_date` ทันที |
-| 6 | **ปฏิเสธคำขอ (Reject)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ REJECTED` | บันทึก `reject_reason` |
+| 6 | **ปฏิเสธคำขอ (Reject)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ REJECTED` | บันทึก `reject_remark` |
 | 7 | **ยกเลิกคำขอ (Cancel - Pending/Approved)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ CANCELLED` | เฉพาะก่อนส่งมอบของ |
-| 8 | **คืนปกติ (Return - Normal)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED` | บันทึก `return_date` |
-| 9 | **คืนชำรุด (Return - Damage)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED` | บันทึก `return_date` |
-| 10 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — | |
-| 11 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — | |
-| 12 | **รอจำหน่าย (Pending Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → WAIT_DISPOSAL` | `→ UNAVAILABLE` | — | |
-| 13 | **จำหน่ายแล้ว (Disposal Completed)** | `WAIT_DISPOSAL → DISPOSAL` | คง `UNAVAILABLE` | — | |
+| 8 | **ผู้ยืมส่งคืน (รอตรวจรับ)** | ไม่เปลี่ยน | คง `BORROWED` | `→ PENDING_VERIFICATION` | บันทึก `return_date`, รอศูนย์ตรวจรับ |
+| 9 | **คืนปกติ (Return - Operational)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED_OPERATIONAL` / `RETURNED` | บันทึก `return_date` |
+| 10 | **คืนชำรุด (Return - Damaged)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED_DAMAGED` | บันทึก `return_date` |
+| 11 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — | |
+| 12 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — | |
+| 13 | **จำหน่าย (Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → DISPOSAL` | `→ UNAVAILABLE` | — | สร้างบันทึกใน DISPOSAL (`disposal_doc_no`, `approved_date`) |
 | 14 | **สูญหาย (Asset Lost)** | `NORMAL/DAMAGED/UNDER_REPAIR → LOST` | `→ UNAVAILABLE` | — | |
 
 ---
@@ -228,25 +232,22 @@ UNAVAILABLE ──► AVAILABLE
 
 ---
 
-## Disposal Workflow (2-phase)
+## Disposal Entity (การจำหน่ายครุภัณฑ์)
+
+โครงสร้างตาราง `DISPOSAL` อ้างอิงตาม `hams_schema.dbml`:
+
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `disposal_id` | UUID | ✅ PK | | ID ประจำรายการจำหน่าย |
+| `disposal_doc_no` | VARCHAR(255) | ✅ | | หมายเลขเอกสารการจำหน่าย |
+| `approved_date` | TIMESTAMPTZ | ✅ | | วันที่อนุมัติจำหน่าย |
+| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่จำหน่าย |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่บันทึก |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่แก้ไขล่าสุด |
+| `deleteAt` | TIMESTAMPTZ | | | Soft delete |
 
 ```
-POST  /asset/:id/disposal        → create AssetDisposal (disposal_status = WAIT_DISPOSAL) + pendingReason
-PATCH /asset/:id/disposal/:id    → update to DISPOSAL + disposalReason + remark + disposedAt
-```
-
-### History Tables
-
-| Table | Purpose | Trigger |
-|---|---|---|
-| `asset_lost` | Records each lost event (date, location, reason) | When AssetStatus → `LOST` |
-| `asset_disposal` | Tracks two-phase disposal (Pending → Disposed) | When AssetStatus → `WAIT_DISPOSAL` / `DISPOSAL` |
-
-### Endpoint: Change Asset Status
-
-```
-PATCH /asset/:id/status
-Body: { asset_status_id: number }
+POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_date) + อัปเดต AssetStatus → DISPOSAL
 ```
 
 ---
@@ -418,6 +419,80 @@ Body: { asset_status_id: number }
 
 ---
 
+## Data Model: ASSET (ครุภัณฑ์)
+
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `asset_id` | UUID | ✅ PK | | ID ของครุภัณฑ์ |
+| `noid` | VARCHAR(30) | | | หมายเลขครุภัณฑ์ |
+| `name` | VARCHAR(100) | ✅ | | ชื่อครุภัณฑ์ |
+| `model` | VARCHAR(100) | ✅ | | รุ่นของครุภัณฑ์ |
+| `serial_no` | VARCHAR(30) | | | เลขประจำเครื่อง |
+| `budget_type` | VARCHAR(100) | ✅ | | ประเภทเงินทุน (เช่น เงินบริจาค เงินกู้ เงินงบประมาณ) |
+| `acq_type` | VARCHAR(100) | ✅ | | ประเภทการได้รับมา (เช่น ติดมากับตึก รับโอน บริจาค) |
+| `type_id` | INT | ✅ | ASSET_TYPE | ประเภทของครุภัณฑ์ |
+| `section_id` | UUID | ✅ | SECTION | แผนก/หน่วยงานที่รับผิดชอบ |
+| `company_id` | UUID | ✅ | COMPANY | บริษัทคู่ค้า/ผู้ขาย |
+| `asset_status_id` | INT | ✅ | ASSET_STATUS | สถานะครุภัณฑ์ |
+| `availability_status_id` | INT | | AVAILABILITY_STATUS | สถานะความพร้อมใช้งาน |
+| `receive_date` | TIMESTAMPTZ | ✅ | | วันที่นำครุภัณฑ์เข้าคลัง |
+| `price` | NUMERIC(15,2) | ✅ | | ราคาครุภัณฑ์ |
+| `acq_doc` | TEXT | ✅ | | เอกสารการได้รับมา |
+| `warranty_date` | VARCHAR(30) | | | วันที่หมดประกัน |
+| `owner_id` | UUID | ✅ | USER | ผู้รับผิดชอบครุภัณฑ์ |
+| `pm_type` | ENUM | ✅ | | ประเภทการบำรุงรักษา (`IM`, `EM`) |
+| `pm_interval_month` | INT | | | ความถี่การบำรุงรักษา (เดือน) |
+| `cal_type` | ENUM | ✅ | | ประเภทการสอบเทียบมาตรฐาน (`IC`, `EC`) |
+| `cal_interval_month` | INT | | | ความถี่การสอบเทียบมาตรฐาน (เดือน) |
+| `equipment_type` | INT | | EQUIPMENT_TYPE | ประเภทเครื่องมือ |
+| `risk_level` | ENUM | ✅ | | ระดับความเสี่ยง (`HIGH`, `MEDIUM`, `LOW`, `UNSPECIFIED`) |
+| `is_special` | BOOLEAN | ✅ | | เป็นเครื่องมือพิเศษหรือไม่ |
+| `is_backup` | BOOLEAN | ✅ | | เป็นเครื่องมือสำรองหรือไม่ |
+| `remark` | TEXT | | | หมายเหตุ |
+| `image_url` | TEXT | ✅ | | URL รูปภาพครุภัณฑ์ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้าง |
+| `created_by` | UUID | ✅ | USER | ผู้สร้างข้อมูล |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่แก้ไขล่าสุด |
+| `updated_by` | UUID | ✅ | USER | ผู้แก้ไขล่าสุด |
+
+---
+
+## Data Model: TRANSFER (การโอนย้ายครุภัณฑ์)
+
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `id` | UUID | ✅ PK | | ID การโอนย้าย |
+| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่ถูกโอนย้าย |
+| `transfer_doc_no` | VARCHAR(255) | ✅ | | หมายเลขเอกสารการโอนย้าย |
+| `transfer_date` | TIMESTAMPTZ | ✅ | | วันที่โอนย้าย |
+| `from_section_id` | UUID | | SECTION | แผนกต้นทาง |
+| `to_section_id` | UUID | | SECTION | แผนกปลายทาง |
+| `from_location` | VARCHAR(255) | | | สถานที่ต้นทาง |
+| `to_location` | VARCHAR(255) | | | สถานที่ปลายทาง |
+| `requested_by` | UUID | ✅ | USER | ผู้ที่ร้องขอการโอนย้าย |
+| `approved_by` | UUID | ✅ | USER | ผู้ที่อนุมัติการโอนย้าย |
+| `received_by` | UUID | ✅ | USER | ผู้รับมอบการโอนย้าย |
+| `transfer_status` | VARCHAR(100) | ✅ | | สถานะการโอนย้าย |
+| `remark` | TEXT | | | หมายเหตุ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้าง |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่แก้ไขล่าสุด |
+| `deletedAt` | TIMESTAMPTZ | | | Soft delete |
+
+---
+
+## Data Model: Master / Lookup Tables
+
+### ACQ_TYPE (ประเภทการได้รับมา)
+- `acq_type_id` (INT PK), `acq_type_name` (VARCHAR 100), `is_active` (BOOLEAN), `description` (TEXT), `createdAt`, `updatedAt`, `deletedAt`
+
+### BUDGET_TYPE (ประเภทเงินทุน)
+- `budget_type_id` (INT PK), `name` (VARCHAR 255), `is_active` (BOOLEAN), `fiscal_year` (INT), `description` (TEXT), `createdAt`, `updatedAt`, `deleteAt`
+
+### EQUIPMENT_TYPE (ประเภทเครื่องมือ)
+- `equipment_id` (INT PK), `name` (VARCHAR 100), `description` (TEXT), `createdAt`, `updatedAt`
+
+---
+
 ## Data Model: BORROW_TRANSACTION
 
 | Column | Type | Required | FK | Description |
@@ -440,7 +515,7 @@ Body: { asset_status_id: number }
 | `return_condition` | ENUM | | | สภาพเครื่องตอนคืน: `Normal` / `Damage` |
 | `return_method` | ENUM | | | วิธีการคืน: `self_return` / `staff_pickup` |
 | `return_remark` | TEXT | | | หมายเหตุการคืน |
-| `reject_reason` | TEXT | | | เหตุผลการปฏิเสธคำขอยืม (เฉพาะกรณี REJECTED) |
+| `reject_remark` | TEXT | | | หมายเหตุการไม่อนุมัติการยืม (เฉพาะกรณี REJECTED) |
 
 ## Data Model: BORROW_STATUS (Lookup Table)
 

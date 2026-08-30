@@ -1,23 +1,30 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ReturnCondition, ReturnMethod } from '@prisma/client';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ReturnCondition } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ReturnAssetBorrowDto {
-  @ApiProperty({ enum: ReturnCondition, description: 'The condition of the asset when returned' })
+  @ApiProperty({
+    description: 'UUID หรือรหัสพนักงานของผู้ที่นำของมาส่งคืนที่เคาน์เตอร์ (ต้องเป็นผู้ยืมหรือคนในแผนกเดียวกัน)',
+    example: 'GOV-67005',
+  })
+  @IsNotEmpty()
+  @IsString()
+  returnedByUserId: string;
+
+  @ApiProperty({
+    enum: ReturnCondition,
+    example: ReturnCondition.Normal,
+    description: 'สภาพของครุภัณฑ์ตอนส่งคืนที่เคาน์เตอร์ (Normal=ปกติ, Damage=ชำรุด)',
+  })
   @IsEnum(ReturnCondition)
+  @IsNotEmpty()
   returnCondition: ReturnCondition;
 
-  @ApiProperty({ enum: ReturnMethod, description: 'How the asset was returned' })
-  @IsEnum(ReturnMethod)
-  returnMethod: ReturnMethod;
-
-  @ApiPropertyOptional({ description: 'Any remarks regarding the return' })
+  @ApiPropertyOptional({
+    example: 'ส่งคืนสภาพปกติที่เคาน์เตอร์ศูนย์ฯ อุปกรณ์ครบ',
+    description: 'หมายเหตุการส่งคืน',
+  })
   @IsOptional()
   @IsString()
   returnRemark?: string;
-
-  @ApiPropertyOptional({ description: 'UUID or Employee Code (รหัสพนักงาน) of the user who returned the asset' })
-  @IsOptional()
-  @IsString()
-  returnedByUserId?: string;
 }

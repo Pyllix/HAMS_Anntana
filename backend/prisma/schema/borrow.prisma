@@ -12,15 +12,20 @@ model BorrowStatus {
 }
 
 model BorrowTransaction {
-  id                  String  @id @default(uuid()) @map("borrow_transaction_id")
-  asset_id            String  @map("asset_id")
-  borrower_id         String  @map("borrower_id")
-  returned_by_user_id String? @map("returned_by_user_id")
-  received_by_user_id String? @map("received_by_user_id")
-  borrow_status_id    Int     @map("borrow_status_id")
+  id                   String  @id @default(uuid()) @map("borrow_transaction_id")
+  asset_id             String  @map("asset_id")
+  borrower_id          String  @map("borrower_id")
+  created_by_user_id   String? @map("created_by_user_id")
+  approved_by_user_id  String? @map("approved_by_user_id")
+  handover_by_user_id  String? @map("handover_by_user_id")
+  returned_by_user_id  String? @map("returned_by_user_id")
+  received_by_user_id  String? @map("received_by_user_id")
+  rejected_by_user_id  String? @map("rejected_by_user_id")
+  cancelled_by_user_id String? @map("cancelled_by_user_id")
+  borrow_status_id     Int     @map("borrow_status_id")
 
-  approved_at   DateTime?        @map("approved_at")
-  handover_date DateTime?        @map("handover_date")
+  approved_at      DateTime?        @map("approved_at")
+  handover_date    DateTime?        @map("handover_date")
   return_date      DateTime?        @map("return_date")
   cancelled_at     DateTime?        @map("cancelled_at")
   rejected_at      DateTime?        @map("rejected_at")
@@ -28,7 +33,7 @@ model BorrowTransaction {
   return_condition ReturnCondition? @map("return_condition")
   return_method    ReturnMethod?    @map("return_method")
   return_remark    String?          @map("return_remark") @db.Text
-  reject_reason    String?          @map("reject_reason") @db.Text
+  reject_remark    String?          @map("reject_remark") @db.Text
 
   request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
   delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")
@@ -36,11 +41,16 @@ model BorrowTransaction {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
-  asset          Asset        @relation(fields: [asset_id], references: [id])
-  borrower       User         @relation("BorrowerUser", fields: [borrower_id], references: [id])
-  returnedByUser User?        @relation("ReturnedByUser", fields: [returned_by_user_id], references: [id])
-  receivedByUser User?        @relation("ReceivedByUser", fields: [received_by_user_id], references: [id])
-  borrowStatus   BorrowStatus @relation(fields: [borrow_status_id], references: [id])
+  asset           Asset        @relation(fields: [asset_id], references: [id])
+  borrower        User         @relation("BorrowerUser", fields: [borrower_id], references: [id])
+  createdByUser   User?        @relation("BorrowCreatedBy", fields: [created_by_user_id], references: [id])
+  approvedByUser  User?        @relation("BorrowApprovedBy", fields: [approved_by_user_id], references: [id])
+  handoverByUser  User?        @relation("BorrowHandoverBy", fields: [handover_by_user_id], references: [id])
+  returnedByUser  User?        @relation("ReturnedByUser", fields: [returned_by_user_id], references: [id])
+  receivedByUser  User?        @relation("ReceivedByUser", fields: [received_by_user_id], references: [id])
+  rejectedByUser  User?        @relation("BorrowRejectedBy", fields: [rejected_by_user_id], references: [id])
+  cancelledByUser User?        @relation("BorrowCancelledBy", fields: [cancelled_by_user_id], references: [id])
+  borrowStatus    BorrowStatus @relation(fields: [borrow_status_id], references: [id])
 
   @@map("borrow_transaction")
 }

@@ -21,15 +21,22 @@ model User {
   section       Section?  @relation(fields: [section_id], references: [id])
   createdAssets Asset[]   @relation("CreatedBy")
   updatedAssets Asset[]   @relation("UpdatedBy")
+  ownedAssets   Asset[]   @relation("AssetOwner")
 
-  //Asset history relations
-  createdLostRecords     AssetLost[]         @relation("LostCreatedBy")
-  updatedLostRecords     AssetLost[]         @relation("LostUpdatedBy")
-  createdDisposalRecords AssetDisposal[]     @relation("DisposalCreatedBy")
-  updatedDisposalRecords AssetDisposal[]     @relation("DisposalUpdatedBy")
-  borrowedTransactions   BorrowTransaction[] @relation("BorrowerUser")
-  returnedTransactions   BorrowTransaction[] @relation("ReturnedByUser")
-  receivedTransactions   BorrowTransaction[] @relation("ReceivedByUser")
+  //Transfer relations
+  requestedTransfers Transfer[] @relation("TransferRequestedBy")
+  approvedTransfers  Transfer[] @relation("TransferApprovedBy")
+  receivedTransfers  Transfer[] @relation("TransferReceivedBy")
+
+  //Borrow relations
+  borrowedTransactions        BorrowTransaction[] @relation("BorrowerUser")
+  createdBorrowTransactions   BorrowTransaction[] @relation("BorrowCreatedBy")
+  approvedBorrowTransactions  BorrowTransaction[] @relation("BorrowApprovedBy")
+  handoverBorrowTransactions  BorrowTransaction[] @relation("BorrowHandoverBy")
+  returnedTransactions        BorrowTransaction[] @relation("ReturnedByUser")
+  receivedTransactions        BorrowTransaction[] @relation("ReceivedByUser")
+  rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
+  cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
 
   @@map("users")
 }

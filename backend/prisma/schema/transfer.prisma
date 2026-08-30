@@ -1,0 +1,30 @@
+// Transfer model (การโอนย้ายครุภัณฑ์)
+
+model Transfer {
+  id              String    @id @default(uuid()) @map("id")
+  asset_id        String    @map("asset_id")
+  transferDocNo   String    @map("transfer_doc_no") @db.VarChar(255)
+  transferDate    DateTime  @map("transfer_date")
+  from_section_id String?   @map("from_section_id")
+  to_section_id   String?   @map("to_section_id")
+  fromLocation    String?   @map("from_location") @db.VarChar(255)
+  toLocation      String?   @map("to_location") @db.VarChar(255)
+  requested_by    String    @map("requested_by")
+  approved_by     String    @map("approved_by")
+  received_by     String    @map("received_by")
+  transferStatus  String    @map("transfer_status") @db.VarChar(100)
+  remark          String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  // Relations
+  asset       Asset    @relation(fields: [asset_id], references: [id])
+  fromSection Section? @relation("TransferFromSection", fields: [from_section_id], references: [id])
+  toSection   Section? @relation("TransferToSection", fields: [to_section_id], references: [id])
+  requestedBy User     @relation("TransferRequestedBy", fields: [requested_by], references: [id])
+  approvedBy  User     @relation("TransferApprovedBy", fields: [approved_by], references: [id])
+  receivedBy  User     @relation("TransferReceivedBy", fields: [received_by], references: [id])
+
+  @@map("transfer")
+}
