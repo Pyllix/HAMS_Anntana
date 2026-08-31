@@ -6,9 +6,12 @@ import {
   getAssetStatuses,
   getSections,
   getAssets,
+  getMySectionAssets,
 } from "../services/assetService";
 import StockAssetsTable from "../components/asset-stock/StockAssetsTable";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
+import { useAuthStore } from "../stores/authStore";
+import { ROLES } from "../Router/roles";
 
 export default function AssetStock() {
   const [inputSearch, setInputSearch] = useState("");
@@ -16,9 +19,18 @@ export default function AssetStock() {
   const [department, setDepartment] = useState("ALL");
   const [status, setStatus] = useState("ALL");
 
-  const { data: assets } = useQuery({
-    queryKey: ["assets"],
-    queryFn: getAssets,
+  const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
+  const isAssetCenter = role === ROLES.ADMIN || role === ROLES.ASSET_CENTER_STAFF;
+
+  const { data: assets, isLoading } = useQuery({
+    queryKey: ["assets", isAssetCenter ? "all" : (user?.section_id || "my-section")],
+    queryFn: () => {
+      if (isAssetCenter) {
+        return getAssets();
+      }
+      return getMySectionAssets();
+    },
   });
 
   const { data: assetTypes } = useQuery({
@@ -34,6 +46,7 @@ export default function AssetStock() {
   const { data: sections } = useQuery({
     queryKey: ["sections"],
     queryFn: getSections,
+    enabled: isAssetCenter,
   });
 
   // Calculate KPIs dynamically
@@ -140,31 +153,33 @@ export default function AssetStock() {
           </select>
         </div>
 
-        {/* Dropdown: แผนก */}
-        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-48 shrink-0 justify-between">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-            <span className="text-slate-500 shrink-0">แผนก:</span>
-            <span
-              className="font-semibold text-emerald-600 truncate"
-              title={department === "ALL" ? "ทั้งหมด" : department}
+        {/* Dropdown: แผนก (แสดงเฉพาะศูนย์ครุภัณฑ์ / Admin) */}
+        {isAssetCenter && (
+          <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-48 shrink-0 justify-between">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+              <span className="text-slate-500 shrink-0">แผนก:</span>
+              <span
+                className="font-semibold text-emerald-600 truncate"
+                title={department === "ALL" ? "ทั้งหมด" : department}
+              >
+                {department === "ALL" ? "ทั้งหมด" : department}
+              </span>
+            </div>
+            <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+            <select
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
             >
-              {department === "ALL" ? "ทั้งหมด" : department}
-            </span>
+              <option value="ALL">ทั้งหมด</option>
+              {sections?.map((sec) => (
+                <option key={sec.id} value={sec.name}>
+                  {sec.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-          >
-            <option value="ALL">ทั้งหมด</option>
-            {sections?.map((sec) => (
-              <option key={sec.id} value={sec.name}>
-                {sec.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        )}
 
         {/* Dropdown: สถานะ */}
         <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-44 shrink-0 justify-between">
@@ -196,10 +211,13 @@ export default function AssetStock() {
       {/* Table Container */}
       <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden">
         <StockAssetsTable
+          assets={assets}
+          isLoading={isLoading}
           search={inputSearch}
           type={type}
-          department={department}
+          department={isAssetCenter ? department : "ALL"}
           status={status}
+          isAssetCenter={isAssetCenter}
         />
       </div>
 
@@ -208,3 +226,4 @@ export default function AssetStock() {
     </div>
   );
 }
+

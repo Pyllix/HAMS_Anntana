@@ -99,15 +99,23 @@ export interface AssetDto {
 
 export interface Asset {
   id: string;
+  noid?: string | null;
   name: string;
   model: string;
   serialNo: string;
   gmdn: string;
+  budgetType?: string | null;
+  acqType?: string | null;
+  acqDoc?: string | null;
   price: string;
   disposalApprovedDate: string | null;
   warrantyDate: string;
-  riskLevel: number;
-  isMedicalDevice: boolean;
+  riskLevel: number | string;
+  isMedicalDevice?: boolean;
+  isSpecial?: boolean;
+  isBackup?: boolean;
+  pmType?: string | null;
+  calType?: string | null;
   remark: string;
   imageUrl: string;
   receivedDate: string;
@@ -116,6 +124,7 @@ export interface Asset {
   asset_type_id: number;
   asset_status_id: number;
   availability_status_id: number;
+  owner_id?: string;
   createdBy: string;
   updatedBy: string;
   createdAt: string;

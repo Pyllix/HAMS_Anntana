@@ -1,5 +1,8 @@
+import { useMemo } from "react";
 import { X, Wrench, BarChart2, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
+import { getAssetTypes } from "../../services/assetService";
 
 const THAI_MONTHS = [
   "ม.ค.",
@@ -58,39 +61,56 @@ function calculateUsageTime(receivedDateString?: string | null): string {
 function isWarrantyActive(warrantyDateString?: string | null): boolean {
   if (!warrantyDateString) return false;
   try {
-    const wDate = new Date(warrantyDateString);
-    return wDate.getTime() >= Date.now();
+    const warranty = new Date(warrantyDateString);
+    const now = new Date();
+    return warranty.getTime() > now.getTime();
   } catch {
     return false;
   }
 }
 
 export default function AssetDetailModal() {
-  const { isOpen, closeModal, selectedAsset: asset } = useAssetDetailModalStore();
+  const { isOpen, selectedAsset: asset, closeModal } = useAssetDetailModalStore();
+
+  const { data: assetTypes } = useQuery({
+    queryKey: ["assetTypes"],
+    queryFn: getAssetTypes,
+  });
+
+  const usefulLifeYears = useMemo(() => {
+    if (!asset) return null;
+    const matched = assetTypes?.find(
+      (t) =>
+        t.id === asset.asset_type_id ||
+        t.id === asset.type?.id ||
+        t.name === asset.type?.name
+    );
+    return matched?.useful_life;
+  }, [asset, assetTypes]);
 
   if (!isOpen || !asset) return null;
 
   const underWarranty = isWarrantyActive(asset.warrantyDate);
 
-  const getStatusStyle = (code?: string) => {
-    switch (code) {
+  const getStatusStyle = (statusCode?: string) => {
+    switch (statusCode) {
       case "NORMAL":
-        return "border-emerald-500 text-emerald-600 bg-emerald-50/60";
+        return "border-emerald-500 text-emerald-700 bg-emerald-50/70";
       case "DAMAGED":
       case "LOST":
-        return "border-rose-400 text-rose-500 bg-rose-50/60";
+        return "border-rose-400 text-rose-700 bg-rose-50/70";
       case "UNDER_REPAIR":
       case "WAIT_DISPOSAL":
-        return "border-amber-400 text-amber-600 bg-amber-50/60";
+        return "border-amber-400 text-amber-700 bg-amber-50/70";
       case "DISPOSAL":
-        return "border-slate-400 text-slate-600 bg-slate-50/60";
+        return "border-slate-400 text-slate-700 bg-slate-50/70";
       default:
-        return "border-gray-300 text-gray-600 bg-gray-50";
+        return "border-gray-300 text-gray-700 bg-gray-50";
     }
   };
 
-  const getDotColor = (code?: string) => {
-    switch (code) {
+  const getDotColor = (statusCode?: string) => {
+    switch (statusCode) {
       case "NORMAL":
         return "bg-emerald-500";
       case "DAMAGED":
@@ -119,7 +139,7 @@ export default function AssetDetailModal() {
           <button
             type="button"
             onClick={closeModal}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -151,7 +171,7 @@ export default function AssetDetailModal() {
               <div>
                 รหัสครุภัณฑ์ (PID):{" "}
                 <span className="font-bold text-slate-900">
-                  {asset.id}
+                  {asset.noid || asset.id}
                 </span>
               </div>
               <div>
@@ -189,14 +209,14 @@ export default function AssetDetailModal() {
         {/* 2-Column Info Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* ข้อมูลการจัดซื้อ */}
-          <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-100 space-y-2.5">
-            <h4 className="font-bold text-slate-900 text-sm mb-3">
+          <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-100 space-y-3">
+            <h4 className="font-bold text-slate-900 text-sm mb-1">
               ข้อมูลการจัดซื้อ
             </h4>
 
             <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
               <span className="text-slate-500 shrink-0">วันที่ตรวจรับ (RECEIVE):</span>
-              <span className="font-bold text-slate-900 text-right">
+              <span className="font-bold text-slate-900 text-right shrink-0 whitespace-nowrap">
                 {formatThaiDate(asset.receivedDate)}
               </span>
             </div>
@@ -208,9 +228,9 @@ export default function AssetDetailModal() {
               </span>
             </div>
 
-            <div className="text-xs sm:text-sm">
-              <span className="text-slate-500 block mb-0.5">ราคาจัดซื้อ (KMONEY):</span>
-              <span className="font-bold text-emerald-600 block text-sm sm:text-base leading-snug">
+            <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
+              <span className="text-slate-500 shrink-0">ราคาจัดซื้อ (KMONEY):</span>
+              <span className="font-bold text-emerald-600 text-right shrink-0 whitespace-nowrap">
                 {Number(asset.price || 0).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -219,23 +239,23 @@ export default function AssetDetailModal() {
               </span>
             </div>
 
-            <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
-              <span className="text-slate-500 shrink-0">ประเภทเงินงบประมาณ:</span>
-              <span className="font-bold text-slate-900 text-right">
-                -
+            <div className="text-xs sm:text-sm">
+              <span className="text-slate-500 block mb-0.5">ประเภทเงินงบประมาณ:</span>
+              <span className="font-bold text-slate-900 block leading-snug break-words">
+                {asset.budgetType || "-"}
               </span>
             </div>
           </div>
 
           {/* การรับประกันและค่าเสื่อม */}
-          <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-100 space-y-2.5">
-            <h4 className="font-bold text-slate-900 text-sm mb-3">
+          <div className="bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-100 space-y-3">
+            <h4 className="font-bold text-slate-900 text-sm mb-1">
               การรับประกันและค่าเสื่อม
             </h4>
 
             <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
               <span className="text-slate-500 shrink-0">วันที่หมดประกัน (Warranty):</span>
-              <span className="font-bold text-slate-900 text-right">
+              <span className="font-bold text-slate-900 text-right shrink-0 whitespace-nowrap">
                 {formatThaiDate(asset.warrantyDate)}
               </span>
             </div>
@@ -243,10 +263,11 @@ export default function AssetDetailModal() {
             <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
               <span className="text-slate-500 shrink-0">สถานะประกัน:</span>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${underWarranty
-                  ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                  : "bg-rose-50 text-rose-600 border border-rose-200"
-                  }`}
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 whitespace-nowrap ${
+                  underWarranty
+                    ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                    : "bg-rose-50 text-rose-600 border border-rose-200"
+                }`}
               >
                 {underWarranty ? "อยู่ในประกัน" : "หมดประกัน"}
               </span>
@@ -254,14 +275,14 @@ export default function AssetDetailModal() {
 
             <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
               <span className="text-slate-500 shrink-0">อายุการใช้งาน (Expired):</span>
-              <span className="font-bold text-slate-900 text-right">
-                -
+              <span className="font-bold text-slate-900 text-right shrink-0 whitespace-nowrap">
+                {usefulLifeYears ? `${usefulLifeYears} ปี` : "-"}
               </span>
             </div>
 
             <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
               <span className="text-slate-500 shrink-0">ใช้งานมาแล้ว:</span>
-              <span className="font-bold text-slate-900 text-right">
+              <span className="font-bold text-slate-900 text-right shrink-0 whitespace-nowrap">
                 {calculateUsageTime(asset.receivedDate)}
               </span>
             </div>

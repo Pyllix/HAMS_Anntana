@@ -7,152 +7,172 @@ import { getAssets } from "../../services/assetService";
 import type { Asset } from "../../types/TypeAsset";
 
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
+import { useAuthStore } from "../../stores/authStore";
+import { ROLES } from "../../Router/roles";
 
 const features = tableFeatures({});
 
-const columns: Array<ColumnDef<typeof features, Asset>> = [
-  {
-    id: "pid",
-    header: "รหัสครุภัณฑ์ (PID)",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <span className="font-semibold text-gray-900 text-sm font-mono">
-          {row.id}
-        </span>
-      );
-    },
-  },
-  {
-    id: "name_model",
-    header: "ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div>
-          <div className="font-semibold text-gray-900">{row.name}</div>
-          <div className="text-sm text-gray-400 font-mono mt-0.5">
-            {row.model || row.company?.name || "-"}
-          </div>
-        </div>
-      );
-    },
-  },
-  {
-    id: "serialNo",
-    header: "หมายเลขเครื่อง (S/N)",
-    cell: (info) => (
-      <span className="text-sm text-gray-600 font-mono">
-        {info.row.original.serialNo || "-"}
-      </span>
-    ),
-  },
-  {
-    id: "department_location",
-    header: "หน่วยงานที่รับผิดชอบ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div>
-          <div className="text-sm font-medium text-gray-900">
-            {row.section?.name ?? "-"}
-          </div>
-          {row.section?.building && (
-            <div className="text-xs text-gray-500 mt-0.5">
-              {row.section.building}
-            </div>
-          )}
-        </div>
-      );
-    },
-  },
-  {
-    id: "status",
-    header: "สถานะ",
-    cell: (info) => {
-      const status = info.row.original.status;
-      const code = status?.code;
-      const name = status?.name ?? "-";
-
-      const getStatusStyle = (statusCode?: string) => {
-        switch (statusCode) {
-          case "NORMAL":
-            return "border-emerald-500 text-emerald-700 bg-emerald-50/70";
-          case "DAMAGED":
-          case "LOST":
-            return "border-rose-400 text-rose-700 bg-rose-50/70";
-          case "UNDER_REPAIR":
-          case "WAIT_DISPOSAL":
-            return "border-amber-400 text-amber-700 bg-amber-50/70";
-          case "DISPOSAL":
-            return "border-slate-400 text-slate-700 bg-slate-50/70";
-          default:
-            return "border-gray-300 text-gray-700 bg-gray-50";
-        }
-      };
-
-      const getDotColor = (statusCode?: string) => {
-        switch (statusCode) {
-          case "NORMAL":
-            return "bg-emerald-500";
-          case "DAMAGED":
-          case "LOST":
-            return "bg-rose-500";
-          case "UNDER_REPAIR":
-          case "WAIT_DISPOSAL":
-            return "bg-amber-500";
-          case "DISPOSAL":
-            return "bg-slate-500";
-          default:
-            return "bg-gray-400";
-        }
-      };
-
-      return (
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium border ${getStatusStyle(
-            code
-          )}`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(code)}`} />
-          {name}
-        </span>
-      );
-    },
-  },
-  {
-    id: "actions",
-    header: "จัดการ",
-    cell: (info) => (
-      <button
-        type="button"
-        onClick={() => useAssetDetailModalStore.getState().openModal(info.row.original)}
-        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 transition-colors shadow-xs cursor-pointer"
-      >
-        รายละเอียด
-      </button>
-    ),
-  },
-];
-
 interface StockAssetsTableProps {
+  assets?: Asset[];
+  isLoading?: boolean;
   search?: string;
   type?: string;
   department?: string;
   status?: string;
+  isAssetCenter?: boolean;
 }
 
 export default function StockAssetsTable({
+  assets,
+  isLoading = false,
   search = "",
   type = "ALL",
   department = "ALL",
   status = "ALL",
+  isAssetCenter: isAssetCenterProp,
 }: StockAssetsTableProps) {
-  const { data: assets, isLoading } = useQuery({
-    queryKey: ["assets"],
-    queryFn: getAssets,
-  });
+  const role = useAuthStore((state) => state.role);
+  const isAssetCenter =
+    isAssetCenterProp ??
+    (role === ROLES.ADMIN || role === ROLES.ASSET_CENTER_STAFF);
 
+  const columns = useMemo<Array<ColumnDef<typeof features, Asset>>>(() => {
+    const cols: Array<ColumnDef<typeof features, Asset>> = [
+      {
+        id: "pid",
+        header: "รหัสครุภัณฑ์ (PID)",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <span className="font-semibold text-gray-900 text-sm font-mono">
+              {row.noid || row.id}
+            </span>
+          );
+        },
+      },
+      {
+        id: "name_model",
+        header: "ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <div>
+              <div className="font-semibold text-gray-900">{row.name}</div>
+              <div className="text-sm text-gray-400 font-mono mt-0.5">
+                {row.model || row.company?.name || "-"}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "serialNo",
+        header: "หมายเลขเครื่อง (S/N)",
+        cell: (info) => (
+          <span className="text-sm text-gray-600 font-mono">
+            {info.row.original.serialNo || "-"}
+          </span>
+        ),
+      },
+    ];
+
+    // แสดงคอลัมน์ "หน่วยงานที่รับผิดชอบ" เฉพาะเจ้าหน้าที่ศูนย์ครุภัณฑ์ / Admin
+    if (isAssetCenter) {
+      cols.push({
+        id: "department_location",
+        header: "หน่วยงานที่รับผิดชอบ",
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <div>
+              <div className="text-sm font-medium text-gray-900">
+                {row.section?.name ?? "-"}
+              </div>
+              {row.section?.building && (
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {row.section.building}
+                </div>
+              )}
+            </div>
+          );
+        },
+      });
+    }
+
+    cols.push(
+      {
+        id: "status",
+        header: "สถานะ",
+        cell: (info) => {
+          const status = info.row.original.status;
+          const code = status?.code;
+          const name = status?.name ?? "-";
+
+          const getStatusStyle = (statusCode?: string) => {
+            switch (statusCode) {
+              case "NORMAL":
+                return "border-emerald-500 text-emerald-700 bg-emerald-50/70";
+              case "DAMAGED":
+              case "LOST":
+                return "border-rose-400 text-rose-700 bg-rose-50/70";
+              case "UNDER_REPAIR":
+              case "WAIT_DISPOSAL":
+                return "border-amber-400 text-amber-700 bg-amber-50/70";
+              case "DISPOSAL":
+                return "border-slate-400 text-slate-700 bg-slate-50/70";
+              default:
+                return "border-gray-300 text-gray-700 bg-gray-50";
+            }
+          };
+
+          const getDotColor = (statusCode?: string) => {
+            switch (statusCode) {
+              case "NORMAL":
+                return "bg-emerald-500";
+              case "DAMAGED":
+              case "LOST":
+                return "bg-rose-500";
+              case "UNDER_REPAIR":
+              case "WAIT_DISPOSAL":
+                return "bg-amber-500";
+              case "DISPOSAL":
+                return "bg-slate-500";
+              default:
+                return "bg-gray-400";
+            }
+          };
+
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium border ${getStatusStyle(
+                code
+              )}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(code)}`} />
+              {name}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "จัดการ",
+        cell: (info) => (
+          <button
+            type="button"
+            onClick={() =>
+              useAssetDetailModalStore.getState().openModal(info.row.original)
+            }
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 transition-colors shadow-xs cursor-pointer"
+          >
+            รายละเอียด
+          </button>
+        ),
+      }
+    );
+
+    return cols;
+  }, [isAssetCenter]);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
@@ -172,6 +192,7 @@ export default function StockAssetsTable({
         item.serialNo?.toLowerCase().includes(searchLower) ||
         item.model?.toLowerCase().includes(searchLower) ||
         item.gmdn?.toLowerCase().includes(searchLower) ||
+        item.noid?.toLowerCase().includes(searchLower) ||
         item.id?.toLowerCase().includes(searchLower);
 
       const matchesType = type === "ALL" || item.type?.name === type;
