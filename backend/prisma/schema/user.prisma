@@ -38,6 +38,10 @@ model User {
   rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
   cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
 
+  //Spare parts relations
+  sparepartAdds               SparepartAdd[]
+  sparepartTxns               SparepartTxn[]
+
   @@map("users")
 }
 
