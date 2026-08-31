@@ -13,8 +13,9 @@ model Section {
 
   users User[]
   asset Asset[]
-  transfersFrom Transfer[] @relation("TransferFromSection")
-  transfersTo   Transfer[] @relation("TransferToSection")
+  transfersFrom Transfer[]  @relation("TransferFromSection")
+  transfersTo   Transfer[]  @relation("TransferToSection")
+  repairJobs    RepairJob[]
 
   @@map("sections")
 }

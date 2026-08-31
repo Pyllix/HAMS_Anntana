@@ -46,6 +46,7 @@ model Asset {
   disposals          Disposal[]
   transfers          Transfer[]
   borrowTransactions BorrowTransaction[]
+  repairJobs         RepairJob[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
