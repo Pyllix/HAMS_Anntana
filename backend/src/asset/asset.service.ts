@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
+import { AssetFilterDto } from './dto/asset-filter.dto';
 import { PrismaService } from 'src/prisma.service';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
@@ -113,21 +114,24 @@ export class AssetService {
     return this.transformAsset(asset);
   }
 
-  async findAll(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findAll(query: AssetFilterDto): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AssetWhereInput = query.search
-      ? {
-          OR: [
-            { name: { contains: query.search, mode: 'insensitive' } },
-            { model: { contains: query.search, mode: 'insensitive' } },
-            { serialNo: { contains: query.search, mode: 'insensitive' } },
-            { noid: { contains: query.search, mode: 'insensitive' } },
-          ],
-        }
-      : {};
+    const where: Prisma.AssetWhereInput = {
+      ...(query.section_id && { section_id: query.section_id }),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: 'insensitive' } },
+              { model: { contains: query.search, mode: 'insensitive' } },
+              { serialNo: { contains: query.search, mode: 'insensitive' } },
+              { noid: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.asset.findMany({
@@ -142,6 +146,35 @@ export class AssetService {
 
     const formattedData = data.map((item) => this.transformAsset(item));
     return paginate(formattedData as Record<string, unknown>[], total, page, limit);
+  }
+
+  /**
+   * ดึง Asset ตาม Section ID (paginated)
+   */
+  async findBySection(sectionId: string, query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const section = await this.prisma.section.findUnique({
+      where: { id: sectionId },
+    });
+    if (!section) {
+      throw new NotFoundException(`Section #${sectionId} not found`);
+    }
+    return this.findAll({ ...query, section_id: sectionId });
+  }
+
+  /**
+   * ดึง Asset ของแผนกผู้ใช้งานที่ Login อยู่ (paginated)
+   */
+  async findMySectionAssets(userId: string, query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { section_id: true },
+    });
+
+    if (!user || !user.section_id) {
+      throw new BadRequestException('ผู้ใช้งานไม่ได้สังกัดแผนกใดๆ');
+    }
+
+    return this.findAll({ ...query, section_id: user.section_id });
   }
 
   async findOne(id: string) {
