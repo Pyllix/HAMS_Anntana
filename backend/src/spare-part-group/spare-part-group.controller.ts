@@ -27,7 +27,7 @@ export class SparePartGroupController {
   constructor(private readonly sparePartGroupService: SparePartGroupService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Create new Spare Part Group', description: 'สร้างกลุ่ม/หมวดหมู่อะไหล่ใหม่' })
   @ApiResponse({ status: 201, description: 'Spare part group created successfully' })
   @ApiResponse({ status: 409, description: 'Group name already exists' })
@@ -67,7 +67,7 @@ export class SparePartGroupController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Update Spare Part Group', description: 'แก้ไขชื่อกลุ่มอะไหล่' })
   @ApiResponse({ status: 200, description: 'Group updated successfully' })
   @ApiResponse({ status: 404, description: 'Group not found' })
@@ -79,7 +79,7 @@ export class SparePartGroupController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Delete Spare Part Group', description: 'ลบกลุ่มอะไหล่ (เฉพาะกลุ่มที่ไม่มีอะไหล่ผูกอยู่)' })
   @ApiResponse({ status: 200, description: 'Group deleted successfully' })
   @ApiResponse({ status: 400, description: 'Group contains active spare parts' })
