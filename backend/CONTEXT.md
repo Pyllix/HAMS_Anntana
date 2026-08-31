@@ -527,3 +527,204 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 | `createdAt` | TIMESTAMPTZ | ✅ | |
 | `updatedAt` | TIMESTAMPTZ | ✅ | |
 | `deletedAt` | TIMESTAMPTZ | | Soft delete |
+
+---
+
+## Spare Parts Management (ระบบการจัดการอะไหล่)
+
+> อ้างอิงจาก `docs/hams_schema.dbml`, UC4 (จัดการสต็อกอะไหล่), และ UC5 (สั่งซื้ออะไหล่)
+
+### สรุปหน้าที่และความสัมพันธ์ของตารางอะไหล่
+
+1. **`SPAREPART` (รายการอะไหล่ในคลัง)**:
+   - บันทึกข้อมูล Master ของอะไหล่แต่ละชนิด: รหัสอะไหล่ (`sparepart_code`), ชื่ออะไหล่ (`name`), หน่วยนับ (`unit`), ราคาต่อหน่วย (`price`), จำนวนขั้นต่ำเตือนสั่งซื้อ (`min_stock`), และจำนวนคงเหลือในคลัง (`qty_in_stock`)
+   - ผูกกับกลุ่มอะไหล่ `SPAREPART_GROUP`
+   - เมื่อสร้างรายการอะไหล่ครั้งแรก สามารถเริ่มต้น `qty_in_stock = 0` หรือหากระบุจำนวนเริ่มต้น ระบบจะสร้างประวัติใน `SPAREPART_ADD` ให้เบื้องหลัง
+2. **`SPAREPART_ADD` (ใบสั่งซื้อ/รับเข้าอะไหล่)**:
+   - ใช้เฉพาะกรณีบันทึกการรับเข้า/สั่งซื้ออะไหล่เพิ่มเข้าคลัง (`SPAREPART.qty_in_stock += qty`)
+   - เก็บเลขอ้างอิงเอกสารหรือใบเสร็จ (`sparepart_add_doc`), จำนวนที่เพิ่ม (`qty`), ราคารวม (`total_price`), และผู้บันทึก (`add_by`)
+3. **`SPAREPART_TXN` (สมุดบันทึกการใช้อะไหล่เฉพาะในงานซ่อม)**:
+   - ผูกกับใบงานซ่อม (`job_id`) เสมอเพื่อบันทึกประวัติการเบิก-คืนอะไหล่ของแต่ละงานซ่อม
+   - ประเภทรายการ (`txn_type`):
+     - `WITHDRAW`: เบิกอะไหล่ออกไปใช้ในงานซ่อม ➔ ตรวจสอบสต็อก `qty_in_stock >= qty` และตัดสต็อก `qty_in_stock -= qty`
+     - `RETURN`: คืนอะไหล่ที่เบิกเกินหรือไม่ใช้งานกลับเข้าคลัง ➔ คืนสต็อก `qty_in_stock += qty`
+   - บันทึกราคา Snapshot `unit_price` จาก `SPAREPART.price` ณ เวลาที่เบิก เพื่อคำนวณต้นทุนค่าซ่อมที่แท้จริง
+
+---
+
+## Maintenance & Repair Flow (ระบบการแจ้งซ่อมและบำรุงรักษา)
+
+> อ้างอิงจาก `docs/hams_schema.dbml`, `docs/repair_step_flow.md`, UC3 (ส่งซ่อมครุภัณฑ์) และ UC8 (จัดการการซ่อม/บำรุงรักษา)
+
+### ภาพรวมกระบวนการทำงาน 4 ขั้นตอนหลัก
+
+```
+[1. แจ้งซ่อมออนไลน์] ──► [2. ช่างรับงาน & วินิจฉัย] ──► [3. ดำเนินการ & แจ้งแล้วเสร็จ] ──► [4. ตรวจรับ ส่งมอบ & ปิดงาน]
+  (User ทั่วไป)          (เลือก Action Type & Steps)       (ทำตาม Steps + แจ้งผู้ส่งซ่อม)       (กรอกวันรับประกัน & ผู้รับคืน)
+```
+
+---
+
+### รายละเอียดแต่ละขั้นตอน (Workflow Details)
+
+#### 1. การแจ้งซ่อมออนไลน์ (Online Repair Request)
+- **ผู้ดำเนินการ**: เจ้าหน้าที่หน่วยงาน (`DEPARTMENT_STAFF`, `PARCEL_STAFF`, ฯลฯ)
+- **ข้อมูลที่บันทึก**:
+  - `asset_id`: ครุภัณฑ์ที่ต้องการส่งซ่อม
+  - `symptom`: อาการชำรุด หรือบันทึกส่งซ่อม
+  - `urgency_status`: ระดับความเร่งด่วน (`NORMAL`, `URGENT`, `EMERGENCY`)
+  - `report_type`: ประเภทรายงาน (`Repair` ซ่อมชำรุด, `Maintenance` บำรุงรักษาตามรอบ)
+  - `reporter_id`: ผู้แจ้งซ่อม (ดึงจาก Login User)
+  - `section_id`: แผนกของผู้แจ้ง/ครุภัณฑ์
+  - `createdAt`: วันที่ส่งซ่อม
+- **สถานะระบบ**:
+  - สร้าง `job_no` อัตโนมัติ (รูปแบบ `REP-YYYYMM-XXXX`)
+  - `REPAIR_JOB.job_status_id` = `PENDING` (รอช่างรับงาน)
+  - `ASSET.asset_status_id` ➔ `UNDER_REPAIR` (อยู่ระหว่างซ่อม)
+  - `ASSET.availability_status_id` ➔ `UNAVAILABLE` (ไม่พร้อมใช้งาน)
+
+#### 2. ช่างรับงาน & วินิจฉัยเลือกประเภทการดำเนินการ (Diagnosis & Action Selection)
+- **ผู้ดำเนินการ**: ช่างซ่อมบำรุง (`MAINTENANCE_STAFF`)
+- **การรับงาน**: มอบหมายช่างผู้รับผิดชอบบันทึกลงใน `MECHANIC_REPAIR` และปรับสถานะงานซ่อมเป็น `IN_PROGRESS`
+- **การวินิจฉัยและวางแผน**:
+  - บันทึก `diagnosis` (ผลการตรวจเช็ค/สาเหตุ), `solution` (แนวทางแก้ไข)
+  - เลือก `cause_id` (มูลเหตุปัญหา จากตาราง `CAUSE`), `tech_category_id` (หมวดช่าง), `job_type_id` (ประเภทงาน)
+  - ระบุ `due_date` (กำหนดแล้วเสร็จโดยประมาณ) และ `is_repeat_repair` (ประวัติการซ่อมซ้ำ)
+  - เลือก **ประเภทการดำเนินการ (`action_type`)** 1 ใน 5 ประเภท:
+    1. `SELF_REPAIR` (ดำเนินการซ่อมเอง / ไม่ใช้อะไหล่)
+    2. `INTERNAL_STOCK` (ขอเบิกอะไหล่ในคลัง) ➔ ผูกรายการอะไหล่ `SPAREPART_TXN`
+    3. `EXTERNAL_STOCK` (ขอเบิกอะไหล่นอกคลัง / จัดซื้ออะไหล่) ➔ ผูกรายการอะไหล่ `SPAREPART_TXN`
+    4. `OUTSOURCE` (ส่งซ่อมบริษัทภายนอก) ➔ ผูกบริษัทคู่ค้า `company_id` และเลขใบเสร็จ `bill_no`
+    5. `PURCHASE_REPLACEMENT` (ขอซื้อทดแทน / ประเมินไม่คุ้มซ่อม)
+- **การสร้างขั้นตอนย่อยอัตโนมัติ (`REPAIR_JOB_STEP`)**:
+  - ระบบจะ Clone แม่แบบ 12 ขั้นตอนจาก `STEP_MASTER` ตามประเภท `action_type` ที่เลือก
+
+---
+
+### แม่แบบ 12 ขั้นตอนของงานซ่อม (Repair Step Master Template)
+
+> อ้างอิงจากโครงสร้างมาตรฐานใน `docs/repair_step_flow.md`:
+
+| Step # | ชื่อขั้นตอน (Label) | กรณีเบิกในคลัง | กรณีเบิกนอกคลัง | กรณีส่งซ่อมบริษัท | กรณีขอซื้อทดแทน | กรณีซ่อมเอง |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|
+| 1 | วันแจ้งซ่อม | ✅ (createdAt) | ✅ (createdAt) | ✅ (createdAt) | ✅ (createdAt) | ✅ (createdAt) |
+| 2 | ธุรการรับ Job | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 3 | กำหนดแล้วเสร็จ | ✅ (due_date) | ✅ (due_date) | ✅ (due_date) | ✅ (due_date) | ✅ (due_date) |
+| 4 | ช่างรับ JOB | ✅ (Mechanic) | ✅ (Mechanic) | ✅ (Mechanic) | ✅ (Mechanic) | ✅ (Mechanic) |
+| 5 | ใช้วัสดุ-อะไหล่สำรอง | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 6 | การดำเนินการตามประเภท | ขอเบิกอะไหล่ในคลัง | ขอเบิกอะไหล่นอกคลัง | ส่งซ่อมบริษัทฯ | ขอซื้อทดแทน | ดำเนินการซ่อมเอง |
+| 7 | การอนุมัติ | อนุมัติจัดหาในคลัง | อนุมัติจัดหานอกคลัง | อนุมัติส่งซ่อมบริษัท | อนุมัติขอซื้อทดแทน | *(ข้าม)* |
+| 8 | การแจ้งรับพัสดุ/ของ | พัสดุแจ้งรับอะไหล่ | พัสดุแจ้งรับอะไหล่ | พัสดุแจ้งรับเครื่องคืน | พัสดุแจ้งรับเครื่องใหม่ | *(ข้าม)* |
+| 9 | ช่างรับพัสดุ/ของ | ช่างรับอะไหล่ | ช่างรับอะไหล่ | ช่างรับเครื่องจากบริษัท | ช่างรับเครื่องใหม่ | *(ข้าม)* |
+| 10 | ประกันงานซ่อมถึงวันที่ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 11 | แล้วเสร็จ/ตรวจรับงาน | ✅ (แจ้งผู้ส่งซ่อม) | ✅ (แจ้งผู้ส่งซ่อม) | ✅ (แจ้งผู้ส่งซ่อม) | ✅ (แจ้งผู้ส่งซ่อม) | ✅ (แจ้งผู้ส่งซ่อม) |
+| 12 | สรุป Job | ✅ (ปิดงาน) | ✅ (ปิดงาน) | ✅ (ปิดงาน) | ✅ (ปิดงาน) | ✅ (ปิดงาน) |
+
+---
+
+#### 3. การดำเนินการซ่อมและการแจ้งแล้วเสร็จ (Progress & Completion Notification)
+- ช่างกดอัปเดตบันทึกเวลา `completeAt` เมื่อทำแต่ละขั้นตอนย่อยสำเร็จ
+- เมื่อซ่อมเสร็จ ช่างจะกดบันทึกขั้นตอนที่ 11 **"แล้วเสร็จ"** ➔ ระบบส่งการแจ้งเตือนไปยังผู้ส่งซ่อม/แผนกเจ้าของเครื่องให้เตรียมมารับเครื่องคืน
+
+#### 4. การส่งมอบคืน ตรวจรับ และปิดสรุปงาน (Handover, Warranty & Close Job)
+- เมื่อผู้ส่งซ่อม/เจ้าหน้าที่แผนกมารับเครื่องคืน:
+  - บันทึก **ขั้นตอนที่ 10 (ประกันงานซ่อมถึงวันที่)**
+  - บันทึก **ขั้นตอนที่ 11 (วันที่ส่งมอบคืน `return_date` และผู้รับคืน `receiver_id`)**
+- ดำเนินการ **ขั้นตอนที่ 12 (สรุป Job / ปิดงาน)**:
+  - `REPAIR_JOB.job_status_id` ➔ `COMPLETED`
+  - `ASSET.asset_status_id` ➔ ปลดกลับเป็น `NORMAL` (ปกติ)
+  - `ASSET.availability_status_id` ➔ ปลดกลับเป็น `AVAILABLE` (ว่าง/พร้อมใช้งาน)
+  *(หมายเหตุ: กรณี `PURCHASE_REPLACEMENT` ครุภัณฑ์เดิมจะถูกปรับสถานะเป็น `WAIT_DISPOSAL` หรือ `DISPOSAL` ตามขั้นตอนการตัดจำหน่าย)*
+
+---
+
+## Data Models: Maintenance & Spare Parts (Lookup & Transactional)
+
+### SPAREPART (ตารางอะไหล่)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `sparepart_id` | INT | ✅ PK | | ID อะไหล่ |
+| `sparepart_code` | VARCHAR(100) | ✅ | | รหัสอะไหล่ |
+| `name` | VARCHAR(100) | ✅ | | ชื่ออะไหล่ |
+| `unit` | INT | ✅ | | หน่วยนับ |
+| `price` | NUMERIC(15,2) | ✅ | | ราคาต่อหน่วย |
+| `min_stock` | INT | ✅ | | จำนวนขั้นต่ำเตือนสั่งซื้อ |
+| `qty_in_stock` | INT | ✅ | | จำนวนคงเหลือในคลัง |
+| `group_id` | INT | ✅ | SPAREPART_GROUP | กลุ่มหมวดหมู่อะไหล่ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | |
+| `deletedAt` | TIMESTAMPTZ | | | Soft delete |
+
+### SPAREPART_ADD (ใบสั่งซื้อ/รับอะไหล่เข้าคลัง)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `sparepart_add_id` | INT | ✅ PK | | ID ใบสั่งซื้อ/รับเข้า |
+| `sparepart_id` | INT | ✅ | SPAREPART | อะไหล่ที่รับเข้า |
+| `qty` | INT | ✅ | | จำนวนที่เพิ่มเข้าคลัง |
+| `total_price` | NUMERIC(15,2) | ✅ | | ราคารวม |
+| `sparepart_add_doc` | VARCHAR(100) | ✅ | | เลขเอกสารจัดซื้อ/ใบเสร็จ |
+| `add_by` | UUID | ✅ | USER | ผู้บันทึกรับเข้า |
+| `createdAt` | TIMESTAMPTZ | ✅ | | |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | |
+| `deletedAt` | TIMESTAMPTZ | | | |
+
+### SPAREPART_TXN (ประวัติการเบิก-คืนอะไหล่ในงานซ่อม)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `txn_id` | INT | ✅ PK | | ID ประวัติรายการ |
+| `sparepart_id` | INT | ✅ | SPAREPART | อะไหล่ที่เบิก/คืน |
+| `job_id` | UUID | ✅ | REPAIR_JOB | งานซ่อมที่เบิกใช้ |
+| `txn_type` | VARCHAR(100) | ✅ | | ประเภท (`WITHDRAW`, `RETURN`) |
+| `qty` | INT | ✅ | | จำนวน |
+| `unit_price` | NUMERIC(15,2) | ✅ | | ราคา Snapshot ต่อหน่วย ณ วันเบิก |
+| `txn_date` | TIMESTAMPTZ | ✅ | | วันเวลาที่ทำรายการ |
+| `txn_by` | UUID | ✅ | USER | ผู้ทำรายการ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | |
+
+### REPAIR_JOB (ใบแจ้งซ่อม/บำรุงรักษา)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `job_id` | UUID | ✅ PK | | ID ของงานซ่อม |
+| `job_no` | VARCHAR(255) | ✅ | | รหัสงานซ่อม (เช่น REP-202608-0001) |
+| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่ซ่อม |
+| `section_id` | UUID | ✅ | SECTION | แผนกเจ้าของเครื่อง |
+| `reporter_id` | UUID | ✅ | USER | ผู้แจ้งซ่อม |
+| `job_type_id` | INT | ✅ | JOB_TYPE | ประเภทงานซ่อม |
+| `report_type` | ENUM | ✅ | | `Repair` / `Maintenance` |
+| `job_status_id` | INT | ✅ | JOB_STATUS | สถานะงานซ่อม |
+| `company_id` | UUID | | COMPANY | บริษัทคู่ค้า (กรณีส่งซ่อมนอก) |
+| `bill_no` | TEXT | | | เลขใบเสร็จค่าซ่อม |
+| `diagnosis` | TEXT | | | ผลการวินิจฉัย/สาเหตุ |
+| `symptom` | TEXT | | | บันทึกส่งซ่อม/อาการเบื้องต้น |
+| `solution` | TEXT | | | วิธีการแก้ไข |
+| `cause_id` | INT | | CAUSE | มูลเหตุของปัญหา |
+| `action_type` | ENUM | | | ประเภทดำเนินการ (`SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`) |
+| `urgency_status` | ENUM | ✅ | | `NORMAL` / `URGENT` / `EMERGENCY` |
+| `due_date` | TIMESTAMPTZ | | | กำหนดแล้วเสร็จโดยประมาณ |
+| `return_date` | TIMESTAMPTZ | | | วันที่ส่งมอบคืน |
+| `is_repeat_repair` | BOOLEAN | | | ซ่อมซ้ำอาการเดิมหรือไม่ |
+| `tech_category_id` | INT | | TECH_CATEGORY | หมวดช่างที่รับผิดชอบ |
+| `receiver_id` | UUID | | USER | ผู้รับมอบเครื่องคืน |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาแจ้งซ่อม |
+| `created_by` | UUID | ✅ | USER | ผู้สร้างรายการ |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | |
+| `updated_by` | UUID | ✅ | USER | |
+
+### REPAIR_JOB_STEP (ขั้นตอนย่อยงานซ่อม)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `step_id` | INT | ✅ PK | | ID ขั้นตอนย่อย |
+| `job_id` | UUID | ✅ | REPAIR_JOB | งานซ่อมที่สังกัด |
+| `step_master_id` | INT | ✅ | STEP_MASTER | แม่แบบขั้นตอน |
+| `completeAt` | TIMESTAMPTZ | | | วันเวลาที่ทำเสร็จ |
+
+### MECHANIC_REPAIR (ช่างผู้รับผิดชอบงานซ่อม)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `mechanic_repair_id` | INT | ✅ PK | | ID รายการ |
+| `job_id` | UUID | ✅ | REPAIR_JOB | งานซ่อม |
+| `user_id` | UUID | ✅ | USER | ช่างผู้รับผิดชอบ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | |
+| `deleteAt` | TIMESTAMPTZ | | | Soft delete |
+
