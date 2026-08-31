@@ -2,6 +2,7 @@ import { Repeat, Archive, Wrench, History, LucideIcon } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import AssetStock from "../Pages/AssetStock";
+import PartStock from "../Pages/PartStock";
 import React from "react";
 
 interface AppRote {
@@ -34,15 +35,15 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "part-stock",
     title: "จัดการสต็อกอะไหล่",
-    element: <div>part-stock</div>,
+    element: <PartStock />,
     icon: Wrench,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
     path: "help-desk",
-    title: "จัดการสต็อกอะไหล่",
-    element: <div>part-stock</div>,
+    title: "แจ้งซ่อมครุภัณฑ์",
+    element: <div>help-desk</div>,
     icon: Wrench,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
