@@ -29,7 +29,12 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการสต็อกครุภัณฑ์",
     element: <AssetStock />,
     icon: Archive,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [
+      ROLES.ADMIN,
+      ROLES.ASSET_CENTER_STAFF,
+      ROLES.DEPARTMENT_STAFF,
+      ROLES.MANAGER,
+    ],
     showInNav: true,
   },
   {
