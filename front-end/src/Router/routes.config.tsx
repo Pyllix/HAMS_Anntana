@@ -3,6 +3,7 @@ import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import AssetStock from "../Pages/AssetStock";
 import PartStock from "../Pages/PartStock";
+import PendingEvaluations from "../Pages/PendingEvaluations";
 import React from "react";
 
 interface AppRote {
@@ -65,6 +66,14 @@ export const APP_ROUTE: AppRote[] = [
     path: "borrow-history",
     title: "ประวัติการยืม",
     element: <div>borrow-history</div>,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "accept-work",
+    title: "งานซ่อม",
+    element: <PendingEvaluations />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
