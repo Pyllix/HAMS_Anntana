@@ -1,0 +1,67 @@
+// This file defines the Prisma models for Spare Parts Management.
+
+model SparepartGroup {
+  id        Int       @id @default(autoincrement()) @map("group_id")
+  name      String    @db.VarChar(100)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? @map("deleted_at")
+
+  spareparts Sparepart[]
+
+  @@map("sparepart_groups")
+}
+
+model Sparepart {
+  id          Int       @id @default(autoincrement()) @map("sparepart_id")
+  code        String    @unique @map("sparepart_code") @db.VarChar(100)
+  name        String    @db.VarChar(100)
+  unit        String    @default("ชิ้น") @db.VarChar(50)
+  price       Decimal   @db.Decimal(15, 2)
+  minStock    Int       @default(0) @map("min_stock")
+  qtyInStock  Int       @default(0) @map("qty_in_stock")
+  groupId     Int       @map("group_id")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? @map("deleted_at")
+
+  group            SparepartGroup @relation(fields: [groupId], references: [id])
+  sparepartAdds    SparepartAdd[]
+  sparepartTxns    SparepartTxn[]
+
+  @@map("spareparts")
+}
+
+model SparepartAdd {
+  id              Int       @id @default(autoincrement()) @map("sparepart_add_id")
+  sparepartId     Int       @map("sparepart_id")
+  qty             Int
+  totalPrice      Decimal   @map("total_price") @db.Decimal(15, 2)
+  sparepartAddDoc String    @map("sparepart_add_doc") @db.VarChar(100)
+  addBy           String    @map("add_by")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? @map("deleted_at")
+
+  sparepart Sparepart @relation(fields: [sparepartId], references: [id])
+  user      User      @relation(fields: [addBy], references: [id])
+
+  @@map("sparepart_adds")
+}
+
+model SparepartTxn {
+  id          Int      @id @default(autoincrement()) @map("txn_id")
+  sparepartId Int      @map("sparepart_id")
+  jobId       String?  @map("job_id")
+  txnType     String   @map("txn_type") @db.VarChar(100) // WITHDRAW / RETURN / ADJUST
+  qty         Int
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(15, 2)
+  txnDate     DateTime @default(now()) @map("txn_date")
+  txnBy       String   @map("txn_by")
+  createdAt   DateTime @default(now())
+
+  sparepart Sparepart @relation(fields: [sparepartId], references: [id])
+  user      User      @relation(fields: [txnBy], references: [id])
+
+  @@map("sparepart_txns")
+}

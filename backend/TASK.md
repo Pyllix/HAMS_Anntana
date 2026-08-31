@@ -83,20 +83,20 @@
 
 ---
 
-### Phase 4: Spare Parts Management Module (`src/spare-parts/`)
-- [ ] **4.1 Spare Parts DTOs & Validation**:
-  - [ ] DTOs สำหรับ `SparepartGroup` (Create, Update, Query)
-  - [ ] DTOs สำหรับ `Sparepart` (Create, Update, Query, Filter Low Stock)
-  - [ ] DTOs สำหรับ `SparepartAdd` (Restock / Stock-in)
-  - [ ] DTOs สำหรับ `SparepartTxn` (Requisition History & Ledger Query)
-- [ ] **4.2 Spare Parts Service & Controller**:
-  - [ ] CRUD หมวดหมู่อะไหล่ (`/spare-part-groups`)
-  - [ ] CRUD รายการอะไหล่พร้อมคำนวณแจ้งเตือนสต็อกต่ำ (`/spare-parts`)
-  - [ ] API รับอะไหล่เข้าคลัง (`POST /spare-parts/stock-in`) ➔ ปรับยอด `qty_in_stock += qty`
-  - [ ] API ดึงประวัติการเบิก-จ่ายอะไหล่รายตัวและตามใบงานซ่อม
-- [ ] **4.3 Role Guards & Unit Tests**:
-  - [ ] ติดตั้ง `@Roles` ตาม Permission Matrix: `ASSET_CENTER_STAFF`, `PARCEL_STAFF`, `MAINTENANCE_STAFF`
-  - [ ] Unit Tests สำหรับการคำนวณและตัด/เพิ่มยอดสต็อก
+### Phase 4: Spare Parts Management Module (`src/spare-parts/`) (เสร็จสิ้น)
+- [x] **4.1 Spare Parts DTOs & Validation**:
+  - [x] DTOs สำหรับ `SparepartGroup` (Create, Update, Query)
+  - [x] DTOs สำหรับ `Sparepart` (Create, Update, Query, Filter Low Stock)
+  - [x] DTOs สำหรับ `SparepartAdd` (Restock / Stock-in)
+  - [x] DTOs สำหรับ `SparepartTxn` (Requisition History & Ledger Query)
+- [x] **4.2 Spare Parts Service & Controller**:
+  - [x] CRUD หมวดหมู่อะไหล่ (`/spare-part-groups`)
+  - [x] CRUD รายการอะไหล่พร้อมคำนวณแจ้งเตือนสต็อกต่ำ (`/spare-parts`)
+  - [x] API รับอะไหล่เข้าคลัง (`POST /spare-parts/stock-in`) ➔ ปรับยอด `qty_in_stock += qty`
+  - [x] API ดึงประวัติการเบิก-จ่ายอะไหล่รายตัวและตามใบงานซ่อม (`/spare-parts/:id/history`, `/spare-parts/transactions`)
+- [x] **4.3 Role Guards & Unit Tests**:
+  - [x] ติดตั้ง `@Roles` ตาม Permission Matrix: `ASSET_CENTER_STAFF`, `PARCEL_STAFF`, `MAINTENANCE_STAFF`, `ADMIN`, `MANAGER`
+  - [x] Unit Tests สำหรับการคำนวณและตัด/เพิ่มยอดสต็อก (20/20 Test Suites passed)
 
 ---
 

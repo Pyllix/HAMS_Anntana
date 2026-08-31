@@ -12,6 +12,8 @@ import { AssetStatusModule } from './asset-status/asset-status.module';
 import { AvailabilitiesModule } from './availabilities/availabilities.module';
 import { AssetModule } from './asset/asset.module';
 import { AssetBorrowModule } from './asset-borrow/asset-borrow.module';
+import { SparePartsModule } from './spare-parts/spare-parts.module';
+import { SparePartGroupModule } from './spare-part-group/spare-part-group.module';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
@@ -26,6 +28,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     AvailabilitiesModule,
     AssetModule,
     AssetBorrowModule,
+    SparePartsModule,
+    SparePartGroupModule,
   ],
   controllers: [],
   providers: [

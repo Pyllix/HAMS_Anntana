@@ -747,6 +747,143 @@ async function main() {
     }
   }
 
+  // 8. Spare Part Groups & Spare Parts
+  console.log('🔩 Seeding Spare Parts & Groups...');
+  const sparepartGroups = [
+    { name: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ' },
+    { name: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์' },
+    { name: 'อุปกรณ์ เซนเซอร์ และหัววัด' },
+    { name: 'ชิ้นส่วนกลไก มอเตอร์ และสายพาน' },
+    { name: 'วัสดุสิ้นเปลืองและฟิลเตอร์' },
+  ];
+
+  const groupMap: Record<string, number> = {};
+  for (const g of sparepartGroups) {
+    let group = await prisma.sparepartGroup.findFirst({ where: { name: g.name } });
+    if (!group) {
+      group = await prisma.sparepartGroup.create({ data: g });
+    }
+    groupMap[g.name] = group.id;
+  }
+
+  const mockSpareparts = [
+    {
+      code: 'SP-ELE-001',
+      name: 'ฟิวส์เซรามิก 10A 250V (แพ็ก 10 ชิ้น)',
+      unit: 'แพ็ก',
+      price: 150.0,
+      minStock: 10,
+      qtyInStock: 25,
+      groupName: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ',
+    },
+    {
+      code: 'SP-ELE-002',
+      name: 'แบตเตอรี่สำรองฉุกเฉินสำหรับ Defibrillator 12V 4.5Ah',
+      unit: 'ก้อน',
+      price: 3200.0,
+      minStock: 4,
+      qtyInStock: 2, // Low stock on purpose
+      groupName: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ',
+    },
+    {
+      code: 'SP-GAS-001',
+      name: 'วาล์วควบคุมแรงดันออกซิเจนความแม่นยำสูง (O2 Regulator Valve)',
+      unit: 'ชุด',
+      price: 4500.0,
+      minStock: 5,
+      qtyInStock: 8,
+      groupName: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์',
+    },
+    {
+      code: 'SP-GAS-002',
+      name: 'ท่อสายส่งก๊าซทางการแพทย์แรงดันสูง (High-Pressure Hose)',
+      unit: 'เส้น',
+      price: 1200.0,
+      minStock: 6,
+      qtyInStock: 3, // Low stock on purpose
+      groupName: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์',
+    },
+    {
+      code: 'SP-SEN-001',
+      name: 'เซนเซอร์วัดค่าออกซิเจนในเลือด SpO2 Reusable Finger Probe',
+      unit: 'เส้น',
+      price: 2800.0,
+      minStock: 8,
+      qtyInStock: 15,
+      groupName: 'อุปกรณ์ เซนเซอร์ และหัววัด',
+    },
+    {
+      code: 'SP-SEN-002',
+      name: 'สายวัดสัญญาณคลื่นหัวใจ EKG Trunk Cable 10-Lead',
+      unit: 'เส้น',
+      price: 3500.0,
+      minStock: 5,
+      qtyInStock: 1, // Low stock on purpose
+      groupName: 'อุปกรณ์ เซนเซอร์ และหัววัด',
+    },
+    {
+      code: 'SP-MEC-001',
+      name: 'มอเตอร์ขับเคลื่อนแกนเตียงผ่าตัดไฟฟ้า (Actuator Motor 24V)',
+      unit: 'ตัว',
+      price: 9500.0,
+      minStock: 2,
+      qtyInStock: 4,
+      groupName: 'ชิ้นส่วนกลไก มอเตอร์ และสายพาน',
+    },
+    {
+      code: 'SP-FLT-001',
+      name: 'ชุดฟิลเตอร์กรองอากาศเครื่องช่วยหายใจ HEPA Bacteria Filter',
+      unit: 'ชิ้น',
+      price: 650.0,
+      minStock: 20,
+      qtyInStock: 50,
+      groupName: 'วัสดุสิ้นเปลืองและฟิลเตอร์',
+    },
+  ];
+
+  for (const sp of mockSpareparts) {
+    const groupId = groupMap[sp.groupName];
+    const existing = await prisma.sparepart.findFirst({ where: { code: sp.code } });
+    if (!existing) {
+      const created = await prisma.sparepart.create({
+        data: {
+          code: sp.code,
+          name: sp.name,
+          unit: sp.unit,
+          price: sp.price,
+          minStock: sp.minStock,
+          qtyInStock: sp.qtyInStock,
+          groupId,
+        },
+      });
+
+      // Add initial stock history
+      await prisma.sparepartAdd.create({
+        data: {
+          sparepartId: created.id,
+          qty: sp.qtyInStock,
+          totalPrice: Number(sp.price) * sp.qtyInStock,
+          sparepartAddDoc: 'SEED-INITIAL-STOCK',
+          addBy: adminId,
+        },
+      });
+      console.log(`  ✅ Created spare part: ${sp.name} (${sp.code}) [Stock: ${sp.qtyInStock}/${sp.minStock}]`);
+    } else {
+      await prisma.sparepart.update({
+        where: { id: existing.id },
+        data: {
+          name: sp.name,
+          unit: sp.unit,
+          price: sp.price,
+          minStock: sp.minStock,
+          qtyInStock: sp.qtyInStock,
+          groupId,
+        },
+      });
+      console.log(`  🔄 Updated spare part: ${sp.name} (${sp.code})`);
+    }
+  }
+
   console.log('\n✨ Enhanced database seeding complete!');
 }
 
