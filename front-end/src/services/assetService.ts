@@ -79,3 +79,34 @@ export async function getSections(): Promise<Section[]> {
   return res.data;
 }
 
+export async function getMySectionAssets(): Promise<Asset[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/asset/my-section",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data.data;
+}
+
+export async function getAssetsBySection(sectionId: string): Promise<Asset[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    `https://hams-anntana.onrender.com/asset/section/${sectionId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return res.data.data;
+}
+
+
