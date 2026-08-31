@@ -3,6 +3,7 @@ import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
+import { AssetFilterDto } from './dto/asset-filter.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
@@ -37,13 +38,14 @@ export class AssetController {
     UserRole.MAINTENANCE_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Find all Assets (paginated)', description: 'Find all assets with pagination and optional search by name, model or serial number' })
+  @ApiOperation({ summary: 'Find all Assets (paginated)', description: 'Find all assets with pagination and optional search by name, model or serial number or filter by section_id' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'section_id', required: false, type: String, description: 'Filter by Section ID' })
   @ApiResponse({ status: 200, description: 'Paginated list of assets' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@Query() query: PaginationDto) {
+  findAll(@Query() query: AssetFilterDto) {
     return this.assetService.findAll(query);
   }
 
@@ -64,6 +66,58 @@ export class AssetController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAllDisposalRecords(@Query() query: PaginationDto) {
     return this.assetService.findAllDisposalRecords(query);
+  }
+
+  @Get('my-section')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Find Assets of logged-in user section (paginated)',
+    description: 'Find all assets belonging to the logged-in user section'
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of assets in user section' })
+  @ApiResponse({ status: 400, description: 'User not assigned to a section' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findMySectionAssets(
+    @Query() query: PaginationDto,
+    @Session() session: UserSession,
+  ) {
+    return this.assetService.findMySectionAssets(session.user.id, query);
+  }
+
+  @Get('section/:sectionId')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Find Assets by Section ID (paginated)',
+    description: 'Find all assets belonging to a specific section'
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of assets in section' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Section not found' })
+  findBySection(
+    @Param('sectionId') sectionId: string,
+    @Query() query: PaginationDto,
+  ) {
+    return this.assetService.findBySection(sectionId, query);
   }
 
   @Get(':id')
