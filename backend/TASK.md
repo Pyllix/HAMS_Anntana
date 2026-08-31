@@ -52,34 +52,34 @@
 
 ## 2. แผนการพัฒนาโมดูลการจัดการอะไหล่และงานซ่อมบำรุง (Maintenance & Spare Parts Roadmap)
 
-### Phase 3: Database & Prisma Schema Expansion (Maintenance & Spare Parts)
-- [ ] **3.1 Enum Definitions (`prisma/schema/enum.prisma`)**:
-  - [ ] เพิ่ม `ReportType` (`Repair`, `Maintenance`)
-  - [ ] เพิ่ม `ActionType` (`REPAIR`, `FABRICATE`, `MODIFY`, `PREVENTIVE`)
-  - [ ] เพิ่ม `UrgencyStatus` (`NORMAL`, `URGENT`, `EMERGENCY`)
-  - [ ] เพิ่ม `StepActionType` (`INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`, `SELF_REPAIR`)
-- [ ] **3.2 Spare Parts Models (`prisma/schema/spare-part.prisma`)**:
-  - [ ] สร้าง `SparepartGroup` model (`group_id`, `name`, `createdAt`, `updatedAt`, `deletedAt`)
-  - [ ] สร้าง `Sparepart` model (`sparepart_id`, `sparepart_code`, `name`, `unit`, `price`, `min_stock`, `qty_in_stock`, `group_id`, `createdAt`, `updatedAt`, `deletedAt`)
-  - [ ] สร้าง `SparepartAdd` model (`sparepart_add_id`, `sparepart_id`, `qty`, `total_price`, `sparepart_add_doc`, `add_by`, timestamps)
-  - [ ] สร้าง `SparepartTxn` model (`txn_id`, `sparepart_id`, `job_id`, `txn_type`, `qty`, `unit_price`, `txn_date`, `txn_by`, `createdAt`)
-- [ ] **3.3 Repair & Maintenance Models (`prisma/schema/repair.prisma`)**:
-  - [ ] สร้าง `JobStatus` model (`job_status_id`, `status_code`, `status_name`, timestamps)
-  - [ ] สร้าง `JobType` model (`job_type_id`, `name`, timestamps)
-  - [ ] สร้าง `Cause` model (`cause_id`, `cause_code`, `cause_name`, timestamps)
-  - [ ] สร้าง `TechCategory` model (`tech_category_id`, `category_code`, `category_name`, `is_active`, timestamps)
-  - [ ] สร้าง `StepMaster` model (`step_master_id`, `step_number`, `action_type`, `label`)
-  - [ ] สร้าง `RepairJob` model (ฟิลด์ทั้งหมดตาม DBML พร้อม Foreign Keys และ Audit fields)
-  - [ ] สร้าง `RepairJobStep` model (`step_id`, `job_id`, `step_master_id`, `completeAt`)
-  - [ ] สร้าง `MechanicRepair` model (`mechanic_repair_id`, `job_id`, `user_id`, timestamps)
-- [ ] **3.4 Relations, Migration & Seed Expansion (`prisma/seed.ts`)**:
-  - [ ] ผูก Relations ใน `Asset`, `User`, `Section`, `Company`
-  - [ ] อัปเดต `seed.ts` ให้ครอบคลุม:
-    - สถานะงานซ่อม (`PENDING`, `ASSIGNED`, `IN_PROGRESS`, `WAITING_PARTS`, `COMPLETED`, `CANCELLED`)
+### Phase 3: Database & Prisma Schema Expansion (Maintenance & Spare Parts) (เสร็จสิ้น)
+- [x] **3.1 Enum Definitions (`prisma/schema/enum.prisma`)**:
+  - [x] เพิ่ม `ReportType` (`Repair`, `Maintenance`)
+  - [x] เพิ่ม `ActionType` (`SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`)
+  - [x] เพิ่ม `UrgencyStatus` (`NORMAL`, `URGENT`, `EMERGENCY`)
+  - [x] เพิ่ม `StepActionType` (`INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`, `SELF_REPAIR`)
+- [x] **3.2 Spare Parts Models (`prisma/schema/spare-part.prisma`)**:
+  - [x] สร้าง `SparepartGroup` model (`group_id`, `name`, timestamps)
+  - [x] สร้าง `Sparepart` model (`sparepart_id`, `sparepart_code`, `name`, `unit`, `price`, `min_stock`, `qty_in_stock`, `group_id`, timestamps)
+  - [x] สร้าง `SparepartAdd` model (`sparepart_add_id`, `sparepart_id`, `qty`, `total_price`, `sparepart_add_doc`, `add_by`, timestamps)
+  - [x] สร้าง `SparepartTxn` model (`txn_id`, `sparepart_id`, `job_id`, `txn_type`, `qty`, `unit_price`, `txn_date`, `txn_by`, `createdAt`)
+- [x] **3.3 Repair & Maintenance Models (`prisma/schema/repair.prisma`)**:
+  - [x] สร้าง `JobStatus` model (`job_status_id`, `status_code`, `status_name`, timestamps)
+  - [x] สร้าง `JobType` model (`job_type_id`, `name`, timestamps)
+  - [x] สร้าง `Cause` model (`cause_id`, `cause_code`, `cause_name`, timestamps)
+  - [x] สร้าง `TechCategory` model (`tech_category_id`, `category_code`, `category_name`, `is_active`, timestamps)
+  - [x] สร้าง `StepMaster` model (`step_master_id`, `step_number`, `action_type`, `label`)
+  - [x] สร้าง `RepairJob` model (ฟิลด์ทั้งหมดตาม DBML พร้อม Foreign Keys และ Audit fields)
+  - [x] สร้าง `RepairJobStep` model (`step_id`, `job_id`, `step_master_id`, `completeAt`, `note`, `completed_by`)
+  - [x] สร้าง `MechanicRepair` model (`mechanic_repair_id`, `job_id`, `user_id`, timestamps)
+- [x] **3.4 Relations, Migration & Seed Expansion (`prisma/seed.ts`)**:
+  - [x] ผูก Relations ใน `Asset`, `User`, `Section`, `Company`, `SparepartTxn`
+  - [x] อัปเดต `seed.ts` ให้ครอบคลุม:
+    - สถานะงานซ่อม (`PENDING`, `IN_PROGRESS`, `WAITING_PARTS`, `WAITING_DELIVERY`, `COMPLETED`, `CANCELLED`)
     - มูลเหตุปัญหา (`Cause`), หมวดช่าง (`TechCategory`), ประเภทงาน (`JobType`)
     - แม่แบบ 12 ขั้นตอนงานซ่อม (`StepMaster`) ครบทั้ง 5 ประเภทตาม `repair_step_flow.md`
     - กลุ่มอะไหล่ (`SparepartGroup`) และรายการอะไหล่ตัวอย่าง (`Sparepart`)
-  - [ ] ดำเนินการ `pnpm prisma db push` และ generate client
+  - [x] ดำเนินการ `pnpm prisma db push` และ generate client สำเร็จ
 
 ---
 
@@ -100,36 +100,37 @@
 
 ---
 
-### Phase 5: Maintenance & Repair Core Module (`src/repairs/`)
-- [ ] **5.1 Repair DTOs & Validation**:
-  - [ ] DTO สำหรับการแจ้งซ่อมออนไลน์ (ผู้ใช้ทั่วไป)
-  - [ ] DTO สำหรับการรับงาน วินิจฉัย และกำหนด Action Type (ช่าง)
-  - [ ] DTO สำหรับการอัปเดตความคืบหน้าขั้นตอนย่อย (`completeAt`)
-  - [ ] DTO สำหรับการเบิก/คืนอะไหล่ในงานซ่อม
-  - [ ] DTO สำหรับการส่งมอบคืน บันทึกประกัน และปิดสรุปงาน
-- [ ] **5.2 Repair Service & Controller**:
-  - [ ] ระบบออกรหัสงานซ่อมอัตโนมัติ (`REP-YYYYMM-XXXX`)
-  - [ ] API แจ้งซ่อม (`POST /repairs`) + ปรับสถานะ Asset เป็น `UNDER_REPAIR` / `UNAVAILABLE`
-  - [ ] API ช่างรับงาน วินิจฉัย และ Clone 12 Steps อัตโนมัติจาก `StepMaster`
-  - [ ] API มอบหมายช่าง (`POST /repairs/:id/mechanics`)
-  - [ ] API อัปเดตสถานะขั้นตอนย่อย (`PATCH /repairs/:id/steps/:stepId`)
-  - [ ] API บันทึกขั้นตอนแล้วเสร็จ (แจ้งเตือนผู้ส่งซ่อม)
-  - [ ] API ส่งมอบคืน บันทึกวันประกัน ผู้รับมอบ และปิดงาน (`COMPLETED`) ➔ ปลดสถานะ Asset กลับเป็น `NORMAL` / `AVAILABLE`
-- [ ] **5.3 Atomic Spare Part Transactions in Repairs**:
-  - [ ] เชื่อมโยงการเบิกอะไหล่เข้าใบงานซ่อมผ่าน Prisma `$transaction`
-  - [ ] ตรวจสอบสต็อก ป้องกันสต็อกติดลบ และ Snapshot `unit_price`
+### Phase 5: Maintenance & Repair Core Module (`src/repairs/`) (เสร็จสิ้น)
+- [x] **5.1 Repair DTOs & Validation**:
+  - [x] DTO สำหรับการแจ้งซ่อมออนไลน์ (`CreateRepairRequestDto`)
+  - [x] DTO สำหรับการรับงาน วินิจฉัย และกำหนด Action Type (`DiagnoseRepairJobDto`)
+  - [x] DTO สำหรับการอัปเดตความคืบหน้าขั้นตอนย่อย (`UpdateRepairStepDto`)
+  - [x] DTO สำหรับการคืนอะไหล่ในงานซ่อม (`ReturnRepairSparePartDto`)
+  - [x] DTO สำหรับการส่งมอบคืน บันทึกประกัน และปิดสรุปงาน (`CompleteRepairJobDto`)
+  - [x] DTO สำหรับการค้นหาและฟิลเตอร์งานซ่อม (`QueryRepairJobDto`)
+- [x] **5.2 Repair Service & Controller**:
+  - [x] ระบบออกรหัสงานซ่อมอัตโนมัติ (`REP-YYYYMM-XXXX`)
+  - [x] API แจ้งซ่อม (`POST /repairs`) + ปรับสถานะ Asset เป็น `UNDER_REPAIR` / `UNAVAILABLE`
+  - [x] API ช่างรับงาน วินิจฉัย และ Clone 12 Steps อัตโนมัติจาก `StepMaster` (`PATCH /repairs/:id/diagnose`)
+  - [x] API อัปเดตสถานะขั้นตอนย่อย 1-12 (`PATCH /repairs/:id/steps/:stepNumber`)
+  - [x] API คืนอะไหล่ที่เหลือเข้าคลัง (`POST /repairs/:id/spare-parts/return`)
+  - [x] API ส่งมอบคืน บันทึกวันประกัน ผู้รับมอบ และปิดงาน (`COMPLETED`) ➔ ปลดสถานะ Asset กลับเป็น `NORMAL` / `AVAILABLE` (`PATCH /repairs/:id/complete`)
+  - [x] API ดึงข้อมูล Lookup Metadata (`GET /repairs/lookups/meta`)
+- [x] **5.3 Atomic Spare Part Transactions in Repairs**:
+  - [x] เชื่อมโยงการเบิกอะไหล่เข้าใบงานซ่อมผ่าน Prisma `$transaction`
+  - [x] ตรวจสอบสต็อก ป้องกันสต็อกติดลบ และคำนวณสรุปต้นทุนอะไหล่สุทธิ (`WITHDRAW` - `RETURN`)
 
 ---
 
-### Phase 6: Testing, Integration & Verification
-- [ ] **6.1 Unit & Supertest E2E Tests**:
-  - [ ] ทดสอบ Flow งานซ่อมครบทั้ง 5 ประเภท (`SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`)
-  - [ ] ทดสอบการตัดสต็อก คืนสต็อก และการ Snapshot ราคาอะไหล่
-  - [ ] ทดสอบการเปลี่ยนสถานะควบคู่ของ Asset (UNDER_REPAIR ➔ NORMAL)
-- [ ] **6.2 Scoping & Permission Verification**:
-  - [ ] ตรวจสอบการแจ้งซ่อมและดูข้อมูลข้ามแผนก (`DEPARTMENT_STAFF` ดูได้เฉพาะแผนกตนเอง)
-- [ ] **6.3 Documentation & Swagger**:
-  - [ ] ตรวจสอบ Swagger API Annotations บนทุก Endpoint ให้สมบูรณ์
+### Phase 6: Testing, Integration & Verification (เสร็จสิ้น)
+- [x] **6.1 Unit & Supertest E2E Tests**:
+  - [x] ทดสอบ Flow งานซ่อมครบทั้ง 5 ประเภท (`SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`)
+  - [x] ทดสอบการตัดสต็อก คืนสต็อก และการบันทึก `SPAREPART_TXN`
+  - [x] ทดสอบการเปลี่ยนสถานะควบคู่ของ Asset (UNDER_REPAIR ➔ NORMAL / AVAILABLE)
+- [x] **6.2 Scoping & Permission Verification**:
+  - [x] ตรวจสอบการแจ้งซ่อมและดูข้อมูลข้ามแผนก (`DEPARTMENT_STAFF` ดูกรณีแผนกตนเอง)
+- [x] **6.3 Documentation & Swagger**:
+  - [x] ติดตั้ง Swagger API Annotations บนทุก Endpoint ใน `RepairsController`
 
 ---
 
@@ -140,18 +141,18 @@
 
 ---
 
-## 3. Checklist การตรวจสอบสิทธิ์แยกตาม Use Case (Permission Matrix Tracking)
+## 4. Checklist การตรวจสอบสิทธิ์แยกตาม Use Case (Permission Matrix Tracking)
 
 | Use Case | ADMIN | MANAGER | ASSET_CENTER_STAFF | PARCEL_STAFF | MAINTENANCE_STAFF | DEPARTMENT_STAFF | Status |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|---|
 | **UC1: ยืม/คืน (Center)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
 | **UC2: ตรวจสอบครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[Own]` | ✅ พัฒนา API Filter Asset ตามแผนก (`GET /asset/my-section`, `GET /asset/section/:sectionId`, `GET /asset?section_id=...`) |
-| **UC3: ส่งซ่อมครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[F]` | `[Own]` | ⏳ รอพัฒนา Repair Module |
-| **UC4: สต็อกอะไหล่** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[-]` | ⏳ รอพัฒนา Spare Parts Module |
-| **UC5: สั่งซื้ออะไหล่** | `[R]` | `[Approve]` | `[Req]` | `[F]` | `[Req]` | `[-]` | ⏳ รอพัฒนา Purchase Module |
-| **UC6: สต็อกครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ⚠️ รอปรับฟิลด์ Asset ใหม่ |
+| **UC3: ส่งซ่อมครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[F]` | `[Own]` | ✅ ติดตั้ง `@Roles` บน `POST /repairs` (Supertest passed) |
+| **UC4: สต็อกอะไหล่** | `[R]` | `[R]` | `[F]` | `[F]` | `[R]` | `[-]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` บน `/spare-parts` (Supertest passed) |
+| **UC5: สั่งซื้ออะไหล่** | `[R]` | `[Approve]` | `[Req]` | `[F]` | `[Req]` | `[-]` | ⏳ รอพัฒนา Purchase Approval Module |
+| **UC6: สต็อกครุภัณฑ์** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` บน `/asset` (Supertest passed) |
 | **UC7: ยืม/คืน (Self)** | `[R]` | `[R]` | `[F]` | `[F]` | `[-]` | `[Own]` | ✅ ติดตั้ง `@Roles` + `RolesGuard` (Supertest passed) |
-| **UC8: งานซ่อมบำรุง** | `[R]` | `[R]` | `[R]` | `[R]` | `[F]` | `[-]` | ⏳ รอพัฒนา Repair Module |
+| **UC8: งานซ่อมบำรุง** | `[R]` | `[R]` | `[R]` | `[R]` | `[F]` | `[-]` | ✅ ติดตั้ง `@Roles` บน `/repairs` (Supertest passed) |
 | **UC9: อนุมัติรายจ่าย** | `[R]` | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | ⏳ รอพัฒนา Approval Module |
 | **UC10: ดูรายงาน** | `[R]` | `[F]` | `[R]` | `[R]` | `[-]` | `[Own]` | ⏳ รอพัฒนา Report Module |
 | **UC11: จัดการผู้ใช้** | `[F]` | `[-]` | `[-]` | `[-]` | `[-]` | `[-]` | ✅ ติดตั้ง `@Roles(ADMIN)` บน Controller (Supertest passed) |

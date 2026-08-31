@@ -590,14 +590,19 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
   - บันทึก `diagnosis` (ผลการตรวจเช็ค/สาเหตุ), `solution` (แนวทางแก้ไข)
   - เลือก `cause_id` (มูลเหตุปัญหา จากตาราง `CAUSE`), `tech_category_id` (หมวดช่าง), `job_type_id` (ประเภทงาน)
   - ระบุ `due_date` (กำหนดแล้วเสร็จโดยประมาณ) และ `is_repeat_repair` (ประวัติการซ่อมซ้ำ)
-  - เลือก **ประเภทการดำเนินการ (`action_type`)** 1 ใน 5 ประเภทโดยการตัดสินใจของช่าง (Explicit Selection โดยไม่มีการเบิกแบบผสม):
+  - เลือก **ประเภทการดำเนินการ (`action_type`)**:
+    - `REPAIR` (ตรวจซ่อม)
+    - `FABRICATE` (สร้างใหม่)
+    - `MODIFY` (ปรับปรุง)
+    - `PREVENTIVE` (เชิงรุก)
+  - เลือก **ประเภทขั้นตอนการจัดหา/ดำเนินการ (`step_action_type`)** 1 ใน 5 ประเภทโดยการตัดสินใจของช่าง (Explicit Selection โดยไม่มีการเบิกแบบผสม):
     1. `SELF_REPAIR` (ดำเนินการซ่อมเอง / ไม่ใช้อะไหล่)
     2. `INTERNAL_STOCK` (ขอเบิกอะไหล่ในคลังอย่างเดียว) ➔ ช่างเลือกอะไหล่จาก Master ที่มีพร้อมในคลัง (`qty_in_stock >= qty`) ผูกรายการอะไหล่ `SPAREPART_TXN`
     3. `EXTERNAL_STOCK` (ขอเบิกอะไหล่นอกคลัง / จัดซื้ออะไหล่อย่างเดียว) ➔ ช่างเลือกอะไหล่จาก Master ในระบบ (`SPAREPART`) ที่ของหมดหรือสต็อกไม่พอ เพื่อส่งเรื่องขอจัดซื้อจัดหาภายนอก
     4. `OUTSOURCE` (ส่งซ่อมบริษัทภายนอก) ➔ ผูกบริษัทคู่ค้า `company_id` และเลขใบเสร็จ `bill_no`
     5. `PURCHASE_REPLACEMENT` (ขอซื้อทดแทน / ประเมินไม่คุ้มซ่อม)
 - **การสร้างขั้นตอนย่อยอัตโนมัติ (`REPAIR_JOB_STEP`)**:
-  - ระบบจะ Clone แม่แบบ 12 ขั้นตอนจาก `STEP_MASTER` ตามประเภท `action_type` ที่เลือก
+  - ระบบจะ Clone แม่แบบ 12 ขั้นตอนจาก `STEP_MASTER` ตามประเภท `step_action_type` ที่เลือก
 
 ---
 
@@ -725,7 +730,7 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 | `symptom` | TEXT | | | บันทึกส่งซ่อม/อาการเบื้องต้น |
 | `solution` | TEXT | | | วิธีการแก้ไข |
 | `cause_id` | INT | | CAUSE | มูลเหตุของปัญหา |
-| `action_type` | ENUM | | | ประเภทดำเนินการ (`SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`) |
+| `action_type` | ENUM | | | ประเภทการดำเนินการ (`REPAIR`, `FABRICATE`, `MODIFY`, `PREVENTIVE`) |
 | `urgency_status` | ENUM | ✅ | | `NORMAL` / `URGENT` / `EMERGENCY` |
 | `due_date` | TIMESTAMPTZ | | | กำหนดแล้วเสร็จโดยประมาณ |
 | `return_date` | TIMESTAMPTZ | | | วันที่ส่งมอบคืน |
