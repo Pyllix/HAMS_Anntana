@@ -1,12 +1,7 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateRepairStepDto {
-  @ApiPropertyOptional({ description: 'Completion timestamp (ISO string), defaults to now if omitted' })
-  @IsDateString()
-  @IsOptional()
-  completeAt?: string;
-
   @ApiPropertyOptional({ description: 'Optional progress note or remark for this step' })
   @IsString()
   @IsOptional()

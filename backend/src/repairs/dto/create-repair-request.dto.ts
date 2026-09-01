@@ -22,9 +22,4 @@ export class CreateRepairRequestDto {
   @IsEnum(ReportType)
   @IsNotEmpty()
   reportType: ReportType;
-
-  @ApiPropertyOptional({ description: 'Section ID (defaults to user section if omitted)' })
-  @IsUUID()
-  @IsOptional()
-  sectionId?: string;
 }

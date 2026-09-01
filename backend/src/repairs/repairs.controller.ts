@@ -79,6 +79,20 @@ export class RepairsController {
     return this.repairsService.findAll(query, session.user);
   }
 
+  @Get('mechanics')
+  @Roles(
+    UserRole.DEPARTMENT_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
+  @ApiOperation({ summary: 'Get list of active mechanics (users with MAINTENANCE_STAFF role)' })
+  async getMechanics() {
+    return this.repairsService.getMechanics();
+  }
+
   @Get(':id')
   @Roles(
     UserRole.DEPARTMENT_STAFF,
@@ -108,8 +122,23 @@ export class RepairsController {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. Update Step Progress (Steps 1 - 10)
+  // 5. Update Step Progress (Auto-Advance & Specific Steps 1 - 10)
   // ───────────────────────────────────────────────────────────────────────────
+  @Patch(':id/steps/next')
+  @Roles(
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MANAGER,
+  )
+  @ApiOperation({ summary: 'Advance to and complete the next pending repair step automatically' })
+  async advanceNextStep(
+    @Param('id') id: string,
+    @Body() dto: UpdateRepairStepDto,
+    @Session() session: UserSession,
+  ) {
+    return this.repairsService.advanceNextStep(id, dto, session.user);
+  }
+
   @Patch(':id/steps/:stepNumber')
   @Roles(
     UserRole.MAINTENANCE_STAFF,

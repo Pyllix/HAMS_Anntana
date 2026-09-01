@@ -106,9 +106,9 @@ export class RepairsService {
     }
 
     const callerSectionId = await this.getCallerSectionId(user);
-    const sectionId = dto.sectionId || asset.section_id || callerSectionId;
+    const sectionId = asset.section_id || callerSectionId;
     if (!sectionId) {
-      throw new BadRequestException('Section ID is required for repair request');
+      throw new BadRequestException('Asset has no associated section and caller user has no section');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -184,6 +184,22 @@ export class RepairsService {
 
     if (dto.stepActionType === StepActionType.OUTSOURCE && !dto.companyId) {
       throw new BadRequestException('Company ID is required for OUTSOURCE step action type');
+    }
+
+    // Validate Mechanics: All assigned users must have role MAINTENANCE_STAFF
+    const mechanicIds = dto.mechanicIds && dto.mechanicIds.length > 0 ? dto.mechanicIds : [user.id];
+    for (const mechId of mechanicIds) {
+      const mech = await this.prisma.user.findUnique({
+        where: { id: mechId, deletedAt: null },
+      });
+      if (!mech) {
+        throw new NotFoundException(`Mechanic user #${mechId} not found`);
+      }
+      if (mech.role !== UserRole.MAINTENANCE_STAFF) {
+        throw new BadRequestException(
+          `User "${mech.firstname} ${mech.lastname}" (${mech.id}) does not have role MAINTENANCE_STAFF (Current role: ${mech.role}). Only maintenance staff can be assigned as mechanics.`,
+        );
+      }
     }
 
     // Validate Spare Parts for INTERNAL_STOCK: Stock must not be deficient
@@ -327,6 +343,23 @@ export class RepairsService {
       throw new NotFoundException(`Step #${stepNumber} not found for this job`);
     }
 
+    // 1. Guard against duplicate step completion
+    if (targetStep.completeAt) {
+      throw new BadRequestException(
+        `Step #${stepNumber} ("${targetStep.stepMaster.label}") has already been completed`,
+      );
+    }
+
+    // 2. Guard against skipping steps (must complete in sequential order)
+    const previousIncompleteStep = job.repairJobSteps.find(
+      (s) => s.stepMaster.stepNumber < stepNumber && !s.completeAt,
+    );
+    if (previousIncompleteStep) {
+      throw new BadRequestException(
+        `Cannot skip to Step #${stepNumber}. Please complete Step #${previousIncompleteStep.stepMaster.stepNumber} ("${previousIncompleteStep.stepMaster.label}") first.`,
+      );
+    }
+
     // Strict Step-level Role Validation (Separation of Duties - ADMIN excluded from approval steps)
     this.validateStepRole(currentStepActionType, stepNumber, user.role);
 
@@ -334,7 +367,26 @@ export class RepairsService {
     const isPenultimateStep = stepNumber === totalSteps - 1; // "แล้วเสร็จ / รอตรวจรับงาน"
     const isFinalStep = stepNumber === totalSteps; // "ตรวจรับงานและสรุป Job"
 
-    const completionTime = dto.completeAt ? new Date(dto.completeAt) : new Date();
+    if (isFinalStep) {
+      if (!dto.receiverId) {
+        throw new BadRequestException(
+          'receiverId is required for the final step (ตรวจรับงานและสรุป Job)',
+        );
+      }
+      if (!dto.warrantyDate) {
+        throw new BadRequestException(
+          'warrantyDate is required for the final step (ตรวจรับงานและสรุป Job)',
+        );
+      }
+      const receiver = await this.prisma.user.findUnique({
+        where: { id: dto.receiverId },
+      });
+      if (!receiver) {
+        throw new NotFoundException(`Receiver user #${dto.receiverId} not found`);
+      }
+    }
+
+    const completionTime = new Date();
 
     return this.prisma.$transaction(async (tx) => {
       // Step-specific Dynamic JobStatus Transitions
@@ -436,15 +488,13 @@ export class RepairsService {
         const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
         const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
 
-        const effectiveReceiverId = dto.receiverId || user.id;
-
         await tx.repairJob.update({
           where: { id: jobId },
           data: {
             jobStatusId: completedStatusId,
             returnDate: completionTime,
-            receiverId: effectiveReceiverId,
-            warrantyDate: dto.warrantyDate ?? job.warrantyDate,
+            receiverId: dto.receiverId,
+            warrantyDate: dto.warrantyDate,
             updatedBy: user.id,
           },
         });
@@ -485,6 +535,46 @@ export class RepairsService {
         job: await this.findOne(jobId, tx),
       };
     });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 3.1 Advance Next Step Automatically
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async advanceNextStep(
+    jobId: string,
+    dto: UpdateRepairStepDto,
+    user: any,
+  ) {
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: {
+        repairJobSteps: {
+          include: { stepMaster: true },
+          orderBy: { stepMaster: { stepNumber: 'asc' } },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.repairJobSteps.length === 0) {
+      throw new BadRequestException('Repair job must be diagnosed before advancing steps');
+    }
+
+    const nextPendingStep = job.repairJobSteps.find((s) => !s.completeAt);
+    if (!nextPendingStep) {
+      throw new BadRequestException('All repair steps have already been completed for this job');
+    }
+
+    return this.updateStepProgress(
+      jobId,
+      nextPendingStep.stepMaster.stepNumber,
+      dto,
+      user,
+    );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -870,6 +960,34 @@ export class RepairsService {
         completedSteps: job.repairJobSteps.filter((s) => s.completeAt !== null).length,
       },
     };
+  }
+
+  async getMechanics() {
+    return this.prisma.user.findMany({
+      where: {
+        role: UserRole.MAINTENANCE_STAFF,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        userName: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        imageUrl: true,
+        section_id: true,
+        section: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+      orderBy: { firstname: 'asc' },
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────

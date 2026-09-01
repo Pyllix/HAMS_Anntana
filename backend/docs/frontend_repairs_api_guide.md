@@ -74,8 +74,7 @@ POST /repairs
     "assetId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     "symptom": "เปิดเครื่องไม่ติด มีกลิ่นไหม้",
     "urgencyStatus": "URGENT",
-    "reportType": "Repair",
-    "sectionId": "optional: แผนกผู้แจ้ง"
+    "reportType": "Repair"
   }
   ```
 
