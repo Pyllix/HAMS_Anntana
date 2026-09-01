@@ -185,7 +185,13 @@ export class RepairsService {
   async diagnoseAndPlan(id: string, dto: DiagnoseRepairJobDto, user: any) {
     const job = await this.prisma.repairJob.findUnique({
       where: { id },
-      include: { jobStatus: true },
+      include: {
+        jobStatus: true,
+        repairJobSteps: {
+          include: { stepMaster: true },
+          orderBy: { stepMaster: { stepNumber: 'asc' } },
+        },
+      },
     });
 
     if (!job) {
@@ -194,6 +200,21 @@ export class RepairsService {
 
     if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
       throw new BadRequestException(`Cannot modify completed or cancelled repair job`);
+    }
+
+    // Guard against re-diagnosing a job that has already progressed beyond the diagnosis boundary
+    if (job.repairJobSteps && job.repairJobSteps.length > 0) {
+      const hasProgressedBeyondDiagnosis = job.repairJobSteps.some(
+        (s) =>
+          ((s.stepMaster?.stepNumber >= 5) ||
+            (s.stepMaster?.actionType === StepActionType.SELF_REPAIR && s.stepMaster?.stepNumber >= 4)) &&
+          s.completeAt !== null,
+      );
+      if (hasProgressedBeyondDiagnosis) {
+        throw new BadRequestException(
+          'Cannot re-diagnose or modify diagnosis plan after post-diagnosis steps have already been completed or approved',
+        );
+      }
     }
 
     // Validate Lookups
@@ -239,6 +260,14 @@ export class RepairsService {
       throw new BadRequestException(
         `Spare parts requisition from internal inventory is not allowed for ${dto.stepActionType} action type`,
       );
+    }
+
+    // 3. Guard against duplicate spare parts in the same request payload
+    if (dto.spareParts && dto.spareParts.length > 0) {
+      const spIds = dto.spareParts.map((item) => item.sparepartId);
+      if (new Set(spIds).size !== spIds.length) {
+        throw new BadRequestException('Duplicate spare parts found in requisition list');
+      }
     }
 
     // Validate Mechanics: All assigned users must have role MAINTENANCE_STAFF
@@ -334,17 +363,21 @@ export class RepairsService {
         });
       }
 
-      // 3. Process Spare Parts Transactions (Deduct Stock & Record SPAREPART_TXN)
-      // If re-diagnosing, revert previous WITHDRAW transactions for this job
-      const existingWithdrawTxns = await tx.sparepartTxn.findMany({
-        where: { jobId: id, txnType: 'WITHDRAW' },
+      // 3. Process Spare Parts Transactions (Record PENDING_WITHDRAW without deducting stock yet)
+      // If re-diagnosing:
+      // - If previous transactions were WITHDRAW (already approved/deducted), revert stock increment
+      // - Clean up previous sparepart transactions for this job
+      const existingTxns = await tx.sparepartTxn.findMany({
+        where: { jobId: id },
       });
-      if (existingWithdrawTxns.length > 0) {
-        for (const oldTxn of existingWithdrawTxns) {
-          await tx.sparepart.update({
-            where: { id: oldTxn.sparepartId },
-            data: { qtyInStock: { increment: oldTxn.qty } },
-          });
+      if (existingTxns.length > 0) {
+        for (const oldTxn of existingTxns) {
+          if (oldTxn.txnType === 'WITHDRAW') {
+            await tx.sparepart.update({
+              where: { id: oldTxn.sparepartId },
+              data: { qtyInStock: { increment: oldTxn.qty } },
+            });
+          }
         }
         await tx.sparepartTxn.deleteMany({ where: { jobId: id } });
       }
@@ -352,18 +385,12 @@ export class RepairsService {
       if (dto.spareParts && dto.spareParts.length > 0) {
         for (const item of dto.spareParts) {
           const sp = sparePartMap[item.sparepartId];
-          // 3.1 Deduct stock from inventory
-          await tx.sparepart.update({
-            where: { id: item.sparepartId },
-            data: { qtyInStock: { decrement: item.qty } },
-          });
-
-          // 3.2 Create WITHDRAW record in sparepart_txns
+          // Create PENDING_WITHDRAW record in sparepart_txns (stock will be deducted upon parcel approval)
           await tx.sparepartTxn.create({
             data: {
               sparepartId: item.sparepartId,
               jobId: id,
-              txnType: 'WITHDRAW',
+              txnType: 'PENDING_WITHDRAW',
               qty: item.qty,
               unitPrice: sp.price,
               txnBy: user.id,
@@ -474,10 +501,21 @@ export class RepairsService {
         );
       }
       const receiver = await this.prisma.user.findUnique({
-        where: { id: dto.receiverId },
+        where: { id: dto.receiverId, deletedAt: null },
       });
       if (!receiver) {
         throw new NotFoundException(`Receiver user #${dto.receiverId} not found`);
+      }
+    } else {
+      if (dto.receiverId) {
+        throw new BadRequestException(
+          'receiverId cannot be provided before the final step (ตรวจรับงานและสรุป Job)',
+        );
+      }
+      if (dto.warrantyDate) {
+        throw new BadRequestException(
+          'warrantyDate cannot be provided before the final step (ตรวจรับงานและสรุป Job)',
+        );
       }
     }
 
@@ -532,7 +570,40 @@ export class RepairsService {
           });
         }
       } else if (currentStepActionType === StepActionType.INTERNAL_STOCK) {
-        if (stepNumber === 6 || stepNumber === 7) {
+        if (stepNumber === 5) {
+          // Parcel approves spare parts requisition (Step 5: อนุมัติจัดหาอะไหล่ในคลัง):
+          // 1. Verify current stock availability for all pending items
+          const pendingTxns = await tx.sparepartTxn.findMany({
+            where: { jobId, txnType: 'PENDING_WITHDRAW' },
+          });
+
+          for (const pTxn of pendingTxns) {
+            const currentSp = await tx.sparepart.findUnique({
+              where: { id: pTxn.sparepartId },
+            });
+            if (!currentSp || currentSp.qtyInStock < pTxn.qty) {
+              throw new BadRequestException(
+                `Insufficient stock for spare part "${currentSp?.name || pTxn.sparepartId}" upon approval. Available: ${currentSp?.qtyInStock ?? 0}, Requested: ${pTxn.qty}`,
+              );
+            }
+
+            // 2. Deduct stock from inventory
+            await tx.sparepart.update({
+              where: { id: pTxn.sparepartId },
+              data: { qtyInStock: { decrement: pTxn.qty } },
+            });
+
+            // 3. Transition transaction from PENDING_WITHDRAW to WITHDRAW
+            await tx.sparepartTxn.update({
+              where: { id: pTxn.id },
+              data: {
+                txnType: 'WITHDRAW',
+                txnBy: user.id,
+                txnDate: completionTime,
+              },
+            });
+          }
+        } else if (stepNumber === 6 || stepNumber === 7) {
           // พัสดุจ่ายอะไหล่ / ช่างรับวัสดุและซ่อม -> IN_PROGRESS
           const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
           await tx.repairJob.update({
@@ -1044,7 +1115,9 @@ export class RepairsService {
     // Calculate total spare parts cost (Withdraw - Return)
     const sparePartsCost = job.sparepartTxns.reduce((acc, t) => {
       const lineCost = Number(t.unitPrice) * t.qty;
-      return t.txnType === 'WITHDRAW' ? acc + lineCost : acc - lineCost;
+      if (t.txnType === 'WITHDRAW') return acc + lineCost;
+      if (t.txnType === 'RETURN') return acc - lineCost;
+      return acc;
     }, 0);
 
     return {
