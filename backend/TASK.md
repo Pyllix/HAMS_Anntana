@@ -77,7 +77,7 @@
   - [x] อัปเดต `seed.ts` ให้ครอบคลุม:
     - สถานะงานซ่อม (`PENDING`, `IN_PROGRESS`, `WAITING_PARTS`, `WAITING_DELIVERY`, `COMPLETED`, `CANCELLED`)
     - มูลเหตุปัญหา (`Cause`), หมวดช่าง (`TechCategory`), ประเภทงาน (`JobType`)
-    - แม่แบบ 12 ขั้นตอนงานซ่อม (`StepMaster`) ครบทั้ง 5 ประเภทตาม `repair_step_flow.md`
+    - แม่แบบขั้นตอนงานซ่อม (`StepMaster`) ปรับปรุงใหม่ตัด redundant non-event fields (`due_date`, `warranty_date`) และลด placeholder steps ให้เหลือเฉพาะ operational workflow milestones (6-9 steps)
     - กลุ่มอะไหล่ (`SparepartGroup`) และรายการอะไหล่ตัวอย่าง (`Sparepart`)
   - [x] ดำเนินการ `pnpm prisma db push` และ generate client สำเร็จ
 
@@ -103,16 +103,16 @@
 ### Phase 5: Maintenance & Repair Core Module (`src/repairs/`) (เสร็จสิ้น)
 - [x] **5.1 Repair DTOs & Validation**:
   - [x] DTO สำหรับการแจ้งซ่อมออนไลน์ (`CreateRepairRequestDto`)
-  - [x] DTO สำหรับการรับงาน วินิจฉัย และกำหนด Action Type (`DiagnoseRepairJobDto`)
+  - [x] DTO สำหรับการรับงาน วินิจฉัย และกำหนด Action Type (`DiagnoseRepairJobDto`) รองรับ Single-submit (Steps 2-4)
   - [x] DTO สำหรับการอัปเดตความคืบหน้าขั้นตอนย่อย (`UpdateRepairStepDto`)
   - [x] DTO สำหรับการคืนอะไหล่ในงานซ่อม (`ReturnRepairSparePartDto`)
   - [x] DTO สำหรับการส่งมอบคืน บันทึกประกัน และปิดสรุปงาน (`CompleteRepairJobDto`)
   - [x] DTO สำหรับการค้นหาและฟิลเตอร์งานซ่อม (`QueryRepairJobDto`)
 - [x] **5.2 Repair Service & Controller**:
   - [x] ระบบออกรหัสงานซ่อมอัตโนมัติ (`REP-YYYYMM-XXXX`)
-  - [x] API แจ้งซ่อม (`POST /repairs`) + ปรับสถานะ Asset เป็น `UNDER_REPAIR` / `UNAVAILABLE`
-  - [x] API ช่างรับงาน วินิจฉัย และ Clone 12 Steps อัตโนมัติจาก `StepMaster` (`PATCH /repairs/:id/diagnose`)
-  - [x] API อัปเดตสถานะขั้นตอนย่อย 1-12 (`PATCH /repairs/:id/steps/:stepNumber`)
+  - [x] API แจ้งซ่อม (`POST /repairs`) + ปรับสถานะ Asset เป็น `UNDER_REPAIR` / `UNAVAILABLE` + Auto-complete Step 1
+  - [x] API ช่างรับงาน วินิจฉัย และ Clone Steps อัตโนมัติจาก `StepMaster` (`PATCH /repairs/:id/diagnose`) พร้อม auto-complete steps 2-4 รวดเดียวใน Form เดียว
+  - [x] API อัปเดตสถานะขั้นตอนย่อย (`PATCH /repairs/:id/steps/:stepNumber`) พร้อม auto status sync รองรับชุด 10 สถานะ (`WAITING_HANDOVER`, `PENDING_ASSIGN`, `IN_PROGRESS`, `WAITING_PARTS`, `PARCEL_PROCESSING`, `OUTSOURCED`, `UNREPAIRABLE`, `WAITING_DELIVERY`, `COMPLETED`, `CANCELLED`)
   - [x] API คืนอะไหล่ที่เหลือเข้าคลัง (`POST /repairs/:id/spare-parts/return`)
   - [x] API ส่งมอบคืน บันทึกวันประกัน ผู้รับมอบ และปิดงาน (`COMPLETED`) ➔ ปลดสถานะ Asset กลับเป็น `NORMAL` / `AVAILABLE` (`PATCH /repairs/:id/complete`)
   - [x] API ดึงข้อมูล Lookup Metadata (`GET /repairs/lookups/meta`)

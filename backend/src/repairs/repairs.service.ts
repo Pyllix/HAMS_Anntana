@@ -247,14 +247,14 @@ export class RepairsService {
         });
       }
 
-      // 3. Clone 12 Steps from StepMaster (Delete old steps if re-diagnosing)
+      // 3. Clone Steps from StepMaster (Delete old steps if re-diagnosing)
       await tx.repairJobStep.deleteMany({ where: { jobId: id } });
       const now = new Date();
       for (const sm of stepMasters) {
-        // Steps 1 to 4 are completed up to diagnosis
+        // Steps 1 to 3 are completed up to diagnosis (1. วันแจ้งซ่อม, 2. ธุรการรับ Job, 3. ช่างรับ Job / วินิจฉัย)
         let completeAt: Date | null = null;
         let completedBy: string | null = null;
-        if (sm.stepNumber <= 4) {
+        if (sm.stepNumber <= 3) {
           completeAt = now;
           completedBy = user.id;
         }
@@ -274,7 +274,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 3. Update Step Progress (Step 1 - 12)
+  // 3. Update Step Progress
   // ───────────────────────────────────────────────────────────────────────────
 
   async updateStepProgress(
@@ -311,22 +311,45 @@ export class RepairsService {
       throw new NotFoundException(`Step #${stepNumber} not found for this job`);
     }
 
+    const totalSteps = job.repairJobSteps.length;
+    const isPenultimateStep = stepNumber === totalSteps - 1; // "แล้วเสร็จ / รอตรวจรับงาน"
+    const isFinalStep = stepNumber === totalSteps; // "ตรวจรับงานและสรุป Job"
+
     const completionTime = dto.completeAt ? new Date(dto.completeAt) : new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      // Step-specific Business Rules
-      if (currentStepActionType === StepActionType.INTERNAL_STOCK) {
-        // Step 7: อนุมัติจัดหาอะไหล่ในคลัง ➔ กัน/ตัดสต็อกทันที
-        // (If spare parts were specified during diagnose or stored in sparepartTxns)
-      }
-
-      // Step 9: ช่างรับพัสดุ/อะไหล่ ➔ บันทึก SPAREPART_TXN (WITHDRAW) ถ้ายังไม่บันทึก
-      // Step 11: แจ้งเตือนแล้วเสร็จ / รอตรวจรับ
-      if (stepNumber === 11) {
+      // If penultimate step (แล้วเสร็จ / รอตรวจรับงาน) -> set status to WAITING_DELIVERY
+      if (isPenultimateStep) {
         const waitingDeliveryStatusId = await this.getStatusId('jobStatus', 'WAITING_DELIVERY');
         await tx.repairJob.update({
           where: { id: jobId },
           data: { jobStatusId: waitingDeliveryStatusId, updatedBy: user.id },
+        });
+      }
+
+      // If final step (ตรวจรับงานและสรุป Job) -> set status to COMPLETED and update returnDate
+      if (isFinalStep) {
+        const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
+        const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
+        const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+
+        await tx.repairJob.update({
+          where: { id: jobId },
+          data: {
+            jobStatusId: completedStatusId,
+            returnDate: completionTime,
+            receiverId: user.id,
+            updatedBy: user.id,
+          },
+        });
+
+        await tx.asset.update({
+          where: { id: job.assetId },
+          data: {
+            asset_status_id: normalAssetStatusId,
+            availability_status_id: availableStatusId,
+            updatedBy: user.id,
+          },
         });
       }
 

@@ -199,11 +199,11 @@ describe('RepairsService', () => {
       mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
       mockPrisma.stepMaster.findMany.mockResolvedValue([
         { id: 1, stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
-        { id: 2, stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ธุรการรับ Job' },
-        { id: 3, stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'กำหนดแล้วเสร็จ' },
-        { id: 4, stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ช่างรับ JOB' },
-        { id: 5, stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'ใช้วัสดุ-อะไหล่สำรอง' },
-        { id: 6, stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ดำเนินการซ่อมเอง' },
+        { id: 2, stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ธุรการรับ Job / จ่ายงาน' },
+        { id: 3, stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างรับ Job / วินิจฉัย' },
+        { id: 4, stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ดำเนินการซ่อมและทดสอบการใช้งาน' },
+        { id: 5, stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+        { id: 6, stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
       ]);
       mockPrisma.repairJob.update.mockResolvedValue({
         id: 'job-uuid-1',
