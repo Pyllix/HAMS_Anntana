@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RepairsService } from './repairs.service';
 import { PrismaService } from '../prisma.service';
 import { ActionType, ReportType, StepActionType, UrgencyStatus, UserRole } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 describe('RepairsService', () => {
   let service: RepairsService;
@@ -309,6 +309,57 @@ describe('RepairsService', () => {
       await expect(
         service.returnSparePart('job-uuid-1', { sparepartId: 1, qty: 5 }, mockUser),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('updateStepProgress & validateStepRole', () => {
+    it('should reject ADMIN or MAINTENANCE_STAFF on approval steps (Step 5)', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        repairJobSteps: [
+          {
+            id: 101,
+            stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK },
+          },
+        ],
+        jobStatus: { code: 'PARCEL_PROCESSING' },
+      });
+
+      // Admin user
+      const adminUser = { id: 'admin-uuid', role: UserRole.ADMIN };
+
+      await expect(() =>
+        service.updateStepProgress('job-uuid-1', 5, {}, adminUser),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow PARCEL_STAFF on Step 5 approval', async () => {
+      mockPrisma.repairJob.findUnique
+        .mockResolvedValueOnce({
+          id: 'job-uuid-1',
+          repairJobSteps: [
+            {
+              id: 101,
+              stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK },
+            },
+            {
+              id: 102,
+              stepMaster: { stepNumber: 9, actionType: StepActionType.INTERNAL_STOCK },
+            },
+          ],
+          jobStatus: { code: 'PARCEL_PROCESSING' },
+        })
+        .mockResolvedValueOnce({
+          id: 'job-uuid-1',
+          repairJobSteps: [],
+          sparepartTxns: [],
+        });
+      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 101 });
+
+      const parcelUser = { id: 'parcel-uuid', role: UserRole.PARCEL_STAFF };
+      const result = await service.updateStepProgress('job-uuid-1', 5, {}, parcelUser);
+
+      expect(mockPrisma.repairJobStep.update).toHaveBeenCalled();
     });
   });
 

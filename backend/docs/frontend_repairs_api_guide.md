@@ -10,14 +10,33 @@
 
 ```
 [ช่วงที่ 1: แจ้งซ่อม] ────────▶ [ช่วงที่ 2: ฟอร์มช่างรับงาน & วินิจฉัย & วางแผน] ────────▶ [ช่วงที่ 3: ทยอยกดอัปเดตตามจริง]
-  • หน่วยงานแจ้งซ่อม                • ธุรการ/ช่างกรอกฟอร์มเดียว รวดเดียว (Steps 2-4)          • ผู้อนุมัติ / พัสดุ / ช่าง / หน่วยงาน
+  • หน่วยงานแจ้งซ่อม                • ธุรการ/ช่างกรอกฟอร์มเดียว รวดเดียว (Steps 2-4)          • ผู้อนุมัติ / พัสดุ / ช่าง
   • POST /repairs                   • PATCH /repairs/:id/diagnose                              • PATCH /repairs/:id/steps/:stepNumber
   • Auto-complete Step 1            • Auto-complete Steps 1-4 ทันที                            • ทยอยกดตาม Event หน้างานจริง
 ```
 
 ---
 
-## 🏷️ 2. ชุดสถานะงานซ่อม (`jobStatus.code`) สำหรับทำ Badge / Tab Filter
+## 🛡️ 2. กฎการควบคุมสิทธิ์รายขั้นตอน & การแสดงผลปุ่มบนหน้าเว็บ (Strict Role Enforcement)
+
+> ⚠️ **กฎเหล็กเรื่องสิทธิ์ (Strict Separation of Duties):**
+> 1. `ADMIN` จะ **ไม่มีบทบาทในขั้นตอนปฏิบัติการงานซ่อม (Operational Workflow)** เพื่อความโปร่งใสและถูกต้องตามระเบียบโรงพยาบาล โดย `ADMIN` จะมีสิทธิ์เฉพาะการดูข้อมูล (Read-only / Audit) เท่านั้น
+> 2. หน้า Frontend จะ **ไม่แสดงปุ่ม Action ใดๆ ให้ผู้ใช้ที่มี Role เป็น `ADMIN`** ในขั้นตอนปฏิบัติการ
+
+| ขั้นตอน (Step Description) | ผู้มีสิทธิ์กดในระบบ (Designated Roles) | สิทธิ์ของ `ADMIN` | คำแนะนำการแสดงผลบน UI สำหรับ Frontend |
+|---|:---:|:---:|---|
+| **Step 1: แจ้งซ่อม** | ทุก Role (`DEPARTMENT_STAFF`, `MAINTENANCE_STAFF` ฯลฯ) | ✅ ทำได้ (แจ้งเครื่องตนเอง) | แสดงปุ่มแจ้งซ่อมให้ทุกคน |
+| **Step 2-4: รับงาน, วินิจฉัย, วางแผนเคส** | `MAINTENANCE_STAFF` | ❌ **ไม่มีสิทธิ์ (Forbidden)** | แสดงฟอร์มและปุ่มบันทึกเฉพาะช่าง (`MAINTENANCE_STAFF`) เท่านั้น |
+| **Step 5: อนุมัติจัดหา / อนุมัติส่งซ่อม (Stock / Outsource)** | **`PARCEL_STAFF`** | ❌ **ไม่มีสิทธิ์ (Forbidden)** | `ADMIN`, `MAINTENANCE_STAFF`, `MANAGER` ➔ **Disable / Hide Button** |
+| **Step 5: พัสดุตรวจสอบขอซื้อทดแทน (Replacement)** | **`PARCEL_STAFF`** | ❌ **ไม่มีสิทธิ์ (Forbidden)** | Role อื่นๆ ➔ **Disable / Hide Button** |
+| **Step 6: ผู้บริหารอนุมัติขอซื้อทดแทน (Replacement)** | **`MANAGER`** | ❌ **ไม่มีสิทธิ์ (Forbidden)** | Role อื่นๆ ➔ **Disable / Hide Button** |
+| **พัสดุจ่ายอะไหล่ / รับของเข้าคลัง (Step 6 ใน Stock หรือ Step 7 ใน Replacement)** | **`PARCEL_STAFF`** | ❌ **ไม่มีสิทธิ์ (Forbidden)** | `ADMIN`, `MAINTENANCE_STAFF` ➔ **Disable / Hide Button** |
+| **ช่างรับอะไหล่ / ดำเนินการซ่อม / ตั้งค่าเครื่อง** | `MAINTENANCE_STAFF` | ❌ **ไม่มีสิทธิ์ (Forbidden)** | `ADMIN`, `PARCEL_STAFF` ➔ **Disable / Hide Button** |
+| **ตรวจรับงานและปิด Job (Step สุดท้าย - ส่งมอบคืน)** | `MAINTENANCE_STAFF` | ❌ **ไม่มีสิทธิ์ (Forbidden)** | **แสดงฟอร์มให้ช่างเลือก Dropdown เจ้าหน้าที่ผู้มารับมอบ (`receiverId`) และระบุ `warrantyDate`** |
+
+---
+
+## 🏷️ 3. ชุดสถานะงานซ่อม (`jobStatus.code`) สำหรับทำ Badge / Tab Filter
 
 | Status Code | ชื่อสถานะ (ไทย) | แนะนำสี Badge | ความหมาย |
 |---|---|:---:|---|
@@ -34,30 +53,17 @@
 
 ---
 
-## 🛠️ 3. API Endpoints Reference
+## 🛠️ 4. API Endpoints Reference
 
-### 3.1 ดึงข้อมูล Master / Lookup สำหรับ Dropdown ในฟอร์ม
+### 4.1 ดึงข้อมูล Master / Lookup สำหรับ Dropdown ในฟอร์ม
 ```http
 GET /repairs/lookups/meta
 ```
 - **Authentication:** `Bearer Token` (ทุก Role)
-- **Response:**
-  ```json
-  {
-    "causes": [{ "id": 1, "code": "01", "name": "การเสื่อมสภาพตามอายุการใช้งาน" }],
-    "techCategories": [{ "id": 1, "code": "BIOMED", "name": "หมวดวิศวกรรมชีวการแพทย์" }],
-    "jobTypes": [{ "id": 1, "name": "ตรวจเช็คและซ่อมทั่วไป" }],
-    "jobStatuses": [{ "id": 1, "code": "PENDING_ASSIGN", "name": "รอมอบหมายงานให้ช่าง" }],
-    "actionTypes": ["REPAIR", "FABRICATE", "MODIFY", "PREVENTIVE"],
-    "stepActionTypes": ["SELF_REPAIR", "INTERNAL_STOCK", "EXTERNAL_STOCK", "OUTSOURCE", "PURCHASE_REPLACEMENT"],
-    "urgencyStatuses": ["NORMAL", "URGENT", "EMERGENCY"],
-    "reportTypes": ["Repair", "Maintenance"]
-  }
-  ```
 
 ---
 
-### 3.2 ช่วงที่ 1: สร้างใบแจ้งซ่อมออนไลน์ (Create Repair Request)
+### 4.2 ช่วงที่ 1: สร้างใบแจ้งซ่อมออนไลน์ (Create Repair Request)
 ```http
 POST /repairs
 ```
@@ -69,192 +75,61 @@ POST /repairs
     "symptom": "เปิดเครื่องไม่ติด มีกลิ่นไหม้",
     "urgencyStatus": "URGENT",
     "reportType": "Repair",
-    "sectionId": " optional: ถ้าระบุจะ override แผนกผู้แจ้ง"
+    "sectionId": "optional: แผนกผู้แจ้ง"
   }
   ```
-- **Response (201 Created):**
-  - ได้ `jobNo` (เช่น `REP-202609-0001`)
-  - `jobStatus.code` ➔ **`PENDING_ASSIGN`**
-  - ครุภัณฑ์ถูกปรับเป็น **`UNDER_REPAIR` / `UNAVAILABLE`** อัตโนมัติ
 
 ---
 
-### 3.3 ช่วงที่ 2: ฟอร์มรับงาน & วินิจฉัย & วางแผนเคส (Diagnose & Plan) — **Single Submit**
-> 📌 **Frontend Note:** หน้านี้ทำเป็น 1 ฟอร์มใหญ่ให้ช่างกรอกทุกอย่างรวดเดียว เมื่อกดบันทึก Backend จะบันทึกช่าง + ผลวินิจฉัย + Auto-complete Steps 1 ถึง 4 ให้ทันที!
-
+### 4.3 ช่วงที่ 2: ฟอร์มรับงาน & วินิจฉัย & วางแผนเคส (Diagnose & Plan) — **Single Submit**
 ```http
 PATCH /repairs/:id/diagnose
 ```
 - **สิทธิ์การใช้งาน:** `MAINTENANCE_STAFF`, `ADMIN`
-- **Request Body (ตัวอย่างเคส INTERNAL_STOCK):**
+- **Request Body (ตัวอย่างเคส PURCHASE_REPLACEMENT):**
   ```json
   {
-    "diagnosis": "พาวเวอร์ซัพพลายช็อตและฟิวส์ขาด",
-    "solution": "เปลี่ยนชุด Power Supply และฟิวส์ 10A",
-    "causeId": 3,
-    "techCategoryId": 1,
-    "jobTypeId": 1,
-    "actionType": "REPAIR",
-    "stepActionType": "INTERNAL_STOCK",
-    "dueDate": "2026-09-10T17:00:00.000Z",
-    "isRepeatRepair": false,
-    "mechanicIds": ["user-uuid-ช่างคนแรก", "user-uuid-ช่างคนที่สอง"],
-    "spareParts": [
-      { "sparepartId": 1, "qty": 1 },
-      { "sparepartId": 5, "qty": 2 }
-    ]
-  }
-  ```
-- **Request Body (ตัวอย่างเคส OUTSOURCE):**
-  ```json
-  {
-    "diagnosis": "บอร์ดประมวลผลหลักเสียหาย ไม่สามารถซ่อมภายในได้",
-    "solution": "ส่งซ่อมศูนย์บริการผู้แทนจำหน่าย",
-    "causeId": 4,
+    "diagnosis": "ตัวถังแตกหัก แผงวงจรหลักเสียหายสิ้นเชิง ซ่อมไม่คุ้มค่า",
+    "solution": "แทงชำรุดและขอจัดซื้อเครื่องใหม่ทดแทน",
+    "causeId": 2,
     "techCategoryId": 1,
     "jobTypeId": 2,
     "actionType": "REPAIR",
-    "stepActionType": "OUTSOURCE",
-    "companyId": "company-uuid-บริษัทผู้รับซ่อม",
-    "billNo": "DOC-OUT-2026/09",
-    "mechanicIds": ["user-uuid-ช่างผู้ประสานงาน"]
+    "stepActionType": "PURCHASE_REPLACEMENT",
+    "mechanicIds": ["user-uuid-ช่างผู้ประเมิน"]
   }
   ```
-- **Response (200 OK):**
-  - ส่ง Object `RepairJob` พร้อม Array `repairJobSteps` ครบทุก Step
-  - สังเกตว่า `repairJobSteps[0..3]` จะมี `completeAt` และ `completedBy` เติมมาให้แล้วทันที
 
 ---
 
-### 3.4 ช่วงที่ 3: อัปเดตความคืบหน้ารายขั้นตอน (Update Step Progress)
-> 📌 **Frontend Note:** สำหรับให้ช่าง/พัสดุ/ผู้อนุมัติ กดผ่านขั้นตอนทีละ Step (ตั้งแต่ Step 5 เป็นต้นไป)
-
+### 4.4 ช่วงที่ 3: อัปเดตความคืบหน้ารายขั้นตอน (Update Step Progress)
 ```http
 PATCH /repairs/:id/steps/:stepNumber
 ```
 - **URL Parameters:**
   - `id`: Job UUID
-  - `stepNumber`: ลำดับของ Step เช่น `5`, `6`, `7`
-- **Request Body:**
+  - `stepNumber`: ลำดับของ Step เช่น `5`, `6`, `7` ... หรือ Step สุดท้าย
+- **Request Body (Step ทั่วไป):**
   ```json
   {
-    "note": "ผ่านการอนุมัติเรียบร้อย อยู่ระหว่างรอเอกสาร",
-    "completeAt": "2026-09-02T10:30:00.000Z" // Optional: ถ้าไม่ส่ง Backend ใช้วันเวลาปัจจุบัน
+    "note": "ผ่านการตรวจสอบความถูกต้อง",
+    "completeAt": "2026-09-02T10:30:00.000Z"
   }
   ```
-- **Behavior & State Transition ใน Backend:**
-  - ถ้าอัปเดต **Step 5 (OUTSOURCE)** ➔ `JobStatus` เปลี่ยนเป็น **`OUTSOURCED`** 🚚
-  - ถ้าอัปเดต **Step 5 (EXTERNAL_STOCK)** ➔ `JobStatus` เปลี่ยนเป็น **`WAITING_PARTS`** ⏳
-  - ถ้าอัปเดต **Step จ่าย/รับของ** ➔ `JobStatus` เปลี่ยนเป็น **`IN_PROGRESS`** 🔧
-  - ถ้าอัปเดต **Step ก่อนสุดท้าย (แล้วเสร็จ)** ➔ `JobStatus` เปลี่ยนเป็น **`WAITING_DELIVERY`** 🔔
-  - ถ้าอัปเดต **Step สุดท้าย (ตรวจรับงาน)** ➔ `JobStatus` เปลี่ยนเป็น **`COMPLETED`** ✅ และคืนสถานะ Asset เป็น **`NORMAL` / `AVAILABLE`**
-
----
-
-### 3.5 ดึงรายการงานซ่อม (List with Filters & Pagination)
-```http
-GET /repairs?statusCode=IN_PROGRESS&page=1&limit=10
-```
-- **Query Parameters ที่รองรับ:**
-  - `page` (number): หน้าที่ต้องการ (Default: 1)
-  - `limit` (number): จำนวนต่อหน้า (Default: 10)
-  - `statusCode` (string): ฟิลเตอร์สถานะ เช่น `PENDING_ASSIGN`, `IN_PROGRESS`, `WAITING_PARTS`, `OUTSOURCED`, `WAITING_DELIVERY`, `COMPLETED`
-  - `stepActionType` (string): `SELF_REPAIR`, `INTERNAL_STOCK`, `EXTERNAL_STOCK`, `OUTSOURCE`, `PURCHASE_REPLACEMENT`
-  - `urgencyStatus` (string): `NORMAL`, `URGENT`, `EMERGENCY`
-  - `reportType` (string): `Repair`, `Maintenance`
-  - `sectionId` (uuid): ฟิลเตอร์ตามแผนก
-  - `assetId` (uuid): ฟิลเตอร์ตามครุภัณฑ์
-  - `mechanicId` (uuid): ฟิลเตอร์ตามช่างที่รับผิดชอบ
-
----
-
-### 3.6 ดึงรายละเอียดงานซ่อมรายใบ (Get Single Job Detail)
-```http
-GET /repairs/:id
-```
-- **Response Structure สำคัญ:**
+- **Request Body (Step สุดท้าย - ช่างกดส่งมอบคืน & ปิด Job):**
   ```json
   {
-    "id": "job-uuid",
-    "jobNo": "REP-202609-0001",
-    "symptom": "...",
-    "diagnosis": "...",
-    "solution": "...",
-    "dueDate": "2026-09-10T17:00:00.000Z",
-    "returnDate": null,
-    "jobStatus": { "code": "IN_PROGRESS", "name": "ช่างกำลังดำเนินการซ่อม" },
-    "asset": { "id": "...", "asset_code": "AST-001", "name": "...", "status": { ... } },
-    "mechanicRepairs": [{ "user": { "id": "...", "firstname": "...", "lastname": "..." } }],
-    "repairJobSteps": [
-      {
-        "id": 101,
-        "completeAt": "2026-09-01T08:00:00.000Z",
-        "note": null,
-        "stepMaster": { "stepNumber": 1, "label": "วันแจ้งซ่อม", "actionType": "INTERNAL_STOCK" },
-        "user": { "firstname": "สมชาย", "lastname": "ใจดี" }
-      }
-    ],
-    "sparepartTxns": [
-      {
-        "txnId": 1,
-        "txnType": "WITHDRAW",
-        "qty": 1,
-        "unitPrice": "150.00",
-        "sparepart": { "name": "ฟิวส์ 10A", "code": "SP-001" }
-      }
-    ]
-  }
-  ```
-
----
-
-### 3.7 ส่งมอบคืน บันทึกประกัน และปิด Job โดยตรง (Complete Job)
-```http
-PATCH /repairs/:id/complete
-```
-- **Request Body:**
-  ```json
-  {
+    "receiverId": "user-uuid-เจ้าหน้าที่หน่วยงานผู้มารับมอบเครื่อง",
     "warrantyDate": "2027-09-01",
-    "receiverId": "user-uuid-ผู้รับมอบเครื่องคืน",
-    "note": "ทดสอบระบบพร้อมใช้งาน ส่งมอบคืนแผนกเรียบร้อย"
+    "note": "ทดสอบเครื่องพร้อมใช้งาน ส่งมอบคืนหน่วยงานเรียบร้อย"
   }
   ```
-- **ผลลัพธ์:** ปรับ `JobStatus: COMPLETED`, `AssetStatus: NORMAL`, `AvailabilityStatus: AVAILABLE`
+  *(เมื่อบันทึก Step สุดท้าย ระบบจะเปลี่ยนสถานะเป็น `COMPLETED` และปรับสถานะ Asset เป็น `NORMAL`/`AVAILABLE` หรือ `WAIT_DISPOSAL` ให้อัตโนมัติทันที)*
 
 ---
 
-### 3.8 การคืนอะไหล่ส่วนเกินเข้าคลัง (Return Spare Parts)
-```http
-POST /repairs/:id/spare-parts/return
-```
-- **Request Body:**
-  ```json
-  {
-    "sparepartId": 1,
-    "qty": 1,
-    "note": "เบิกมา 2 ชิ้น ใช้จริง 1 ชิ้น คืนเข้าคลัง 1 ชิ้น"
-  }
-  ```
-- **ผลลัพธ์:** คืนยอดสต็อกเข้า `SPAREPART.qty_in_stock` และบันทึก `SPAREPART_TXN` ประเภท `RETURN`
-
----
-
-## 💡 Frontend Best Practices & UI Tips
-
-1. **Stepper / Timeline Rendering:**
-   - ใช้ `job.repairJobSteps` ในการ Render Stepper
-   - ถ้า `step.completeAt !== null` ให้แสดงไอคอน ✅ ผ่านแล้ว พร้อมแสดงวันที่และชื่อผู้ดำเนินการ (`step.user.firstname`)
-   - ขั้นตอนที่กำลังดำเนินการ (Active Step) คือ Step แรกที่ `completeAt === null`
-2. **Form Validation:**
-   - ถ้าเลือก `stepActionType === 'OUTSOURCE'` อย่าลืมบังคับให้เลือก `companyId` ในฟอร์ม
-   - ถ้าเลือก `stepActionType === 'INTERNAL_STOCK'` สามารถตรวจสอบสต็อกคงเหลือจาก Master อะไหล่ก่อนกดส่งได้
-3. **Tab Filtering:**
-   - ออกแบบ Tab บนหน้าตารางงานซ่อมตาม `statusCode`:
-     - 📥 ทั้งหมด
-     - ⏳ รอมอบหมาย (`PENDING_ASSIGN`)
-     - 🔧 กำลังซ่อม (`IN_PROGRESS`)
-     - 📦 รออะไหล่/พัสดุ (`WAITING_PARTS`, `PARCEL_PROCESSING`)
-     - 🚚 ส่งซ่อมนอก (`OUTSOURCED`)
-     - 🔔 รอส่งมอบ (`WAITING_DELIVERY`)
-     - ✅ เสร็จสมบูรณ์ (`COMPLETED`)
+### 4.5 ดึงรายการงานซ่อม & รายละเอียด
+- `GET /repairs?statusCode=PARCEL_PROCESSING&page=1&limit=10`
+- `GET /repairs/:id`
+- `POST /repairs/:id/spare-parts/return`
+- `PATCH /repairs/:id/complete` (หรือใช้ Step สุดท้ายใน `PATCH /repairs/:id/steps/:stepNumber`)

@@ -327,6 +327,9 @@ export class RepairsService {
       throw new NotFoundException(`Step #${stepNumber} not found for this job`);
     }
 
+    // Strict Step-level Role Validation (Separation of Duties - ADMIN excluded from approval steps)
+    this.validateStepRole(currentStepActionType, stepNumber, user.role);
+
     const totalSteps = job.repairJobSteps.length;
     const isPenultimateStep = stepNumber === totalSteps - 1; // "แล้วเสร็จ / รอตรวจรับงาน"
     const isFinalStep = stepNumber === totalSteps; // "ตรวจรับงานและสรุป Job"
@@ -391,15 +394,15 @@ export class RepairsService {
           });
         }
       } else if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
-        if (stepNumber === 5 || stepNumber === 6) {
-          // อนุมัติซื้อเครื่องใหม่ / พัสดุรับเครื่องใหม่ -> PARCEL_PROCESSING
+        if (stepNumber === 5 || stepNumber === 6 || stepNumber === 7) {
+          // Step 5: พัสดุตรวจ, Step 6: ผู้บริหารอนุมัติ, Step 7: พัสดุรับเครื่องใหม่ -> PARCEL_PROCESSING
           const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
           await tx.repairJob.update({
             where: { id: jobId },
             data: { jobStatusId: parcelStatusId, updatedBy: user.id },
           });
-        } else if (stepNumber === 7) {
-          // ช่างรับเครื่องใหม่และส่งมอบ -> IN_PROGRESS
+        } else if (stepNumber === 8) {
+          // Step 8: ช่างรับเครื่องใหม่และส่งมอบ -> IN_PROGRESS
           const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
           await tx.repairJob.update({
             where: { id: jobId },
@@ -433,12 +436,15 @@ export class RepairsService {
         const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
         const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
 
+        const effectiveReceiverId = dto.receiverId || user.id;
+
         await tx.repairJob.update({
           where: { id: jobId },
           data: {
             jobStatusId: completedStatusId,
             returnDate: completionTime,
-            receiverId: user.id,
+            receiverId: effectiveReceiverId,
+            warrantyDate: dto.warrantyDate ?? job.warrantyDate,
             updatedBy: user.id,
           },
         });
@@ -886,5 +892,101 @@ export class RepairsService {
       techCategories,
       stepMasters,
     };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Helper: Strict Step-level Role Validation (Separation of Duties)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  private validateStepRole(
+    actionType: StepActionType,
+    stepNumber: number,
+    role: UserRole,
+  ) {
+    // 1. Approvals: Step 5 for Stock/Outsource/Replacement (PARCEL_STAFF only), Step 6 for Replacement (MANAGER only)
+    if (
+      (actionType === StepActionType.INTERNAL_STOCK ||
+        actionType === StepActionType.EXTERNAL_STOCK ||
+        actionType === StepActionType.OUTSOURCE) &&
+      stepNumber === 5
+    ) {
+      if (role !== UserRole.PARCEL_STAFF) {
+        throw new ForbiddenException(
+          `Step #${stepNumber} (Approval) can only be performed by PARCEL_STAFF`,
+        );
+      }
+      return;
+    }
+
+    if (actionType === StepActionType.PURCHASE_REPLACEMENT) {
+      if (stepNumber === 5) {
+        // Step 5: พัสดุตรวจสอบและเสนอความเห็น -> PARCEL_STAFF only
+        if (role !== UserRole.PARCEL_STAFF) {
+          throw new ForbiddenException(
+            `Step #5 (Parcel Review) can only be performed by PARCEL_STAFF`,
+          );
+        }
+        return;
+      }
+      if (stepNumber === 6) {
+        // Step 6: ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน -> MANAGER only
+        if (role !== UserRole.MANAGER) {
+          throw new ForbiddenException(
+            `Step #6 (Executive Approval) can only be performed by MANAGER`,
+          );
+        }
+        return;
+      }
+    }
+
+    // 2. Parcel Handling: Step 6 for Stock/Outsource, Step 7 for Replacement (PARCEL_STAFF only)
+    if (
+      ((actionType === StepActionType.INTERNAL_STOCK ||
+        actionType === StepActionType.EXTERNAL_STOCK ||
+        actionType === StepActionType.OUTSOURCE) &&
+        stepNumber === 6) ||
+      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 7)
+    ) {
+      if (role !== UserRole.PARCEL_STAFF) {
+        throw new ForbiddenException(
+          `Parcel handover steps can only be performed by PARCEL_STAFF`,
+        );
+      }
+      return;
+    }
+
+    // 3. Mechanic Operations: Step 4 for SELF_REPAIR, Step 7 for Stock/Outsource, Step 8 for Replacement
+    if (
+      (actionType === StepActionType.SELF_REPAIR && stepNumber === 4) ||
+      ((actionType === StepActionType.INTERNAL_STOCK ||
+        actionType === StepActionType.EXTERNAL_STOCK ||
+        actionType === StepActionType.OUTSOURCE) &&
+        stepNumber === 7) ||
+      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 8)
+    ) {
+      if (role !== UserRole.MAINTENANCE_STAFF) {
+        throw new ForbiddenException(
+          `Mechanic operations can only be performed by MAINTENANCE_STAFF`,
+        );
+      }
+      return;
+    }
+
+    // 4. Final Handover & Closure Step (ช่างเป็นผู้บันทึกสรุปและส่งมอบให้หน่วยงาน)
+    const isFinalStep =
+      (actionType === StepActionType.SELF_REPAIR && stepNumber === 6) ||
+      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 10) ||
+      (actionType !== StepActionType.SELF_REPAIR &&
+        actionType !== StepActionType.PURCHASE_REPLACEMENT &&
+        stepNumber === 9);
+
+    if (isFinalStep) {
+      if (role !== UserRole.MAINTENANCE_STAFF) {
+        throw new ForbiddenException(
+          `Final job completion can only be performed by MAINTENANCE_STAFF`,
+        );
+      }
+      return;
+    }
   }
 }

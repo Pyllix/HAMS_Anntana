@@ -996,16 +996,17 @@ async function main() {
     { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
     { stepNumber: 9, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับงานและสรุป Job' },
 
-    // 4. PURCHASE_REPLACEMENT
+    // 4. PURCHASE_REPLACEMENT (10 Steps with Two-tier Approval)
     { stepNumber: 1, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'วันแจ้งซ่อม' },
     { stepNumber: 2, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ธุรการรับ Job / จ่ายงาน' },
     { stepNumber: 3, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับ Job / วินิจฉัย' },
     { stepNumber: 4, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ขอซื้อเครื่องทดแทน' },
-    { stepNumber: 5, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'อนุมัติขอซื้อเครื่องทดแทน' },
-    { stepNumber: 6, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุรับเครื่องใหม่เข้าคลัง' },
-    { stepNumber: 7, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับเครื่องใหม่และส่งมอบ' },
-    { stepNumber: 8, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 9, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ตรวจรับงานและสรุป Job' },
+    { stepNumber: 5, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุตรวจสอบและเสนอความเห็น' },
+    { stepNumber: 6, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน' },
+    { stepNumber: 7, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุรับเครื่องใหม่เข้าคลัง' },
+    { stepNumber: 8, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับเครื่องใหม่และส่งมอบ' },
+    { stepNumber: 9, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 10, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ตรวจรับงานและสรุป Job' },
 
     // 5. SELF_REPAIR
     { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
@@ -1021,7 +1022,13 @@ async function main() {
     where: {
       OR: [
         { actionType: StepActionType.SELF_REPAIR, stepNumber: { gt: 6 } },
-        { actionType: { not: StepActionType.SELF_REPAIR }, stepNumber: { gt: 9 } },
+        { actionType: StepActionType.PURCHASE_REPLACEMENT, stepNumber: { gt: 10 } },
+        {
+          actionType: {
+            notIn: [StepActionType.SELF_REPAIR, StepActionType.PURCHASE_REPLACEMENT],
+          },
+          stepNumber: { gt: 9 },
+        },
       ],
     },
   });

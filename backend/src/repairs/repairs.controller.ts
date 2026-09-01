@@ -97,8 +97,8 @@ export class RepairsController {
   // 4. Mechanic Diagnosis & Action Type Selection - UC8
   // ───────────────────────────────────────────────────────────────────────────
   @Patch(':id/diagnose')
-  @Roles(UserRole.MAINTENANCE_STAFF, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Mechanic diagnoses job, selects ActionType, and clones 12 steps' })
+  @Roles(UserRole.MAINTENANCE_STAFF)
+  @ApiOperation({ summary: 'Mechanic diagnoses job, selects ActionType, and clones operational steps' })
   async diagnose(
     @Param('id') id: string,
     @Body() dto: DiagnoseRepairJobDto,
@@ -108,16 +108,15 @@ export class RepairsController {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. Update Step Progress (Steps 1 - 12)
+  // 5. Update Step Progress (Steps 1 - 10)
   // ───────────────────────────────────────────────────────────────────────────
   @Patch(':id/steps/:stepNumber')
   @Roles(
     UserRole.MAINTENANCE_STAFF,
     UserRole.PARCEL_STAFF,
-    UserRole.ASSET_CENTER_STAFF,
-    UserRole.ADMIN,
+    UserRole.MANAGER,
   )
-  @ApiOperation({ summary: 'Update progress of a specific repair step (1 to 12)' })
+  @ApiOperation({ summary: 'Update progress of a specific repair step (1 to 10)' })
   async updateStep(
     @Param('id') id: string,
     @Param('stepNumber', ParseIntPipe) stepNumber: number,
@@ -131,7 +130,7 @@ export class RepairsController {
   // 6. Spare Parts Requisition & Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
   @Post(':id/spare-parts/withdraw')
-  @Roles(UserRole.MAINTENANCE_STAFF, UserRole.PARCEL_STAFF, UserRole.ADMIN)
+  @Roles(UserRole.MAINTENANCE_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Withdraw / dedicate spare parts to repair job (INTERNAL_STOCK)' })
   async withdrawSparePart(
     @Param('id') id: string,
@@ -142,7 +141,7 @@ export class RepairsController {
   }
 
   @Post(':id/spare-parts/return')
-  @Roles(UserRole.MAINTENANCE_STAFF, UserRole.ADMIN)
+  @Roles(UserRole.MAINTENANCE_STAFF)
   @ApiOperation({ summary: 'Return unused spare parts back into warehouse inventory' })
   async returnSparePart(
     @Param('id') id: string,
@@ -153,14 +152,10 @@ export class RepairsController {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 7. Complete, Handover & Close Job (Step 12)
+  // 7. Complete, Handover & Close Job
   // ───────────────────────────────────────────────────────────────────────────
   @Patch(':id/complete')
-  @Roles(
-    UserRole.MAINTENANCE_STAFF,
-    UserRole.ASSET_CENTER_STAFF,
-    UserRole.ADMIN,
-  )
+  @Roles(UserRole.MAINTENANCE_STAFF)
   @ApiOperation({ summary: 'Complete repair job, record warranty, handover asset, and set asset to NORMAL/AVAILABLE' })
   async completeJob(
     @Param('id') id: string,

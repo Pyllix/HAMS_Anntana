@@ -18,4 +18,19 @@ export class UpdateRepairStepDto {
   @IsString()
   @IsOptional()
   docNo?: string;
+
+  @ApiPropertyOptional({
+    description: 'User ID of the department staff who received the asset upon job completion',
+    example: 'uuid',
+  })
+  @IsString()
+  @IsOptional()
+  receiverId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Warranty expiration date string (e.g. 2027-09-01)',
+  })
+  @IsString()
+  @IsOptional()
+  warrantyDate?: string;
 }
