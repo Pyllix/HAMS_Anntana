@@ -93,6 +93,31 @@ export class RepairsService {
       throw new NotFoundException(`Asset with ID ${dto.assetId} not found`);
     }
 
+    // 1. Guard against disposed or lost asset
+    if (asset.status?.code === 'DISPOSAL' || asset.status?.code === 'WAIT_DISPOSAL') {
+      throw new BadRequestException(`Cannot request repair for disposed asset "${asset.name}" (${asset.noid})`);
+    }
+    if (asset.status?.code === 'LOST') {
+      throw new BadRequestException(`Cannot request repair for lost asset "${asset.name}" (${asset.noid})`);
+    }
+
+    // 2. Guard against duplicate active repair requests for the same asset
+    const activeRepairJob = await this.prisma.repairJob.findFirst({
+      where: {
+        assetId: dto.assetId,
+        jobStatus: {
+          code: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+      },
+      include: { jobStatus: true },
+    });
+
+    if (activeRepairJob) {
+      throw new BadRequestException(
+        `Asset "${asset.name}" (${asset.noid}) already has an active repair job #${activeRepairJob.jobNo} (Status: ${activeRepairJob.jobStatus?.name || activeRepairJob.jobStatus?.code})`,
+      );
+    }
+
     const underRepairStatusId = await this.getStatusId('assetStatus', 'UNDER_REPAIR');
     const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
     const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
@@ -182,8 +207,38 @@ export class RepairsService {
     if (!techCat) throw new NotFoundException(`Tech category #${dto.techCategoryId} not found`);
     if (!jobType) throw new NotFoundException(`Job type #${dto.jobTypeId} not found`);
 
-    if (dto.stepActionType === StepActionType.OUTSOURCE && !dto.companyId) {
-      throw new BadRequestException('Company ID is required for OUTSOURCE step action type');
+    // 1. Validate OUTSOURCE vs Non-OUTSOURCE rules
+    if (dto.stepActionType === StepActionType.OUTSOURCE) {
+      if (!dto.companyId) {
+        throw new BadRequestException('Company ID is required for OUTSOURCE action type');
+      }
+      const company = await this.prisma.company.findUnique({
+        where: { id: dto.companyId, deletedAt: null },
+      });
+      if (!company) {
+        throw new NotFoundException(`Company #${dto.companyId} not found`);
+      }
+      if (dto.spareParts && dto.spareParts.length > 0) {
+        throw new BadRequestException('Spare parts requisition is not allowed for OUTSOURCE action type');
+      }
+    } else {
+      if (dto.companyId) {
+        throw new BadRequestException(`Company ID cannot be specified for ${dto.stepActionType} action type`);
+      }
+      if (dto.billNo) {
+        throw new BadRequestException(`Bill number cannot be specified for ${dto.stepActionType} action type`);
+      }
+    }
+
+    // 2. Validate INTERNAL_STOCK vs Other Action Types regarding spare parts
+    if (dto.stepActionType === StepActionType.INTERNAL_STOCK) {
+      if (!dto.spareParts || dto.spareParts.length === 0) {
+        throw new BadRequestException('At least one spare part must be selected for INTERNAL_STOCK action type');
+      }
+    } else if (dto.spareParts && dto.spareParts.length > 0) {
+      throw new BadRequestException(
+        `Spare parts requisition from internal inventory is not allowed for ${dto.stepActionType} action type`,
+      );
     }
 
     // Validate Mechanics: All assigned users must have role MAINTENANCE_STAFF
@@ -203,7 +258,8 @@ export class RepairsService {
     }
 
     // Validate Spare Parts for INTERNAL_STOCK: Stock must not be deficient
-    if (dto.stepActionType === StepActionType.INTERNAL_STOCK && dto.spareParts && dto.spareParts.length > 0) {
+    const sparePartMap: Record<number, any> = {};
+    if (dto.spareParts && dto.spareParts.length > 0) {
       for (const item of dto.spareParts) {
         const sp = await this.prisma.sparepart.findUnique({
           where: { id: item.sparepartId, deletedAt: null },
@@ -216,6 +272,7 @@ export class RepairsService {
             `Insufficient stock for spare part "${sp.name}" (${sp.code}). In stock: ${sp.qtyInStock}, Requested: ${item.qty}. Please select EXTERNAL_STOCK or adjust quantity.`,
           );
         }
+        sparePartMap[item.sparepartId] = sp;
       }
     }
 
@@ -277,7 +334,45 @@ export class RepairsService {
         });
       }
 
-      // 3. Clone Steps from StepMaster (Delete old steps if re-diagnosing)
+      // 3. Process Spare Parts Transactions (Deduct Stock & Record SPAREPART_TXN)
+      // If re-diagnosing, revert previous WITHDRAW transactions for this job
+      const existingWithdrawTxns = await tx.sparepartTxn.findMany({
+        where: { jobId: id, txnType: 'WITHDRAW' },
+      });
+      if (existingWithdrawTxns.length > 0) {
+        for (const oldTxn of existingWithdrawTxns) {
+          await tx.sparepart.update({
+            where: { id: oldTxn.sparepartId },
+            data: { qtyInStock: { increment: oldTxn.qty } },
+          });
+        }
+        await tx.sparepartTxn.deleteMany({ where: { jobId: id } });
+      }
+
+      if (dto.spareParts && dto.spareParts.length > 0) {
+        for (const item of dto.spareParts) {
+          const sp = sparePartMap[item.sparepartId];
+          // 3.1 Deduct stock from inventory
+          await tx.sparepart.update({
+            where: { id: item.sparepartId },
+            data: { qtyInStock: { decrement: item.qty } },
+          });
+
+          // 3.2 Create WITHDRAW record in sparepart_txns
+          await tx.sparepartTxn.create({
+            data: {
+              sparepartId: item.sparepartId,
+              jobId: id,
+              txnType: 'WITHDRAW',
+              qty: item.qty,
+              unitPrice: sp.price,
+              txnBy: user.id,
+            },
+          });
+        }
+      }
+
+      // 4. Clone Steps from StepMaster (Delete old steps if re-diagnosing)
       // Form Boundary: Steps 1-4 are auto-completed on single form submission (or 1-3 for SELF_REPAIR)
       await tx.repairJobStep.deleteMany({ where: { jobId: id } });
       const now = new Date();

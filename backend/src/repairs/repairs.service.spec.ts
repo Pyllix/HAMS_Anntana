@@ -47,6 +47,9 @@ describe('RepairsService', () => {
     stepMaster: {
       findMany: jest.fn(),
     },
+    company: {
+      findUnique: jest.fn(),
+    },
     repairJobStep: {
       create: jest.fn(),
       update: jest.fn(),
@@ -61,8 +64,9 @@ describe('RepairsService', () => {
       update: jest.fn(),
     },
     sparepartTxn: {
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
+      deleteMany: jest.fn(),
     },
     assetStatus: {
       findUnique: jest.fn(),
@@ -147,6 +151,54 @@ describe('RepairsService', () => {
           mockUser,
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject createRequest if asset already has an active repair job', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        name: 'เครื่องวัดความดัน',
+        noid: 'MED-001',
+        section_id: 'section-uuid-1',
+        status: { code: 'UNDER_REPAIR' },
+      });
+      mockPrisma.repairJob.findFirst.mockResolvedValue({
+        id: 'existing-job',
+        jobNo: 'REP-202609-0001',
+        jobStatus: { code: 'IN_PROGRESS', name: 'กำลังดำเนินการ' },
+      });
+
+      await expect(
+        service.createRequest(
+          {
+            assetId: 'asset-uuid-1',
+            symptom: 'เปิดไม่ติดอีกรอบ',
+            urgencyStatus: UrgencyStatus.NORMAL,
+            reportType: ReportType.Repair,
+          },
+          mockUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject createRequest if asset is DISPOSAL or LOST', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        name: 'เตียงคนไข้',
+        noid: 'MED-999',
+        status: { code: 'DISPOSAL' },
+      });
+
+      await expect(
+        service.createRequest(
+          {
+            assetId: 'asset-uuid-1',
+            symptom: 'พัง',
+            urgencyStatus: UrgencyStatus.NORMAL,
+            reportType: ReportType.Repair,
+          },
+          mockUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -241,6 +293,76 @@ describe('RepairsService', () => {
       expect(mockPrisma.repairJobStep.create).toHaveBeenCalledTimes(6);
     });
 
+    it('should deduct spare parts stock and create WITHDRAW transactions on diagnoseAndPlan', async () => {
+      mockPrisma.repairJob.findUnique
+        .mockResolvedValueOnce({
+          id: 'job-uuid-1',
+          jobStatus: { code: 'PENDING' },
+        })
+        .mockResolvedValueOnce({
+          id: 'job-uuid-1',
+          jobStatus: { code: 'PARCEL_PROCESSING' },
+          repairJobSteps: [],
+          sparepartTxns: [
+            {
+              sparepartId: 10,
+              txnType: 'WITHDRAW',
+              qty: 2,
+              unitPrice: '500.00',
+            },
+          ],
+        });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 3, code: 'PARCEL_PROCESSING' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: mockUser.id,
+        role: UserRole.MAINTENANCE_STAFF,
+        firstname: 'Somchai',
+        lastname: 'Tech',
+      });
+      mockPrisma.sparepart.findUnique.mockResolvedValue({
+        id: 10,
+        name: 'Battery',
+        price: '500.00',
+        qtyInStock: 5,
+      });
+      mockPrisma.stepMaster.findMany.mockResolvedValue([
+        { id: 1, stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+      ]);
+      mockPrisma.sparepartTxn.findMany.mockResolvedValue([]);
+
+      const dto = {
+        diagnosis: 'แบตเตอรี่เสื่อม',
+        solution: 'เปลี่ยนแบตเตอรี่',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.INTERNAL_STOCK,
+        spareParts: [{ sparepartId: 10, qty: 2 }],
+      };
+
+      const result = await service.diagnoseAndPlan('job-uuid-1', dto, mockUser);
+
+      expect(mockPrisma.sparepart.update).toHaveBeenCalledWith({
+        where: { id: 10 },
+        data: { qtyInStock: { decrement: 2 } },
+      });
+      expect(mockPrisma.sparepartTxn.create).toHaveBeenCalledWith({
+        data: {
+          sparepartId: 10,
+          jobId: 'job-uuid-1',
+          txnType: 'WITHDRAW',
+          qty: 2,
+          unitPrice: '500.00',
+          txnBy: mockUser.id,
+        },
+      });
+      expect(result.summary.totalSparePartsCost).toBe(1000);
+    });
+
     it('should reject assigning users without MAINTENANCE_STAFF role as mechanics', async () => {
       mockPrisma.repairJob.findUnique.mockResolvedValue({
         id: 'job-uuid-1',
@@ -267,6 +389,113 @@ describe('RepairsService', () => {
         mechanicIds: ['user-non-mech'],
       };
 
+      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject OUTSOURCE if companyId is missing or if spareParts are provided', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING' },
+      });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+
+      // 1. Missing companyId
+      const dtoNoCompany: any = {
+        diagnosis: 'ส่งซ่อมนอก',
+        solution: 'ส่งศูนย์บริการ',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.OUTSOURCE,
+      };
+      await expect(service.diagnoseAndPlan('job-uuid-1', dtoNoCompany, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      // 2. OUTSOURCE with spareParts
+      mockPrisma.company.findUnique.mockResolvedValue({ id: 'comp-1' });
+      const dtoWithSpareParts: any = {
+        ...dtoNoCompany,
+        companyId: 'comp-1',
+        spareParts: [{ sparepartId: 1, qty: 1 }],
+      };
+      await expect(service.diagnoseAndPlan('job-uuid-1', dtoWithSpareParts, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject non-OUTSOURCE if companyId or billNo is provided', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING' },
+      });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+
+      const dto: any = {
+        diagnosis: 'ซ่อมเอง',
+        solution: 'ตรวจเช็ค',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.SELF_REPAIR,
+        companyId: 'comp-1',
+      };
+      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject INTERNAL_STOCK if spareParts array is empty or missing', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING' },
+      });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+
+      const dto: any = {
+        diagnosis: 'เบิกอะไหล่',
+        solution: 'เปลี่ยนของ',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.INTERNAL_STOCK,
+        spareParts: [],
+      };
+      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject SELF_REPAIR if spareParts are provided', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING' },
+      });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+
+      const dto: any = {
+        diagnosis: 'ซ่อมเอง',
+        solution: 'ตรวจเช็ค',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.SELF_REPAIR,
+        spareParts: [{ sparepartId: 1, qty: 1 }],
+      };
       await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
         BadRequestException,
       );
