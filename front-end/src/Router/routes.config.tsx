@@ -1,9 +1,10 @@
-import { Repeat, Archive, Wrench, History, LucideIcon } from "lucide-react";
+import { Repeat, Archive, Wrench, History, ShoppingCart, LucideIcon } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import AssetStock from "../Pages/AssetStock";
 import PartStock from "../Pages/PartStock";
 import PendingEvaluations from "../Pages/PendingEvaluations";
+import OrderSpareParts from "../Pages/OrderSpareParts";
 import React from "react";
 
 interface AppRote {
@@ -76,6 +77,15 @@ export const APP_ROUTE: AppRote[] = [
     element: <PendingEvaluations />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  // -------- สำหรับ Parcel Staff & Admin ------------
+  {
+    path: "order-spare-parts",
+    title: "สั่งซื้ออะไหล่",
+    element: <OrderSpareParts />,
+    icon: ShoppingCart,
+    roles: [ROLES.ADMIN, ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   // -------- สำหรับ Department ------------
