@@ -97,7 +97,7 @@ describe('RepairsService', () => {
         status: { code: 'NORMAL' },
       });
       mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1, name: 'ตรวจเช็คและซ่อมทั่วไป' });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 1, code: 'PENDING' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 1, code: 'PENDING_ASSIGN' });
       mockPrisma.assetStatus.findUnique.mockResolvedValue({ id: 3, code: 'UNDER_REPAIR' });
       mockPrisma.availabilityStatus.findUnique.mockResolvedValue({ id: 4, code: 'UNAVAILABLE' });
       mockPrisma.repairJob.findFirst.mockResolvedValue(null); // for jobNo generator

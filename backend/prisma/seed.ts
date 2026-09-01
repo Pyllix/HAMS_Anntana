@@ -887,13 +887,17 @@ async function main() {
   // 9. Repair Masters & Lookups
   console.log('🔧 Seeding Repair Masters & Lookups...');
 
-  // 9.1 JobStatus
+  // 9.1 JobStatus (10 standard repair job lifecycle statuses)
   const jobStatuses = [
-    { code: 'PENDING', name: 'รอช่างรับงาน' },
-    { code: 'IN_PROGRESS', name: 'กำลังดำเนินการซ่อม' },
-    { code: 'WAITING_PARTS', name: 'รออะไหล่/จัดซื้อ' },
-    { code: 'WAITING_DELIVERY', name: 'แจ้งแล้วเสร็จ/รอส่งมอบ' },
-    { code: 'COMPLETED', name: 'ซ่อมเสร็จสมบูรณ์/ปิดงาน' },
+    { code: 'WAITING_HANDOVER', name: 'รอรับเครื่องจากหน่วยงาน' },
+    { code: 'PENDING_ASSIGN', name: 'รอมอบหมายงานให้ช่าง' },
+    { code: 'IN_PROGRESS', name: 'ช่างกำลังดำเนินการซ่อม' },
+    { code: 'WAITING_PARTS', name: 'สั่งซื้อ/รออะไหล่' },
+    { code: 'PARCEL_PROCESSING', name: 'พัสดุกำลังดำเนินการ' },
+    { code: 'OUTSOURCED', name: 'ส่งซ่อมบริษัทภายนอก' },
+    { code: 'UNREPAIRABLE', name: 'แทงชำรุด/เห็นควรจำหน่าย' },
+    { code: 'WAITING_DELIVERY', name: 'เสร็จแล้วรอรับคืน' },
+    { code: 'COMPLETED', name: 'ส่งคืน/ดำเนินการเรียบร้อย' },
     { code: 'CANCELLED', name: 'ยกเลิกงานซ่อม' },
   ];
   for (const js of jobStatuses) {

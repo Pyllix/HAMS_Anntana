@@ -95,7 +95,7 @@ export class RepairsService {
 
     const underRepairStatusId = await this.getStatusId('assetStatus', 'UNDER_REPAIR');
     const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
-    const pendingJobStatusId = await this.getStatusId('jobStatus', 'PENDING');
+    const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
 
     // Default JobType to first available if not specified
     const defaultJobType = await this.prisma.jobType.findFirst({
@@ -123,7 +123,7 @@ export class RepairsService {
           reporterId: user.id,
           jobTypeId: defaultJobType.id,
           reportType: dto.reportType,
-          jobStatusId: pendingJobStatusId,
+          jobStatusId: pendingAssignStatusId,
           symptom: dto.symptom,
           urgencyStatus: dto.urgencyStatus,
           createdBy: user.id,
@@ -154,7 +154,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 2. Diagnose and Plan (ช่างรับงาน วินิจฉัย และ Clone 12 Steps)
+  // 2. Diagnose and Plan (ช่างรับงาน วินิจฉัย และ Clone Steps)
   // ───────────────────────────────────────────────────────────────────────────
 
   async diagnoseAndPlan(id: string, dto: DiagnoseRepairJobDto, user: any) {
@@ -203,7 +203,21 @@ export class RepairsService {
       }
     }
 
-    const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+    // Determine initial JobStatus according to Action Type:
+    // - INTERNAL_STOCK / EXTERNAL_STOCK / OUTSOURCE -> PARCEL_PROCESSING (ตั้งเรื่องขอเบิก/จัดซื้อ/ส่งซ่อม)
+    // - PURCHASE_REPLACEMENT -> UNREPAIRABLE (แทงชำรุด/ขอซื้อทดแทน)
+    // - SELF_REPAIR -> IN_PROGRESS (ช่างดำเนินการซ่อมเอง)
+    let targetStatusCode = 'IN_PROGRESS';
+    if (
+      dto.stepActionType === StepActionType.INTERNAL_STOCK ||
+      dto.stepActionType === StepActionType.EXTERNAL_STOCK ||
+      dto.stepActionType === StepActionType.OUTSOURCE
+    ) {
+      targetStatusCode = 'PARCEL_PROCESSING';
+    } else if (dto.stepActionType === StepActionType.PURCHASE_REPLACEMENT) {
+      targetStatusCode = 'UNREPAIRABLE';
+    }
+    const initialJobStatusId = await this.getStatusId('jobStatus', targetStatusCode);
 
     // Fetch master steps template using stepActionType
     const stepMasters = await this.prisma.stepMaster.findMany({
@@ -226,7 +240,7 @@ export class RepairsService {
           techCategoryId: dto.techCategoryId,
           jobTypeId: dto.jobTypeId,
           actionType: dto.actionType,
-          jobStatusId: inProgressStatusId,
+          jobStatusId: initialJobStatusId,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           isRepeatRepair: dto.isRepeatRepair ?? false,
           companyId: dto.companyId ?? null,
@@ -248,13 +262,15 @@ export class RepairsService {
       }
 
       // 3. Clone Steps from StepMaster (Delete old steps if re-diagnosing)
+      // Form Boundary: Steps 1-4 are auto-completed on single form submission (or 1-3 for SELF_REPAIR)
       await tx.repairJobStep.deleteMany({ where: { jobId: id } });
       const now = new Date();
+      const autoCompletedThreshold = dto.stepActionType === StepActionType.SELF_REPAIR ? 3 : 4;
+
       for (const sm of stepMasters) {
-        // Steps 1 to 3 are completed up to diagnosis (1. วันแจ้งซ่อม, 2. ธุรการรับ Job, 3. ช่างรับ Job / วินิจฉัย)
         let completeAt: Date | null = null;
         let completedBy: string | null = null;
-        if (sm.stepNumber <= 3) {
+        if (sm.stepNumber <= autoCompletedThreshold) {
           completeAt = now;
           completedBy = user.id;
         }
@@ -318,6 +334,88 @@ export class RepairsService {
     const completionTime = dto.completeAt ? new Date(dto.completeAt) : new Date();
 
     return this.prisma.$transaction(async (tx) => {
+      // Step-specific Dynamic JobStatus Transitions
+      if (currentStepActionType === StepActionType.OUTSOURCE) {
+        if (stepNumber === 5) {
+          // อนุมัติส่งซ่อมบริษัทภายนอก -> OUTSOURCED
+          const outsourcedStatusId = await this.getStatusId('jobStatus', 'OUTSOURCED');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: outsourcedStatusId, updatedBy: user.id },
+          });
+        } else if (stepNumber === 6) {
+          // พัสดุรับเครื่องกลับจากบริษัท -> PARCEL_PROCESSING
+          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
+          });
+        } else if (stepNumber === 7) {
+          // ช่างรับเครื่องและทดสอบ -> IN_PROGRESS
+          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+          });
+        }
+      } else if (currentStepActionType === StepActionType.EXTERNAL_STOCK) {
+        if (stepNumber === 5) {
+          // อนุมัติจัดหาอะไหล่นอกคลัง -> WAITING_PARTS
+          const waitingPartsStatusId = await this.getStatusId('jobStatus', 'WAITING_PARTS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: waitingPartsStatusId, updatedBy: user.id },
+          });
+        } else if (stepNumber === 6) {
+          // พัสดุแจ้งรับอะไหล่ -> PARCEL_PROCESSING
+          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
+          });
+        } else if (stepNumber === 7) {
+          // ช่างรับอะไหล่/ดำเนินการซ่อม -> IN_PROGRESS
+          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+          });
+        }
+      } else if (currentStepActionType === StepActionType.INTERNAL_STOCK) {
+        if (stepNumber === 6 || stepNumber === 7) {
+          // พัสดุจ่ายอะไหล่ / ช่างรับวัสดุและซ่อม -> IN_PROGRESS
+          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+          });
+        }
+      } else if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
+        if (stepNumber === 5 || stepNumber === 6) {
+          // อนุมัติซื้อเครื่องใหม่ / พัสดุรับเครื่องใหม่ -> PARCEL_PROCESSING
+          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
+          });
+        } else if (stepNumber === 7) {
+          // ช่างรับเครื่องใหม่และส่งมอบ -> IN_PROGRESS
+          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+          });
+        }
+      } else if (currentStepActionType === StepActionType.SELF_REPAIR) {
+        if (stepNumber === 4) {
+          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          await tx.repairJob.update({
+            where: { id: jobId },
+            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+          });
+        }
+      }
+
       // If penultimate step (แล้วเสร็จ / รอตรวจรับงาน) -> set status to WAITING_DELIVERY
       if (isPenultimateStep) {
         const waitingDeliveryStatusId = await this.getStatusId('jobStatus', 'WAITING_DELIVERY');
@@ -331,7 +429,9 @@ export class RepairsService {
       if (isFinalStep) {
         const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
         const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
+        const waitDisposalAssetStatusId = await this.getStatusId('assetStatus', 'WAIT_DISPOSAL');
         const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+        const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
 
         await tx.repairJob.update({
           where: { id: jobId },
@@ -343,11 +443,21 @@ export class RepairsService {
           },
         });
 
+        // For PURCHASE_REPLACEMENT, original asset goes to WAIT_DISPOSAL / UNAVAILABLE
+        const targetAssetStatusId =
+          currentStepActionType === StepActionType.PURCHASE_REPLACEMENT
+            ? waitDisposalAssetStatusId
+            : normalAssetStatusId;
+        const targetAvailabilityId =
+          currentStepActionType === StepActionType.PURCHASE_REPLACEMENT
+            ? unavailableStatusId
+            : availableStatusId;
+
         await tx.asset.update({
           where: { id: job.assetId },
           data: {
-            asset_status_id: normalAssetStatusId,
-            availability_status_id: availableStatusId,
+            asset_status_id: targetAssetStatusId,
+            availability_status_id: targetAvailabilityId,
             updatedBy: user.id,
           },
         });
