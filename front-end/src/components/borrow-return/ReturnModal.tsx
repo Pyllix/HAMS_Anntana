@@ -1,4 +1,4 @@
-import { Building2, CheckCircle2, Package, Search, Tag, X } from "lucide-react";
+import { Building2, CheckCircle2, Loader2, Package, Search, Tag, X } from "lucide-react";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
 import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,9 +12,9 @@ export default function ReturnModal() {
   const queryClient = useQueryClient();
 
   // State ฟอร์มการคืน
-  const [conditionStatus, setConditionStatus] = useState<
-    "NORMAL" | "DAMAGED" | "LOST"
-  >("NORMAL");
+  const [conditionStatus, setConditionStatus] = useState<"Normal" | "Damage">(
+    "Normal",
+  );
   const [returnDate, setReturnDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -70,19 +70,28 @@ export default function ReturnModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!asset?.id) {
+      alert("ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
+      return;
+    }
+
+    if (!user?.id) {
+      alert("กรุณากรอกและค้นหารหัสพนักงานก่อนทำรายการ");
+      return;
+    }
+
     if (!user) {
       console.log("ไม่เจอ user");
       return;
     }
 
     const payload: ReturnReq = {
+      returnRemark: returnRemark,
       returnCondition: conditionStatus,
-      returnMethod,
-      returnRemark,
       returnedByUserId: user.id,
     };
 
-    handleReturnSubmit({ id: borrowingId, data: payload });
+    handleReturnSubmit({ id: asset?.currentBorrowing.id, data: payload });
   };
 
   return (
@@ -196,6 +205,49 @@ export default function ReturnModal() {
               </div>
             </div>
 
+            {/* ชื่อ-นามสกุลผู้ยืม */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="borrower"
+                className="text-xs font-semibold text-gray-700"
+              >
+                ชื่อ-นามสกุลผู้ยืม
+              </label>
+              <input
+                disabled
+                type="text"
+                id="borrower"
+                className={`w-full px-3.5 py-2.5 text-xs border border-gray-300 rounded-lg focus:outline-none transition-all ${
+                  user ? "bg-white text-gray-800" : "bg-gray-50 text-gray-400"
+                }`}
+                value={
+                  user ? user.firstname + " " + user.lastname : "ชื่อ-นามสกุล"
+                }
+              />
+            </div>
+
+            {/* แผนก / วอร์ด */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="ward"
+                className="text-xs font-semibold text-gray-700"
+              >
+                แผนก / วอร์ด (Ward)
+              </label>
+              <select
+                disabled
+                id="ward"
+                defaultValue=""
+                className={`w-full px-3.5 py-2.5 text-xs border border-gray-300 rounded-lg focus:outline-none transition-all ${
+                  user ? "bg-white text-gray-800" : "bg-gray-50 text-gray-400"
+                }`}
+              >
+                <option value="" disabled className="text-gray-300">
+                  {user ? user.role : "เลือกแผนก"}
+                </option>
+              </select>
+            </div>
+
             {/* สภาพของอุปกรณ์ตอนส่งคืน (Radio Group) */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-gray-700">
@@ -206,9 +258,9 @@ export default function ReturnModal() {
                   <input
                     type="radio"
                     name="conditionStatus"
-                    value="NORMAL"
-                    checked={conditionStatus === "NORMAL"}
-                    onChange={() => setConditionStatus("NORMAL")}
+                    value="Normal"
+                    checked={conditionStatus === "Normal"}
+                    onChange={() => setConditionStatus("Normal")}
                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300"
                   />
                   <span>ปกติสมบูรณ์</span>
@@ -218,24 +270,12 @@ export default function ReturnModal() {
                   <input
                     type="radio"
                     name="conditionStatus"
-                    value="DAMAGED"
-                    checked={conditionStatus === "DAMAGED"}
-                    onChange={() => setConditionStatus("DAMAGED")}
+                    value="Damage"
+                    checked={conditionStatus === "Damage"}
+                    onChange={() => setConditionStatus("Damage")}
                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300"
                   />
                   <span>ชำรุด / เสียหาย</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700">
-                  <input
-                    type="radio"
-                    name="conditionStatus"
-                    value="LOST"
-                    checked={conditionStatus === "LOST"}
-                    onChange={() => setConditionStatus("LOST")}
-                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300"
-                  />
-                  <span>สูญหาย</span>
                 </label>
               </div>
             </div>
@@ -300,11 +340,11 @@ export default function ReturnModal() {
           </button>
           <button
             type="submit"
-            form="return-asset-form"
-            disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-medium shadow-sm transition-colors disabled:opacity-50"
+            disabled={isSubmitting || !user}
+            className="flex items-center gap-2 px-6 py-2.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg transition-colors disabled:bg-emerald-300 disabled:cursor-not-allowed shadow-sm"
           >
-            {isSubmitting ? "กำลังบันทึก..." : "ยืนยันการคืน"}
+            {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isSubmitting ? "กำลังบันทึก..." : "ยืนยันการยืม"}
           </button>
         </div>
       </div>

@@ -109,7 +109,7 @@ export default function BorrowModal() {
         {/* Content Body */}
         <div className="px-8 py-2 flex flex-col gap-4 overflow-y-auto max-h-[calc(85vh-160px)]">
           {/* Card แสดงรายละเอียดครุภัณฑ์ที่เลือก */}
-          <div className="flex items-start justify-between p-4 bg-gray-50/80 border border-gray-100 rounded-xl gap-3.5">
+          <div className="flex items-start justify-between p-4 bg-gray-50/80 border border-gray-100 rounded-xl">
             <div className="flex gap-3.5">
               {/* Image / Icon Preview */}
               <div className="w-14 h-14 bg-white rounded-xl border border-gray-200/80 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-sm">
@@ -125,7 +125,7 @@ export default function BorrowModal() {
               </div>
 
               {/* Detail */}
-              <div className="flex flex-col gap-0.5 shrink-0">
+              <div className="flex flex-col gap-0.5">
                 <h3 className="font-semibold text-gray-800 text-sm leading-tight">
                   {asset?.name}
                 </h3>
@@ -146,7 +146,7 @@ export default function BorrowModal() {
             </div>
 
             {/* Availability Status Badge */}
-            <span className="text-[11px] font-medium px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200/60 rounded-md whitespace-nowrap">
+            <span className="text-[11px] font-medium px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-md whitespace-nowrap">
               {asset?.availabilityStatus?.name || "กำลังถูกยืม"}
             </span>
           </div>

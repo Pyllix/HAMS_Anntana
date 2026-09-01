@@ -6,7 +6,7 @@ import { useState } from "react";
 import BorrowModal from "../components/borrow-return/BorrowModal";
 import { useBorrowModalStore } from "../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../stores/useReturnModalStore";
-import ReturnModal from "../components/borrow-return/returnModal";
+import ReturnModal from "../components/borrow-return/ReturnModal";
 
 export default function AssetCenterBorrowReturn() {
   const { data: assetTypes } = useQuery({
@@ -88,7 +88,7 @@ export default function AssetCenterBorrowReturn() {
         </div>
       </div>
       {/* Table */}
-      <div className="bg-bg-component shadow-sm w-full rounded-sm ">
+      <div className=" ">
         <AssetsTable search={inputSearch} category={category} type={type} />
       </div>
 

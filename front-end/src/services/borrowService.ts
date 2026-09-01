@@ -23,23 +23,33 @@ interface BorrowRes {
 }
 
 export interface ReturnReq {
-  returnCondition: string;
-  returnMethod: string;
-  returnRemark: string;
   returnedByUserId: string;
+  returnCondition: string;
+  returnRemark: string;
 }
 
 export interface ReturnRes {
   id: string;
   asset_id: string;
   borrower_id: string;
+  created_by_user_id: string;
+  approved_by_user_id: string;
+  handover_by_user_id: string;
   returned_by_user_id: string;
   received_by_user_id: string;
+  rejected_by_user_id: string | null;
+  cancelled_by_user_id: string | null;
   borrow_status_id: number;
+  approved_at: string;
+  handover_date: string;
   return_date: string;
+  cancelled_at: string | null;
+  rejected_at: string | null;
+  cancel_reason: string | null;
   return_condition: string;
   return_method: string;
   return_remark: string;
+  reject_remark: string | null;
   request_source: string;
   delivery_method: string;
   createdAt: string;
