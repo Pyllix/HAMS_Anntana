@@ -941,21 +941,30 @@ async function main() {
     }
   }
 
-  // 9.4 TechCategory
+  // 9.4 TechCategory (9 หมวดงานซ่อมบำรุง)
   const techCategories = [
-    { code: 'BIOMED', name: 'หมวดวิศวกรรมชีวการแพทย์ (Biomedical)', isActive: true },
-    { code: 'ELEC', name: 'หมวดระบบไฟฟ้าและอิเล็กทรอนิกส์', isActive: true },
-    { code: 'IT_NET', name: 'หมวดคอมพิวเตอร์และระบบเครือข่าย', isActive: true },
-    { code: 'MECH_BLD', name: 'หมวดกลไกและอาคารสถานที่', isActive: true },
+    { code: 'MED_EQ', name: 'งานเครื่องมือแพทย์', isActive: true },
+    { code: 'AIR_CON', name: 'งานเครื่องปรับอากาศ', isActive: true },
+    { code: 'PLUMBING', name: 'งานประปา', isActive: true },
+    { code: 'CONSTRUCT', name: 'งานก่อสร้าง', isActive: true },
+    { code: 'ALUMINIUM', name: 'งานอะลูมิเนียม', isActive: true },
+    { code: 'ELECTRICAL', name: 'งานไฟฟ้า', isActive: true },
+    { code: 'IT_HW_SW', name: 'งานระบบคอมพิวเตอร์Hardware&Software', isActive: true },
+    { code: 'METAL_OFFICE', name: 'งานโลหะและครุภัณฑ์สำนักงาน', isActive: true },
+    { code: 'ELECTRONIC', name: 'งานอิเล็กทรอนิกส์', isActive: true },
   ];
   for (const tc of techCategories) {
-    const existing = await prisma.techCategory.findFirst({ where: { code: tc.code } });
+    const existing = await prisma.techCategory.findFirst({
+      where: {
+        OR: [{ code: tc.code }, { name: tc.name }],
+      },
+    });
     if (!existing) {
       await prisma.techCategory.create({ data: tc });
     } else {
       await prisma.techCategory.update({
         where: { id: existing.id },
-        data: { name: tc.name, isActive: tc.isActive },
+        data: { code: tc.code, name: tc.name, isActive: tc.isActive },
       });
     }
   }
