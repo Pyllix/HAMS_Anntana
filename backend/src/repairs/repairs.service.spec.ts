@@ -585,46 +585,7 @@ describe('RepairsService', () => {
     });
   });
 
-  describe('spare parts transactions (withdraw & return)', () => {
-    it('should deduct stock on spare part withdraw', async () => {
-      mockPrisma.repairJob.findUnique.mockResolvedValue({
-        id: 'job-uuid-1',
-        actionType: ActionType.REPAIR,
-        repairJobSteps: [
-          { stepMaster: { actionType: StepActionType.INTERNAL_STOCK } },
-        ],
-      });
-      mockPrisma.sparepart.findUnique.mockResolvedValue({
-        id: 1,
-        name: 'Fuse 10A',
-        price: '150.00',
-        qtyInStock: 10,
-      });
-      mockPrisma.sparepartTxn.create.mockResolvedValue({
-        id: 1,
-        sparepartId: 1,
-        txnType: 'WITHDRAW',
-        qty: 2,
-      });
-
-      const result = await service.withdrawSparePart('job-uuid-1', 1, 2, mockUser);
-
-      expect(mockPrisma.sparepart.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: { qtyInStock: { decrement: 2 } },
-      });
-      expect(mockPrisma.sparepartTxn.create).toHaveBeenCalledWith({
-        data: {
-          sparepartId: 1,
-          jobId: 'job-uuid-1',
-          txnType: 'WITHDRAW',
-          qty: 2,
-          unitPrice: '150.00',
-          txnBy: mockUser.id,
-        },
-        include: { sparepart: true, user: true },
-      });
-    });
+  describe('spare parts transactions (return)', () => {
 
     it('should return unused spare parts and increment stock', async () => {
       mockPrisma.repairJob.findUnique.mockResolvedValue({

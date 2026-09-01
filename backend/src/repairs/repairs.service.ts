@@ -744,56 +744,8 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 4. Spare Parts Requisition & Return within Repair Job
+  // 4. Spare Parts Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
-
-  async withdrawSparePart(
-    jobId: string,
-    sparepartId: number,
-    qty: number,
-    user: any,
-  ) {
-    const job = await this.prisma.repairJob.findUnique({
-      where: { id: jobId },
-      include: { repairJobSteps: { include: { stepMaster: true } } },
-    });
-    if (!job) throw new NotFoundException(`Repair job #${jobId} not found`);
-
-    const sp = await this.prisma.sparepart.findUnique({
-      where: { id: sparepartId, deletedAt: null },
-    });
-    if (!sp) throw new NotFoundException(`Spare part #${sparepartId} not found`);
-
-    const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
-    if (currentStepActionType === StepActionType.INTERNAL_STOCK && sp.qtyInStock < qty) {
-      throw new BadRequestException(
-        `Insufficient stock for "${sp.name}". In stock: ${sp.qtyInStock}, Requested: ${qty}`,
-      );
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Deduct stock
-      await tx.sparepart.update({
-        where: { id: sparepartId },
-        data: { qtyInStock: { decrement: qty } },
-      });
-
-      // 2. Create SPAREPART_TXN (WITHDRAW)
-      const txn = await tx.sparepartTxn.create({
-        data: {
-          sparepartId,
-          jobId,
-          txnType: 'WITHDRAW',
-          qty,
-          unitPrice: sp.price,
-          txnBy: user.id,
-        },
-        include: { sparepart: true, user: true },
-      });
-
-      return txn;
-    });
-  }
 
   async returnSparePart(
     jobId: string,

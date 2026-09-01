@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -139,36 +138,9 @@ export class RepairsController {
     return this.repairsService.advanceNextStep(id, dto, session.user);
   }
 
-  @Patch(':id/steps/:stepNumber')
-  @Roles(
-    UserRole.MAINTENANCE_STAFF,
-    UserRole.PARCEL_STAFF,
-    UserRole.MANAGER,
-  )
-  @ApiOperation({ summary: 'Update progress of a specific repair step (1 to 10)' })
-  async updateStep(
-    @Param('id') id: string,
-    @Param('stepNumber', ParseIntPipe) stepNumber: number,
-    @Body() dto: UpdateRepairStepDto,
-    @Session() session: UserSession,
-  ) {
-    return this.repairsService.updateStepProgress(id, stepNumber, dto, session.user);
-  }
-
   // ───────────────────────────────────────────────────────────────────────────
-  // 6. Spare Parts Requisition & Return within Repair Job
+  // 6. Spare Parts Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
-  @Post(':id/spare-parts/withdraw')
-  @Roles(UserRole.MAINTENANCE_STAFF, UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Withdraw / dedicate spare parts to repair job (INTERNAL_STOCK)' })
-  async withdrawSparePart(
-    @Param('id') id: string,
-    @Body() body: { sparepartId: number; qty: number },
-    @Session() session: UserSession,
-  ) {
-    return this.repairsService.withdrawSparePart(id, body.sparepartId, body.qty, session.user);
-  }
-
   @Post(':id/spare-parts/return')
   @Roles(UserRole.MAINTENANCE_STAFF)
   @ApiOperation({ summary: 'Return unused spare parts back into warehouse inventory' })
