@@ -5,10 +5,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { RepairJob, PriorityFilter } from "../../Types/TypeAssessment";
 import { getPendingEvaluations } from "../../services/assessmentService";
+import { useAssessmentStore } from "../../stores/useAssessmentStore";
 
 const features = tableFeatures({});
-
-// ─── Helper Functions ─────────────────────────────────────────────────────────
 
 function formatDateTH(dateString?: string): string {
   if (!dateString) return "-";
@@ -16,14 +15,22 @@ function formatDateTH(dateString?: string): string {
   if (isNaN(date.getTime())) return dateString;
 
   const months = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+    "ม.ค.",
+    "ก.พ.",
+    "มี.ค.",
+    "เม.ย.",
+    "พ.ค.",
+    "มิ.ย.",
+    "ก.ค.",
+    "ส.ค.",
+    "ก.ย.",
+    "ต.ค.",
+    "พ.ย.",
+    "ธ.ค.",
   ];
 
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
 }
-
-// ─── Status Badge Component ────────────────────────────────────────────────────
 
 function UrgencyBadge({ job }: { job: RepairJob }) {
   const urgency = job.urgencyStatus || "NORMAL";
@@ -49,93 +56,13 @@ function UrgencyBadge({ job }: { job: RepairJob }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${getStatusStyle(
-        urgency
+        urgency,
       )}`}
     >
       {labelMap[urgency] || "ปกติ"}
     </span>
   );
 }
-
-// ─── Columns Definition ───────────────────────────────────────────────────────
-
-const columns: Array<ColumnDef<typeof features, RepairJob>> = [
-  {
-    id: "jobNo",
-    header: "รหัสงาน",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <span className="font-semibold text-gray-900 font-mono text-sm">
-          {row.jobNo || row.jobId}
-        </span>
-      );
-    },
-  },
-  {
-    id: "assetInfo",
-    header: "รายการครุภัณฑ์",
-    cell: (info) => {
-      const asset = info.row.original.asset;
-      return (
-        <div>
-          <div className="font-semibold text-gray-900 text-sm">
-            {asset?.assetName || "-"}
-          </div>
-          <div className="text-sm text-gray-600 font-mono mt-0.5">
-            {asset?.assetCode || "-"}
-          </div>
-        </div>
-      );
-    },
-  },
-  {
-    id: "symptom",
-    header: "อาการเสียที่แจ้ง",
-    cell: (info) => (
-      <span className="text-sm text-gray-600 line-clamp-2 max-w-xs">
-        {info.row.original.symptom || "-"}
-      </span>
-    ),
-  },
-  {
-    id: "urgencyStatus",
-    header: "ระดับความเร่งด่วน",
-    cell: (info) => <UrgencyBadge job={info.row.original} />,
-  },
-  {
-    id: "createdAt",
-    header: "วันที่แจ้งซ่อม",
-    cell: (info) => (
-      <span className="text-sm text-gray-600 whitespace-nowrap">
-        {formatDateTH(info.row.original.createdAt)}
-      </span>
-    ),
-  },
-  {
-    id: "actions",
-    header: "การจัดการ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              const customEvent = new CustomEvent("open-evaluate-modal", { detail: row });
-              window.dispatchEvent(customEvent);
-            }}
-            className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
-          >
-            ประเมิน
-          </button>
-        </div>
-      );
-    },
-  },
-];
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 interface PendingEvaluationTableProps {
   search?: string;
@@ -146,6 +73,10 @@ export default function PendingEvaluationTable({
   search = "",
   urgencyStatus = "ALL",
 }: PendingEvaluationTableProps) {
+  const openAssessmentForm = useAssessmentStore(
+    (state) => state.openAssessmentForm,
+  );
+
   const { data: jobsData = [], isLoading } = useQuery({
     queryKey: ["pendingEvaluations"],
     queryFn: getPendingEvaluations,
@@ -158,8 +89,87 @@ export default function PendingEvaluationTable({
     setCurrentPage(1);
   }, [search, urgencyStatus]);
 
+  const columns = useMemo<Array<ColumnDef<typeof features, RepairJob>>>(
+    () => [
+      {
+        id: "jobNo",
+        header: "รหัสงาน",
+        cell: (info: any) => {
+          const row = info.row.original as RepairJob;
+          return (
+            <span className="font-semibold text-gray-900 font-mono text-sm">
+              {row.jobNo || row.jobId}
+            </span>
+          );
+        },
+      },
+      {
+        id: "assetInfo",
+        header: "รายการครุภัณฑ์",
+        cell: (info: any) => {
+          const asset = (info.row.original as RepairJob).asset;
+          return (
+            <div>
+              <div className="font-semibold text-gray-900 text-sm">
+                {asset?.assetName || "-"}
+              </div>
+              <div className="text-sm text-gray-600 font-mono mt-0.5">
+                {asset?.assetCode || "-"}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "symptom",
+        header: "อาการเสียที่แจ้ง",
+        cell: (info: any) => (
+          <span className="text-sm text-gray-600 line-clamp-2 max-w-xs">
+            {(info.row.original as RepairJob).symptom || "-"}
+          </span>
+        ),
+      },
+      {
+        id: "urgencyStatus",
+        header: "ระดับความเร่งด่วน",
+        cell: (info: any) => (
+          <UrgencyBadge job={info.row.original as RepairJob} />
+        ),
+      },
+      {
+        id: "createdAt",
+        header: "วันที่แจ้งซ่อม",
+        cell: (info: any) => (
+          <span className="text-sm text-gray-600 whitespace-nowrap">
+            {formatDateTH((info.row.original as RepairJob).createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "รายละเอียด",
+        cell: (info: any) => {
+          const row = info.row.original as RepairJob;
+          return (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openAssessmentForm(row)}
+                className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+              >
+                ประเมิน
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [openAssessmentForm],
+  );
+
   const filteredData = useMemo(() => {
     if (!jobsData) return [];
+
     return jobsData.filter((item) => {
       const sl = search.toLowerCase();
       const matchesSearch =
@@ -182,10 +192,7 @@ export default function PendingEvaluationTable({
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
   const paginatedData = useMemo(
     () =>
-      filteredData.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize,
-      ),
+      filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize),
     [filteredData, currentPage],
   );
 
@@ -234,7 +241,10 @@ export default function PendingEvaluationTable({
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr
+                  key={row.id}
+                  className="hover:bg-slate-50/50 transition-colors"
+                >
                   {row.getAllCells().map((cell) => (
                     <td key={cell.id} className="py-3 px-4">
                       <table.FlexRender cell={cell} />
