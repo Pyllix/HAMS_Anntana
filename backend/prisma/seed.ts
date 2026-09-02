@@ -910,11 +910,9 @@ async function main() {
 
   // 9.2 JobType
   const jobTypes = [
-    { name: 'ตรวจเช็คและซ่อมทั่วไป' },
-    { name: 'ซ่อมใหญ่/ยกเครื่อง' },
-    { name: 'บำรุงรักษาเชิงป้องกัน (PM)' },
-    { name: 'สอบเทียบมาตรฐาน (Calibration)' },
-    { name: 'ดัดแปลง/ปรับปรุงสภาพ' },
+    { name: 'ซ่อมเครื่องมือแพทย์' },
+    { name: 'ซ่อมบำรุงทั่วไป' },
+    { name: 'ซ่อมคอมพิวเตอร์' },
   ];
   for (const jt of jobTypes) {
     const existing = await prisma.jobType.findFirst({ where: { name: jt.name } });
