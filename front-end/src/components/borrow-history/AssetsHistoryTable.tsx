@@ -5,203 +5,189 @@ import {
   createPaginatedRowModel,
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { Asset } from "../../types/TypeAsset";
+import {
+  getAllBorrowHistory,
+  type BorrowHistory,
+} from "../../services/borrowService";
 import { useQuery } from "@tanstack/react-query";
-import { getAssets } from "../../services/assetService";
 import { useMemo } from "react";
-import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
-import { useReturnModalStore } from "../../stores/useReturnModalStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
 
-const columns: Array<ColumnDef<typeof features, Asset>> = [
-  {
-    accessorKey: "imageUrl",
-    header: "รูปภาพ",
-    cell: (info) => (
-      <img
-        src={(info.getValue() as string) || "/placeholder.png"}
-        alt="Asset"
-        className="h-10 w-10 rounded-md object-cover bg-gray-100 border border-gray-200"
-      />
-    ),
-  },
-  {
-    id: "item_info",
-    header: "รายการ / รหัส",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div>
-          <div className="font-semibold text-gray-900">{row.name}</div>
-          <div className="text-sm text-gray-400 font-mono mt-0.5">
-            {row.serialNo || row.model}
-          </div>
-        </div>
-      );
-    },
-  },
-  {
-    id: "typeName",
-    header: "ประเภท",
-    accessorFn: (row) => row.type?.name,
-    cell: (info) => (
-      <span className="text-sm text-gray-600">
-        {(info.getValue() as string) ?? "-"}
-      </span>
-    ),
-  },
-  {
-    id: "borrower_section",
-    header: "สถานที่เก็บ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div>
-          <div className="text-xs text-gray-500">
-            {row.section?.name ?? "-"}
-          </div>
-        </div>
-      );
-    },
-  },
-  //   {
-  //     accessorKey: "receivedDate",
-  //     header: "วันที่ยืม",
-  //     cell: (info) => {
-  //       const dateStr = info.getValue() as string;
+// ฟังก์ชันสำหรับแปลงรูปแบบวันที่ให้ออกมาเป็นภาษาไทย (เช่น 01 มี.ค. 2026, 13:56)
+const formatThaiDate = (dateString: string | null) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "-";
 
-  //       const timePart = dateStr.split("T")[0];
-  //       return <span className="text-sm text-gray-600">{timePart || "-"}</span>;
-  //     },
-  //   },
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+};
+
+const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
   {
-    id: "statusName",
-    header: "สถานะ",
+    accessorKey: "id",
+    header: "รหัสการยืม",
     cell: (info) => {
-      const status = info.row.original.availabilityStatus;
-      const code = status?.code;
-      const name = status?.name ?? "-";
-
-      // เลือก Class สีตาม Code
-      const getStatusStyle = (statusCode?: string) => {
-        switch (statusCode) {
-          case "AVAILABLE":
-            return "bg-emerald-100 text-emerald-700";
-          case "BORROWED":
-            return "bg-red-100 text-red-700";
-          case "UNAVAILABLE":
-          default:
-            return "bg-gray-100 text-gray-700";
-        }
-      };
-
+      const id = info.getValue() as string;
+      // ตัด UUID ให้แสดงผลสั้นลง พร้อมเติม Prefix (หรือปรับตามรูปแบบ ID จริงของระบบ)
+      const shortId = id ? `BR-${id.slice(0, 6).toUpperCase()}` : "-";
       return (
-        <span
-          className={`inline-flex items-center justify-center w-36 whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${getStatusStyle(
-            code,
-          )}`}
-        >
-          {name}
+        <span className="whitespace-nowrap font-semibold text-gray-900">
+          {shortId}
         </span>
       );
     },
   },
   {
-    id: "actions",
-    header: "จัดการ",
+    id: "item_info",
+    header: "ข้อมูลครุภัณฑ์",
     cell: (info) => {
       const row = info.row.original;
-      const isAvailable = info.row.original.availabilityStatus?.code;
+      return (
+        <div>
+          <div className="font-semibold text-gray-900">
+            {row.asset?.model || "-"}
+          </div>
+          <div className="text-sm text-gray-500">{row.asset?.name || "-"}</div>
+        </div>
+      );
+    },
+  },
+  {
+    id: "borrower_info",
+    header: "ชื่อผู้ยืม",
+    cell: (info) => {
+      const row = info.row.original;
+      return (
+        <div>
+          <div className="font-medium text-gray-900">
+            {row.borrower
+              ? `${row.borrower.firstname} ${row.borrower.lastname}`
+              : "-"}
+          </div>
+          <div className="text-xs text-gray-500">
+            รหัสพนักงาน: {row.borrower?.employeeId || "-"}
+          </div>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "handover_date",
+    header: "วันที่ยืม",
+    cell: (info) => {
+      const dateStr = info.getValue() as string | null;
+      return (
+        <span className="text-sm text-gray-600">{formatThaiDate(dateStr)}</span>
+      );
+    },
+  },
+  {
+    accessorKey: "return_date",
+    header: "วันที่คืน",
+    cell: (info) => {
+      const dateStr = info.getValue() as string | null;
+      if (!dateStr) {
+        return <span className="text-sm text-gray-400">-</span>;
+      }
+      return (
+        <span className="text-sm text-gray-600">{formatThaiDate(dateStr)}</span>
+      );
+    },
+  },
+  {
+    id: "statusName",
+    header: "สถานะ",
+    cell: (info) => {
+      const status = info.row.original.borrowStatus;
+      const code = status?.code;
+      const name = status?.name ?? "-";
 
-      const handleOpenBorrowModal = () => {
-        useBorrowModalStore.getState().openForm(row);
+      // กำหนดสีและสไตล์ตาม Code ของสถานะ
+      const getStatusStyle = (statusCode?: string) => {
+        switch (statusCode) {
+          case "RETURNED":
+            return {
+              container: "bg-emerald-100 text-emerald-600", // คืนแล้ว (พื้นหลังเขียวอ่อน ตัวหนังสือเขียวเข้ม)
+              dot: "bg-emerald-600",
+            };
+          case "BORROWED":
+          case "PENDING":
+          default:
+            return {
+              container: "bg-amber-100 text-amber-600", // ยังไม่คืน (พื้นหลังเหลือง/ส้มอ่อน ตัวหนังสือส้มเข้ม)
+              dot: "bg-amber-500",
+            };
+        }
       };
 
-      const handleOpenReturnModal = () => {
-        useReturnModalStore.getState().openForm(row);
-      };
+      const style = getStatusStyle(code);
 
-      if (isAvailable === "AVAILABLE") {
-        return (
-          <button
-            type="button"
-            onClick={handleOpenBorrowModal}
-            className="w-full max-w-20 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
-          >
-            ยืมของ
-          </button>
-        );
-      }
-
-      if (isAvailable === "BORROWED") {
-        return (
-          <button
-            type="button"
-            onClick={handleOpenReturnModal}
-            className="w-full max-w-20 rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50"
-          >
-            รับคืน
-          </button>
-        );
-      }
-
-      if (isAvailable === "UNAVAILABLE") {
-        return (
-          <button
-            disabled
-            type="button"
-            className="w-full whitespace-nowrap cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-400"
-          >
-            ไม่พร้อม
-          </button>
-        );
-      }
+      return (
+        <span
+          className={`whitespace-nowrap inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-semibold shadow-xs ${style.container}`}
+        >
+          <span className={`h-2 w-2 rounded-full ${style.dot}`} />
+          {name}
+        </span>
+      );
     },
   },
 ];
 
 interface Props {
-  search: string;
-  category: string;
-  type: string;
+  inputSearch: string;
+  status: "ALL" | "BORROWED" | "RETURNED";
 }
 
-export default function AssetsTable({ search, category, type }: Props) {
-  const { data: assets } = useQuery({
-    queryKey: ["assets"],
-    queryFn: getAssets,
+export default function AssetsHistoryTable({ inputSearch, status }: Props) {
+  const { data: borrowHistory } = useQuery({
+    queryKey: ["borrowHistory"],
+    queryFn: getAllBorrowHistory,
   });
 
-  const filteredAssets = useMemo(() => {
-    if (!assets) {
-      console.log("assets is undefined at AssetsTable.tsx");
+  const filteredItems = useMemo(() => {
+    if (!borrowHistory) {
+      console.log("borrowHistory is undefined at AssetsHistoryTable.tsx");
       return [];
     }
 
-    return assets.filter((item) => {
+    return borrowHistory.filter((item) => {
+      const searchKeyword = inputSearch.toLowerCase();
+
+      // ค้นหาจาก ชื่อครุภัณฑ์, รุ่น, ชื่อ-นามสกุลผู้ยืม, รหัสพนักงาน หรือรหัสการยืม
       const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(search.toLowerCase()) ||
-        item.serialNo?.toLowerCase().includes(search.toLowerCase());
+        inputSearch === "" ||
+        item.asset?.name?.toLowerCase().includes(searchKeyword) ||
+        item.asset?.model?.toLowerCase().includes(searchKeyword) ||
+        item.borrower?.firstname?.toLowerCase().includes(searchKeyword) ||
+        item.borrower?.lastname?.toLowerCase().includes(searchKeyword) ||
+        item.borrower?.employeeId?.toLowerCase().includes(searchKeyword) ||
+        item.id?.toLowerCase().includes(searchKeyword);
 
+      // กรองตามสถานะการยืม (เช่น ALL, BORROWED, RETURNED)
       const matchesStatus =
-        category === "ALL" || item.availabilityStatus?.name === category;
+        status === "ALL" || item.borrowStatus?.code === status;
 
-      const matchesType = type === "ALL" || item.type?.name === type;
-
-      return matchesSearch && matchesStatus && matchesType;
+      return matchesSearch && matchesStatus;
     });
-  }, [assets, search, category, type]);
+  }, [borrowHistory, inputSearch, status]);
 
   const table = useTable({
     key: "assets-table",
     features,
     columns,
-    data: filteredAssets ?? [],
+    data: filteredItems ?? [],
     initialState: {
       pagination: {
         pageIndex: 0,
