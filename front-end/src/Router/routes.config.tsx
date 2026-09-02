@@ -76,7 +76,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "งานซ่อม",
     element: <PendingEvaluations />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF, ROLES.MAINTENANCE_STAFF],
     showInNav: true,
   },
   // -------- สำหรับ Parcel Staff & Admin ------------

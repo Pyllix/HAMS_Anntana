@@ -4,6 +4,8 @@ import type { PriorityFilter, AssessmentTab } from "../Types/TypeAssessment";
 import PendingEvaluationTable from "../components/accept-work/PendingEvaluationTable";
 import AssessmentForm from "../components/accept-work/AssessmentForm";
 import { useAssessmentStore } from "../stores/useAssessmentStore";
+import RepairHistory from "./RepairHistory";
+import ConfirmRepair from "./ConfirmRepair";
 
 const PRIORITY_OPTIONS: readonly { value: PriorityFilter; label: string }[] = [
   { value: "ALL", label: "ทั้งหมด" },
@@ -73,6 +75,7 @@ export default function PendingEvaluationsPage() {
             {/* Search input */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+
               <input
                 type="text"
                 placeholder="ค้นหาใบแจ้งซ่อม, รหัสครุภัณฑ์..."
@@ -88,12 +91,15 @@ export default function PendingEvaluationsPage() {
                 <span className="text-slate-500 shrink-0">
                   ระดับความเร่งด่วน:
                 </span>
+
                 <span className="font-semibold text-emerald-600 truncate">
                   {PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ??
                     "ทั้งหมด"}
                 </span>
               </div>
+
               <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+
               <select
                 className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                 value={priority}
@@ -118,18 +124,11 @@ export default function PendingEvaluationsPage() {
         </div>
       )}
 
-      {/* Sub Tabs Placeholders */}
-      {activeTab === "REPAIR_LIST" && (
-        <div className="bg-white p-12 text-center rounded-xl border border-slate-100 shadow-sm text-slate-400 text-xs">
-          หน้ารายการงานซ่อม (กำลังพัฒนา)
-        </div>
-      )}
+      {/* รายการงานซ่อม */}
+      {activeTab === "REPAIR_LIST" && <RepairHistory />}
 
-      {activeTab === "CONFIRM_REPAIR" && (
-        <div className="bg-white p-12 text-center rounded-xl border border-slate-100 shadow-sm text-slate-400 text-xs">
-          หน้ารายการยืนยันการซ่อม (กำลังพัฒนา)
-        </div>
-      )}
+      {/* ยืนยันการซ่อม */}
+      {activeTab === "CONFIRM_REPAIR" && <ConfirmRepair />}
     </div>
   );
 }
