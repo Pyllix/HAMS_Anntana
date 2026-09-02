@@ -1,6 +1,6 @@
-import type { User } from "./TypeUser";
+import type { User } from "../types/TypeUser";
 
-// ─── Enums & Literals 
+// ─── Enums & Literals
 
 export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 export type PriorityFilter = "ALL" | UrgencyStatus;
@@ -15,7 +15,7 @@ export type ActionTypeUI =
 
 export type ActionType = ActionTypeUI;
 
-// ─── Entities (Master Data) 
+// ─── Entities (Master Data)
 
 export interface Asset {
   assetId: number;
@@ -65,7 +65,7 @@ export interface SelectedSparePart extends SparePart {
   quantity: number;
 }
 
-// ─── Main Model 
+// ─── Main Model
 
 export interface RepairJob {
   jobId: number;
@@ -103,24 +103,22 @@ export interface RepairJob {
 // ─── Form State (สำหรับผูกข้อมูลฟอร์มประเมินของช่าง) ─────────────────────────
 
 export interface AssessmentFormState {
-  symptomCause?: string; 
-  solution?: string; 
-  causeCategory?: string; 
-  causeId?: number; 
-  isRepeat?: boolean; 
-  isRepeatRepair?: boolean; 
-  estimatedDays?: number | string; 
-  technicalDiagnosis?: string; 
-  dueDate?: string; 
-  vendorId?: string | number; 
-  companyId?: number; 
-  techCategoryId?: number; 
-  assigneeIds?: (string | number)[]; 
-  spares?: SelectedSparePart[]; 
-  [key: string]: any; 
+  symptomCause?: string;
+  solution?: string;
+  causeCategory?: string;
+  causeId?: number;
+  isRepeat?: boolean;
+  isRepeatRepair?: boolean;
+  estimatedDays?: number | string;
+  technicalDiagnosis?: string;
+  dueDate?: string;
+  vendorId?: string | number;
+  companyId?: number;
+  techCategoryId?: number;
+  assigneeIds?: (string | number)[];
+  spares?: SelectedSparePart[];
+  [key: string]: any;
 }
-
-
 
 export interface EvaluationSpareDto {
   sparepartId: number;
