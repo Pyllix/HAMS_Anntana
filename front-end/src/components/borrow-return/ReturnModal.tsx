@@ -1,4 +1,12 @@
-import { Building2, CheckCircle2, Loader2, Package, Search, Tag, X } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Package,
+  Search,
+  Tag,
+  X,
+} from "lucide-react";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
 import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,7 +33,6 @@ export default function ReturnModal() {
       hour12: false,
     }),
   );
-  const [returnMethod, setReturnMethod] = useState<string>("self_return");
   const [returnRemark, setReturnRemark] = useState("");
 
   const [employeeId, setEmployeeId] = useState("");
@@ -55,7 +62,6 @@ export default function ReturnModal() {
       console.log("Return success:", data);
       // Invalidate queries เพื่ออัปเดตข้อมูลหน้าตาราง
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      queryClient.invalidateQueries({ queryKey: ["borrowings"] });
       closeForm();
     },
     onError: (err: any) => {
@@ -69,6 +75,8 @@ export default function ReturnModal() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    console.log("กดเเล้ว:", asset);
 
     if (!asset?.id) {
       alert("ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
@@ -325,27 +333,29 @@ export default function ReturnModal() {
                 className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none placeholder:text-gray-400"
               />
             </div>
-          </form>
-        </div>
 
-        {/* Footer Actions */}
-        <div className="px-8 py-4 mt-3 border-t border-gray-100 flex items-center justify-end gap-3 bg-white">
-          <button
-            type="button"
-            onClick={closeForm}
-            disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50"
-          >
-            ยกเลิก
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting || !user}
-            className="flex items-center gap-2 px-6 py-2.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg transition-colors disabled:bg-emerald-300 disabled:cursor-not-allowed shadow-sm"
-          >
-            {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {isSubmitting ? "กำลังบันทึก..." : "ยืนยันการยืม"}
-          </button>
+            {/* Footer Actions */}
+            <div className="px-8 py-4 mt-3 border-t border-gray-100 flex items-center justify-end gap-3 bg-white">
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={isSubmitting}
+                className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || !user}
+                className="flex items-center gap-2 px-6 py-2.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg transition-colors disabled:bg-emerald-300 disabled:cursor-not-allowed shadow-sm"
+              >
+                {isSubmitting && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
+                {isSubmitting ? "กำลังบันทึก..." : "ยืนยันการคืน"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
