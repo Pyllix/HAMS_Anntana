@@ -1106,6 +1106,24 @@ export class RepairsService {
       where.mechanicRepairs = { some: { userId: query.mechanicId } };
     }
 
+    if (query.startDate || query.endDate) {
+      if (query.startDate && !this.isValidCalendarDate(query.startDate)) {
+        throw new BadRequestException(
+          `Invalid startDate format or calendar date value: "${query.startDate}". Expected YYYY-MM-DD.`,
+        );
+      }
+      if (query.endDate && !this.isValidCalendarDate(query.endDate)) {
+        throw new BadRequestException(
+          `Invalid endDate format or calendar date value: "${query.endDate}". Expected YYYY-MM-DD.`,
+        );
+      }
+
+      where.createdAt = {
+        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
+        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
     if (search) {
       where.OR = [
         { jobNo: { contains: search, mode: 'insensitive' } },

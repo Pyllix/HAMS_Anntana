@@ -79,7 +79,7 @@ describe('RepairsService', () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
-    $transaction: jest.fn((callback) => callback(mockPrisma)),
+    $transaction: jest.fn((arg) => (typeof arg === 'function' ? arg(mockPrisma) : Promise.all(arg))),
   };
 
   beforeEach(async () => {
@@ -1181,6 +1181,42 @@ describe('RepairsService', () => {
 
       await expect(
         service.cancelRepairJob('job-uuid-1', { reason: 'ยกเลิกกลางคัน' }, techUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('findAll', () => {
+    it('should filter repair jobs with valid startDate and endDate', async () => {
+      mockPrisma.repairJob.findMany.mockResolvedValue([]);
+      mockPrisma.repairJob.count.mockResolvedValue(0);
+
+      const query: any = {
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+      };
+
+      const result = await service.findAll(query, { role: UserRole.ADMIN });
+
+      expect(mockPrisma.repairJob.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: {
+              gte: new Date('2026-08-01T00:00:00.000Z'),
+              lte: new Date('2026-08-31T23:59:59.999Z'),
+            },
+          }),
+        }),
+      );
+      expect(result.data).toEqual([]);
+    });
+
+    it('should reject invalid calendar date in startDate or endDate filter', async () => {
+      const invalidQuery: any = {
+        startDate: '2026-50-54',
+      };
+
+      await expect(
+        service.findAll(invalidQuery, { role: UserRole.ADMIN }),
       ).rejects.toThrow(BadRequestException);
     });
   });

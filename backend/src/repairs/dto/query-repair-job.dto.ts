@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ActionType, ReportType, StepActionType, UrgencyStatus } from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
@@ -48,4 +48,14 @@ export class QueryRepairJobDto extends PaginationDto {
   @IsUUID()
   @IsOptional()
   mechanicId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter ticket created from date (YYYY-MM-DD)', example: '2026-08-01' })
+  @IsDateString({ strict: true })
+  @IsOptional()
+  startDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter ticket created to date (YYYY-MM-DD)', example: '2026-08-31' })
+  @IsDateString({ strict: true })
+  @IsOptional()
+  endDate?: string;
 }
