@@ -1,197 +1,341 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Search, X, Plus, Check } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import AssetInfoCard from "./AssetInfoCard";
+import CommonEvaluationFields from "./CommonEvaluationFields";
+import InternalSpareFields from "./InternalSpareFields";
+import ExternalVendorFields from "./ExternalVendorFields";
+import MechanicSelector from "./MechanicSelector";
+import { useAssessmentStore } from "../../stores/useAssessmentStore";
+import type { SpareItem } from "./InternalSpareFields";
+import type {
+  EvaluationDto,
+  EvaluationSpareDto,
+  ActionTypeUI,
+  AssessmentFormState,
+} from "../../Types/TypeAssessment";
 import type { User } from "../../Types/TypeUser";
+import { createEvaluation, getUsers } from "../../services/assessmentService";
 
-export interface MechanicSelectorProps {
-  usersList: User[];
-  selectedMechanicIds: (string | number)[];
-  onToggleMechanic: (id: number | string) => void;
-}
+const INITIAL_FORM_STATE: AssessmentFormState = {
+  symptomCause: "",
+  solution: "",
+  causeCategory: "",
+  isRepeat: undefined,
+  estimatedDays: "",
+  technicalDiagnosis: "",
+};
 
-export default function MechanicSelector({
-  usersList = [],
-  selectedMechanicIds = [],
-  onToggleMechanic,
-}: MechanicSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [mechanicSearch, setMechanicSearch] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // ปิด Dropdown เมื่อคลิกพื้นที่ภายนอก
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Helper Functions สำหรับแปลง User/ID
-  const getUserId = (user: User | any): string => {
-    if (!user) return "";
-    if (typeof user === "string" || typeof user === "number")
-      return String(user);
-    const u = user as Record<string, unknown>;
-    const id = user?.id ?? u?.userId ?? u?.user_id ?? u?._id;
-    return id !== undefined && id !== null ? String(id) : "";
-  };
-
-  const getUserFirstName = (user: User): string => {
-    const u = user as unknown as Record<string, unknown>;
-    return (
-      user?.firstname ||
-      (u?.firstName as string) ||
-      user?.userName ||
-      (u?.name as string) ||
-      "Unknown"
+const normalizeMechanicIds = (ids: (string | number)[]): string[] => {
+  return ids
+    .map((id) => String(id).trim())
+    .filter(
+      (id) => id !== "" && id !== "null" && id !== "undefined" && id !== "NaN",
     );
-  };
+};
 
-  const getUserInitials = (user: User): string => {
-    return getUserFirstName(user).substring(0, 2).toUpperCase();
-  };
+const normalizeSpares = (spares: SpareItem[]): EvaluationSpareDto[] => {
+  return (spares || []).map((item) => ({
+    sparepartId: Number(item.id) || 0,
+    qty: Number(item.quantity) || 1,
+    unitPrice: Number(item.price) || 0,
+  }));
+};
 
-  const cleanSelectedIds = Array.from(
-    new Set(
-      (selectedMechanicIds || [])
-        .map((item) => getUserId(item))
-        .filter((id) => id !== ""),
-    ),
-  );
+export default function AssessmentForm() {
+  const queryClient = useQueryClient();
 
-  const safeUsersList = Array.isArray(usersList) ? usersList : [];
+  const selectedJob = useAssessmentStore((state) => state.selectedJob);
+  const closeForm = useAssessmentStore((state) => state.closeForm);
 
-  const selectedMechanics = safeUsersList.filter((u) => {
-    const userId = getUserId(u);
-    return cleanSelectedIds.includes(userId);
-  });
+  const [actionStatus, setActionStatus] = useState<ActionTypeUI>("ซ่อมเองได้");
+  const [formState, setFormState] =
+    useState<AssessmentFormState>(INITIAL_FORM_STATE);
+  const [usersList, setUsersList] = useState<User[]>([]);
+  const [selectedMechanicIds, setSelectedMechanicIds] = useState<
+    (string | number)[]
+  >([]);
+  const [selectedSpares, setSelectedSpares] = useState<SpareItem[]>([]);
+  const [vendorId, setVendorId] = useState<string>("");
 
-  // กรอง Role เฉพาะช่าง + ค้นหาข้อมูล
-  const filteredMechanics = safeUsersList
-    .filter((u) => {
-      const userRole = String(u.role || "");
-      return userRole === "MAINTENANCE_STAFF" || userRole === "technician";
-    })
-    .filter((u) => {
-      const search = mechanicSearch.toLowerCase();
-      const fullName = `${u.firstname || ""} ${u.lastname || ""}`.toLowerCase();
-      const username = (u.userName || "").toLowerCase();
+  const currentJobId = selectedJob?.jobId;
+  const draftStorageKey = `draft_assessment_${currentJobId}`;
 
-      return fullName.includes(search) || username.includes(search);
+  // 1. Reset State หรือโหลดข้อมูลแบบร่างจาก localStorage เมื่อเปลี่ยน Job
+  useEffect(() => {
+    if (!currentJobId) return;
+
+    const savedDraft = localStorage.getItem(draftStorageKey);
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        setActionStatus(parsed.actionStatus || "ซ่อมเองได้");
+        setFormState(parsed.formState || INITIAL_FORM_STATE);
+        setSelectedMechanicIds(parsed.selectedMechanicIds || []);
+        setSelectedSpares(parsed.selectedSpares || []);
+        setVendorId(parsed.vendorId || "");
+        return;
+      } catch (error) {
+        console.error("Failed to parse draft from localStorage:", error);
+      }
+    }
+
+    setActionStatus("ซ่อมเองได้");
+    setFormState(INITIAL_FORM_STATE);
+    setSelectedMechanicIds([]);
+    setSelectedSpares([]);
+    setVendorId("");
+  }, [currentJobId, draftStorageKey]);
+
+  // Mutation บันทึกการประเมิน
+  const { mutate: handleEvaluationSubmit, isPending: isSubmitting } =
+    useMutation({
+      mutationFn: createEvaluation,
+      onSuccess: () => {
+        alert("บันทึกผลการประเมินสำเร็จ");
+        if (currentJobId) {
+          localStorage.removeItem(draftStorageKey);
+        }
+        queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
+        closeForm();
+      },
+      onError: (err: unknown) => {
+        const errorObj = err as {
+          response?: { data?: { message?: string } };
+          message?: string;
+        };
+        const errorMsg =
+          errorObj?.response?.data?.message ||
+          errorObj?.message ||
+          "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+        alert(`ไม่สามารถทำรายการได้: ${errorMsg}`);
+      },
     });
 
+  // ดึงรายชื่อผู้ใช้งาน
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUsers = async () => {
+      try {
+        const res = await getUsers();
+        const list: User[] = Array.isArray(res)
+          ? res
+          : (res as { data: User[] })?.data || [];
+        if (isMounted) setUsersList(list);
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+      }
+    };
+
+    fetchUsers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Form Validation Logic
+  const isFormValid = useMemo(() => {
+    const hasCommonFields =
+      Boolean(actionStatus) &&
+      Boolean(formState.symptomCause?.trim()) &&
+      Boolean(formState.solution?.trim()) &&
+      Boolean(formState.technicalDiagnosis?.trim()) &&
+      Boolean(formState.causeCategory) &&
+      formState.isRepeat !== undefined &&
+      Boolean(String(formState.estimatedDays ?? "").trim()) &&
+      selectedMechanicIds.length > 0;
+
+    if (!hasCommonFields) return false;
+
+    if (
+      actionStatus === "ขอเบิกอะไหล่ภายใน" ||
+      actionStatus === "ขอเบิกอะไหล่ภายนอก"
+    ) {
+      return selectedSpares.length > 0;
+    }
+
+    if (actionStatus === "ส่งซ่อมภายนอก") {
+      return Boolean(vendorId && vendorId.trim() !== "");
+    }
+
+    return true;
+  }, [formState, actionStatus, selectedMechanicIds, selectedSpares, vendorId]);
+
+  // Handlers
+  const handleActionStatusChange = (newStatus: ActionTypeUI) => {
+    setActionStatus(newStatus);
+    setSelectedMechanicIds([]);
+    setSelectedSpares([]);
+    setVendorId("");
+  };
+
+  const handleToggleMechanic = (mechanicId: number | string) => {
+    if (mechanicId === undefined || mechanicId === null) return;
+    const targetId = String(mechanicId);
+
+    setSelectedMechanicIds((prev) => {
+      const exists = prev.some((item) => String(item) === targetId);
+      return exists
+        ? prev.filter((item) => String(item) !== targetId)
+        : [...prev, targetId];
+    });
+  };
+
+  const handleSaveDraft = () => {
+    if (!currentJobId) return;
+
+    const draftData = {
+      actionStatus,
+      formState,
+      selectedMechanicIds,
+      selectedSpares,
+      vendorId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(draftStorageKey, JSON.stringify(draftData));
+    alert("บันทึกแบบร่างเรียบร้อยแล้ว");
+    closeForm();
+  };
+
+  const handleSubmit = () => {
+    if (!selectedJob || !isFormValid) return;
+
+    const cleanMechanicIds = normalizeMechanicIds(selectedMechanicIds);
+    const cleanVendorId = Number(vendorId) || undefined;
+
+    const dto: EvaluationDto = {
+      jobId: selectedJob.jobId,
+      actionType: actionStatus,
+      diagnosis: formState.symptomCause?.trim(),
+      solution: formState.solution?.trim(),
+      causeCategory: formState.causeCategory,
+      isRepeatRepair: Boolean(formState.isRepeat),
+      dueDate: String(formState.estimatedDays).trim(),
+      technicalDiagnosis: formState.technicalDiagnosis?.trim(),
+      assigneeIds: cleanMechanicIds,
+      ...(actionStatus === "ขอเบิกอะไหล่ภายใน" ||
+      actionStatus === "ขอเบิกอะไหล่ภายนอก"
+        ? { spares: normalizeSpares(selectedSpares) }
+        : {}),
+      ...(actionStatus === "ส่งซ่อมภายนอก"
+        ? {
+            companyId: cleanVendorId,
+            vendorId: cleanVendorId,
+          }
+        : {}),
+    };
+
+    handleEvaluationSubmit(dto);
+  };
+
+  if (!selectedJob) return null;
+
   return (
-    <div className="relative" ref={dropdownRef}>
-      <label className="text-xs font-semibold text-slate-700 block mb-1">
-        ผู้รับผิดชอบงาน / ผู้ปฏิบัติงาน (Assignees){" "}
-        <span className="text-rose-500">*</span>
-        <span className="text-[11px] font-normal text-slate-400 ml-1">
-          เลือกได้มากกว่า 1 คน (เลือกแล้ว {selectedMechanics.length} คน)
-        </span>
-      </label>
-
-      {/* Chip ผู้รับผิดชอบงานที่เลือก */}
-      <div className="min-h-[42px] p-1.5 border border-slate-200 focus-within:border-emerald-500 rounded-xl bg-white flex flex-wrap items-center gap-1.5 transition-colors">
-        {selectedMechanics.map((m) => {
-          const mId = getUserId(m);
-          return (
-            <div
-              key={mId}
-              className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-full pl-1 pr-2 py-0.5"
-            >
-              <span className="h-5 w-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
-                {getUserInitials(m)}
-              </span>
-              <span className="text-xs text-slate-700 font-medium">
-                {getUserFirstName(m)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onToggleMechanic(mId)}
-                className="text-slate-400 hover:text-rose-500 cursor-pointer transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          );
-        })}
-
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="inline-flex items-center gap-1 text-xs text-slate-500 border border-dashed border-slate-300 rounded-full px-3 py-1 hover:border-emerald-500 hover:text-emerald-600 transition-colors cursor-pointer ml-auto"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          เพิ่มผู้รับผิดชอบ...
-        </button>
-      </div>
-
-      {/* Dropdown ตัวเลือกรายชื่อ */}
-      {isOpen && (
-        <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-slate-100 shadow-xl rounded-xl p-3 space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="ค้นหาชื่อช่าง, ตำแหน่ง หรือรหัสพนักงาน..."
-              value={mechanicSearch}
-              onChange={(e) => setMechanicSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
-            {filteredMechanics.length === 0 ? (
-              <div className="p-3 text-center text-xs text-slate-400">
-                ไม่พบรายชื่อช่าง
-              </div>
-            ) : (
-              filteredMechanics.map((u) => {
-                const uId = getUserId(u);
-                const isSelected = cleanSelectedIds.includes(uId);
-
-                return (
-                  <div
-                    key={uId}
-                    onClick={() => onToggleMechanic(uId)}
-                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                      isSelected ? "bg-emerald-50/50" : "hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={`h-4 w-4 rounded-md border flex items-center justify-center transition-colors ${
-                          isSelected
-                            ? "bg-emerald-600 border-emerald-600 text-white"
-                            : "border-slate-300 bg-white"
-                        }`}
-                      >
-                        {isSelected && <Check className="h-3 w-3" />}
-                      </div>
-                      <span className="h-7 w-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
-                        {getUserInitials(u)}
-                      </span>
-                      <div>
-                        <div className="text-xs font-semibold text-slate-800">
-                          {getUserFirstName(u)}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {u.userName} {u.lastname ? `• ${u.lastname}` : ""}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+    <div className="space-y-4 pb-12">
+      {/* Top Header Navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={closeForm}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            ย้อนกลับ
+          </button>
+          <div className="text-xs text-slate-400 flex items-center gap-1.5">
+            <span className="font-semibold text-emerald-600">
+              ประเมินการซ่อม ({selectedJob.jobNo || `JOB-${selectedJob.jobId}`})
+            </span>
           </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold font-mono">
+            {selectedJob.jobNo || `JOB-${selectedJob.jobId}`}
+          </span>
+          <span className="px-3 py-1 rounded-md bg-amber-50 text-amber-600 text-xs font-semibold">
+            ● รอดำเนินการประเมิน
+          </span>
+        </div>
+      </div>
+
+      {/* Main Grid Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Side: Asset Details */}
+        <div className="lg:col-span-5">
+          <AssetInfoCard jobData={selectedJob} />
+        </div>
+
+        {/* Right Side: Evaluation Form */}
+        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
+              <span className="p-1 rounded-md bg-emerald-50 text-emerald-600">
+                ✏️
+              </span>
+              บันทึกผลการประเมินและการดำเนินการ
+            </div>
+          </div>
+
+          <CommonEvaluationFields
+            actionStatus={actionStatus}
+            setActionStatus={handleActionStatusChange}
+            formState={formState}
+            setFormState={setFormState}
+          />
+
+          <MechanicSelector
+            usersList={usersList}
+            selectedMechanicIds={selectedMechanicIds}
+            onToggleMechanic={handleToggleMechanic}
+          />
+
+          {(actionStatus === "ขอเบิกอะไหล่ภายใน" ||
+            actionStatus === "ขอเบิกอะไหล่ภายนอก") && (
+            <InternalSpareFields
+              key={actionStatus}
+              selectedSpares={selectedSpares}
+              setSelectedSpares={setSelectedSpares}
+            />
+          )}
+
+          {actionStatus === "ส่งซ่อมภายนอก" && (
+            <ExternalVendorFields
+              key={actionStatus}
+              vendorId={vendorId}
+              setVendorId={setVendorId}
+            />
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSaveDraft}
+              className="px-5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              บันทึกแบบร่าง
+            </button>
+
+            <button
+              type="button"
+              disabled={!isFormValid || isSubmitting}
+              onClick={handleSubmit}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold shadow-2xs transition-colors ${
+                isFormValid && !isSubmitting
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
+              }`}
+            >
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isSubmitting ? "กำลังบันทึก..." : "บันทึกผลการประเมิน"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
