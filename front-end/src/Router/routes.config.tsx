@@ -1,6 +1,7 @@
 import { Repeat, Archive, Wrench, History, LucideIcon } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
+import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
 
 interface AppRote {
@@ -57,7 +58,7 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "borrow-history",
     title: "ประวัติการยืม",
-    element: <div>borrow-history</div>,
+    element: <BorrowHistory />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,

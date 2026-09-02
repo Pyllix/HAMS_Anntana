@@ -55,6 +55,50 @@ export interface ReturnRes {
   createdAt: string;
 }
 
+export interface BorrowHistory {
+  id: string;
+  asset_id: string;
+  borrower_id: string;
+  created_by_user_id: string;
+  approved_by_user_id: string;
+  handover_by_user_id: string;
+  returned_by_user_id: string | null;
+  received_by_user_id: string | null;
+  rejected_by_user_id: string | null;
+  cancelled_by_user_id: string | null;
+  borrow_status_id: number;
+  approved_at: string | null;
+  handover_date: string | null;
+  return_date: string | null;
+  cancelled_at: string | null;
+  rejected_at: string | null;
+  cancel_reason: string | null;
+  return_condition: string | null;
+  return_method: string | null;
+  return_remark: string | null;
+  reject_remark: string | null;
+  request_source: string;
+  delivery_method: string;
+  createdAt: string;
+  asset: {
+    id: string;
+    name: string;
+    model: string;
+  };
+  borrower: {
+    id: string;
+    employeeId: string;
+    firstname: string;
+    lastname: string;
+    section_id: string;
+  };
+  borrowStatus: {
+    id: number;
+    code: string;
+    name: string;
+  };
+}
+
 export async function postBorrow(borrow: BorrowReq): Promise<BorrowRes> {
   const token = localStorage.getItem("token");
 
@@ -88,4 +132,16 @@ export async function returnAsset(
   );
 
   return res.data;
+}
+
+export async function getAllBorrowHistory(): Promise<BorrowHistory[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(`https://hams-anntana.onrender.com/borrowings`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return res.data.data;
 }
