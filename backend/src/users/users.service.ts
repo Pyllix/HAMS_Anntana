@@ -72,6 +72,7 @@ export class UsersService {
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       ...(query.role ? { role: query.role } : {}),
+      ...(query.section_id ? { section_id: query.section_id } : {}),
       ...(query.search
         ? {
           OR: [

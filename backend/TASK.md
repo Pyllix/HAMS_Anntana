@@ -9,32 +9,19 @@
 
 | ลำดับ | โมดูล / Endpoint | ปัญหาที่พบในการออกแบบ Filter | ระดับผลกระทบ | สถานะ |
 | :---: | :--- | :--- | :---: | :---: |
-| 1 | **`GET /asset`** | **ขาด Filter สำคัญใน `AssetFilterDto`**<br>มีแค่ `section_id` แต่ไม่มี `asset_status_id`, `availability_status_id`, `asset_type_id` | 🔴 **สูง (High)** | ✅ **เสร็จสิ้น** |
+| 1 | **`GET /asset`** | **ขาด Filter สำคัญใน `AssetFilterDto`**<br>มีแค่ `section_id` แต่ไม่มี `asset_status_id`, `availability_status_id`, `asset_type_id`, `equipment_type_id` | 🔴 **สูง (High)** | ✅ **เสร็จสิ้น** |
 | 2 | **`GET /asset/section/:sectionId`** | **สร้าง Path ซ้ำซ้อนกับการทำ Query Filter**<br>มีทั้ง `GET /asset?section_id=...` และ `GET /asset/section/:id` ทำให้เกิด Code Duplication และผสม Filter ไม่ได้ | 🟡 **ปานกลาง (Medium)** | รอดำเนินการ |
 | 3 | **`GET /borrowings`** | **ขาด Filter ด้านหน่วยงานและช่วงเวลา** ใน `BorrowFilterDto`<br>มีแค่ `assetId`, `borrowerId`, `borrowStatusId` แต่ไม่มี `sectionId` หรือ `startDate`/`endDate` | 🟡 **ปานกลาง (Medium)** | ✅ **เสร็จสิ้น** |
-| 4 | **`GET /company`, `GET /sections`** | **ไม่มี Search และ Pagination**<br>ดึงข้อมูลทั้งหมดออกมาแบบ Flat Array (ปัจจุบันยังไม่ส่งผลมากเพราะข้อมูลหลักสิบถึงร้อยรายการ) | 🟢 **ต่ำ (Low)** | รอดำเนินการ |
+| 4 | **`GET /users`** | **ขาด Filter ด้านแผนก** ใน `QueryUserDto`<br>มีแค่ `role`, `search` แต่ไม่มี `section_id` สำหรับ Dropdown แยกรายแผนก | 🟡 **ปานกลาง (Medium)** | ✅ **เสร็จสิ้น** |
+| 5 | **`GET /spare-parts/transactions`** | **ขาด Filter ด้านช่วงเวลาและผู้ทำรายการ** ใน `QuerySparepartTxnDto`<br>มีแค่ `sparepartId`, `jobId`, `txnType` แต่ไม่มี `startDate`, `endDate`, `userId` | 🟡 **ปานกลาง (Medium)** | ✅ **เสร็จสิ้น** |
+| 6 | **`GET /company`, `GET /sections`** | **ไม่มี Search และ Pagination**<br>ดึงข้อมูลทั้งหมดออกมาแบบ Flat Array (ปัจจุบันยังไม่ส่งผลมากเพราะข้อมูลหลักสิบถึงร้อยรายการ) | 🟢 **ต่ำ (Low)** | รอดำเนินการ |
 
 ---
 
 ## 2. รายละเอียดเชิงลึกและแนวทางการแก้ไข
 
 ### 🔴 1. โมดูล Assets (`GET /asset`)
-* **ปัญหาปัจจุบัน:**
-  * ใน `src/asset/dto/asset-filter.dto.ts` มีเฉพาะ `section_id?: string`
-  * หน้าบ้านไม่สามารถกรองดูตามสถานะความพร้อม (เช่น `AVAILABLE` เพื่อนำไปยืม) หรือตามประเภทครุภัณฑ์ได้
-* **ผลเสีย:**
-  * หากหน้าบ้านดึงข้อมูลทั้งหมดมา Filter ใน Client-side จะทำให้ระบบ Pagination เพี้ยน (Broken Pagination) และช้าเมื่อข้อมูลมีจำนวนมาก
-* **แนวทางแก้ไข:**
-  * ขยาย `AssetFilterDto` ให้รองรับ:
-    ```typescript
-    export class AssetFilterDto extends PaginationDto {
-      section_id?: string;
-      asset_status_id?: number;
-      availability_status_id?: number;
-      asset_type_id?: number;
-    }
-    ```
-  * อัปเดต Prisma `where` clause ใน `src/asset/asset.service.ts`
+* **สถานะ:** ✅ ปรับปรุงเรียบร้อยแล้ว รองรับ `section_id`, `asset_status_id`, `availability_status_id`, `asset_type_id`, `equipment_type_id`, `search`, `page`, `limit`
 
 ---
 
@@ -51,16 +38,21 @@
 ---
 
 ### 🟡 3. โมดูล Borrowings (`GET /borrowings`)
-* **ปัญหาปัจจุบัน:**
-  * ใน `src/asset-borrow/dto/borrow-filter.dto.ts` ยังขาด `sectionId`, `startDate`, `endDate`
-* **ผลเสีย:**
-  * เจ้าหน้าที่ศูนย์เครื่องมือไม่สามารถคัดกรองประวัติการยืมตาม "แผนกที่ยืม" หรือ "รอบประจำเดือน/ปีงบประมาณ" ได้
-* **แนวทางแก้ไข:**
-  * เพิ่มฟิลด์ `sectionId?: string`, `startDate?: string`, `endDate?: string` ลงใน `BorrowFilterDto` และ Query ใน `AssetBorrowService`
+* **สถานะ:** ✅ ปรับปรุงเรียบร้อยแล้ว รองรับ `sectionId`, `startDate`, `endDate`, `assetId`, `borrowerId`, `borrowStatusId`, `page`, `limit`
 
 ---
 
-### 🟢 4. Master Data (`/company`, `/sections`)
+### 🟡 4. โมดูล Users (`GET /users`)
+* **สถานะ:** ✅ ปรับปรุงเรียบร้อยแล้ว รองรับ `section_id`, `role`, `search`, `page`, `limit`
+
+---
+
+### 🟡 5. โมดูล Spare Parts Transactions (`GET /spare-parts/transactions`)
+* **สถานะ:** ✅ ปรับปรุงเรียบร้อยแล้ว รองรับ `startDate`, `endDate`, `userId`, `sparepartId`, `jobId`, `txnType`, `page`, `limit`
+
+---
+
+### 🟢 6. Master Data (`/company`, `/sections`)
 * **ปัญหาปัจจุบัน:**
   * คืนค่าเป็น Array ทั้งหมด (`findMany`)
 * **แนวทางแก้ไข:**
@@ -69,6 +61,9 @@
 ---
 
 ## 3. โมดูลที่ออกแบบได้ถูกต้องตาม Best Practice แล้ว (Benchmark)
-* **`Repairs Module` (`GET /repairs?...`)**: รวม Filter 10 มิติ (`statusCode`, `urgencyStatus`, `actionType`, `stepActionType`, `mechanicId`, `assetId`, `sectionId`, `search`) ไว้ในเส้นเดียว พร้อม Data Isolation ตาม Role
+* **`Repairs Module` (`GET /repairs?...`)**: รวม Filter 10 มิติ (`statusCode`, `urgencyStatus`, `actionType`, `stepActionType`, `mechanicId`, `assetId`, `sectionId`, `startDate`, `endDate`, `search`) ไว้ในเส้นเดียว พร้อม Data Isolation ตาม Role
 * **`Spare Parts Module` (`GET /spare-parts?...`)**: รองรับ `sparePartGroupId`, `isLowStock`, `search`, `page`, `limit` ในเส้นเดียวชัดเจน
-* **`Users Module` (`GET /users?...`)**: รองรับ `role`, `search`, `page`, `limit` ครบถ้วน
+* **`Spare Parts Transactions` (`GET /spare-parts/transactions?...`)**: รองรับ `sparepartId`, `jobId`, `txnType`, `userId`, `startDate`, `endDate`, `page`, `limit` ครบถ้วน
+* **`Users Module` (`GET /users?...`)**: รองรับ `role`, `section_id`, `search`, `page`, `limit` ครบถ้วน
+* **`Asset Borrow Module` (`GET /borrowings?...`)**: รองรับ `assetId`, `borrowerId`, `borrowStatusId`, `sectionId`, `startDate`, `endDate`, `page`, `limit` ครบถ้วน
+* **`Asset Module` (`GET /asset?...`)**: รองรับ `section_id`, `asset_status_id`, `availability_status_id`, `asset_type_id`, `equipment_type_id`, `search`, `page`, `limit` ครบถ้วน
