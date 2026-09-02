@@ -60,8 +60,9 @@ model SparepartTxn {
   txnBy       String   @map("txn_by")
   createdAt   DateTime @default(now())
 
-  sparepart Sparepart @relation(fields: [sparepartId], references: [id])
-  user      User      @relation(fields: [txnBy], references: [id])
+  sparepart Sparepart  @relation(fields: [sparepartId], references: [id])
+  user      User       @relation(fields: [txnBy], references: [id])
+  repairJob RepairJob? @relation(fields: [jobId], references: [id])
 
   @@map("sparepart_txns")
 }

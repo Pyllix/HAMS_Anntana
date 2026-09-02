@@ -1,0 +1,141 @@
+// This file defines the Prisma models for Maintenance and Repair Management.
+
+model JobStatus {
+  id        Int       @id @default(autoincrement()) @map("job_status_id")
+  code      String    @unique @map("status_code") @db.VarChar(20)
+  name      String    @map("status_name") @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  repairJobs RepairJob[]
+
+  @@map("job_status")
+}
+
+model JobType {
+  id        Int       @id @default(autoincrement()) @map("job_type_id")
+  name      String    @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  repairJobs RepairJob[]
+
+  @@map("job_type")
+}
+
+model Cause {
+  id        Int       @id @default(autoincrement()) @map("cause_id")
+  code      String    @map("cause_code") @db.VarChar(10)
+  name      String    @map("cause_name") @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deleteAt  DateTime? @map("delete_at")
+
+  repairJobs RepairJob[]
+
+  @@map("cause")
+}
+
+model TechCategory {
+  id        Int       @id @default(autoincrement()) @map("tech_category_id")
+  code      String    @map("category_code") @db.VarChar(20)
+  name      String    @map("category_name") @db.VarChar(100)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deleteAt  DateTime? @map("delete_at")
+
+  repairJobs RepairJob[]
+
+  @@map("tech_category")
+}
+
+model StepMaster {
+  id         Int            @id @default(autoincrement()) @map("step_master_id")
+  stepNumber Int            @map("step_number")
+  actionType StepActionType @map("action_type")
+  label      String         @db.VarChar(100)
+
+  repairJobSteps RepairJobStep[]
+
+  @@map("step_master")
+}
+
+model RepairJob {
+  id             String         @id @default(uuid()) @map("job_id")
+  jobNo          String         @unique @map("job_no") @db.VarChar(255)
+  assetId        String         @map("asset_id")
+  sectionId      String         @map("section_id")
+  reporterId     String         @map("reporter_id")
+  jobTypeId      Int            @map("job_type_id")
+  reportType     ReportType     @map("report_type")
+  jobStatusId    Int            @map("job_status_id")
+  companyId      String?        @map("company_id")
+  billNo         String?        @map("bill_no") @db.Text
+  diagnosis      String?        @db.Text
+  symptom        String?        @db.Text
+  solution       String?        @db.Text
+  causeId        Int?           @map("cause_id")
+  actionType     ActionType?    @map("action_type")
+  urgencyStatus  UrgencyStatus  @map("urgency_status")
+  dueDate        DateTime?      @map("due_date")
+  returnDate     DateTime?      @map("return_date")
+  isRepeatRepair Boolean?       @map("is_repeat_repair")
+  techCategoryId Int?           @map("tech_category_id")
+  receiverId     String?        @map("receiver_id")
+  warrantyDate   String?        @map("warranty_date") @db.VarChar(30)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  createdBy      String         @map("created_by")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  updatedBy      String         @map("updated_by")
+
+  // Relations
+  asset          Asset           @relation(fields: [assetId], references: [id])
+  section        Section         @relation(fields: [sectionId], references: [id])
+  reporter       User            @relation("RepairReporter", fields: [reporterId], references: [id])
+  jobType        JobType         @relation(fields: [jobTypeId], references: [id])
+  jobStatus      JobStatus       @relation(fields: [jobStatusId], references: [id])
+  company        Company?        @relation(fields: [companyId], references: [id])
+  cause          Cause?          @relation(fields: [causeId], references: [id])
+  techCategory   TechCategory?   @relation(fields: [techCategoryId], references: [id])
+  receiver       User?           @relation("RepairReceiver", fields: [receiverId], references: [id])
+  creator        User            @relation("RepairCreatedBy", fields: [createdBy], references: [id])
+  updater        User            @relation("RepairUpdatedBy", fields: [updatedBy], references: [id])
+
+  repairJobSteps RepairJobStep[]
+  mechanicRepairs MechanicRepair[]
+  sparepartTxns   SparepartTxn[]
+
+  @@map("repair_job")
+}
+
+model RepairJobStep {
+  id           Int        @id @default(autoincrement()) @map("step_id")
+  jobId        String     @map("job_id")
+  stepMasterId Int        @map("step_master_id")
+  completeAt   DateTime?  @map("complete_at")
+  note         String?    @db.Text
+  completedBy  String?    @map("completed_by")
+
+  job        RepairJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stepMaster StepMaster @relation(fields: [stepMasterId], references: [id])
+  user       User?      @relation(fields: [completedBy], references: [id])
+
+  @@map("repair_job_step")
+}
+
+model MechanicRepair {
+  id        Int       @id @default(autoincrement()) @map("mechanic_repair_id")
+  jobId     String    @map("job_id")
+  userId    String    @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deleteAt  DateTime? @map("delete_at")
+
+  job  RepairJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id])
+
+  @@map("mechanic_repair")
+}

@@ -10,6 +10,7 @@ import { CompanyService } from '../src/company/company.service';
 import { SectionsService } from '../src/sections/sections.service';
 import { SparePartsService } from '../src/spare-parts/spare-parts.service';
 import { SparePartGroupService } from '../src/spare-part-group/spare-part-group.service';
+import { RepairsService } from '../src/repairs/repairs.service';
 
 describe('RBAC Authorization (e2e)', () => {
   let app: INestApplication;
@@ -45,6 +46,14 @@ describe('RBAC Authorization (e2e)', () => {
     create: jest.fn().mockResolvedValue({ id: 1, name: 'Group 1' }),
   };
 
+  const mockRepairsService = {
+    findAll: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+    createRequest: jest.fn().mockResolvedValue({ id: 'job-1', jobNo: 'REP-202609-0001' }),
+    diagnoseAndPlan: jest.fn().mockResolvedValue({ id: 'job-1' }),
+    updateStepProgress: jest.fn().mockResolvedValue({ id: 'step-1' }),
+    completeAndCloseJob: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -63,6 +72,8 @@ describe('RBAC Authorization (e2e)', () => {
       .useValue(mockSparePartsService)
       .overrideProvider(SparePartGroupService)
       .useValue(mockSparePartGroupService)
+      .overrideProvider(RepairsService)
+      .useValue(mockRepairsService)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -246,4 +257,66 @@ describe('RBAC Authorization (e2e)', () => {
         .expect(403);
     });
   });
+
+  // ─── UC3 & UC8: Repairs & Maintenance (/repairs) ─────────────────────────
+
+  describe('UC3 & UC8: Repairs & Maintenance (/repairs)', () => {
+    it('POST /repairs -> 201 Created for DEPARTMENT_STAFF (UC3: Submit online repair)', async () => {
+      await request(app.getHttpServer())
+        .post('/repairs')
+        .set('x-test-role', UserRole.DEPARTMENT_STAFF)
+        .send({
+          assetId: '123e4567-e89b-12d3-a456-426614174000',
+          symptom: 'Machine error',
+          urgencyStatus: 'NORMAL',
+          reportType: 'Repair',
+        })
+        .expect(201);
+    });
+
+    it('GET /repairs -> 200 OK for MAINTENANCE_STAFF and DEPARTMENT_STAFF', async () => {
+      await request(app.getHttpServer())
+        .get('/repairs')
+        .set('x-test-role', UserRole.MAINTENANCE_STAFF)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get('/repairs')
+        .set('x-test-role', UserRole.DEPARTMENT_STAFF)
+        .expect(200);
+    });
+
+    it('PATCH /repairs/:id/diagnose -> 200 OK for MAINTENANCE_STAFF (UC8)', async () => {
+      await request(app.getHttpServer())
+        .patch('/repairs/job-1/diagnose')
+        .set('x-test-role', UserRole.MAINTENANCE_STAFF)
+        .send({
+          diagnosis: 'Motor defect',
+          solution: 'Repair motor',
+          causeId: 1,
+          techCategoryId: 1,
+          jobTypeId: 1,
+          actionType: 'REPAIR',
+          stepActionType: 'SELF_REPAIR',
+        })
+        .expect(200);
+    });
+
+    it('PATCH /repairs/:id/diagnose -> 403 Forbidden for DEPARTMENT_STAFF', async () => {
+      await request(app.getHttpServer())
+        .patch('/repairs/job-1/diagnose')
+        .set('x-test-role', UserRole.DEPARTMENT_STAFF)
+        .send({
+          diagnosis: 'Motor defect',
+          solution: 'Repair motor',
+          causeId: 1,
+          techCategoryId: 1,
+          jobTypeId: 1,
+          actionType: 'REPAIR',
+          stepActionType: 'SELF_REPAIR',
+        })
+        .expect(403);
+    });
+  });
 });
+

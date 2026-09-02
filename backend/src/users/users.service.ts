@@ -6,9 +6,9 @@ import {
 import { PrismaService } from '../prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { QueryUserDto } from './dto/query-user.dto';
 import { auth } from '../auth/auth';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
+import { PaginatedResult, paginate } from 'src/common/utils/paginate.util';
 import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
 
@@ -59,11 +59,11 @@ export class UsersService {
     return user;
   }
 
-  // ─── Read All (paginated) ───────────────────────────────────────────────────
+  // ─── Read All (paginated & role filter) ───────────────────────────────────────
 
-  /** Retrieve all active users (not soft-deleted), with optional pagination and search */
+  /** Retrieve all active users (not soft-deleted), with optional pagination, role filter, and search */
   async findAll(
-    query: PaginationDto,
+    query: QueryUserDto,
   ): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -71,6 +71,7 @@ export class UsersService {
 
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
+      ...(query.role ? { role: query.role } : {}),
       ...(query.search
         ? {
           OR: [

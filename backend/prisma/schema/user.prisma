@@ -42,6 +42,14 @@ model User {
   sparepartAdds               SparepartAdd[]
   sparepartTxns               SparepartTxn[]
 
+  //Repair relations
+  reportedRepairs             RepairJob[]      @relation("RepairReporter")
+  receivedRepairs             RepairJob[]      @relation("RepairReceiver")
+  createdRepairs              RepairJob[]      @relation("RepairCreatedBy")
+  updatedRepairs              RepairJob[]      @relation("RepairUpdatedBy")
+  mechanicRepairs             MechanicRepair[]
+  completedRepairSteps        RepairJobStep[]
+
   @@map("users")
 }
 

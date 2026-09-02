@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient, RiskLevel, PmType, CalType } from '@prisma/client';
+import { PrismaClient, RiskLevel, PmType, CalType, StepActionType } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { hashPassword } from 'better-auth/crypto';
@@ -881,6 +881,178 @@ async function main() {
         },
       });
       console.log(`  🔄 Updated spare part: ${sp.name} (${sp.code})`);
+    }
+  }
+
+  // 9. Repair Masters & Lookups
+  console.log('🔧 Seeding Repair Masters & Lookups...');
+
+  // 9.1 JobStatus (10 standard repair job lifecycle statuses)
+  const jobStatuses = [
+    { code: 'WAITING_HANDOVER', name: 'รอรับเครื่องจากหน่วยงาน' },
+    { code: 'PENDING_ASSIGN', name: 'รอมอบหมายงานให้ช่าง' },
+    { code: 'IN_PROGRESS', name: 'ช่างกำลังดำเนินการซ่อม' },
+    { code: 'WAITING_PARTS', name: 'สั่งซื้อ/รออะไหล่' },
+    { code: 'PARCEL_PROCESSING', name: 'พัสดุกำลังดำเนินการ' },
+    { code: 'OUTSOURCED', name: 'ส่งซ่อมบริษัทภายนอก' },
+    { code: 'UNREPAIRABLE', name: 'แทงชำรุด/เห็นควรจำหน่าย' },
+    { code: 'WAITING_DELIVERY', name: 'เสร็จแล้วรอรับคืน' },
+    { code: 'COMPLETED', name: 'ส่งคืน/ดำเนินการเรียบร้อย' },
+    { code: 'CANCELLED', name: 'ยกเลิกงานซ่อม' },
+  ];
+  for (const js of jobStatuses) {
+    await prisma.jobStatus.upsert({
+      where: { code: js.code },
+      update: { name: js.name },
+      create: js,
+    });
+  }
+
+  // 9.2 JobType
+  const jobTypes = [
+    { name: 'ตรวจเช็คและซ่อมทั่วไป' },
+    { name: 'ซ่อมใหญ่/ยกเครื่อง' },
+    { name: 'บำรุงรักษาเชิงป้องกัน (PM)' },
+    { name: 'สอบเทียบมาตรฐาน (Calibration)' },
+    { name: 'ดัดแปลง/ปรับปรุงสภาพ' },
+  ];
+  for (const jt of jobTypes) {
+    const existing = await prisma.jobType.findFirst({ where: { name: jt.name } });
+    if (!existing) {
+      await prisma.jobType.create({ data: jt });
+    }
+  }
+
+  // 9.3 Cause
+  const causes = [
+    { code: '01', name: 'การเสื่อมสภาพตามอายุการใช้งาน' },
+    { code: '02', name: 'การใช้งานผิดวิธี/เกิดอุบัติเหตุ' },
+    { code: '03', name: 'ระบบไฟฟ้าขัดข้อง/แรงดันไฟตกหรือกระชาก' },
+    { code: '04', name: 'ข้อผิดพลาดทางซอฟต์แวร์หรือเฟิร์มแวร์' },
+    { code: '05', name: 'สิ่งแปลกปลอม/ของเหลวไหลเข้าตัวเครื่อง' },
+    { code: '06', name: 'การขาดการบำรุงรักษาตามรอบ' },
+  ];
+  for (const cs of causes) {
+    const existing = await prisma.cause.findFirst({ where: { code: cs.code } });
+    if (!existing) {
+      await prisma.cause.create({ data: cs });
+    } else {
+      await prisma.cause.update({ where: { id: existing.id }, data: { name: cs.name } });
+    }
+  }
+
+  // 9.4 TechCategory (9 หมวดงานซ่อมบำรุง)
+  const techCategories = [
+    { code: 'MED_EQ', name: 'งานเครื่องมือแพทย์', isActive: true },
+    { code: 'AIR_CON', name: 'งานเครื่องปรับอากาศ', isActive: true },
+    { code: 'PLUMBING', name: 'งานประปา', isActive: true },
+    { code: 'CONSTRUCT', name: 'งานก่อสร้าง', isActive: true },
+    { code: 'ALUMINIUM', name: 'งานอะลูมิเนียม', isActive: true },
+    { code: 'ELECTRICAL', name: 'งานไฟฟ้า', isActive: true },
+    { code: 'IT_HW_SW', name: 'งานระบบคอมพิวเตอร์Hardware&Software', isActive: true },
+    { code: 'METAL_OFFICE', name: 'งานโลหะและครุภัณฑ์สำนักงาน', isActive: true },
+    { code: 'ELECTRONIC', name: 'งานอิเล็กทรอนิกส์', isActive: true },
+  ];
+  for (const tc of techCategories) {
+    const existing = await prisma.techCategory.findFirst({
+      where: {
+        OR: [{ code: tc.code }, { name: tc.name }],
+      },
+    });
+    if (!existing) {
+      await prisma.techCategory.create({ data: tc });
+    } else {
+      await prisma.techCategory.update({
+        where: { id: existing.id },
+        data: { code: tc.code, name: tc.name, isActive: tc.isActive },
+      });
+    }
+  }
+
+  // 9.5 StepMaster (Streamlined Action Types Workflow Templates)
+  console.log('📋 Seeding StepMaster templates...');
+  const stepMasterTemplates: { stepNumber: number; actionType: StepActionType; label: string }[] = [
+    // 1. INTERNAL_STOCK
+    { stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.INTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.INTERNAL_STOCK, label: 'ขอเบิกอะไหล่ในคลัง' },
+    { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
+    { stepNumber: 6, actionType: StepActionType.INTERNAL_STOCK, label: 'พัสดุจ่ายอะไหล่ในคลัง' },
+    { stepNumber: 7, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับวัสดุ/ดำเนินการซ่อม' },
+    { stepNumber: 8, actionType: StepActionType.INTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.INTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 2. EXTERNAL_STOCK
+    { stepNumber: 1, actionType: StepActionType.EXTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.EXTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.EXTERNAL_STOCK, label: 'ขอเบิก/จัดซื้ออะไหล่นอกคลัง' },
+    { stepNumber: 5, actionType: StepActionType.EXTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่นอกคลัง' },
+    { stepNumber: 6, actionType: StepActionType.EXTERNAL_STOCK, label: 'พัสดุแจ้งรับอะไหล่' },
+    { stepNumber: 7, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับอะไหล่/ดำเนินการซ่อม' },
+    { stepNumber: 8, actionType: StepActionType.EXTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.EXTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 3. OUTSOURCE
+    { stepNumber: 1, actionType: StepActionType.OUTSOURCE, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.OUTSOURCE, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.OUTSOURCE, label: 'ขอส่งซ่อมบริษัทภายนอก' },
+    { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'อนุมัติส่งซ่อมบริษัทภายนอก' },
+    { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'พัสดุรับเครื่องกลับจากบริษัท' },
+    { stepNumber: 7, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับเครื่องและทดสอบ' },
+    { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 4. PURCHASE_REPLACEMENT (10 Steps with Two-tier Approval)
+    { stepNumber: 1, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ขอซื้อเครื่องทดแทน' },
+    { stepNumber: 5, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุตรวจสอบและเสนอความเห็น' },
+    { stepNumber: 6, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน' },
+    { stepNumber: 7, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุรับเครื่องใหม่เข้าคลัง' },
+    { stepNumber: 8, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับเครื่องใหม่และส่งมอบ' },
+    { stepNumber: 9, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 10, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 5. SELF_REPAIR
+    { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ดำเนินการซ่อมและทดสอบการใช้งาน' },
+    { stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
+  ];
+
+  // Clean old step master entries that might not be in the new schema (e.g. step numbers > max per actionType)
+  await prisma.stepMaster.deleteMany({
+    where: {
+      OR: [
+        { actionType: StepActionType.SELF_REPAIR, stepNumber: { gt: 6 } },
+        { actionType: StepActionType.PURCHASE_REPLACEMENT, stepNumber: { gt: 10 } },
+        {
+          actionType: {
+            notIn: [StepActionType.SELF_REPAIR, StepActionType.PURCHASE_REPLACEMENT],
+          },
+          stepNumber: { gt: 9 },
+        },
+      ],
+    },
+  });
+
+  for (const st of stepMasterTemplates) {
+    const existing = await prisma.stepMaster.findFirst({
+      where: { stepNumber: st.stepNumber, actionType: st.actionType },
+    });
+    if (!existing) {
+      await prisma.stepMaster.create({ data: st });
+    } else {
+      await prisma.stepMaster.update({
+        where: { id: existing.id },
+        data: { label: st.label },
+      });
     }
   }
 
