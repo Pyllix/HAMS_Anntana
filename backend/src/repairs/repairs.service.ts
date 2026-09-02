@@ -10,8 +10,9 @@ import { paginate } from 'src/common/utils/paginate.util';
 import { CreateRepairRequestDto } from './dto/create-repair-request.dto';
 import { DiagnoseRepairJobDto } from './dto/diagnose-repair-job.dto';
 import { UpdateRepairStepDto } from './dto/update-repair-step.dto';
+import { RejectRepairStepDto } from './dto/reject-repair-step.dto';
+import { CancelRepairJobDto } from './dto/cancel-repair-job.dto';
 import { ReturnRepairSparePartDto } from './dto/return-repair-spare-part.dto';
-import { CompleteRepairJobDto } from './dto/complete-repair-job.dto';
 import { QueryRepairJobDto } from './dto/query-repair-job.dto';
 import {
   ActionType,
@@ -64,6 +65,27 @@ export class RepairsService {
     }
 
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  }
+
+  private isValidCalendarDate(dateStr?: string | null): boolean {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const regex = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/;
+    const match = dateStr.match(regex);
+    if (!match) return false;
+
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+
+    const date = new Date(year, month - 1, day);
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    );
   }
 
   private async getCallerSectionId(user: any, tx?: Prisma.TransactionClient): Promise<string | null> {
@@ -227,6 +249,13 @@ export class RepairsService {
     if (!cause) throw new NotFoundException(`Cause #${dto.causeId} not found`);
     if (!techCat) throw new NotFoundException(`Tech category #${dto.techCategoryId} not found`);
     if (!jobType) throw new NotFoundException(`Job type #${dto.jobTypeId} not found`);
+
+    // Validate dueDate calendar date format if provided
+    if (dto.dueDate && !this.isValidCalendarDate(dto.dueDate)) {
+      throw new BadRequestException(
+        `Invalid dueDate format or calendar date value: "${dto.dueDate}". Expected a valid date in YYYY-MM-DD format.`,
+      );
+    }
 
     // 1. Validate OUTSOURCE vs Non-OUTSOURCE rules
     if (dto.stepActionType === StepActionType.OUTSOURCE) {
@@ -440,6 +469,7 @@ export class RepairsService {
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: {
+        asset: true,
         repairJobSteps: {
           include: { stepMaster: true },
           orderBy: { stepMaster: { stepNumber: 'asc' } },
@@ -450,6 +480,12 @@ export class RepairsService {
 
     if (!job) {
       throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code === 'PENDING_ASSIGN') {
+      throw new BadRequestException(
+        'This repair job has been rejected and is awaiting re-diagnosis by the technician before steps can be updated',
+      );
     }
 
     const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
@@ -500,11 +536,29 @@ export class RepairsService {
           'warrantyDate is required for the final step (ตรวจรับงานและสรุป Job)',
         );
       }
+      if (!this.isValidCalendarDate(dto.warrantyDate)) {
+        throw new BadRequestException(
+          `Invalid warrantyDate format or calendar date value: "${dto.warrantyDate}". Expected a valid date in YYYY-MM-DD format.`,
+        );
+      }
       const receiver = await this.prisma.user.findUnique({
         where: { id: dto.receiverId, deletedAt: null },
       });
       if (!receiver) {
         throw new NotFoundException(`Receiver user #${dto.receiverId} not found`);
+      }
+
+      const isSameReporter = receiver.id === job.reporterId;
+      const isSameSection = Boolean(
+        receiver.section_id &&
+          (receiver.section_id === job.sectionId ||
+            (job.asset && receiver.section_id === job.asset.section_id)),
+      );
+
+      if (!isSameReporter && !isSameSection) {
+        throw new BadRequestException(
+          `Receiver "${receiver.firstname} ${receiver.lastname}" must either be the original repair requester or belong to the same department/section`,
+        );
       }
     } else {
       if (dto.receiverId) {
@@ -744,6 +798,199 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
+  // 3.2 Reject / Disapprove Approval Step (ตีกลับ/ไม่อนุมัติ)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async rejectStep(
+    jobId: string,
+    dto: RejectRepairStepDto,
+    user: any,
+  ) {
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: {
+        jobStatus: true,
+        repairJobSteps: {
+          include: { stepMaster: true },
+          orderBy: { stepMaster: { stepNumber: 'asc' } },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
+      throw new BadRequestException(`Cannot reject a completed or cancelled repair job`);
+    }
+
+    if (job.jobStatus.code === 'PENDING_ASSIGN') {
+      throw new BadRequestException(
+        'This repair job has already been rejected and is awaiting re-diagnosis by the technician',
+      );
+    }
+
+    if (!job.repairJobSteps || job.repairJobSteps.length === 0) {
+      throw new BadRequestException('Repair job must be diagnosed before rejecting steps');
+    }
+
+    const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
+    const nextPendingStep = job.repairJobSteps.find((s) => !s.completeAt);
+
+    if (!nextPendingStep) {
+      throw new BadRequestException('All repair steps have already been completed for this job');
+    }
+
+    const stepNumber = nextPendingStep.stepMaster.stepNumber;
+
+    // Strict validation: Only approval steps can be rejected by their designated roles
+    let isApprovalStep = false;
+    if (
+      (currentStepActionType === StepActionType.INTERNAL_STOCK ||
+        currentStepActionType === StepActionType.EXTERNAL_STOCK ||
+        currentStepActionType === StepActionType.OUTSOURCE) &&
+      stepNumber === 5
+    ) {
+      if (user.role !== UserRole.PARCEL_STAFF) {
+        throw new ForbiddenException('Step #5 (Approval) rejection can only be performed by PARCEL_STAFF');
+      }
+      isApprovalStep = true;
+    } else if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
+      if (stepNumber === 5) {
+        if (user.role !== UserRole.PARCEL_STAFF) {
+          throw new ForbiddenException('Step #5 (Parcel Review) rejection can only be performed by PARCEL_STAFF');
+        }
+        isApprovalStep = true;
+      } else if (stepNumber === 6) {
+        if (user.role !== UserRole.MANAGER) {
+          throw new ForbiddenException('Step #6 (Executive Approval) rejection can only be performed by MANAGER');
+        }
+        isApprovalStep = true;
+      }
+    }
+
+    if (!isApprovalStep) {
+      throw new BadRequestException(
+        `Step #${stepNumber} ("${nextPendingStep.stepMaster.label}") is not an approval step and cannot be rejected`,
+      );
+    }
+
+    const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Record rejection note and user on the pending step
+      const updatedStep = await tx.repairJobStep.update({
+        where: { id: nextPendingStep.id },
+        data: {
+          note: `[ไม่อนุมัติ] ${dto.reason}`,
+          completedBy: user.id,
+        },
+        include: { stepMaster: true, user: true },
+      });
+
+      // 2. Revert job status back to PENDING_ASSIGN so technician can re-diagnose
+      await tx.repairJob.update({
+        where: { id: jobId },
+        data: {
+          jobStatusId: pendingAssignStatusId,
+          updatedBy: user.id,
+        },
+      });
+
+      // 3. Clear any PENDING_WITHDRAW transactions to free up reserved inventory
+      await tx.sparepartTxn.deleteMany({
+        where: { jobId, txnType: 'PENDING_WITHDRAW' },
+      });
+
+      return {
+        message: 'Step rejected successfully. The repair job has been returned for re-diagnosis.',
+        step: updatedStep,
+        job: await this.findOne(jobId, tx),
+      };
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 3.3 Cancel Repair Job (ยกเลิกใบงานซ่อมโดยช่าง)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async cancelRepairJob(
+    jobId: string,
+    dto: CancelRepairJobDto,
+    user: any,
+  ) {
+    if (user.role !== UserRole.MAINTENANCE_STAFF) {
+      throw new ForbiddenException('Only maintenance staff (technicians) can cancel repair jobs');
+    }
+
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: {
+        jobStatus: true,
+        repairJobSteps: {
+          include: { stepMaster: true },
+        },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
+      throw new BadRequestException(`Cannot cancel a repair job that is already ${job.jobStatus.code}`);
+    }
+
+    // Check if the job has already progressed past the diagnosis/approval phase
+    const hasProgressedPastApproval = job.repairJobSteps.some(
+      (s) =>
+        ((s.stepMaster?.stepNumber >= 5) ||
+          (s.stepMaster?.actionType === StepActionType.SELF_REPAIR && s.stepMaster?.stepNumber >= 4)) &&
+        s.completeAt !== null,
+    );
+
+    if (hasProgressedPastApproval) {
+      throw new BadRequestException(
+        'Cannot cancel a repair job that has already been approved or started active repair operations',
+      );
+    }
+
+    const cancelledStatusId = await this.getStatusId('jobStatus', 'CANCELLED');
+    const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
+    const availableAvailabilityId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update job to CANCELLED
+      await tx.repairJob.update({
+        where: { id: jobId },
+        data: {
+          jobStatusId: cancelledStatusId,
+          solution: `[ยกเลิกงานซ่อม] ${dto.reason}`,
+          updatedBy: user.id,
+        },
+      });
+
+      // 2. Clear any PENDING_WITHDRAW transactions
+      await tx.sparepartTxn.deleteMany({
+        where: { jobId, txnType: 'PENDING_WITHDRAW' },
+      });
+
+      // 3. Revert Asset status to NORMAL and AVAILABLE
+      await tx.asset.update({
+        where: { id: job.assetId },
+        data: {
+          asset_status_id: normalAssetStatusId,
+          availability_status_id: availableAvailabilityId,
+          updatedBy: user.id,
+        },
+      });
+
+      return this.findOne(jobId, tx);
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // 4. Spare Parts Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -810,101 +1057,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. Complete, Handover & Close Job (Step 12 / ปิดงาน)
-  // ───────────────────────────────────────────────────────────────────────────
-
-  async completeAndCloseJob(id: string, dto: CompleteRepairJobDto, user: any) {
-    const job = await this.prisma.repairJob.findUnique({
-      where: { id },
-      include: {
-        jobStatus: true,
-        repairJobSteps: { include: { stepMaster: true } },
-      },
-    });
-
-    if (!job) {
-      throw new NotFoundException(`Repair job #${id} not found`);
-    }
-
-    if (job.jobStatus.code === 'COMPLETED') {
-      throw new BadRequestException('Repair job is already completed');
-    }
-
-    const completedJobStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
-    const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
-    const waitDisposalStatusId = await this.getStatusId('assetStatus', 'WAIT_DISPOSAL');
-    const availableAvailabilityId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
-    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
-
-    const returnDate = dto.returnDate ? new Date(dto.returnDate) : new Date();
-
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Update RepairJob status to COMPLETED
-      const updatedJob = await tx.repairJob.update({
-        where: { id },
-        data: {
-          jobStatusId: completedJobStatusId,
-          warrantyDate: dto.warrantyDate,
-          receiverId: dto.receiverId,
-          returnDate,
-          updatedBy: user.id,
-        },
-      });
-
-      // 2. Complete Step 10, 11, 12 if not completed yet
-      const step10 = job.repairJobSteps.find((s) => s.stepMaster.stepNumber === 10);
-      const step11 = job.repairJobSteps.find((s) => s.stepMaster.stepNumber === 11);
-      const step12 = job.repairJobSteps.find((s) => s.stepMaster.stepNumber === 12);
-
-      if (step10 && !step10.completeAt) {
-        await tx.repairJobStep.update({
-          where: { id: step10.id },
-          data: { completeAt: returnDate, completedBy: user.id },
-        });
-      }
-      if (step11 && !step11.completeAt) {
-        await tx.repairJobStep.update({
-          where: { id: step11.id },
-          data: { completeAt: returnDate, completedBy: user.id },
-        });
-      }
-      if (step12 && !step12.completeAt) {
-        await tx.repairJobStep.update({
-          where: { id: step12.id },
-          data: { completeAt: returnDate, completedBy: user.id },
-        });
-      }
-
-      // 3. Update Asset Status:
-      // If PURCHASE_REPLACEMENT -> WAIT_DISPOSAL, UNAVAILABLE
-      // Otherwise -> NORMAL, AVAILABLE
-      const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
-      if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
-        await tx.asset.update({
-          where: { id: job.assetId },
-          data: {
-            asset_status_id: waitDisposalStatusId,
-            availability_status_id: unavailableAvailabilityId,
-            updatedBy: user.id,
-          },
-        });
-      } else {
-        await tx.asset.update({
-          where: { id: job.assetId },
-          data: {
-            asset_status_id: normalAssetStatusId,
-            availability_status_id: availableAvailabilityId,
-            updatedBy: user.id,
-          },
-        });
-      }
-
-      return this.findOne(id, tx);
-    });
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 6. Find All & Query
+  // 5. Find All & Query
   // ───────────────────────────────────────────────────────────────────────────
 
   async findAll(query: QueryRepairJobDto, user: any) {

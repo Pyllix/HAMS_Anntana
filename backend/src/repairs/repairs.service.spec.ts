@@ -557,6 +557,32 @@ describe('RepairsService', () => {
         BadRequestException,
       );
     });
+
+    it('should reject invalid calendar date for dueDate in diagnoseAndPlan', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING_ASSIGN' },
+        repairJobSteps: [],
+      });
+      mockPrisma.cause.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.jobType.findUnique.mockResolvedValue({ id: 1 });
+
+      const dto: any = {
+        diagnosis: 'ทดสอบวันไม่ถูกต้อง',
+        solution: 'แก้ไข',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.SELF_REPAIR,
+        dueDate: '2026-50-54',
+      };
+
+      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   describe('getMechanics', () => {
@@ -830,6 +856,73 @@ describe('RepairsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should reject invalid calendar dates for warrantyDate on final step', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        reporterId: 'reporter-1',
+        sectionId: 'sec-1',
+        repairJobSteps: [
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
+          },
+          {
+            id: 102,
+            completeAt: null,
+            stepMaster: { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
+          },
+        ],
+        jobStatus: { code: 'IN_PROGRESS' },
+      });
+
+      await expect(
+        service.updateStepProgress(
+          'job-uuid-1',
+          2,
+          { receiverId: 'reporter-1', warrantyDate: '2026-50-54' },
+          mockUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject receiver if receiver is not reporter and not in the same department/section', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        reporterId: 'reporter-1',
+        sectionId: 'sec-1',
+        repairJobSteps: [
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
+          },
+          {
+            id: 102,
+            completeAt: null,
+            stepMaster: { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
+          },
+        ],
+        jobStatus: { code: 'IN_PROGRESS' },
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'other-user',
+        firstname: 'Other',
+        lastname: 'Person',
+        section_id: 'sec-different',
+      });
+
+      await expect(
+        service.updateStepProgress(
+          'job-uuid-1',
+          2,
+          { receiverId: 'other-user', warrantyDate: '2028-12-31' },
+          mockUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should deduct spare parts stock and convert PENDING_WITHDRAW to WITHDRAW when Parcel approves Step 5', async () => {
       const parcelUser = { id: 'parcel-user-1', role: UserRole.PARCEL_STAFF };
       mockPrisma.repairJob.findUnique
@@ -908,39 +1001,187 @@ describe('RepairsService', () => {
     });
   });
 
-  describe('completeAndCloseJob', () => {
-    it('should complete job and restore asset status to NORMAL and AVAILABLE', async () => {
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 5, code: 'COMPLETED' });
+  describe('rejectStep', () => {
+    it('should allow PARCEL_STAFF to reject Step 5, record note, clear PENDING_WITHDRAW, and revert to PENDING_ASSIGN', async () => {
+      const parcelUser = { id: 'parcel-1', role: UserRole.PARCEL_STAFF };
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'PENDING_ASSIGN' });
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PARCEL_PROCESSING' },
+        repairJobSteps: [
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+          },
+          {
+            id: 105,
+            completeAt: null,
+            stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
+          },
+        ],
+        sparepartTxns: [],
+      });
+      mockPrisma.repairJobStep.update.mockResolvedValue({
+        id: 105,
+        note: '[ไม่อนุมัติ] ราคาอะไหล่แพงเกินไป',
+      });
+      mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1' });
+
+      const result = await service.rejectStep('job-uuid-1', { reason: 'ราคาอะไหล่แพงเกินไป' }, parcelUser);
+
+      expect(mockPrisma.repairJobStep.update).toHaveBeenCalledWith({
+        where: { id: 105 },
+        data: {
+          note: '[ไม่อนุมัติ] ราคาอะไหล่แพงเกินไป',
+          completedBy: parcelUser.id,
+        },
+        include: { stepMaster: true, user: true },
+      });
+      expect(mockPrisma.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-uuid-1' },
+        data: {
+          jobStatusId: 2,
+          updatedBy: parcelUser.id,
+        },
+      });
+      expect(mockPrisma.sparepartTxn.deleteMany).toHaveBeenCalledWith({
+        where: { jobId: 'job-uuid-1', txnType: 'PENDING_WITHDRAW' },
+      });
+      expect(result.message).toContain('Step rejected successfully');
+    });
+
+    it('should reject if non-PARCEL_STAFF tries to reject Step 5', async () => {
+      const techUser = { id: 'tech-1', role: UserRole.MAINTENANCE_STAFF };
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PARCEL_PROCESSING' },
+        repairJobSteps: [
+          {
+            id: 105,
+            completeAt: null,
+            stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
+          },
+        ],
+      });
+
+      await expect(
+        service.rejectStep('job-uuid-1', { reason: 'ไม่อนุมัติ' }, techUser),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject if trying to reject a non-approval step', async () => {
+      const parcelUser = { id: 'parcel-1', role: UserRole.PARCEL_STAFF };
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'IN_PROGRESS' },
+        repairJobSteps: [
+          {
+            id: 104,
+            completeAt: null,
+            stepMaster: { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ช่างดำเนินการซ่อม' },
+          },
+        ],
+      });
+
+      await expect(
+        service.rejectStep('job-uuid-1', { reason: 'ไม่อนุมัติ' }, parcelUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject repeated reject calls if job is already in PENDING_ASSIGN (awaiting re-diagnosis)', async () => {
+      const parcelUser = { id: 'parcel-1', role: UserRole.PARCEL_STAFF };
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING_ASSIGN' },
+        repairJobSteps: [
+          {
+            id: 105,
+            completeAt: null,
+            note: '[ไม่อนุมัติ] ราคาอะไหล่แพงเกินไป',
+            stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
+          },
+        ],
+      });
+
+      await expect(
+        service.rejectStep('job-uuid-1', { reason: 'ไม่อนุมัติซ้ำ' }, parcelUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('cancelRepairJob', () => {
+    it('should allow MAINTENANCE_STAFF to cancel repair job before approval/in-progress', async () => {
+      const techUser = { id: 'tech-1', role: UserRole.MAINTENANCE_STAFF };
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
       mockPrisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
       mockPrisma.availabilityStatus.findUnique.mockResolvedValue({ id: 1, code: 'AVAILABLE' });
-      mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1' });
 
       mockPrisma.repairJob.findUnique.mockResolvedValue({
         id: 'job-uuid-1',
-        assetId: 'asset-uuid-1',
-        actionType: ActionType.REPAIR,
-        jobStatus: { code: 'IN_PROGRESS' },
+        assetId: 'asset-1',
+        jobStatus: { code: 'PENDING_ASSIGN' },
         repairJobSteps: [
-          { stepMaster: { actionType: StepActionType.SELF_REPAIR, stepNumber: 1 } },
+          {
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK },
+          },
         ],
         sparepartTxns: [],
       });
 
-      const dto = {
-        warrantyDate: '2028-12-31',
-        receiverId: 'receiver-uuid-1',
-      };
+      await service.cancelRepairJob('job-uuid-1', { reason: 'เครื่องไม่ได้เสียจริง' }, techUser);
 
-      await service.completeAndCloseJob('job-uuid-1', dto, mockUser);
-
+      expect(mockPrisma.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-uuid-1' },
+        data: {
+          jobStatusId: 99,
+          solution: '[ยกเลิกงานซ่อม] เครื่องไม่ได้เสียจริง',
+          updatedBy: techUser.id,
+        },
+      });
       expect(mockPrisma.asset.update).toHaveBeenCalledWith({
-        where: { id: 'asset-uuid-1' },
+        where: { id: 'asset-1' },
         data: {
           asset_status_id: 1,
           availability_status_id: 1,
-          updatedBy: mockUser.id,
+          updatedBy: techUser.id,
         },
       });
+      expect(mockPrisma.sparepartTxn.deleteMany).toHaveBeenCalledWith({
+        where: { jobId: 'job-uuid-1', txnType: 'PENDING_WITHDRAW' },
+      });
+    });
+
+    it('should reject cancel if caller is not MAINTENANCE_STAFF (e.g. ADMIN or DEPARTMENT_STAFF)', async () => {
+      const adminUser = { id: 'admin-1', role: UserRole.ADMIN };
+      await expect(
+        service.cancelRepairJob('job-uuid-1', { reason: 'ยกเลิก' }, adminUser),
+      ).rejects.toThrow(ForbiddenException);
+
+      const deptUser = { id: 'dept-1', role: UserRole.DEPARTMENT_STAFF };
+      await expect(
+        service.cancelRepairJob('job-uuid-1', { reason: 'ยกเลิก' }, deptUser),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject cancel if job has already progressed past approval (Step 5 completed)', async () => {
+      const techUser = { id: 'tech-1', role: UserRole.MAINTENANCE_STAFF };
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        assetId: 'asset-1',
+        jobStatus: { code: 'IN_PROGRESS' },
+        repairJobSteps: [
+          {
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK },
+          },
+        ],
+      });
+
+      await expect(
+        service.cancelRepairJob('job-uuid-1', { reason: 'ยกเลิกกลางคัน' }, techUser),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

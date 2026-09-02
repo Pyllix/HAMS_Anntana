@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class UpdateRepairStepDto {
   @ApiPropertyOptional({ description: 'Optional progress note or remark for this step' })
@@ -25,7 +25,7 @@ export class UpdateRepairStepDto {
   @ApiPropertyOptional({
     description: 'Warranty expiration date string (e.g. 2027-09-01)',
   })
-  @IsString()
+  @IsDateString({ strict: true })
   @IsOptional()
   warrantyDate?: string;
 }

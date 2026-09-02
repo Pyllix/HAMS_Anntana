@@ -17,8 +17,9 @@ import { RepairsService } from './repairs.service';
 import { CreateRepairRequestDto } from './dto/create-repair-request.dto';
 import { DiagnoseRepairJobDto } from './dto/diagnose-repair-job.dto';
 import { UpdateRepairStepDto } from './dto/update-repair-step.dto';
+import { RejectRepairStepDto } from './dto/reject-repair-step.dto';
+import { CancelRepairJobDto } from './dto/cancel-repair-job.dto';
 import { ReturnRepairSparePartDto } from './dto/return-repair-spare-part.dto';
-import { CompleteRepairJobDto } from './dto/complete-repair-job.dto';
 import { QueryRepairJobDto } from './dto/query-repair-job.dto';
 
 @ApiTags('Repairs')
@@ -138,6 +139,28 @@ export class RepairsController {
     return this.repairsService.advanceNextStep(id, dto, session.user);
   }
 
+  @Patch(':id/steps/reject')
+  @Roles(UserRole.PARCEL_STAFF, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Reject/disapprove the pending approval step and return job for re-diagnosis' })
+  async rejectStep(
+    @Param('id') id: string,
+    @Body() dto: RejectRepairStepDto,
+    @Session() session: UserSession,
+  ) {
+    return this.repairsService.rejectStep(id, dto, session.user);
+  }
+
+  @Patch(':id/cancel')
+  @Roles(UserRole.MAINTENANCE_STAFF)
+  @ApiOperation({ summary: 'Technician cancels repair job ticket before approval/in-progress and restores asset to NORMAL' })
+  async cancelJob(
+    @Param('id') id: string,
+    @Body() dto: CancelRepairJobDto,
+    @Session() session: UserSession,
+  ) {
+    return this.repairsService.cancelRepairJob(id, dto, session.user);
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // 6. Spare Parts Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
@@ -150,19 +173,5 @@ export class RepairsController {
     @Session() session: UserSession,
   ) {
     return this.repairsService.returnSparePart(id, dto, session.user);
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 7. Complete, Handover & Close Job
-  // ───────────────────────────────────────────────────────────────────────────
-  @Patch(':id/complete')
-  @Roles(UserRole.MAINTENANCE_STAFF)
-  @ApiOperation({ summary: 'Complete repair job, record warranty, handover asset, and set asset to NORMAL/AVAILABLE' })
-  async completeJob(
-    @Param('id') id: string,
-    @Body() dto: CompleteRepairJobDto,
-    @Session() session: UserSession,
-  ) {
-    return this.repairsService.completeAndCloseJob(id, dto, session.user);
   }
 }

@@ -74,7 +74,7 @@ export class DiagnoseRepairJobDto {
   stepActionType: StepActionType;
 
   @ApiPropertyOptional({ description: 'Estimated completion date (ISO string)' })
-  @IsDateString()
+  @IsDateString({ strict: true })
   @IsOptional()
   dueDate?: string;
 
