@@ -93,14 +93,21 @@ export class AssetBorrowService {
     const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Verify Asset exists and is eligible
+      // 1. Verify Asset exists, belongs to Asset Center, and is eligible
       const existingAsset = await tx.asset.findUnique({
         where: { id: dto.assetId },
-        include: { status: true, availabilityStatus: true },
+        include: { status: true, availabilityStatus: true, section: true },
       });
 
       if (!existingAsset) {
         throw new NotFoundException(`Asset with ID ${dto.assetId} not found`);
+      }
+
+      if (existingAsset.section?.code !== 'CENTER') {
+        const sectionName = existingAsset.section?.name || 'Unknown Section';
+        throw new BadRequestException(
+          `Cannot borrow asset: Asset belongs to department '${sectionName}'. Only assets belonging to the Asset Center (CENTER) can be borrowed.`
+        );
       }
 
       if (
@@ -768,20 +775,32 @@ export class AssetBorrowService {
       } else {
         where.borrower_id = user.id;
       }
-    } else if (query.borrowerId) {
-      const targetUser = await this.prisma.user.findFirst({
-        where: {
-          deletedAt: null,
-          OR: [
-            { id: query.borrowerId },
-            { employeeId: query.borrowerId }
-          ]
-        }
-      });
-      where.borrower_id = targetUser ? targetUser.id : query.borrowerId;
+    } else {
+      if (query.sectionId) {
+        where.borrower = { ...(where.borrower || {}), section_id: query.sectionId };
+      }
+      if (query.borrowerId) {
+        const targetUser = await this.prisma.user.findFirst({
+          where: {
+            deletedAt: null,
+            OR: [
+              { id: query.borrowerId },
+              { employeeId: query.borrowerId }
+            ]
+          }
+        });
+        where.borrower_id = targetUser ? targetUser.id : query.borrowerId;
+      }
     }
 
     if (query.borrowStatusId) where.borrow_status_id = query.borrowStatusId;
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {
+        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
+        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.borrowTransaction.findMany({

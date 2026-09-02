@@ -58,6 +58,7 @@ describe('AssetBorrowService', () => {
       availability_status_id: 10,
       status: { name: 'NORMAL' },
       availabilityStatus: { name: 'AVAILABLE' },
+      section: { code: 'CENTER', name: 'Asset Center' },
     });
   });
 
@@ -89,7 +90,12 @@ describe('AssetBorrowService', () => {
       prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
 
       prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
-      prisma.asset.findUnique.mockResolvedValue({ id: 'asset-1', asset_status_id: 1, availability_status_id: 10 });
+      prisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-1',
+        asset_status_id: 1,
+        availability_status_id: 10,
+        section: { code: 'CENTER', name: 'Asset Center' },
+      });
       prisma.asset.update.mockResolvedValue({});
       prisma.borrowTransaction.create.mockResolvedValue({ id: 'tx-1', request_source: RequestSource.SELF_SERVICE });
 
@@ -153,6 +159,25 @@ describe('AssetBorrowService', () => {
           }),
         }),
       );
+    });
+
+    it('should throw BadRequestException if asset does not belong to CENTER section', async () => {
+      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.borrowStatus.findUnique.mockResolvedValue({ id: 21, code: 'PENDING_APPROVE' });
+      prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
+
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-opd',
+        asset_status_id: 1,
+        availability_status_id: 10,
+        status: { name: 'NORMAL' },
+        availabilityStatus: { name: 'AVAILABLE' },
+        section: { code: 'OPD', name: 'Outpatient Department' },
+      });
+
+      await expect(service.createBorrow({ assetId: 'asset-opd', deliveryMethod: DeliveryMethod.PICKUP }, parcelUser))
+        .rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException if asset is not AVAILABLE', async () => {
@@ -375,6 +400,7 @@ describe('AssetBorrowService', () => {
         availability_status_id: 10,
         status: { name: 'DAMAGED' },
         availabilityStatus: { name: 'AVAILABLE' },
+        section: { code: 'CENTER', name: 'Asset Center' },
       });
       await expect(service.createBorrow(dto, parcelUser)).rejects.toThrow(ConflictException);
     });
@@ -386,6 +412,7 @@ describe('AssetBorrowService', () => {
         availability_status_id: 10,
         status: { name: 'NORMAL' },
         availabilityStatus: { name: 'AVAILABLE' },
+        section: { code: 'CENTER', name: 'Asset Center' },
       });
       prisma.asset.updateMany.mockResolvedValue({ count: 0 }); // another transaction grabbed it
       await expect(service.createBorrow(dto, parcelUser)).rejects.toThrow(ConflictException);
@@ -862,6 +889,31 @@ describe('AssetBorrowService', () => {
       });
 
       await expect(service.findOne('tx-1', deptUser)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should allow ADMIN to filter by sectionId, startDate, and endDate in findAll', async () => {
+      prisma.$transaction.mockResolvedValue([[], 0]);
+
+      await service.findAll(
+        {
+          sectionId: 'sec-icu',
+          startDate: '2026-08-01',
+          endDate: '2026-08-31',
+        },
+        adminUser,
+      );
+
+      expect(prisma.borrowTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            borrower: { section_id: 'sec-icu' },
+            createdAt: {
+              gte: new Date('2026-08-01T00:00:00.000Z'),
+              lte: new Date('2026-08-31T23:59:59.999Z'),
+            },
+          }),
+        }),
+      );
     });
 
     it('should allow ADMIN to view any transaction in findOne', async () => {

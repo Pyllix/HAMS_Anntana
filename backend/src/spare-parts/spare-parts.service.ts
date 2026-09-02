@@ -351,6 +351,15 @@ export class SparePartsService {
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
       ...(query.jobId ? { jobId: query.jobId } : {}),
       ...(query.txnType ? { txnType: query.txnType } : {}),
+      ...(query.userId ? { txnBy: query.userId } : {}),
+      ...((query.startDate || query.endDate)
+        ? {
+            createdAt: {
+              ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
+              ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
     };
 
     const [txns, total] = await this.prisma.$transaction([
