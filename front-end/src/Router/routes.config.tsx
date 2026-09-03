@@ -10,6 +10,12 @@ import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
+import AssetStock from "../Pages/AssetStock";
+import ConfirmRepair from "../Pages/ConfirmRepair";
+import OrderSpareParts from "../Pages/OrderSpareParts";
+import PartStock from "../Pages/PartStock";
+import PendingEvaluationsPage from "../Pages/PendingEvaluations";
+import RepairHistory from "../Pages/RepairHistory";
 
 interface AppRote {
   path: string;
@@ -76,4 +82,52 @@ export const APP_ROUTE: AppRote[] = [
     showInNav: true,
   },
   // -------- สำหรับ Department ------------
+  {
+    path: "test-1",
+    title: "AssetStock",
+    element: <AssetStock />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "test-2",
+    title: "ConfirmRepair",
+    element: <ConfirmRepair />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "test-3",
+    title: "OrderSpareParts",
+    element: <OrderSpareParts />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "test-4",
+    title: "PartStock",
+    element: <PartStock />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "test-5",
+    title: "PendingEvaluationsPage",
+    element: <PendingEvaluationsPage />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "test-6",
+    title: "RepairHistory",
+    element: <RepairHistory />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
 ];
