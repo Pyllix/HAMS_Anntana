@@ -1,14 +1,32 @@
-import { ChevronDown, Search } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Clock,
+  FileCheck,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getAssetTypes, getAvailabilities } from "../services/assetService";
+import {
+  getAssets,
+  getAssetTypes,
+  getAvailabilities,
+} from "../services/assetService";
 import AssetsTable from "../components/borrow-return/assetsTable";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import BorrowModal from "../components/borrow-return/BorrowModal";
 import { useBorrowModalStore } from "../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../stores/useReturnModalStore";
 import ReturnModal from "../components/borrow-return/ReturnModal";
-
+import StatCards from "../components/borrow-return/StatCards";
+import type { StatCardData } from "../components/borrow-return/StatCards";
 export default function AssetCenterBorrowReturn() {
+  const { data: assets } = useQuery({
+    queryKey: ["assets"],
+    queryFn: getAssets,
+  });
+
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
     queryFn: getAssetTypes,
@@ -25,8 +43,84 @@ export default function AssetCenterBorrowReturn() {
   const { isFormOpen } = useBorrowModalStore();
   const { isFormOpen: isFormOpenReturn } = useReturnModalStore();
 
+  // useMemo คำนวณนับจำนวน assets และจัด Format การ์ด
+  const statsSummary: StatCardData[] = useMemo(() => {
+    const assetList = assets ?? [];
+
+    // 1. ฟังก์ชันช่วยค้นหาจำนวนนับตามชื่อสถานะ
+    const countByKeyword = (keyword: string): number => {
+      return assetList.filter((asset: any) => {
+        const availName = asset?.availabilityStatus?.name || "";
+        return availName.toLowerCase().includes(keyword.toLowerCase());
+      }).length;
+    };
+
+    // 2. ฟังก์ชันช่วยดึงชื่อจริงจากตาราง availabilities มาเป็น filter key
+    const getExactName = (keyword: string) => {
+      const match = availabilities?.find((a: any) =>
+        a.name?.toLowerCase().includes(keyword.toLowerCase()),
+      );
+      return match ? match.name : keyword;
+    };
+
+    return [
+      {
+        id: "total",
+        filterKey: "ALL",
+        title: "จำนวนครุภัณฑ์ทั้งหมด",
+        value: assets?.length ?? 999,
+        icon: Plus,
+        iconBg: "bg-slate-100",
+        iconColor: "text-slate-600",
+        valueColor: "text-slate-800",
+      },
+      {
+        id: "normal",
+        filterKey: getExactName("ว่าง/พร้อมใช้งาน"),
+        title: "ใช้งานได้ปกติ (รายการ)",
+        value: countByKeyword("ว่าง/พร้อมใช้งาน"),
+        icon: Check,
+        iconBg: "bg-emerald-100",
+        iconColor: "text-emerald-600",
+        valueColor: "text-emerald-600",
+      },
+      {
+        id: "borrowed",
+        filterKey: getExactName("ถูกยืม"),
+        title: "กำลังยืม",
+        value: countByKeyword("ถูกยืม"),
+        icon: Clock,
+        iconBg: "bg-amber-100",
+        iconColor: "text-amber-600",
+        valueColor: "text-amber-600",
+      },
+      {
+        id: "repair",
+        filterKey: getExactName("ไม่พร้อมใช้งาน"),
+        title: "ไม่พร้อมใช้งาน",
+        value: countByKeyword("ไม่พร้อมใช้งาน"),
+        icon: X,
+        iconBg: "bg-rose-100",
+        iconColor: "text-rose-600",
+        valueColor: "text-rose-600",
+      },
+      {
+        id: "approval",
+        filterKey: getExactName("ถูงจอง/รออนุมัติ"),
+        title: "รออนุมัติ",
+        value: countByKeyword("ถูงจอง/รออนุมัติ"),
+        icon: FileCheck,
+        iconBg: "bg-sky-100",
+        iconColor: "text-sky-600",
+        valueColor: "text-sky-600",
+      },
+    ];
+  }, [assets, availabilities]);
+
   return (
     <div className="space-y-2">
+      {/* Stat Cards */}
+      <StatCards stats={statsSummary} />
       {/* search bar */}
       <div className="flex gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
         {/* กรอกคำค้นหา */}
