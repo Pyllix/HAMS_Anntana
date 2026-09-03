@@ -13,6 +13,7 @@ model BorrowStatus {
 
 model BorrowTransaction {
   id                   String  @id @default(uuid()) @map("borrow_transaction_id")
+  borrowNo             String  @unique @map("borrow_no") @db.VarChar(50)
   asset_id             String  @map("asset_id")
   borrower_id          String  @map("borrower_id")
   created_by_user_id   String? @map("created_by_user_id")

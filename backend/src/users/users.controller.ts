@@ -67,6 +67,7 @@ export class UsersController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'role', required: false, enum: UserRole, description: 'Filter by role (e.g. MAINTENANCE_STAFF)' })
+  @ApiQuery({ name: 'section_id', required: false, type: String, description: 'Filter by Section/Department UUID' })
   @ApiResponse({ status: 200, description: 'Paginated list of users' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAll(@Query() query: QueryUserDto) {

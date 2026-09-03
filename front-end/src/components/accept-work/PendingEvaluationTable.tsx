@@ -3,9 +3,9 @@ import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { RepairJob, PriorityFilter } from "../../Types/TypeAssessment";
+import type { RepairListItem, UrgencyStatus } from "../../Types/TypeAssessment";
 import { getPendingEvaluations } from "../../services/assessmentService";
-import { useAssessmentStore } from "../../stores/useAssessmentStore";
+import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 
 const features = tableFeatures({});
 
@@ -32,8 +32,8 @@ function formatDateTH(dateString?: string): string {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
 }
 
-function UrgencyBadge({ job }: { job: RepairJob }) {
-  const urgency = job.urgencyStatus || "NORMAL";
+function UrgencyBadge({ urgencyStatus }: { urgencyStatus?: string }) {
+  const urgency = urgencyStatus || "NORMAL";
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -66,7 +66,7 @@ function UrgencyBadge({ job }: { job: RepairJob }) {
 
 interface PendingEvaluationTableProps {
   search?: string;
-  urgencyStatus?: PriorityFilter;
+  urgencyStatus?: UrgencyStatus | "ALL";
 }
 
 export default function PendingEvaluationTable({
@@ -77,9 +77,10 @@ export default function PendingEvaluationTable({
     (state) => state.openAssessmentForm,
   );
 
-  const { data: jobsData = [], isLoading } = useQuery({
+  const { data: jobsData = [], isLoading } = useQuery<any>({
     queryKey: ["pendingEvaluations"],
     queryFn: getPendingEvaluations,
+    refetchOnWindowFocus: true,
   });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -89,16 +90,16 @@ export default function PendingEvaluationTable({
     setCurrentPage(1);
   }, [search, urgencyStatus]);
 
-  const columns = useMemo<Array<ColumnDef<typeof features, RepairJob>>>(
+  const columns = useMemo<Array<ColumnDef<typeof features, RepairListItem>>>(
     () => [
       {
         id: "jobNo",
         header: "รหัสงาน",
-        cell: (info: any) => {
-          const row = info.row.original as RepairJob;
+        cell: (info) => {
+          const row = info.row.original;
           return (
             <span className="font-semibold text-gray-900 font-mono text-sm">
-              {row.jobNo || row.jobId}
+              {row.jobNo || "-"}
             </span>
           );
         },
@@ -106,15 +107,15 @@ export default function PendingEvaluationTable({
       {
         id: "assetInfo",
         header: "รายการครุภัณฑ์",
-        cell: (info: any) => {
-          const asset = (info.row.original as RepairJob).asset;
+        cell: (info) => {
+          const row = info.row.original;
           return (
             <div>
               <div className="font-semibold text-gray-900 text-sm">
-                {asset?.assetName || "-"}
+                {row.asset?.name || "-"}
               </div>
               <div className="text-sm text-gray-600 font-mono mt-0.5">
-                {asset?.assetCode || "-"}
+                {row.asset?.noid || "-"}
               </div>
             </div>
           );
@@ -123,33 +124,36 @@ export default function PendingEvaluationTable({
       {
         id: "symptom",
         header: "อาการเสียที่แจ้ง",
-        cell: (info: any) => (
+        cell: (info) => (
           <span className="text-sm text-gray-600 line-clamp-2 max-w-xs">
-            {(info.row.original as RepairJob).symptom || "-"}
+            {info.row.original.symptom || "-"}
           </span>
         ),
       },
       {
         id: "urgencyStatus",
         header: "ระดับความเร่งด่วน",
-        cell: (info: any) => (
-          <UrgencyBadge job={info.row.original as RepairJob} />
+        cell: (info) => (
+          <UrgencyBadge urgencyStatus={info.row.original.urgencyStatus} />
         ),
       },
       {
         id: "createdAt",
         header: "วันที่แจ้งซ่อม",
-        cell: (info: any) => (
-          <span className="text-sm text-gray-600 whitespace-nowrap">
-            {formatDateTH((info.row.original as RepairJob).createdAt)}
-          </span>
-        ),
+        cell: (info) => {
+          const date = info.row.original.createdAt;
+          return (
+            <span className="text-sm text-gray-600 whitespace-nowrap">
+              {date ? formatDateTH(date) : "-"}
+            </span>
+          );
+        },
       },
       {
         id: "actions",
         header: "รายละเอียด",
-        cell: (info: any) => {
-          const row = info.row.original as RepairJob;
+        cell: (info) => {
+          const row = info.row.original;
           return (
             <div className="flex items-center gap-2">
               <button
@@ -168,18 +172,32 @@ export default function PendingEvaluationTable({
   );
 
   const filteredData = useMemo(() => {
-    if (!jobsData) return [];
+    const list: RepairListItem[] = Array.isArray(jobsData)
+      ? jobsData
+      : Array.isArray((jobsData as any)?.data)
+        ? (jobsData as any).data
+        : [];
 
-    return jobsData.filter((item) => {
+    return list.filter((item: any) => {
+      //กรองรายการที่ประเมินแล้วออก
+      const isEvaluated =
+        item.jobStatusId === 3 ||
+        item.jobStatus?.code === "IN_PROGRESS" ||
+        Boolean(item.diagnosis);
+
+      if (isEvaluated) {
+        return false;
+      }
+
+      //กรองข้อมูลจากกล่องค้นหา (Search Text)
       const sl = search.toLowerCase();
       const matchesSearch =
         search === "" ||
         item.jobNo?.toLowerCase().includes(sl) ||
-        String(item.jobId)?.toLowerCase().includes(sl) ||
-        item.asset?.assetName?.toLowerCase().includes(sl) ||
-        item.asset?.assetCode?.toLowerCase().includes(sl) ||
-        item.symptom?.toLowerCase().includes(sl);
+        item.asset?.name?.toLowerCase().includes(sl) ||
+        item.asset?.noid?.toLowerCase().includes(sl);
 
+      //กรองตามระดับความเร่งด่วน (Urgency)
       const matchesUrgency =
         urgencyStatus === "ALL" ||
         (item.urgencyStatus || "NORMAL") === urgencyStatus;

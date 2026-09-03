@@ -12,10 +12,11 @@ import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
 import AssetStock from "../Pages/AssetStock";
 import ConfirmRepair from "../Pages/ConfirmRepair";
-import OrderSpareParts from "../Pages/OrderSpareParts";
-import PartStock from "../Pages/PartStock";
 import PendingEvaluationsPage from "../Pages/PendingEvaluations";
 import RepairHistory from "../Pages/RepairHistory";
+import PartStock from "../Pages/PartStock";
+import OrderSpareParts from "../Pages/OrderSpareParts";
+import { ToolCase } from "lucide-react";
 
 interface AppRote {
   path: string;
@@ -47,7 +48,7 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "asset-stock",
     title: "จัดการสต็อกครุภัณฑ์",
-    element: <div>asset-stock</div>,
+    element: <AssetStock />,
     icon: Archive,
     roles: [
       ROLES.ADMIN,
@@ -60,8 +61,16 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "part-stock",
     title: "จัดการสต็อกอะไหล่",
-    element: <div>part-stock</div>,
+    element: <PartStock />,
     icon: Wrench,
+    roles: [ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "order-spare-parts",
+    title: "สั่งซื้ออะไหล่",
+    element: <OrderSpareParts />,
+    icon: ToolCase,
     roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },

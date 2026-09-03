@@ -1,38 +1,49 @@
-import React from "react";
 import type {
-  ActionType,
-  AssessmentFormState,
+  StepActionType,
+  RepairDetailDto,
+  BaseLookup,
 } from "../../Types/TypeAssessment";
 
-export type { ActionType };
+const ACTION_TYPE_LABELS: Record<StepActionType, string> = {
+  SELF_REPAIR: "ซ่อมเองได้",
+  INTERNAL_STOCK: "ขอเบิกอะไหล่ภายใน",
+  EXTERNAL_STOCK: "ขอเบิกอะไหล่ภายนอก",
+  OUTSOURCE: "ส่งซ่อมภายนอก",
+  PURCHASE_REPLACEMENT: "ขอซื้อทดแทน",
+};
 
 interface CommonFieldsProps {
-  actionStatus: ActionType;
-  setActionStatus: (status: ActionType) => void;
-  formState: AssessmentFormState;
-  setFormState: React.Dispatch<React.SetStateAction<AssessmentFormState>>;
+  actionStatus: StepActionType;
+  setActionStatus: (status: StepActionType) => void;
+  formState: RepairDetailDto;
+  setFormState: React.Dispatch<React.SetStateAction<RepairDetailDto>>;
+  causes?: BaseLookup[];
 }
 
-export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
+export default function CommonEvaluationFields({
   actionStatus,
   setActionStatus,
   formState,
   setFormState,
-}) => {
-  const actionOptions: ActionType[] = [
-    "ซ่อมเองได้",
-    "ขอเบิกอะไหล่ภายใน",
-    "ขอเบิกอะไหล่ภายนอก",
-    "ส่งซ่อมภายนอก",
-    "ขอซื้อทดแทน",
+  causes = [],
+}: CommonFieldsProps) {
+  const actionOptions: StepActionType[] = [
+    "SELF_REPAIR",
+    "INTERNAL_STOCK",
+    "EXTERNAL_STOCK",
+    "OUTSOURCE",
+    "PURCHASE_REPLACEMENT",
   ];
 
-  // Helper function สำหรับอัปเดต Field ใน Form แบบ Type-safe
-  const handleChange = <K extends keyof AssessmentFormState>(
+  const handleChange = <K extends keyof RepairDetailDto>(
     field: K,
-    value: AssessmentFormState[K],
+    value: RepairDetailDto[K],
   ) => {
     setFormState((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleMultipleChange = (updates: Partial<RepairDetailDto>) => {
+    setFormState((prev) => ({ ...prev, ...updates }));
   };
 
   return (
@@ -40,7 +51,7 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
       {/* 1. ปุ่มเลือก สถานะการตรวจรักษา / การดำเนินการ */}
       <div>
         <label className="text-xs font-semibold text-slate-700 block mb-2">
-          สถานะการตรวจรักษา / การดำเนินการ{" "}
+          สถานะการตรวจรักษา / การดำเนินการ
           <span className="text-rose-500">*</span>
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 bg-slate-100 p-1 rounded-xl">
@@ -48,14 +59,17 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
             <button
               key={option}
               type="button"
-              onClick={() => setActionStatus(option)}
+              onClick={() => {
+                setActionStatus(option);
+                handleChange("stepActionType", option);
+              }}
               className={`py-2 px-1 text-xs font-medium rounded-lg transition-all text-center cursor-pointer ${
                 actionStatus === option
                   ? "bg-white text-emerald-600 shadow-2xs font-semibold"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              {option}
+              {ACTION_TYPE_LABELS[option]}
             </button>
           ))}
         </div>
@@ -68,8 +82,14 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
         </label>
         <input
           type="text"
-          value={formState.symptomCause || ""}
-          onChange={(e) => handleChange("symptomCause", e.target.value)}
+          value={formState.symptomCause || formState.diagnosis || ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            handleMultipleChange({
+              symptomCause: val,
+              diagnosis: val,
+            });
+          }}
           placeholder="ระบุอาการหรือสาเหตุ..."
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
@@ -96,18 +116,19 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
             วิเคราะห์สาเหตุ <span className="text-rose-500">*</span>
           </label>
           <select
-            value={formState.causeCategory || ""}
-            onChange={(e) => handleChange("causeCategory", e.target.value)}
+            value={formState.causeId || ""}
+            onChange={(e) => handleChange("causeId", Number(e.target.value))}
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
           >
             <option value="" disabled>
               -- เลือกวิเคราะห์สาเหตุ --
             </option>
-            <option value="อุปกรณ์เสื่อมสภาพตามอายุ">
-              อุปกรณ์เสื่อมสภาพตามอายุ
-            </option>
-            <option value="การใช้งานผิดวิธี">การใช้งานผิดวิธี</option>
-            <option value="ภัยธรรมชาติ/กระแสไฟ">ภัยธรรมชาติ/กระแสไฟ</option>
+            {causes.map((cause) => (
+              <option key={cause.id} value={cause.id}>
+                {cause.code ? `${cause.code} - ` : ""}
+                {cause.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -119,9 +140,9 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
             <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
               <input
                 type="radio"
-                name="isRepeat"
-                checked={formState.isRepeat === true}
-                onChange={() => handleChange("isRepeat", true)}
+                name="isRepeatRepair"
+                checked={formState.isRepeatRepair === true}
+                onChange={() => handleChange("isRepeatRepair", true)}
                 className="text-emerald-600 focus:ring-emerald-500"
               />
               ใช่
@@ -129,9 +150,9 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
             <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
               <input
                 type="radio"
-                name="isRepeat"
-                checked={formState.isRepeat === false}
-                onChange={() => handleChange("isRepeat", false)}
+                name="isRepeatRepair"
+                checked={formState.isRepeatRepair === false}
+                onChange={() => handleChange("isRepeatRepair", false)}
                 className="text-emerald-600 focus:ring-emerald-500"
               />
               ไม่
@@ -147,13 +168,8 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
             <input
               type="number"
               min="0"
-              value={formState.estimatedDays || ""}
-              onChange={(e) =>
-                handleChange(
-                  "estimatedDays",
-                  e.target.value ? Number(e.target.value) : "",
-                )
-              }
+              value={formState.dueDate || ""}
+              onChange={(e) => handleChange("dueDate", e.target.value)}
               placeholder="0"
               className="w-full rounded-lg border border-slate-200 pl-3 pr-16 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
@@ -167,19 +183,19 @@ export const CommonEvaluationFields: React.FC<CommonFieldsProps> = ({
       {/* 5. รายละเอียดผลการวินิจฉัยทางเทคนิค */}
       <div>
         <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-          รายละเอียดผลการวินิจฉัยทางเทคนิค{" "}
+          รายละเอียดผลการวินิจฉัยทางเทคนิค
           <span className="text-rose-500">*</span>
         </label>
         <textarea
           rows={3}
-          value={formState.technicalDiagnosis || ""}
-          onChange={(e) => handleChange("technicalDiagnosis", e.target.value)}
+          value={formState.technicalDiagnosisDetail || ""}
+          onChange={(e) =>
+            handleChange("technicalDiagnosisDetail", e.target.value)
+          }
           placeholder="ระบุรายละเอียดทางเทคนิคเพิ่มเติม..."
           className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none"
         />
       </div>
     </div>
   );
-};
-
-export default CommonEvaluationFields;
+}

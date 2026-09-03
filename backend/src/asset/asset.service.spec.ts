@@ -60,6 +60,30 @@ describe('AssetService', () => {
       expect(result.data).toHaveLength(1);
       expect(result.meta.total).toBe(1);
     });
+
+    it('should filter by status and type IDs when provided in query', async () => {
+      mockPrismaService.$transaction.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        asset_status_id: 1,
+        availability_status_id: 1,
+        asset_type_id: 2,
+        equipment_type_id: 3,
+      });
+
+      expect(mockPrismaService.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            asset_status_id: 1,
+            availability_status_id: 1,
+            type_id: 2,
+            equipment_type_id: 3,
+          }),
+        }),
+      );
+    });
   });
 
   describe('findBySection', () => {

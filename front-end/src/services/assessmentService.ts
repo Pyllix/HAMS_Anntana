@@ -1,17 +1,19 @@
 import axios from "axios";
 import type {
-  RepairJob,
-  EvaluationDto,
+  RepairListItem,
+  RepairDetailDto,
   Company,
   SparePart,
-  RepairCause,
+  RepairDetail,
+  Mechanic,
+  RepairMetaLookups,
 } from "../Types/TypeAssessment";
-import type { User } from "../Types/TypeUser";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 
 function getHeaders() {
   const token = localStorage.getItem("token");
+
   return {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -19,53 +21,53 @@ function getHeaders() {
   };
 }
 
-export async function getPendingEvaluations(): Promise<RepairJob[]> {
-  const res = await axios.get(`${BASE_URL}/repair-jobs/pending`, getHeaders());
+export async function getPendingEvaluations(): Promise<RepairListItem[]> {
+  const res = await axios.get(`${BASE_URL}/repairs`, getHeaders());
+
+  return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+}
+
+export async function getRepairJobById(
+  id: string | number,
+): Promise<RepairDetail> {
+  const res = await axios.get(`${BASE_URL}/repairs/${id}`, getHeaders());
+
   return res.data;
 }
 
-export async function getRepairJobById(id: number): Promise<RepairJob> {
-  const res = await axios.get(`${BASE_URL}/repair-jobs/${id}`, getHeaders());
-  return res.data;
-}
-
-export async function createEvaluation(dto: EvaluationDto): Promise<RepairJob> {
-  const res = await axios.post(
-    `${BASE_URL}/repair-jobs/evaluate`,
+export async function createEvaluation(
+  id: string,
+  dto: RepairDetailDto,
+): Promise<RepairDetail> {
+  const res = await axios.patch(
+    `${BASE_URL}/repairs/${id}/diagnose`,
     dto,
     getHeaders(),
   );
+
   return res.data;
 }
 
-/**
- * ดึงรายการผู้ใช้งานทั้งหมด
- */
-export async function getUsers(): Promise<User[]> {
-  const res = await axios.get(`${BASE_URL}/users`, getHeaders());
+export async function getMechanics(): Promise<Mechanic[]> {
+  const res = await axios.get(`${BASE_URL}/repairs/mechanics`, getHeaders());
+
   return res.data;
 }
 
-/**
- * ดึงรายการบริษัททั้งหมด
- */
 export async function getCompanies(): Promise<Company[]> {
   const res = await axios.get(`${BASE_URL}/company`, getHeaders());
-  return res.data;
+
+  return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
-/**
- * ดึงรายการอะไหล่ทั้งหมด
- */
 export async function getSpareParts(): Promise<SparePart[]> {
   const res = await axios.get(`${BASE_URL}/spare-parts`, getHeaders());
-  return res.data;
+
+  return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
-/**
- * ดึงรายการสาเหตุการเสียทั้งหมด
- */
-export async function getCauses(): Promise<RepairCause[]> {
-  const res = await axios.get(`${BASE_URL}/repair-causes`, getHeaders());
+export async function getRepairMetaLookups(): Promise<RepairMetaLookups> {
+  const res = await axios.get(`${BASE_URL}/repairs/lookups/meta`, getHeaders());
+
   return res.data;
 }

@@ -162,6 +162,8 @@ export class AssetBorrowController {
   @ApiOperation({ summary: 'List borrow transactions with pagination and filtering' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'borrowNo', required: false, type: String })
+  @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'assetId', required: false, type: String })
   @ApiQuery({ name: 'borrowerId', required: false, type: String })
   @ApiQuery({ name: 'borrowStatusId', required: false, type: Number })

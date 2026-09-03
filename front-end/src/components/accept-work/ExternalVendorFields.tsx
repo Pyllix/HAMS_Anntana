@@ -3,14 +3,14 @@ import { getCompanies } from "../../services/assessmentService";
 import type { Company } from "../../Types/TypeAssessment";
 
 interface ExternalVendorProps {
-  vendorId: string;
-  setVendorId: React.Dispatch<React.SetStateAction<string>>;
+  companyId?: string | number | null;
+  setCompanyId: (id: string) => void;
 }
 
-export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
-  vendorId,
-  setVendorId,
-}) => {
+export default function ExternalVendorFields({
+  companyId,
+  setCompanyId,
+}: ExternalVendorProps) {
   const [vendors, setVendors] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -22,9 +22,10 @@ export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
         setErrorMsg("");
 
         const res = await getCompanies();
-        const list: Company[] = Array.isArray(res)
-          ? res
-          : (res as { data?: Company[] })?.data || [];
+
+        const rawData = (res as any)?.data ?? res;
+        const list: Company[] = Array.isArray(rawData) ? rawData : [];
+
         setVendors(list);
       } catch (err) {
         console.error("Failed to fetch companies/vendors:", err);
@@ -37,6 +38,9 @@ export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
     fetchVendors();
   }, []);
 
+  const currentValue =
+    companyId !== null && companyId !== undefined ? String(companyId) : "";
+
   return (
     <div className="space-y-2">
       <label className="text-xs font-semibold text-slate-700 block">
@@ -45,9 +49,9 @@ export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
 
       <div className="relative">
         <select
-          value={vendorId}
+          value={currentValue}
           disabled={isLoading}
-          onChange={(e) => setVendorId(e.target.value)}
+          onChange={(e) => setCompanyId(e.target.value)}
           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-emerald-500 bg-white disabled:bg-slate-50 disabled:cursor-not-allowed cursor-pointer"
         >
           <option value="">
@@ -56,15 +60,12 @@ export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
               : "-- กรุณาเลือกบริษัทที่ส่งซ่อม --"}
           </option>
 
-          {vendors.map((item) => {
-            const codeDisplay = item.code ? ` (${item.code})` : "";
-
-            return (
-              <option key={item.id} value={item.id}>
-                {item.name || "ไม่ระบุชื่อบริษัท"} {codeDisplay}
-              </option>
-            );
-          })}
+          {vendors.map((item) => (
+            <option key={item.id} value={String(item.id)}>
+              {" "}
+              {item.name || "ไม่ระบุชื่อบริษัท"}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -73,6 +74,4 @@ export const ExternalVendorFields: React.FC<ExternalVendorProps> = ({
       )}
     </div>
   );
-};
-
-export default ExternalVendorFields;
+}

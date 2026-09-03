@@ -243,6 +243,19 @@ describe('UsersService', () => {
       });
     });
 
+    it('should filter by section_id when section_id is provided', async () => {
+      const query = { section_id: 'sec-opd-uuid' };
+      mockPrismaService.$transaction.mockResolvedValue([[mockUser], 1]);
+
+      await service.findAll(query);
+
+      const [[findManyCall]] = mockPrismaService.user.findMany.mock.calls;
+      expect(findManyCall.where).toMatchObject({
+        deletedAt: null,
+        section_id: 'sec-opd-uuid',
+      });
+    });
+
     it('should return empty data when no users match', async () => {
       const query: PaginationDto = { search: 'nonexistent' };
       mockPrismaService.$transaction.mockResolvedValue([[], 0]);

@@ -187,4 +187,30 @@ describe('SparePartsService', () => {
       expect(res.updatedSparepart.isLowStock).toBe(false);
     });
   });
+
+  describe('findAllTransactions', () => {
+    it('should filter transactions by userId, startDate, and endDate', async () => {
+      mockPrismaService.$transaction.mockResolvedValue([[], 0]);
+
+      await service.findAllTransactions({
+        userId: 'user-uuid-1',
+        startDate: '2026-08-01',
+        endDate: '2026-08-31',
+        page: 1,
+        limit: 10,
+      });
+
+      expect(mockPrismaService.sparepartTxn.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            txnBy: 'user-uuid-1',
+            createdAt: {
+              gte: new Date('2026-08-01T00:00:00.000Z'),
+              lte: new Date('2026-08-31T23:59:59.999Z'),
+            },
+          }),
+        }),
+      );
+    });
+  });
 });

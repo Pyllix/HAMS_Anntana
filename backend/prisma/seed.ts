@@ -107,6 +107,9 @@ const sections = [
   { code: 'ICU', name: 'แผนกผู้ป่วยวิกฤต (Intensive Care Unit)', tel: '1200', building: 'อาคารเฉลิมพระเกียรติ ชั้น 4' },
   { code: 'ER', name: 'แผนกอุบัติเหตุและฉุกเฉิน (Emergency Room)', tel: '1999', building: 'อาคารเฉลิมพระเกียรติ ชั้น 1' },
   { code: 'SURGERY', name: 'แผนกห้องผ่าตัด (Operating Room)', tel: '1300', building: 'อาคารเฉลิมพระเกียรติ ชั้น 3' },
+  { code: 'LAB', name: 'แผนกห้องปฏิบัติการและชันสูตร (Laboratory)', tel: '1400', building: 'อาคารเฉลิมพระเกียรติ ชั้น 2' },
+  { code: 'XRAY', name: 'แผนกรังสีวิทยา (Radiology Department)', tel: '1500', building: 'อาคารผู้ป่วยนอก ชั้น 2' },
+  { code: 'PHARMACY', name: 'แผนกเภสัชกรรม (Pharmacy Department)', tel: '1600', building: 'อาคารผู้ป่วยนอก ชั้น 1' },
 ];
 
 const systemUsers = [
@@ -199,6 +202,127 @@ const systemUsers = [
     password: 'Maintenance@1234',
     role: 'MAINTENANCE_STAFF' as const,
     sectionCode: 'CENTER',
+  },
+  // Additional users ensuring at least 2 users per section
+  {
+    employeeId: 'GOV-67010',
+    userName: 'deptstaff_it2',
+    firstname: 'พิชิต',
+    lastname: 'เจ้าหน้าที่เทคโนโลยีสารสนเทศ 2',
+    email: 'it2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'IT',
+  },
+  {
+    employeeId: 'GOV-67011',
+    userName: 'parcel2',
+    firstname: 'สุภาพร',
+    lastname: 'เจ้าหน้าที่พัสดุจัดซื้อ 2',
+    email: 'parcel2@hospital.go.th',
+    password: 'Parcel@1234',
+    role: 'PARCEL_STAFF' as const,
+    sectionCode: 'PARCEL',
+  },
+  {
+    employeeId: 'GOV-67012',
+    userName: 'deptstaff_icu2',
+    firstname: 'นภา',
+    lastname: 'พยาบาลวิชาชีพ ICU 2',
+    email: 'icu2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'ICU',
+  },
+  {
+    employeeId: 'GOV-67013',
+    userName: 'deptstaff_er2',
+    firstname: 'วีระ',
+    lastname: 'พยาบาลฉุกเฉิน ER 2',
+    email: 'er2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'ER',
+  },
+  {
+    employeeId: 'GOV-67014',
+    userName: 'deptstaff_surgery1',
+    firstname: 'วิภา',
+    lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 1',
+    email: 'surgery1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'SURGERY',
+  },
+  {
+    employeeId: 'GOV-67015',
+    userName: 'deptstaff_surgery2',
+    firstname: 'กิตติ',
+    lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 2',
+    email: 'surgery2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'SURGERY',
+  },
+  {
+    employeeId: 'GOV-67016',
+    userName: 'deptstaff_lab1',
+    firstname: 'สมพงษ์',
+    lastname: 'นักเทคนิคการแพทย์ 1',
+    email: 'lab1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'LAB',
+  },
+  {
+    employeeId: 'GOV-67017',
+    userName: 'deptstaff_lab2',
+    firstname: 'นิภา',
+    lastname: 'นักเทคนิคการแพทย์ 2',
+    email: 'lab2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'LAB',
+  },
+  {
+    employeeId: 'GOV-67018',
+    userName: 'deptstaff_xray1',
+    firstname: 'รังสรรค์',
+    lastname: 'นักรังสีการแพทย์ 1',
+    email: 'xray1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'XRAY',
+  },
+  {
+    employeeId: 'GOV-67019',
+    userName: 'deptstaff_xray2',
+    firstname: 'มยุรี',
+    lastname: 'นักรังสีการแพทย์ 2',
+    email: 'xray2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'XRAY',
+  },
+  {
+    employeeId: 'GOV-67020',
+    userName: 'deptstaff_pharm1',
+    firstname: 'ธนินท์',
+    lastname: 'เภสัชกรวิชาชีพ 1',
+    email: 'pharm1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'PHARMACY',
+  },
+  {
+    employeeId: 'GOV-67021',
+    userName: 'deptstaff_pharm2',
+    firstname: 'พิมพ์',
+    lastname: 'เภสัชกรวิชาชีพ 2',
+    email: 'pharm2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'PHARMACY',
   },
 ];
 
@@ -910,11 +1034,9 @@ async function main() {
 
   // 9.2 JobType
   const jobTypes = [
-    { name: 'ตรวจเช็คและซ่อมทั่วไป' },
-    { name: 'ซ่อมใหญ่/ยกเครื่อง' },
-    { name: 'บำรุงรักษาเชิงป้องกัน (PM)' },
-    { name: 'สอบเทียบมาตรฐาน (Calibration)' },
-    { name: 'ดัดแปลง/ปรับปรุงสภาพ' },
+    { name: 'ซ่อมเครื่องมือแพทย์' },
+    { name: 'ซ่อมบำรุงทั่วไป' },
+    { name: 'ซ่อมคอมพิวเตอร์' },
   ];
   for (const jt of jobTypes) {
     const existing = await prisma.jobType.findFirst({ where: { name: jt.name } });
@@ -925,19 +1047,32 @@ async function main() {
 
   // 9.3 Cause
   const causes = [
-    { code: '01', name: 'การเสื่อมสภาพตามอายุการใช้งาน' },
-    { code: '02', name: 'การใช้งานผิดวิธี/เกิดอุบัติเหตุ' },
-    { code: '03', name: 'ระบบไฟฟ้าขัดข้อง/แรงดันไฟตกหรือกระชาก' },
-    { code: '04', name: 'ข้อผิดพลาดทางซอฟต์แวร์หรือเฟิร์มแวร์' },
-    { code: '05', name: 'สิ่งแปลกปลอม/ของเหลวไหลเข้าตัวเครื่อง' },
-    { code: '06', name: 'การขาดการบำรุงรักษาตามรอบ' },
+    { code: '01', name: 'เครื่องไม่มีคุณภาพ' },
+    { code: '02', name: 'การติดตั้งไม่เรียบร้อย' },
+    { code: '03', name: 'ผู้ใช้ขาดความเข้าใจ' },
+    { code: '04', name: 'สภาวะแวดล้อม' },
+    { code: '05', name: 'อายุการใช้งานนาน' },
+    { code: '06', name: 'ความถี่การใช้งานสูง' },
+    { code: '07', name: 'การบำรุงรักษาไม่ดีพอ' },
+    { code: '08', name: 'ซ่อมเพื่อปรับปรุงพัฒนา' },
+    { code: '09', name: 'ตรวจเช็คตามระยะเวลา' },
+    { code: '10', name: 'ส่งสอบเทียบ' },
+    { code: '11', name: 'แจ้งรายชื่อครุภัณฑ์รับใหม่/โอน/แทงจำหน่าย' },
+    { code: '12', name: 'ของไม่มีคุณภาพ' },
+    { code: '13', name: 'ขออนุมัติจัดทำเพื่อปรับปรุงหรือพัฒนา' },
+    { code: '14', name: 'เกิดจากผู้ใช้งาน' },
+    { code: '15', name: 'อุปกรณ์เสื่อมคุณภาพ' },
+    { code: '16', name: 'Software มีปัญหา/ไม่สมบูรณ์' },
+    { code: '17', name: 'สมควรแทงจำหน่าย' },
+    { code: '18', name: 'Hardware ชำรุด' },
+    { code: '19', name: 'ระบบ Network ชำรุด' },
   ];
   for (const cs of causes) {
     const existing = await prisma.cause.findFirst({ where: { code: cs.code } });
     if (!existing) {
       await prisma.cause.create({ data: cs });
     } else {
-      await prisma.cause.update({ where: { id: existing.id }, data: { name: cs.name } });
+      await prisma.cause.update({ where: { id: existing.id }, data: { name: cs.name, deleteAt: null } });
     }
   }
 
