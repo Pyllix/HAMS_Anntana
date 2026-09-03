@@ -41,8 +41,7 @@ export function PartOrderCreateModal() {
     if (isCreateModalOpen) {
       const initialId = preselectedSparepartId || spareParts?.[0]?.id || 0;
       setSelectedSparepartId(initialId);
-      const randomPO = `PO-${Math.floor(100 + Math.random() * 900)}`;
-      setOrderNo(randomPO);
+      setOrderNo("");
       setQty(1);
       const matched = spareParts?.find((p) => p.id === initialId);
       setTotalPrice(matched ? Number(matched.price) : 0);
@@ -68,12 +67,16 @@ export function PartOrderCreateModal() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!currentPart) return;
+      if (!orderNo.trim()) {
+        alert("กรุณากรอกเลขที่เอกสาร / ใบสั่งซื้อ");
+        throw new Error("Doc No. is required");
+      }
 
       const dto: StockInSparepartDto = {
         sparepartId: currentPart.id,
         qty: Number(qty),
         totalPrice: Number(totalPrice),
-        sparepartAddDoc: orderNo.trim() || `PO-${Date.now()}`,
+        sparepartAddDoc: orderNo.trim(),
       };
 
       try {
@@ -90,7 +93,7 @@ export function PartOrderCreateModal() {
         quantity: Number(qty),
         unitPrice: Number(currentPart.price),
         totalPrice: Number(totalPrice),
-        orderNo: orderNo.trim() || `PO-${Date.now()}`,
+        orderNo: orderNo.trim(),
       });
     },
     onSuccess: () => {
