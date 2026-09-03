@@ -1,44 +1,112 @@
-import React from "react";
-import { useAssessmentStore } from "../../stores/useAssessmentStore";
-import type { RepairJob } from "../../Types/TypeAssessment";
+import { FileText } from "lucide-react";
+import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
+import type {
+  RepairDetail,
+  UrgencyStatus,
+  BaseLookup,
+  RepairMetaLookups,
+} from "../../Types/TypeAssessment";
 
 interface AssetInfoProps {
-  jobData?: RepairJob | null;
+  jobData?: RepairDetail | null;
+  jobTypes?: BaseLookup[];
 }
 
-export const AssetInfoCard: React.FC<AssetInfoProps> = ({
+export default function AssetInfoCard({
   jobData: customJobData,
-}) => {
-  const { selectedJob } = useAssessmentStore();
+  jobTypes: customJobTypes,
+}: AssetInfoProps) {
+  const { selectedJob, lookups } = useAssessmentStore() as any;
 
-  // เลือกใช้ข้อมูลจาก props ก่อน หากไม่มีให้ใช้ selectedJob จาก Store
-  const job = customJobData || selectedJob;
+  const rawJob = customJobData || selectedJob;
+  const job = (
+    Array.isArray((rawJob as any)?.data) ? (rawJob as any).data[0] : rawJob
+  ) as RepairDetail | null;
 
   if (!job) return null;
 
-  // Cast type ชั่วคราวเพื่อให้อ่าน Optional Fields
-  const rawJob = job as RepairJob & Record<string, any>;
-  const rawAsset = (job.asset || {}) as Record<string, any>;
+  const asset = job.asset;
+  const section = job.section;
+  const reporter = job.reporter;
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "-";
-    try {
-      return new Date(dateString).toLocaleDateString("th-TH", {
-        day: "numeric",
-        month: "short",
+  const jobTypesList: BaseLookup[] =
+    customJobTypes ||
+    lookups?.jobTypes ||
+    lookups?.meta?.jobTypes ||
+    lookups?.repairMeta?.jobTypes ||
+    (lookups as RepairMetaLookups)?.jobTypes ||
+    [];
+
+  const matchedJobType = jobTypesList.find(
+    (item) => String(item.id) === String(job.jobTypeId),
+  );
+
+  const rawReportType = job.reportType?.trim();
+  const isGenericEnglishWord =
+    rawReportType?.toUpperCase() === "REPAIR" || !rawReportType;
+    
+  const rawJobTypeObj = (job as any)?.jobType;
+  const reportType =
+    (typeof rawJobTypeObj === "string" ? rawJobTypeObj : rawJobTypeObj?.name) ||
+    matchedJobType?.name ||
+    (!isGenericEnglishWord ? rawReportType : null) ||
+    "-";
+
+  const assetCode = asset?.noid || "-";
+  const assetName = asset?.name
+    ? `${asset.name} ${asset.model ? `(${asset.model})` : ""}`
+    : "-";
+  const serialNo = asset?.serialNo || "-";
+  const categoryName =
+    (job as any)?.techCategory?.name ||
+    asset?.type?.name ||
+    (job as any)?.jobType?.name ||
+    "-";
+  const location = section?.name
+    ? `${section.name} ${section.building ? `(${section.building})` : ""}`
+    : "-";
+  const reporterName = reporter?.firstname
+    ? `${reporter.firstname} ${reporter.lastname}`
+    : "-";
+  const urgencyStatus = job.urgencyStatus;
+  const reportedAt = job.createdAt
+    ? new Date(job.createdAt).toLocaleDateString("th-TH", {
         year: "numeric",
-      });
-    } catch {
-      return dateString;
+        month: "short",
+        day: "numeric",
+      })
+    : "-";
+  const symptomDetails = job.symptom || asset?.remark || "-";
+
+  const getUrgencyBadge = (urgency?: UrgencyStatus) => {
+    switch (urgency) {
+      case "EMERGENCY":
+        return {
+          label: "ด่วนมาก",
+          className: "bg-rose-50 border border-rose-100 text-rose-600",
+        };
+      case "URGENT":
+        return {
+          label: "ด่วน",
+          className: "bg-amber-50 border border-amber-100 text-amber-600",
+        };
+      case "NORMAL":
+      default:
+        return {
+          label: "ปกติ",
+          className: "bg-slate-100 border border-slate-200 text-slate-600",
+        };
     }
   };
+
+  const urgencyBadge = getUrgencyBadge(urgencyStatus);
 
   return (
     <div className="bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
         <span className="p-1 rounded-md bg-emerald-50 text-emerald-600">
-          📄
+          <FileText className="w-4 h-4" />
         </span>
         ข้อมูลครุภัณฑ์และรายการแจ้งซ่อม
       </div>
@@ -53,7 +121,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
             <input
               type="text"
               readOnly
-              value={job.asset?.assetCode || rawJob.assetCode || "-"}
+              value={assetCode}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono font-semibold outline-hidden"
             />
           </div>
@@ -62,10 +130,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
               ประเภทการแจ้ง
             </label>
             <div className="w-full bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2 text-emerald-700 font-semibold truncate">
-              {job.reportType ||
-                rawAsset.type ||
-                rawJob.category ||
-                "ซ่อมทั่วไป"}
+              {reportType}
             </div>
           </div>
         </div>
@@ -78,7 +143,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
           <input
             type="text"
             readOnly
-            value={job.asset?.assetName || rawJob.assetName || "-"}
+            value={assetName}
             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-medium outline-hidden"
           />
         </div>
@@ -92,12 +157,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
             <input
               type="text"
               readOnly
-              value={
-                rawAsset.serialNo ||
-                rawAsset.serialNumber ||
-                rawJob.serialNo ||
-                "-"
-              }
+              value={serialNo}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono outline-hidden"
             />
           </div>
@@ -108,13 +168,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
             <input
               type="text"
               readOnly
-              value={
-                job.techCategory?.categoryName ||
-                rawAsset.category ||
-                rawJob.categoryName ||
-                rawJob.group ||
-                "-"
-              }
+              value={categoryName}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
             />
           </div>
@@ -128,7 +182,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
           <input
             type="text"
             readOnly
-            value={rawJob.location || rawAsset.location || "-"}
+            value={location}
             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-hidden"
           />
         </div>
@@ -142,11 +196,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
             <input
               type="text"
               readOnly
-              value={
-                rawJob.reporterName
-                  ? `${rawJob.reporterName} ${rawJob.reporterPhone ? `(${rawJob.reporterPhone})` : ""}`
-                  : rawJob.reporter || "-"
-              }
+              value={reporterName}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
             />
           </div>
@@ -155,19 +205,9 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
               ระดับความเร่งด่วน
             </label>
             <div
-              className={`w-full rounded-lg px-3 py-2 font-semibold text-center truncate ${
-                job.urgencyStatus === "EMERGENCY"
-                  ? "bg-rose-50 border border-rose-100 text-rose-600"
-                  : job.urgencyStatus === "URGENT"
-                    ? "bg-amber-50 border border-amber-100 text-amber-600"
-                    : "bg-slate-100 border border-slate-200 text-slate-600"
-              }`}
+              className={`w-full rounded-lg px-3 py-2 font-semibold text-center truncate  ${urgencyBadge.className}`}
             >
-              {job.urgencyStatus === "EMERGENCY"
-                ? "ด่วนมาก"
-                : job.urgencyStatus === "URGENT"
-                  ? "ด่วน"
-                  : rawJob.urgency || "ปกติ"}
+              {urgencyBadge.label}
             </div>
           </div>
           <div>
@@ -177,7 +217,7 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
             <input
               type="text"
               readOnly
-              value={formatDate(job.createdAt || rawJob.createdDate)}
+              value={reportedAt}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 text-center outline-hidden"
             />
           </div>
@@ -191,13 +231,11 @@ export const AssetInfoCard: React.FC<AssetInfoProps> = ({
           <textarea
             readOnly
             rows={3}
-            value={job.symptom || rawJob.userSymptom || "-"}
+            value={symptomDetails}
             className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-700 resize-none outline-hidden"
           />
         </div>
       </div>
     </div>
   );
-};
-
-export default AssetInfoCard;
+}

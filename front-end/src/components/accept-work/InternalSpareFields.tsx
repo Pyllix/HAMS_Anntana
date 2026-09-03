@@ -1,74 +1,55 @@
 import React, { useState } from "react";
-import { Search, Plus, Trash2, Package } from "lucide-react";
+import { Search, Plus, Trash2, Package, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { SparePart } from "../../Types/TypeAssessment";
+import { getSpareParts } from "../../services/assessmentService";
+
+export interface SelectedSpareItem extends SparePart {
+  quantity: number;
+}
 
 export interface SpareItem {
-  id: string | number;
-  code?: string;
-  name: string;
-  location?: string;
-  stock: number;
-  price: number;
-  quantity?: number;
+  id: string;
+  quantity: number;
+  price?: number;
 }
 
 interface InternalSpareFieldsProps {
-  selectedSpares: SpareItem[];
-  setSelectedSpares: React.Dispatch<React.SetStateAction<SpareItem[]>>;
-  availableSpares?: SpareItem[];
+  selectedSpares: SelectedSpareItem[];
+  setSelectedSpares: React.Dispatch<React.SetStateAction<SelectedSpareItem[]>>;
+  availableSpares?: SparePart[];
 }
-
-// ข้อมูลจำลอง อะไหล่ในคลัง
-const DEFAULT_STOCK_ITEMS: SpareItem[] = [
-  {
-    id: "1",
-    code: "CAP-1000-25",
-    name: "Capacitor 1000uF 25V (Electrolytic)",
-    location: "ชั้นวาง A-02",
-    stock: 15,
-    price: 40.0,
-  },
-  {
-    id: "2",
-    code: "FUS-10A-250",
-    name: "Ceramic Fuse 10A 250V (Fast Blow)",
-    location: "ชั้นวาง B-01",
-    stock: 8,
-    price: 15.0,
-  },
-  {
-    id: "3",
-    code: "CAP-0470-50",
-    name: "Capacitor 470uF 50V (High Temp)",
-    location: "ชั้นวาง A-03",
-    stock: 4,
-    price: 25.0,
-  },
-  {
-    id: "4",
-    code: "RES-10K-025",
-    name: "Resistor 10k Ohm 1/4W",
-    location: "ชั้นวาง A-01",
-    stock: 50,
-    price: 5.0,
-  },
-];
 
 export default function InternalSpareFields({
   selectedSpares = [],
   setSelectedSpares,
-  availableSpares = DEFAULT_STOCK_ITEMS,
+  availableSpares: propAvailableSpares,
 }: InternalSpareFieldsProps) {
   const [isOpenDropdown, setIsOpenDropdown] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const { data: apiSpares, isLoading } = useQuery<SparePart[]>({
+    queryKey: ["spareParts"],
+    queryFn: getSpareParts,
+    enabled: !propAvailableSpares,
+  });
+
+  const rawSpares = propAvailableSpares || apiSpares;
+
+  const availableSpares: SparePart[] = Array.isArray(rawSpares)
+    ? rawSpares
+    : (rawSpares as unknown as { data: SparePart[] })?.data &&
+        Array.isArray((rawSpares as unknown as { data: SparePart[] }).data)
+      ? (rawSpares as unknown as { data: SparePart[] }).data
+      : [];
+
   // ฟังก์ชันเพิ่มรายการอะไหล่
-  const handleAddSpare = (item: SpareItem) => {
+  const handleAddSpare = (item: SparePart) => {
     const exists = selectedSpares.some((s) => String(s.id) === String(item.id));
     if (!exists) {
       setSelectedSpares((prev) => [...prev, { ...item, quantity: 1 }]);
     }
   };
-
   // ฟังก์ชันลบรายการอะไหล่
   const handleRemoveSpare = (id: string | number) => {
     setSelectedSpares((prev) =>
@@ -77,7 +58,7 @@ export default function InternalSpareFields({
   };
 
   // ฟังก์ชันเปลี่ยนจำนวนที่เบิก
-  const handleQuantityChange = (id: string | number, qty: number) => {
+  const handleQuantityChange = (id: string, qty: number) => {
     setSelectedSpares((prev) =>
       prev.map((s) =>
         String(s.id) === String(id) ? { ...s, quantity: qty } : s,
@@ -90,12 +71,7 @@ export default function InternalSpareFields({
     const search = searchTerm.toLowerCase();
     const nameStr = (item.name || "").toLowerCase();
     const codeStr = (item.code || "").toLowerCase();
-    const locStr = (item.location || "").toLowerCase();
-    return (
-      nameStr.includes(search) ||
-      codeStr.includes(search) ||
-      locStr.includes(search)
-    );
+    return nameStr.includes(search) || codeStr.includes(search);
   });
 
   return (
@@ -132,7 +108,7 @@ export default function InternalSpareFields({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="ค้นหาชื่ออะไหล่, รหัส หรือตำแหน่งจัดเก็บ..."
+                placeholder="ค้นหาชื่ออะไหล่ หรือรหัสอะไหล่..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:border-emerald-500"
@@ -140,7 +116,12 @@ export default function InternalSpareFields({
             </div>
 
             <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
-              {filteredStock.length === 0 ? (
+              {isLoading ? (
+                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                  กำลังโหลดรายการอะไหล่...
+                </div>
+              ) : filteredStock.length === 0 ? (
                 <div className="p-3 text-center text-xs text-slate-400">
                   ไม่พบรายการอะไหล่ในคลัง
                 </div>
@@ -149,6 +130,7 @@ export default function InternalSpareFields({
                   const isAdded = selectedSpares.some(
                     (s) => String(s.id) === String(item.id),
                   );
+                  const itemPrice = Number(item.price ?? item.price ?? 0);
 
                   return (
                     <div
@@ -161,23 +143,20 @@ export default function InternalSpareFields({
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-2">
                           {item.code && <span>รหัส: {item.code}</span>}
-                          {item.location && (
-                            <span>ตำแหน่ง: {item.location}</span>
-                          )}
                         </div>
                         <div className="text-[11px] font-medium flex items-center gap-3 pt-0.5">
                           <span className="text-emerald-600">
-                            คลัง: {item.stock} ชิ้น
+                            คลัง: {item.qtyInStock} {item.unit || "ชิ้น"}
                           </span>
                           <span className="text-slate-600 font-mono">
-                            {(item.price || 0).toFixed(2)} ฿
+                            {itemPrice.toFixed(2)} ฿
                           </span>
                         </div>
                       </div>
 
                       <button
                         type="button"
-                        onClick={() => handleAddSpare(item)}
+                    onClick={() => handleAddSpare(item)}
                         disabled={isAdded}
                         className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer shrink-0 ${
                           isAdded
@@ -229,8 +208,17 @@ export default function InternalSpareFields({
                 const name =
                   item.name || matchedStockItem?.name || "ไม่ระบุชื่ออะไหล่";
                 const code = item.code || matchedStockItem?.code;
-                const stock = item.stock ?? matchedStockItem?.stock ?? 0;
-                const price = item.price ?? matchedStockItem?.price ?? 0;
+                const stock =
+                  item.qtyInStock ?? matchedStockItem?.qtyInStock ?? 0;
+                const priceNum = Number(
+                  item.price ??
+                    item.price ??
+                    matchedStockItem?.price ??
+                    matchedStockItem?.price ??
+                    0,
+                );
+
+                const unit = item.unit || matchedStockItem?.unit || "ชิ้น";
                 const qty = item.quantity || 1;
 
                 return (
@@ -244,7 +232,7 @@ export default function InternalSpareFields({
                       )}
                     </td>
                     <td className="p-2.5 text-center text-emerald-600 font-medium">
-                      {stock} ชิ้น
+                      {stock} {unit}
                     </td>
                     <td className="p-2.5 text-center">
                       <input
@@ -262,7 +250,7 @@ export default function InternalSpareFields({
                       />
                     </td>
                     <td className="p-2.5 text-right font-mono text-slate-600">
-                      {(price || 0).toFixed(2)} ฿
+                      {priceNum.toFixed(2)} ฿
                     </td>
                     <td className="p-2.5 text-center">
                       <button
