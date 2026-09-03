@@ -1219,5 +1219,68 @@ describe('RepairsService', () => {
         service.findAll(invalidQuery, { role: UserRole.ADMIN }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should filter overdue jobs when isOverdue is true and enrich returned items with isOverdue and overdueDays', async () => {
+      const pastDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days ago
+      const mockOverdueJob = {
+        id: 'job-overdue-1',
+        dueDate: pastDate,
+        jobStatus: { code: 'IN_PROGRESS' },
+        sparepartTxns: [],
+        repairJobSteps: [],
+      };
+      mockPrisma.repairJob.findMany.mockResolvedValue([mockOverdueJob]);
+      mockPrisma.repairJob.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ isOverdue: true } as any, { role: UserRole.ADMIN });
+
+      expect(mockPrisma.repairJob.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            dueDate: expect.objectContaining({ lt: expect.any(Date) }),
+            jobStatus: { code: { notIn: ['COMPLETED', 'CANCELLED'] } },
+          }),
+        }),
+      );
+
+      expect(result.data[0].isOverdue).toBe(true);
+      expect(result.data[0].overdueDays).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should not mark COMPLETED job as overdue even if dueDate is in the past', async () => {
+      const pastDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      const mockCompletedJob = {
+        id: 'job-completed-1',
+        dueDate: pastDate,
+        jobStatus: { code: 'COMPLETED' },
+        sparepartTxns: [],
+        repairJobSteps: [],
+      };
+      mockPrisma.repairJob.findMany.mockResolvedValue([mockCompletedJob]);
+      mockPrisma.repairJob.count.mockResolvedValue(1);
+
+      const result = await service.findAll({}, { role: UserRole.ADMIN });
+      expect(result.data[0].isOverdue).toBe(false);
+      expect(result.data[0].overdueDays).toBe(0);
+    });
+  });
+
+  describe('findOne - overdue enrichment', () => {
+    it('should enrich findOne response and summary with overdue info', async () => {
+      const pastDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-1',
+        dueDate: pastDate,
+        jobStatus: { code: 'IN_PROGRESS' },
+        sparepartTxns: [],
+        repairJobSteps: [],
+      });
+
+      const result = await service.findOne('job-1');
+      expect(result.isOverdue).toBe(true);
+      expect(result.overdueDays).toBeGreaterThanOrEqual(3);
+      expect(result.summary.isOverdue).toBe(true);
+      expect(result.summary.overdueDays).toBeGreaterThanOrEqual(3);
+    });
   });
 });

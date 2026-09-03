@@ -88,6 +88,32 @@ export class RepairsService {
     );
   }
 
+  private calculateOverdueInfo(job: { dueDate?: Date | string | null; jobStatus?: { code?: string } | null }): {
+    isOverdue: boolean;
+    overdueDays: number;
+  } {
+    if (!job.dueDate) {
+      return { isOverdue: false, overdueDays: 0 };
+    }
+
+    const completedOrCancelled = ['COMPLETED', 'CANCELLED'];
+    const statusCode = job.jobStatus?.code;
+    if (statusCode && completedOrCancelled.includes(statusCode)) {
+      return { isOverdue: false, overdueDays: 0 };
+    }
+
+    const due = new Date(job.dueDate);
+    const now = new Date();
+    const diffMs = now.getTime() - due.getTime();
+
+    if (diffMs > 0) {
+      const overdueDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      return { isOverdue: true, overdueDays };
+    }
+
+    return { isOverdue: false, overdueDays: 0 };
+  }
+
   private async getCallerSectionId(user: any, tx?: Prisma.TransactionClient): Promise<string | null> {
     if (user?.section_id) return user.section_id;
     if (user?.id) {
@@ -1106,6 +1132,22 @@ export class RepairsService {
       where.mechanicRepairs = { some: { userId: query.mechanicId } };
     }
 
+    if (query.isOverdue !== undefined) {
+      const now = new Date();
+      if (query.isOverdue) {
+        where.dueDate = { lt: now };
+        where.jobStatus = {
+          code: { notIn: ['COMPLETED', 'CANCELLED'] },
+        };
+      } else {
+        where.OR = [
+          { dueDate: null },
+          { dueDate: { gte: now } },
+          { jobStatus: { code: { in: ['COMPLETED', 'CANCELLED'] } } },
+        ];
+      }
+    }
+
     if (query.startDate || query.endDate) {
       if (query.startDate && !this.isValidCalendarDate(query.startDate)) {
         throw new BadRequestException(
@@ -1125,13 +1167,22 @@ export class RepairsService {
     }
 
     if (search) {
-      where.OR = [
-        { jobNo: { contains: search, mode: 'insensitive' } },
-        { symptom: { contains: search, mode: 'insensitive' } },
-        { diagnosis: { contains: search, mode: 'insensitive' } },
-        { asset: { name: { contains: search, mode: 'insensitive' } } },
-        { asset: { noid: { contains: search, mode: 'insensitive' } } },
+      const searchCondition = [
+        { jobNo: { contains: search, mode: 'insensitive' as const } },
+        { symptom: { contains: search, mode: 'insensitive' as const } },
+        { diagnosis: { contains: search, mode: 'insensitive' as const } },
+        { asset: { name: { contains: search, mode: 'insensitive' as const } } },
+        { asset: { noid: { contains: search, mode: 'insensitive' as const } } },
       ];
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchCondition },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchCondition;
+      }
     }
 
     const [items, total] = await this.prisma.$transaction([
@@ -1170,7 +1221,16 @@ export class RepairsService {
       this.prisma.repairJob.count({ where }),
     ]);
 
-    return paginate(items, total, page, limit);
+    const enrichedItems = items.map((job) => {
+      const overdueInfo = this.calculateOverdueInfo(job);
+      return {
+        ...job,
+        isOverdue: overdueInfo.isOverdue,
+        overdueDays: overdueInfo.overdueDays,
+      };
+    });
+
+    return paginate(enrichedItems, total, page, limit);
   }
 
   async findOne(id: string, tx?: Prisma.TransactionClient) {
@@ -1243,12 +1303,18 @@ export class RepairsService {
       return acc;
     }, 0);
 
+    const overdueInfo = this.calculateOverdueInfo(job);
+
     return {
       ...job,
+      isOverdue: overdueInfo.isOverdue,
+      overdueDays: overdueInfo.overdueDays,
       summary: {
         totalSparePartsCost: Math.max(0, sparePartsCost),
         totalSteps: job.repairJobSteps.length,
         completedSteps: job.repairJobSteps.filter((s) => s.completeAt !== null).length,
+        isOverdue: overdueInfo.isOverdue,
+        overdueDays: overdueInfo.overdueDays,
       },
     };
   }

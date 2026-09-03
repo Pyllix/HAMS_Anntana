@@ -1,9 +1,20 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ActionType, ReportType, StepActionType, UrgencyStatus } from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class QueryRepairJobDto extends PaginationDto {
+  @ApiPropertyOptional({ description: 'Filter by overdue status (true = past due date and not completed/cancelled)' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  @IsBoolean()
+  isOverdue?: boolean;
+
   @ApiPropertyOptional({ description: 'Filter by job status code (e.g. PENDING, IN_PROGRESS, COMPLETED)' })
   @IsString()
   @IsOptional()
