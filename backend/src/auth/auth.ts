@@ -3,13 +3,7 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { openAPI, bearer, admin } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+import { sharedPrisma } from '../common/config/database.config';
 
 // ─── Access Control ───────────────────────────────────────────────────────────
 // Define admin-level permissions matching better-auth's defaults,
@@ -37,7 +31,7 @@ const noPermRole = ac.newRole({
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
+  database: prismaAdapter(sharedPrisma, {
     provider: 'postgresql',
   }),
   emailAndPassword: {

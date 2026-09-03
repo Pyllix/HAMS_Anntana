@@ -50,6 +50,8 @@ model User {
   mechanicRepairs             MechanicRepair[]
   completedRepairSteps        RepairJobStep[]
 
+  @@index([section_id])
+  @@index([role])
   @@map("users")
 }
 
