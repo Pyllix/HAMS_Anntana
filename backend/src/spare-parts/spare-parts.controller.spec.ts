@@ -18,6 +18,7 @@ describe('SparePartsController', () => {
     stockIn: jest.fn(),
     findSparepartHistory: jest.fn(),
     findAllTransactions: jest.fn(),
+    findStockInHistory: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -65,5 +66,17 @@ describe('SparePartsController', () => {
 
     const res = await controller.getLowStockSummary();
     expect(res.totalLowStockCount).toBe(1);
+  });
+
+  it('should call service.findStockInHistory with query params', async () => {
+    const query = { page: 1, limit: 10, search: 'Fuse' };
+    mockSparePartsService.findStockInHistory.mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, limit: 10, totalPages: 0 },
+    });
+
+    const res = await controller.findStockInHistory(query);
+    expect(service.findStockInHistory).toHaveBeenCalledWith(query);
+    expect(res.meta.total).toBe(0);
   });
 });

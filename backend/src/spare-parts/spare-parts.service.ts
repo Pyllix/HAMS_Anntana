@@ -11,11 +11,44 @@ import { UpdateSparepartDto } from './dto/update-spare-part.dto';
 import { QuerySparepartDto } from './dto/query-spare-part.dto';
 import { StockInSparepartDto } from './dto/stock-in-spare-part.dto';
 import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
+import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class SparePartsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Helper Methods
+  // ───────────────────────────────────────────────────────────────────────────
+
+  private async generateSparepartCode(
+    groupId: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string> {
+    const client = tx || this.prisma;
+    const groupStr = String(groupId).padStart(2, '0');
+    const prefix = `SP${groupStr}-`;
+
+    const latest = await client.sparepart.findFirst({
+      where: { code: { startsWith: prefix } },
+      orderBy: { code: 'desc' },
+      select: { code: true },
+    });
+
+    let nextSeq = 1;
+    if (latest && latest.code) {
+      const parts = latest.code.split('-');
+      if (parts.length >= 2) {
+        const lastSeq = parseInt(parts[1], 10);
+        if (!isNaN(lastSeq)) {
+          nextSeq = lastSeq + 1;
+        }
+      }
+    }
+
+    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Sparepart Methods
@@ -30,19 +63,12 @@ export class SparePartsService {
       throw new NotFoundException(`Spare part group #${dto.groupId} not found`);
     }
 
-    // Check unique code
-    const existing = await this.prisma.sparepart.findFirst({
-      where: { code: dto.code, deletedAt: null },
-    });
-    if (existing) {
-      throw new ConflictException(`Spare part code "${dto.code}" already exists`);
-    }
-
     return this.prisma.$transaction(async (tx) => {
+      const code = await this.generateSparepartCode(dto.groupId, tx);
       const initialStock = dto.qtyInStock ?? 0;
       const sparepart = await tx.sparepart.create({
         data: {
-          code: dto.code,
+          code,
           name: dto.name,
           unit: dto.unit ?? 'ชิ้น',
           price: dto.price,
@@ -182,15 +208,6 @@ export class SparePartsService {
       });
       if (!group) {
         throw new NotFoundException(`Spare part group #${dto.groupId} not found`);
-      }
-    }
-
-    if (dto.code) {
-      const existing = await this.prisma.sparepart.findFirst({
-        where: { code: dto.code, deletedAt: null, NOT: { id } },
-      });
-      if (existing) {
-        throw new ConflictException(`Spare part code "${dto.code}" already exists`);
       }
     }
 
@@ -381,5 +398,60 @@ export class SparePartsService {
     ]);
 
     return paginate(txns, total, page, limit);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Stock-In History
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async findStockInHistory(query: QueryStockInHistoryDto) {
+    const page = query.page ? Number(query.page) : 1;
+    const limit = query.limit ? Number(query.limit) : 20;
+
+    const where: Prisma.SparepartAddWhereInput = {
+      deletedAt: null,
+      ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
+      ...(query.addBy ? { addBy: query.addBy } : {}),
+      ...(query.sparepartAddDoc
+        ? { sparepartAddDoc: { contains: query.sparepartAddDoc, mode: 'insensitive' } }
+        : {}),
+      ...((query.startDate || query.endDate)
+        ? {
+            createdAt: {
+              ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
+              ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { sparepartAddDoc: { contains: query.search, mode: 'insensitive' } },
+              { sparepart: { code: { contains: query.search, mode: 'insensitive' } } },
+              { sparepart: { name: { contains: query.search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [adds, total] = await this.prisma.$transaction([
+      this.prisma.sparepartAdd.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          sparepart: {
+            select: { id: true, code: true, name: true, unit: true },
+          },
+          user: {
+            select: { id: true, firstname: true, lastname: true, email: true },
+          },
+        },
+      }),
+      this.prisma.sparepartAdd.count({ where }),
+    ]);
+
+    return paginate(adds, total, page, limit);
   }
 }
