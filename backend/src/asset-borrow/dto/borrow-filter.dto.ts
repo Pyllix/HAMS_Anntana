@@ -4,6 +4,11 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class BorrowFilterDto extends PaginationDto {
+  @ApiPropertyOptional({ description: 'Filter by borrow transaction pattern ID (e.g. BR-202609-0001)' })
+  @IsOptional()
+  @IsString()
+  borrowNo?: string;
+
   @ApiPropertyOptional({ description: 'Filter by asset UUID' })
   @IsOptional()
   @IsUUID()

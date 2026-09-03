@@ -7,11 +7,36 @@ import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
-import { ReturnCondition, ReturnMethod, UserRole, RequestSource } from '@prisma/client';
+import { ReturnCondition, ReturnMethod, UserRole, RequestSource, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AssetBorrowService {
   constructor(private prisma: PrismaService) { }
+
+  private async generateBorrowNo(tx?: Prisma.TransactionClient): Promise<string> {
+    const client = tx || this.prisma;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `BR-${year}${month}-`;
+
+    const latest = await client.borrowTransaction.findFirst({
+      where: { borrowNo: { startsWith: prefix } },
+      orderBy: { borrowNo: 'desc' },
+      select: { borrowNo: true },
+    });
+
+    let nextSeq = 1;
+    if (latest && latest.borrowNo) {
+      const parts = latest.borrowNo.split('-');
+      const lastSeq = parseInt(parts[2], 10);
+      if (!isNaN(lastSeq)) {
+        nextSeq = lastSeq + 1;
+      }
+    }
+
+    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  }
 
   private async getStatusId(model: 'availabilityStatus' | 'borrowStatus' | 'assetStatus', code: string): Promise<number> {
     const status = await (this.prisma[model] as any).findUnique({
@@ -138,8 +163,10 @@ export class AssetBorrowService {
       }
 
       // 3. Create BorrowTransaction
+      const borrowNo = await this.generateBorrowNo(tx);
       const transaction = await tx.borrowTransaction.create({
         data: {
+          borrowNo,
           asset_id: dto.assetId,
           borrower_id: borrowerId,
           created_by_user_id: user.id,
@@ -765,13 +792,27 @@ export class AssetBorrowService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
+    if (query.borrowNo) {
+      where.borrowNo = { contains: query.borrowNo, mode: 'insensitive' };
+    }
     if (query.assetId) where.asset_id = query.assetId;
+
+    if (query.search) {
+      const search = query.search.trim();
+      where.OR = [
+        { borrowNo: { contains: search, mode: 'insensitive' } },
+        { asset: { name: { contains: search, mode: 'insensitive' } } },
+        { borrower: { employeeId: { contains: search, mode: 'insensitive' } } },
+        { borrower: { firstname: { contains: search, mode: 'insensitive' } } },
+        { borrower: { lastname: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
 
     if (user?.role === UserRole.DEPARTMENT_STAFF) {
       const callerSectionId = await this.getCallerSectionId(user);
       // Department staff can view borrowings in their department (or their own)
       if (callerSectionId) {
-        where.borrower = { section_id: callerSectionId };
+        where.borrower = { ...(where.borrower || {}), section_id: callerSectionId };
       } else {
         where.borrower_id = user.id;
       }
@@ -820,25 +861,28 @@ export class AssetBorrowService {
     return paginate(data, total, page, limit);
   }
 
-  async findOne(id: string, user?: any) {
+  async findOne(idOrBorrowNo: string, user?: any) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrBorrowNo);
+    const include = {
+      asset: { select: { id: true, name: true, model: true } },
+      borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
+      createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      borrowStatus: { select: { id: true, code: true, name: true } }
+    };
+
     const transaction = await this.prisma.borrowTransaction.findUnique({
-      where: { id },
-      include: {
-        asset: { select: { id: true, name: true, model: true } },
-        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
-        createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        borrowStatus: { select: { id: true, code: true, name: true } }
-      }
+      where: isUuid ? { id: idOrBorrowNo } : { borrowNo: idOrBorrowNo },
+      include,
     });
 
     if (!transaction) {
-      throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+      throw new NotFoundException(`Borrow transaction with ID or Code '${idOrBorrowNo}' not found`);
     }
     // [AuthZ] Check Permission
     if (user?.role === UserRole.DEPARTMENT_STAFF) {
@@ -850,7 +894,7 @@ export class AssetBorrowService {
         callerSectionId === transaction.borrower.section_id;
 
       if (!isOwner && !isSameDept) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(`Borrow transaction with ID ${idOrBorrowNo} not found`);
       }
     }
 

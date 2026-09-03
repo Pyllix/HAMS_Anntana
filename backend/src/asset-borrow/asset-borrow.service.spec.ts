@@ -16,6 +16,7 @@ const mockPrismaService = {
     update: jest.fn(),
     updateMany: jest.fn(),
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
   },
@@ -922,6 +923,37 @@ describe('AssetBorrowService', () => {
 
       const result = await service.findOne('tx-1', adminUser);
       expect(result).toEqual(mockTx);
+    });
+
+    it('should allow finding by human-readable borrowNo in findOne', async () => {
+      const mockTx = { id: 'tx-1', borrowNo: 'BR-202609-0001', borrower_id: 'user-id-99' };
+      prisma.borrowTransaction.findUnique.mockResolvedValue(mockTx);
+
+      const result = await service.findOne('BR-202609-0001', adminUser);
+      expect(result).toEqual(mockTx);
+      expect(prisma.borrowTransaction.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { borrowNo: 'BR-202609-0001' },
+        })
+      );
+    });
+
+    it('should generate next sequence borrowNo correctly when creating borrow', async () => {
+      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.borrowStatus.findUnique.mockResolvedValue({ id: 21, code: 'PENDING_APPROVE' });
+      prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-1',
+        asset_status_id: 1,
+        availability_status_id: 10,
+        section: { code: 'CENTER', name: 'Asset Center' },
+      });
+      prisma.borrowTransaction.findFirst.mockResolvedValue({ borrowNo: 'BR-202609-0005' });
+      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'tx-new', ...data }));
+
+      const res = await service.createBorrow({ assetId: 'asset-1', deliveryMethod: DeliveryMethod.PICKUP }, { id: 'user-1', role: UserRole.PARCEL_STAFF });
+      expect(res.borrowNo).toMatch(/^BR-\d{6}-0006$/);
     });
   });
 });
