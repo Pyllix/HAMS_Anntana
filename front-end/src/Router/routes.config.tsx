@@ -1,9 +1,14 @@
-import { Repeat, Archive, Wrench, History, LucideIcon } from "lucide-react";
+import {
+  Repeat,
+  Archive,
+  Wrench,
+  History,
+  ShoppingCart,
+  LucideIcon,
+} from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
-import AssetStock from "../Pages/AssetStock";
-import PartStock from "../Pages/PartStock";
-import PendingEvaluations from "../Pages/PendingEvaluations";
+import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
 
 interface AppRote {
@@ -26,9 +31,17 @@ export const APP_ROUTE: AppRote[] = [
     showInNav: true,
   },
   {
+    path: "borrow-history",
+    title: "ประวัติการยืม",
+    element: <BorrowHistory />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
     path: "asset-stock",
     title: "จัดการสต็อกครุภัณฑ์",
-    element: <AssetStock />,
+    element: <div>asset-stock</div>,
     icon: Archive,
     roles: [
       ROLES.ADMIN,
@@ -41,9 +54,9 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "part-stock",
     title: "จัดการสต็อกอะไหล่",
-    element: <PartStock />,
+    element: <div>part-stock</div>,
     icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
@@ -58,22 +71,6 @@ export const APP_ROUTE: AppRote[] = [
     path: "track-status",
     title: "ติดตามสถานะ",
     element: <div>track-status</div>,
-    icon: History,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-    showInNav: true,
-  },
-  {
-    path: "borrow-history",
-    title: "ประวัติการยืม",
-    element: <div>borrow-history</div>,
-    icon: History,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-    showInNav: true,
-  },
-  {
-    path: "accept-work",
-    title: "งานซ่อม",
-    element: <PendingEvaluations />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,

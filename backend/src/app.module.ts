@@ -12,6 +12,15 @@ import { AssetStatusModule } from './asset-status/asset-status.module';
 import { AvailabilitiesModule } from './availabilities/availabilities.module';
 import { AssetModule } from './asset/asset.module';
 import { AssetBorrowModule } from './asset-borrow/asset-borrow.module';
+import { SparePartsModule } from './spare-parts/spare-parts.module';
+import { SparePartGroupModule } from './spare-part-group/spare-part-group.module';
+import { RepairsModule } from './repairs/repairs.module';
+import { AcqTypeModule } from './acq-type/acq-type.module';
+import { BudgetTypeModule } from './budget-type/budget-type.module';
+import { EquipmentTypeModule } from './equipment-type/equipment-type.module';
+import { TechCategoryModule } from './tech-category/tech-category.module';
+import { CauseModule } from './cause/cause.module';
+import { JobTypeModule } from './job-type/job-type.module';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
@@ -26,6 +35,15 @@ import { RolesGuard } from './common/guards/roles.guard';
     AvailabilitiesModule,
     AssetModule,
     AssetBorrowModule,
+    SparePartsModule,
+    SparePartGroupModule,
+    RepairsModule,
+    AcqTypeModule,
+    BudgetTypeModule,
+    EquipmentTypeModule,
+    TechCategoryModule,
+    CauseModule,
+    JobTypeModule,
   ],
   controllers: [],
   providers: [

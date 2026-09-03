@@ -7,16 +7,19 @@ import {
   Eye,
   Pencil,
   Trash2,
+  BatteryCharging,
+  Wrench,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpareParts } from "../../services/sparepartService";
-import type { Sparepart } from "../../types/TypeSparePart";
-import { getSparePartStatus } from "../../types/TypeSparePart";
+import type { Sparepart } from "../../Types/TypeSparePart";
+import { getSparePartStatus } from "../../Types/TypeSparePart";
 import {
   useSparePartDetailModalStore,
   useSparePartFormModalStore,
   useSparePartDeleteModalStore,
 } from "../../stores/useSparePartModalStore";
+import { useAuthStore } from "../../stores/authStore";
 
 const features = tableFeatures({});
 
@@ -53,19 +56,68 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
   );
 }
 
+function ActionsCell({ row }: { row: Sparepart }) {
+  const role = useAuthStore((state) => state.role);
+  const canManage = role === "ASSET_CENTER_STAFF";
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        title="ดูรายละเอียด"
+        onClick={() => useSparePartDetailModalStore.getState().openModal(row)}
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+      >
+        <Eye className="h-4 w-4" />
+      </button>
+      {canManage && (
+        <>
+          <button
+            type="button"
+            title="แก้ไข"
+            onClick={() => useSparePartFormModalStore.getState().openEdit(row)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            title="ลบ"
+            onClick={() => useSparePartDeleteModalStore.getState().openDelete(row)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Columns ──────────────────────────────────────────────────────────────────
 
 const columns: Array<ColumnDef<typeof features, Sparepart>> = [
   {
-    accessorKey: "imageUrl",
+    id: "image",
     header: "รูปภาพ",
-    cell: (info) => (
-      <img
-        src={(info.getValue() as string) || "/placeholder.png"}
-        alt="Sparepart"
-        className="h-10 w-10 rounded-md object-cover bg-gray-100 border border-gray-200"
-      />
-    ),
+    cell: (info) => {
+      const item = info.row.original;
+      return (
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 border border-gray-200 overflow-hidden text-gray-400">
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="h-full w-full object-cover"
+            />
+          ) : item.category === "ไฟฟ้า" || item.group?.name === "ไฟฟ้า" ? (
+            <BatteryCharging className="h-5 w-5 text-gray-500" />
+          ) : (
+            <Wrench className="h-5 w-5 text-gray-500" />
+          )}
+        </div>
+      );
+    },
   },
   {
     id: "code",
@@ -73,7 +125,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="font-semibold text-gray-900 font-mono text-sm">
+        <span className="font-semibold text-gray-900 font-mono text-sm whitespace-nowrap">
           {row.code}
         </span>
       );
@@ -85,7 +137,9 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div className="font-semibold text-gray-900 text-sm">{row.name}</div>
+        <div className="font-semibold text-gray-900 text-sm leading-snug">
+          {row.name}
+        </div>
       );
     },
   },
@@ -95,8 +149,8 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="text-sm text-gray-600">
-          {row.category || row.group?.name || "-"}
+        <span className="text-sm text-gray-600 whitespace-nowrap">
+          {row.group?.name || row.category || "-"}
         </span>
       );
     },
@@ -106,7 +160,11 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     header: "ยี่ห้อ",
     cell: (info) => {
       const row = info.row.original;
-      return <span className="text-sm text-gray-600">{row.brand || "-"}</span>;
+      return (
+        <span className="text-sm text-gray-600 whitespace-nowrap">
+          {row.brand || "-"}
+        </span>
+      );
     },
   },
   {
@@ -115,14 +173,15 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       const st = getSparePartStatus(row);
-      const colorMap = {
-        NORMAL: "text-gray-900 font-medium",
-        LOW: "text-amber-600 font-semibold",
-        OUT: "text-red-600 font-semibold",
-      };
+      const color =
+        st === "OUT"
+          ? "text-red-600 font-bold"
+          : st === "LOW"
+          ? "text-amber-600 font-bold"
+          : "text-gray-900 font-semibold";
       return (
-        <span className={`text-sm ${colorMap[st]}`}>
-          {row.qtyInStock} {row.unit || "หน่วย"}
+        <span className={`text-sm whitespace-nowrap ${color}`}>
+          {row.qtyInStock} {row.unit || "ชิ้น"}
         </span>
       );
     },
@@ -132,7 +191,11 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     header: "จุดสั่งซื้อขั้นต่ำ",
     cell: (info) => {
       const row = info.row.original;
-      return <span className="text-sm text-gray-600">{row.minStock}</span>;
+      return (
+        <span className="text-sm text-gray-600 whitespace-nowrap">
+          {row.minStock}
+        </span>
+      );
     },
   },
   {
@@ -141,9 +204,10 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="text-sm text-gray-900">
+        <span className="text-sm text-gray-700 font-mono whitespace-nowrap">
           {Number(row.price).toLocaleString("th-TH", {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       );
@@ -152,48 +216,16 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
   {
     id: "status",
     header: "สถานะ",
-    cell: (info) => <StockStatusBadge item={info.row.original} />,
+    cell: (info) => (
+      <div className="whitespace-nowrap">
+        <StockStatusBadge item={info.row.original} />
+      </div>
+    ),
   },
   {
     id: "actions",
     header: "จัดการ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            title="ดูรายละเอียด"
-            onClick={() =>
-              useSparePartDetailModalStore.getState().openModal(row)
-            }
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            title="แก้ไข"
-            onClick={() =>
-              useSparePartFormModalStore.getState().openEdit(row)
-            }
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            title="ลบ"
-            onClick={() =>
-              useSparePartDeleteModalStore.getState().openDelete(row)
-            }
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      );
-    },
+    cell: (info) => <ActionsCell row={info.row.original} />,
   },
 ];
 
@@ -214,7 +246,7 @@ export default function SparePartTable({
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 6;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -260,12 +292,15 @@ export default function SparePartTable({
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
+        <table className="w-full text-left border-collapse">
           <thead className="font-bold text-md">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-200">
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="py-3 px-4">
+                  <th
+                    key={header.id}
+                    className="py-3.5 px-3.5 font-bold text-slate-900 whitespace-nowrap text-base"
+                  >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -279,7 +314,7 @@ export default function SparePartTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="py-8 text-center text-slate-400 text-sm whitespace-nowrap"
                 >
                   กำลังโหลดข้อมูลอะไหล่...
                 </td>
@@ -288,7 +323,7 @@ export default function SparePartTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="py-8 text-center text-slate-400 text-sm whitespace-nowrap"
                 >
                   ไม่พบข้อมูลอะไหล่
                 </td>
@@ -297,7 +332,7 @@ export default function SparePartTable({
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-3 px-4">
+                    <td key={cell.id} className="py-2.5 px-3">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -309,7 +344,7 @@ export default function SparePartTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 text-sm text-slate-500">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3 border-t border-slate-100 text-sm text-slate-500">
         <div>
           แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
           {Math.min(currentPage * pageSize, totalItems)} จาก{" "}

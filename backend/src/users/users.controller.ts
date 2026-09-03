@@ -24,8 +24,8 @@ import {
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { QueryUserDto } from './dto/query-user.dto';
 import { UsersService } from './users.service';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -55,20 +55,22 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
-  // ─── Read All (paginated) ──────────────────────────────────────────────
+  // ─── Read All (paginated & role filter) ──────────────────────────────────────
 
   @Get()
   @ApiOperation({
-    summary: 'Get all Users (paginated)',
+    summary: 'Get all Users (paginated with optional role filter)',
     description:
-      'Retrieve active users with pagination and optional search by name or email',
+      'Retrieve active users with pagination, optional role filter (e.g. MAINTENANCE_STAFF for mechanics), and optional search by name or email',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'role', required: false, enum: UserRole, description: 'Filter by role (e.g. MAINTENANCE_STAFF)' })
+  @ApiQuery({ name: 'section_id', required: false, type: String, description: 'Filter by Section/Department UUID' })
   @ApiResponse({ status: 200, description: 'Paginated list of users' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@Query() query: PaginationDto) {
+  findAll(@Query() query: QueryUserDto) {
     return this.usersService.findAll(query);
   }
 

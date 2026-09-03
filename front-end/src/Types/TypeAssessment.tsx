@@ -92,7 +92,7 @@ export interface RepairDetail {
   techCategoryId?: number;
   createdAt?: string;
   updatedAt?: string;
-
+  
   status?: {
     id?: number;
     code?: string;

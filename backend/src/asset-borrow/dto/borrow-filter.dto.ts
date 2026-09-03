@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsInt, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -19,4 +19,20 @@ export class BorrowFilterDto extends PaginationDto {
   @Type(() => Number)
   @IsInt()
   borrowStatusId?: number;
+
+  @ApiPropertyOptional({ description: 'Filter by borrower department/section UUID' })
+  @IsOptional()
+  @IsUUID()
+  sectionId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter borrowings created from date (YYYY-MM-DD)', example: '2026-08-01' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  startDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter borrowings created to date (YYYY-MM-DD)', example: '2026-08-31' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  endDate?: string;
 }
+

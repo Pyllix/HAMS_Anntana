@@ -121,6 +121,10 @@ export class AssetService {
 
     const where: Prisma.AssetWhereInput = {
       ...(query.section_id && { section_id: query.section_id }),
+      ...(query.asset_status_id && { asset_status_id: query.asset_status_id }),
+      ...(query.availability_status_id && { availability_status_id: query.availability_status_id }),
+      ...(query.asset_type_id && { type_id: query.asset_type_id }),
+      ...(query.equipment_type_id && { equipment_type_id: query.equipment_type_id }),
       ...(query.search
         ? {
             OR: [

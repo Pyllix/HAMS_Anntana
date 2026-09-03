@@ -46,3 +46,29 @@ enum CalType {
   IC
   EC
 }
+
+enum ReportType {
+  Repair
+  Maintenance
+}
+
+enum ActionType {
+  REPAIR
+  FABRICATE
+  MODIFY
+  PREVENTIVE
+}
+
+enum UrgencyStatus {
+  NORMAL
+  URGENT
+  EMERGENCY
+}
+
+enum StepActionType {
+  INTERNAL_STOCK
+  EXTERNAL_STOCK
+  OUTSOURCE
+  PURCHASE_REPLACEMENT
+  SELF_REPAIR
+}

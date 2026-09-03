@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient, RiskLevel, PmType, CalType } from '@prisma/client';
+import { PrismaClient, RiskLevel, PmType, CalType, StepActionType } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { hashPassword } from 'better-auth/crypto';
@@ -107,6 +107,9 @@ const sections = [
   { code: 'ICU', name: 'แผนกผู้ป่วยวิกฤต (Intensive Care Unit)', tel: '1200', building: 'อาคารเฉลิมพระเกียรติ ชั้น 4' },
   { code: 'ER', name: 'แผนกอุบัติเหตุและฉุกเฉิน (Emergency Room)', tel: '1999', building: 'อาคารเฉลิมพระเกียรติ ชั้น 1' },
   { code: 'SURGERY', name: 'แผนกห้องผ่าตัด (Operating Room)', tel: '1300', building: 'อาคารเฉลิมพระเกียรติ ชั้น 3' },
+  { code: 'LAB', name: 'แผนกห้องปฏิบัติการและชันสูตร (Laboratory)', tel: '1400', building: 'อาคารเฉลิมพระเกียรติ ชั้น 2' },
+  { code: 'XRAY', name: 'แผนกรังสีวิทยา (Radiology Department)', tel: '1500', building: 'อาคารผู้ป่วยนอก ชั้น 2' },
+  { code: 'PHARMACY', name: 'แผนกเภสัชกรรม (Pharmacy Department)', tel: '1600', building: 'อาคารผู้ป่วยนอก ชั้น 1' },
 ];
 
 const systemUsers = [
@@ -199,6 +202,127 @@ const systemUsers = [
     password: 'Maintenance@1234',
     role: 'MAINTENANCE_STAFF' as const,
     sectionCode: 'CENTER',
+  },
+  // Additional users ensuring at least 2 users per section
+  {
+    employeeId: 'GOV-67010',
+    userName: 'deptstaff_it2',
+    firstname: 'พิชิต',
+    lastname: 'เจ้าหน้าที่เทคโนโลยีสารสนเทศ 2',
+    email: 'it2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'IT',
+  },
+  {
+    employeeId: 'GOV-67011',
+    userName: 'parcel2',
+    firstname: 'สุภาพร',
+    lastname: 'เจ้าหน้าที่พัสดุจัดซื้อ 2',
+    email: 'parcel2@hospital.go.th',
+    password: 'Parcel@1234',
+    role: 'PARCEL_STAFF' as const,
+    sectionCode: 'PARCEL',
+  },
+  {
+    employeeId: 'GOV-67012',
+    userName: 'deptstaff_icu2',
+    firstname: 'นภา',
+    lastname: 'พยาบาลวิชาชีพ ICU 2',
+    email: 'icu2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'ICU',
+  },
+  {
+    employeeId: 'GOV-67013',
+    userName: 'deptstaff_er2',
+    firstname: 'วีระ',
+    lastname: 'พยาบาลฉุกเฉิน ER 2',
+    email: 'er2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'ER',
+  },
+  {
+    employeeId: 'GOV-67014',
+    userName: 'deptstaff_surgery1',
+    firstname: 'วิภา',
+    lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 1',
+    email: 'surgery1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'SURGERY',
+  },
+  {
+    employeeId: 'GOV-67015',
+    userName: 'deptstaff_surgery2',
+    firstname: 'กิตติ',
+    lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 2',
+    email: 'surgery2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'SURGERY',
+  },
+  {
+    employeeId: 'GOV-67016',
+    userName: 'deptstaff_lab1',
+    firstname: 'สมพงษ์',
+    lastname: 'นักเทคนิคการแพทย์ 1',
+    email: 'lab1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'LAB',
+  },
+  {
+    employeeId: 'GOV-67017',
+    userName: 'deptstaff_lab2',
+    firstname: 'นิภา',
+    lastname: 'นักเทคนิคการแพทย์ 2',
+    email: 'lab2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'LAB',
+  },
+  {
+    employeeId: 'GOV-67018',
+    userName: 'deptstaff_xray1',
+    firstname: 'รังสรรค์',
+    lastname: 'นักรังสีการแพทย์ 1',
+    email: 'xray1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'XRAY',
+  },
+  {
+    employeeId: 'GOV-67019',
+    userName: 'deptstaff_xray2',
+    firstname: 'มยุรี',
+    lastname: 'นักรังสีการแพทย์ 2',
+    email: 'xray2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'XRAY',
+  },
+  {
+    employeeId: 'GOV-67020',
+    userName: 'deptstaff_pharm1',
+    firstname: 'ธนินท์',
+    lastname: 'เภสัชกรวิชาชีพ 1',
+    email: 'pharm1@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'PHARMACY',
+  },
+  {
+    employeeId: 'GOV-67021',
+    userName: 'deptstaff_pharm2',
+    firstname: 'พิมพ์',
+    lastname: 'เภสัชกรวิชาชีพ 2',
+    email: 'pharm2@hospital.go.th',
+    password: 'DeptStaff@1234',
+    role: 'DEPARTMENT_STAFF' as const,
+    sectionCode: 'PHARMACY',
   },
 ];
 
@@ -744,6 +868,326 @@ async function main() {
         },
       });
       console.log(`  🔄 Updated asset: ${asset.name} (${asset.serialNo})`);
+    }
+  }
+
+  // 8. Spare Part Groups & Spare Parts
+  console.log('🔩 Seeding Spare Parts & Groups...');
+  const sparepartGroups = [
+    { name: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ' },
+    { name: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์' },
+    { name: 'อุปกรณ์ เซนเซอร์ และหัววัด' },
+    { name: 'ชิ้นส่วนกลไก มอเตอร์ และสายพาน' },
+    { name: 'วัสดุสิ้นเปลืองและฟิลเตอร์' },
+  ];
+
+  const groupMap: Record<string, number> = {};
+  for (const g of sparepartGroups) {
+    let group = await prisma.sparepartGroup.findFirst({ where: { name: g.name } });
+    if (!group) {
+      group = await prisma.sparepartGroup.create({ data: g });
+    }
+    groupMap[g.name] = group.id;
+  }
+
+  const mockSpareparts = [
+    {
+      code: 'SP-ELE-001',
+      name: 'ฟิวส์เซรามิก 10A 250V (แพ็ก 10 ชิ้น)',
+      unit: 'แพ็ก',
+      price: 150.0,
+      minStock: 10,
+      qtyInStock: 25,
+      groupName: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ',
+    },
+    {
+      code: 'SP-ELE-002',
+      name: 'แบตเตอรี่สำรองฉุกเฉินสำหรับ Defibrillator 12V 4.5Ah',
+      unit: 'ก้อน',
+      price: 3200.0,
+      minStock: 4,
+      qtyInStock: 2, // Low stock on purpose
+      groupName: 'อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ',
+    },
+    {
+      code: 'SP-GAS-001',
+      name: 'วาล์วควบคุมแรงดันออกซิเจนความแม่นยำสูง (O2 Regulator Valve)',
+      unit: 'ชุด',
+      price: 4500.0,
+      minStock: 5,
+      qtyInStock: 8,
+      groupName: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์',
+    },
+    {
+      code: 'SP-GAS-002',
+      name: 'ท่อสายส่งก๊าซทางการแพทย์แรงดันสูง (High-Pressure Hose)',
+      unit: 'เส้น',
+      price: 1200.0,
+      minStock: 6,
+      qtyInStock: 3, // Low stock on purpose
+      groupName: 'อะไหล่ระบบท่อและก๊าซทางการแพทย์',
+    },
+    {
+      code: 'SP-SEN-001',
+      name: 'เซนเซอร์วัดค่าออกซิเจนในเลือด SpO2 Reusable Finger Probe',
+      unit: 'เส้น',
+      price: 2800.0,
+      minStock: 8,
+      qtyInStock: 15,
+      groupName: 'อุปกรณ์ เซนเซอร์ และหัววัด',
+    },
+    {
+      code: 'SP-SEN-002',
+      name: 'สายวัดสัญญาณคลื่นหัวใจ EKG Trunk Cable 10-Lead',
+      unit: 'เส้น',
+      price: 3500.0,
+      minStock: 5,
+      qtyInStock: 1, // Low stock on purpose
+      groupName: 'อุปกรณ์ เซนเซอร์ และหัววัด',
+    },
+    {
+      code: 'SP-MEC-001',
+      name: 'มอเตอร์ขับเคลื่อนแกนเตียงผ่าตัดไฟฟ้า (Actuator Motor 24V)',
+      unit: 'ตัว',
+      price: 9500.0,
+      minStock: 2,
+      qtyInStock: 4,
+      groupName: 'ชิ้นส่วนกลไก มอเตอร์ และสายพาน',
+    },
+    {
+      code: 'SP-FLT-001',
+      name: 'ชุดฟิลเตอร์กรองอากาศเครื่องช่วยหายใจ HEPA Bacteria Filter',
+      unit: 'ชิ้น',
+      price: 650.0,
+      minStock: 20,
+      qtyInStock: 50,
+      groupName: 'วัสดุสิ้นเปลืองและฟิลเตอร์',
+    },
+  ];
+
+  for (const sp of mockSpareparts) {
+    const groupId = groupMap[sp.groupName];
+    const existing = await prisma.sparepart.findFirst({ where: { code: sp.code } });
+    if (!existing) {
+      const created = await prisma.sparepart.create({
+        data: {
+          code: sp.code,
+          name: sp.name,
+          unit: sp.unit,
+          price: sp.price,
+          minStock: sp.minStock,
+          qtyInStock: sp.qtyInStock,
+          groupId,
+        },
+      });
+
+      // Add initial stock history
+      await prisma.sparepartAdd.create({
+        data: {
+          sparepartId: created.id,
+          qty: sp.qtyInStock,
+          totalPrice: Number(sp.price) * sp.qtyInStock,
+          sparepartAddDoc: 'SEED-INITIAL-STOCK',
+          addBy: adminId,
+        },
+      });
+      console.log(`  ✅ Created spare part: ${sp.name} (${sp.code}) [Stock: ${sp.qtyInStock}/${sp.minStock}]`);
+    } else {
+      await prisma.sparepart.update({
+        where: { id: existing.id },
+        data: {
+          name: sp.name,
+          unit: sp.unit,
+          price: sp.price,
+          minStock: sp.minStock,
+          qtyInStock: sp.qtyInStock,
+          groupId,
+        },
+      });
+      console.log(`  🔄 Updated spare part: ${sp.name} (${sp.code})`);
+    }
+  }
+
+  // 9. Repair Masters & Lookups
+  console.log('🔧 Seeding Repair Masters & Lookups...');
+
+  // 9.1 JobStatus (10 standard repair job lifecycle statuses)
+  const jobStatuses = [
+    { code: 'WAITING_HANDOVER', name: 'รอรับเครื่องจากหน่วยงาน' },
+    { code: 'PENDING_ASSIGN', name: 'รอมอบหมายงานให้ช่าง' },
+    { code: 'IN_PROGRESS', name: 'ช่างกำลังดำเนินการซ่อม' },
+    { code: 'WAITING_PARTS', name: 'สั่งซื้อ/รออะไหล่' },
+    { code: 'PARCEL_PROCESSING', name: 'พัสดุกำลังดำเนินการ' },
+    { code: 'OUTSOURCED', name: 'ส่งซ่อมบริษัทภายนอก' },
+    { code: 'UNREPAIRABLE', name: 'แทงชำรุด/เห็นควรจำหน่าย' },
+    { code: 'WAITING_DELIVERY', name: 'เสร็จแล้วรอรับคืน' },
+    { code: 'COMPLETED', name: 'ส่งคืน/ดำเนินการเรียบร้อย' },
+    { code: 'CANCELLED', name: 'ยกเลิกงานซ่อม' },
+  ];
+  for (const js of jobStatuses) {
+    await prisma.jobStatus.upsert({
+      where: { code: js.code },
+      update: { name: js.name },
+      create: js,
+    });
+  }
+
+  // 9.2 JobType
+  const jobTypes = [
+    { name: 'ซ่อมเครื่องมือแพทย์' },
+    { name: 'ซ่อมบำรุงทั่วไป' },
+    { name: 'ซ่อมคอมพิวเตอร์' },
+  ];
+  for (const jt of jobTypes) {
+    const existing = await prisma.jobType.findFirst({ where: { name: jt.name } });
+    if (!existing) {
+      await prisma.jobType.create({ data: jt });
+    }
+  }
+
+  // 9.3 Cause
+  const causes = [
+    { code: '01', name: 'เครื่องไม่มีคุณภาพ' },
+    { code: '02', name: 'การติดตั้งไม่เรียบร้อย' },
+    { code: '03', name: 'ผู้ใช้ขาดความเข้าใจ' },
+    { code: '04', name: 'สภาวะแวดล้อม' },
+    { code: '05', name: 'อายุการใช้งานนาน' },
+    { code: '06', name: 'ความถี่การใช้งานสูง' },
+    { code: '07', name: 'การบำรุงรักษาไม่ดีพอ' },
+    { code: '08', name: 'ซ่อมเพื่อปรับปรุงพัฒนา' },
+    { code: '09', name: 'ตรวจเช็คตามระยะเวลา' },
+    { code: '10', name: 'ส่งสอบเทียบ' },
+    { code: '11', name: 'แจ้งรายชื่อครุภัณฑ์รับใหม่/โอน/แทงจำหน่าย' },
+    { code: '12', name: 'ของไม่มีคุณภาพ' },
+    { code: '13', name: 'ขออนุมัติจัดทำเพื่อปรับปรุงหรือพัฒนา' },
+    { code: '14', name: 'เกิดจากผู้ใช้งาน' },
+    { code: '15', name: 'อุปกรณ์เสื่อมคุณภาพ' },
+    { code: '16', name: 'Software มีปัญหา/ไม่สมบูรณ์' },
+    { code: '17', name: 'สมควรแทงจำหน่าย' },
+    { code: '18', name: 'Hardware ชำรุด' },
+    { code: '19', name: 'ระบบ Network ชำรุด' },
+  ];
+  for (const cs of causes) {
+    const existing = await prisma.cause.findFirst({ where: { code: cs.code } });
+    if (!existing) {
+      await prisma.cause.create({ data: cs });
+    } else {
+      await prisma.cause.update({ where: { id: existing.id }, data: { name: cs.name, deleteAt: null } });
+    }
+  }
+
+  // 9.4 TechCategory (9 หมวดงานซ่อมบำรุง)
+  const techCategories = [
+    { code: 'MED_EQ', name: 'งานเครื่องมือแพทย์', isActive: true },
+    { code: 'AIR_CON', name: 'งานเครื่องปรับอากาศ', isActive: true },
+    { code: 'PLUMBING', name: 'งานประปา', isActive: true },
+    { code: 'CONSTRUCT', name: 'งานก่อสร้าง', isActive: true },
+    { code: 'ALUMINIUM', name: 'งานอะลูมิเนียม', isActive: true },
+    { code: 'ELECTRICAL', name: 'งานไฟฟ้า', isActive: true },
+    { code: 'IT_HW_SW', name: 'งานระบบคอมพิวเตอร์Hardware&Software', isActive: true },
+    { code: 'METAL_OFFICE', name: 'งานโลหะและครุภัณฑ์สำนักงาน', isActive: true },
+    { code: 'ELECTRONIC', name: 'งานอิเล็กทรอนิกส์', isActive: true },
+  ];
+  for (const tc of techCategories) {
+    const existing = await prisma.techCategory.findFirst({
+      where: {
+        OR: [{ code: tc.code }, { name: tc.name }],
+      },
+    });
+    if (!existing) {
+      await prisma.techCategory.create({ data: tc });
+    } else {
+      await prisma.techCategory.update({
+        where: { id: existing.id },
+        data: { code: tc.code, name: tc.name, isActive: tc.isActive },
+      });
+    }
+  }
+
+  // 9.5 StepMaster (Streamlined Action Types Workflow Templates)
+  console.log('📋 Seeding StepMaster templates...');
+  const stepMasterTemplates: { stepNumber: number; actionType: StepActionType; label: string }[] = [
+    // 1. INTERNAL_STOCK
+    { stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.INTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.INTERNAL_STOCK, label: 'ขอเบิกอะไหล่ในคลัง' },
+    { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
+    { stepNumber: 6, actionType: StepActionType.INTERNAL_STOCK, label: 'พัสดุจ่ายอะไหล่ในคลัง' },
+    { stepNumber: 7, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับวัสดุ/ดำเนินการซ่อม' },
+    { stepNumber: 8, actionType: StepActionType.INTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.INTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 2. EXTERNAL_STOCK
+    { stepNumber: 1, actionType: StepActionType.EXTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.EXTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.EXTERNAL_STOCK, label: 'ขอเบิก/จัดซื้ออะไหล่นอกคลัง' },
+    { stepNumber: 5, actionType: StepActionType.EXTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่นอกคลัง' },
+    { stepNumber: 6, actionType: StepActionType.EXTERNAL_STOCK, label: 'พัสดุแจ้งรับอะไหล่' },
+    { stepNumber: 7, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับอะไหล่/ดำเนินการซ่อม' },
+    { stepNumber: 8, actionType: StepActionType.EXTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.EXTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 3. OUTSOURCE
+    { stepNumber: 1, actionType: StepActionType.OUTSOURCE, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.OUTSOURCE, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.OUTSOURCE, label: 'ขอส่งซ่อมบริษัทภายนอก' },
+    { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'อนุมัติส่งซ่อมบริษัทภายนอก' },
+    { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'พัสดุรับเครื่องกลับจากบริษัท' },
+    { stepNumber: 7, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับเครื่องและทดสอบ' },
+    { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 9, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 4. PURCHASE_REPLACEMENT (10 Steps with Two-tier Approval)
+    { stepNumber: 1, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ขอซื้อเครื่องทดแทน' },
+    { stepNumber: 5, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุตรวจสอบและเสนอความเห็น' },
+    { stepNumber: 6, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน' },
+    { stepNumber: 7, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุรับเครื่องใหม่เข้าคลัง' },
+    { stepNumber: 8, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับเครื่องใหม่และส่งมอบ' },
+    { stepNumber: 9, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 10, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ตรวจรับงานและสรุป Job' },
+
+    // 5. SELF_REPAIR
+    { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ธุรการรับ Job / จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างรับ Job / วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ดำเนินการซ่อมและทดสอบการใช้งาน' },
+    { stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
+    { stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
+  ];
+
+  // Clean old step master entries that might not be in the new schema (e.g. step numbers > max per actionType)
+  await prisma.stepMaster.deleteMany({
+    where: {
+      OR: [
+        { actionType: StepActionType.SELF_REPAIR, stepNumber: { gt: 6 } },
+        { actionType: StepActionType.PURCHASE_REPLACEMENT, stepNumber: { gt: 10 } },
+        {
+          actionType: {
+            notIn: [StepActionType.SELF_REPAIR, StepActionType.PURCHASE_REPLACEMENT],
+          },
+          stepNumber: { gt: 9 },
+        },
+      ],
+    },
+  });
+
+  for (const st of stepMasterTemplates) {
+    const existing = await prisma.stepMaster.findFirst({
+      where: { stepNumber: st.stepNumber, actionType: st.actionType },
+    });
+    if (!existing) {
+      await prisma.stepMaster.create({ data: st });
+    } else {
+      await prisma.stepMaster.update({
+        where: { id: existing.id },
+        data: { label: st.label },
+      });
     }
   }
 

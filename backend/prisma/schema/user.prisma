@@ -38,6 +38,18 @@ model User {
   rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
   cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
 
+  //Spare parts relations
+  sparepartAdds               SparepartAdd[]
+  sparepartTxns               SparepartTxn[]
+
+  //Repair relations
+  reportedRepairs             RepairJob[]      @relation("RepairReporter")
+  receivedRepairs             RepairJob[]      @relation("RepairReceiver")
+  createdRepairs              RepairJob[]      @relation("RepairCreatedBy")
+  updatedRepairs              RepairJob[]      @relation("RepairUpdatedBy")
+  mechanicRepairs             MechanicRepair[]
+  completedRepairSteps        RepairJobStep[]
+
   @@map("users")
 }
 

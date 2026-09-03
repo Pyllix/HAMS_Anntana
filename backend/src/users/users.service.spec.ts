@@ -230,6 +230,32 @@ describe('UsersService', () => {
       expect(findManyCall.where).not.toHaveProperty('OR');
     });
 
+    it('should filter by role when role is provided', async () => {
+      const query = { role: UserRole.MAINTENANCE_STAFF };
+      mockPrismaService.$transaction.mockResolvedValue([[mockUser], 1]);
+
+      await service.findAll(query);
+
+      const [[findManyCall]] = mockPrismaService.user.findMany.mock.calls;
+      expect(findManyCall.where).toMatchObject({
+        deletedAt: null,
+        role: UserRole.MAINTENANCE_STAFF,
+      });
+    });
+
+    it('should filter by section_id when section_id is provided', async () => {
+      const query = { section_id: 'sec-opd-uuid' };
+      mockPrismaService.$transaction.mockResolvedValue([[mockUser], 1]);
+
+      await service.findAll(query);
+
+      const [[findManyCall]] = mockPrismaService.user.findMany.mock.calls;
+      expect(findManyCall.where).toMatchObject({
+        deletedAt: null,
+        section_id: 'sec-opd-uuid',
+      });
+    });
+
     it('should return empty data when no users match', async () => {
       const query: PaginationDto = { search: 'nonexistent' };
       mockPrismaService.$transaction.mockResolvedValue([[], 0]);

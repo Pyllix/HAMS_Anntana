@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   X,
@@ -11,6 +11,7 @@ import {
   Briefcase,
   BatteryCharging,
   Wrench,
+  Calendar,
 } from "lucide-react";
 import {
   useSparePartDetailModalStore,
@@ -23,8 +24,8 @@ import {
   deleteSparepart,
   getSparepartGroups,
 } from "../../services/sparepartService";
-import type { Sparepart, CreateSparepartDto } from "../../types/TypeSparePart";
-import { getSparePartStatus } from "../../types/TypeSparePart";
+import type { Sparepart, CreateSparepartDto } from "../../Types/TypeSparePart";
+import { getSparePartStatus } from "../../Types/TypeSparePart";
 
 // ─── 1. Detail Modal (Dialog DetailStock) ──────────────────────────────────────
 
@@ -77,7 +78,7 @@ export function SparePartDetailModal() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                รหัส: {selectedItem.code} | หมวดหมู่: {selectedItem.category || "ไฟฟ้า"} |
+                รหัส: {selectedItem.code} | หมวดหมู่: {selectedItem.group?.name || selectedItem.category || "ทั่วไป"} |
                 ยี่ห้อ: {selectedItem.brand || "-"}
               </p>
             </div>
@@ -242,10 +243,20 @@ export function SparePartFormModal() {
     queryFn: getSparepartGroups,
   });
 
+  const defaultGroups = [
+    { id: 1, name: "ไฟฟ้า" },
+    { id: 2, name: "เครื่องมือแพทย์" },
+    { id: 3, name: "อิเล็กทรอนิกส์" },
+    { id: 4, name: "กลไก/เครื่องกล" },
+  ];
+
+  const availableGroups = groups.length > 0 ? groups : defaultGroups;
+
   const empty: CreateSparepartDto = {
     code: "",
     name: "",
-    category: "ไฟฟ้า",
+    groupId: availableGroups[0]?.id ?? 1,
+    category: availableGroups[0]?.name ?? "ไฟฟ้า",
     brand: "",
     price: 0,
     minStock: 0,
@@ -258,13 +269,34 @@ export function SparePartFormModal() {
   };
 
   const [form, setForm] = useState<CreateSparepartDto>(empty);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleImageFile = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (JPG, PNG, WEBP)");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("ขนาดไฟล์ภาพต้องไม่เกิน 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setForm((f) => ({ ...f, imageUrl: e.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (editItem) {
       setForm({
         code: editItem.code,
         name: editItem.name,
-        category: editItem.category || "ไฟฟ้า",
+        groupId: editItem.groupId || editItem.group?.id || (availableGroups[0]?.id ?? 1),
+        category: editItem.category || editItem.group?.name || availableGroups[0]?.name || "ไฟฟ้า",
         brand: editItem.brand || "",
         price: editItem.price || 0,
         minStock: editItem.minStock || 0,
@@ -276,9 +308,13 @@ export function SparePartFormModal() {
         storageLocation: editItem.storageLocation || "",
       });
     } else {
-      setForm(empty);
+      setForm({
+        ...empty,
+        groupId: availableGroups[0]?.id ?? 1,
+        category: availableGroups[0]?.name ?? "ไฟฟ้า",
+      });
     }
-  }, [editItem, isOpen]);
+  }, [editItem, isOpen, groups]);
 
   const mutation = useMutation({
     mutationFn: (dto: CreateSparepartDto) =>
@@ -331,13 +367,42 @@ export function SparePartFormModal() {
               {/* Left Column */}
               <div className="md:col-span-5 space-y-4">
                 {/* Image Preview Box */}
-                <div className="h-44 w-full rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-3 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-1.5">
-                    <UploadCloud className="h-6 w-6" />
-                  </div>
-                  <span className="text-xs text-slate-500">
-                    {editItem.code}.jpg
-                  </span>
+                <input
+                  type="file"
+                  ref={editFileInputRef}
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                  onChange={(e) => handleImageFile(e.target.files?.[0])}
+                />
+                <div
+                  onClick={() => editFileInputRef.current?.click()}
+                  className="relative h-44 w-full rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 transition-colors flex flex-col items-center justify-center p-3 text-center cursor-pointer overflow-hidden group"
+                >
+                  {form.imageUrl ? (
+                    <>
+                      <img
+                        src={form.imageUrl}
+                        alt="Preview"
+                        className="h-full w-full object-contain rounded-lg"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
+                        <UploadCloud className="h-6 w-6 mb-1" />
+                        <span className="text-2xs font-medium">คลิกเพื่อเปลี่ยนรูป</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-1.5 group-hover:scale-105 transition-transform">
+                        <UploadCloud className="h-6 w-6" />
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium">
+                        คลิกเพื่อเพิ่ม/เปลี่ยนรูปภาพ
+                      </span>
+                      <span className="text-2xs text-slate-400 mt-0.5">
+                        รองรับ JPG, PNG
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 {/* ข้อมูลพื้นฐาน */}
@@ -395,14 +460,17 @@ export function SparePartFormModal() {
                       </label>
                       <input
                         type="number"
-                        value={form.minStock}
+                        placeholder="0"
+                        value={form.minStock === 0 ? "" : form.minStock}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            minStock: Number(e.target.value),
+                            minStock:
+                              e.target.value === "" ? 0 : Number(e.target.value),
                           }))
                         }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         required
                       />
                     </div>
@@ -414,14 +482,23 @@ export function SparePartFormModal() {
                         หมวดหมู่
                       </label>
                       <select
-                        value={form.category}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, category: e.target.value }))
-                        }
+                        value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
+                        onChange={(e) => {
+                          const gid = Number(e.target.value);
+                          const g = availableGroups.find((x) => x.id === gid);
+                          setForm((f) => ({
+                            ...f,
+                            groupId: gid,
+                            category: g?.name || f.category,
+                          }));
+                        }}
                         className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       >
-                        <option value="ไฟฟ้า">ไฟฟ้า</option>
-                        <option value="เครื่องมือแพทย์">เครื่องมือแพทย์</option>
+                        {availableGroups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -507,11 +584,17 @@ export function SparePartFormModal() {
                   <input
                     type="number"
                     step="0.01"
-                    value={form.price}
+                    placeholder="0.00"
+                    value={form.price === 0 ? "" : form.price}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, price: Number(e.target.value) }))
+                      setForm((f) => ({
+                        ...f,
+                        price:
+                          e.target.value === "" ? 0 : Number(e.target.value),
+                      }))
                     }
-                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 focus:bg-white focus:border-emerald-500"
+                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500"
                   />
                 </div>
 
@@ -558,7 +641,7 @@ export function SparePartFormModal() {
                         วันที่สั่งซื้อ *
                       </label>
                       <input
-                        type="text"
+                        type="date"
                         value={form.purchaseDate}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -566,8 +649,7 @@ export function SparePartFormModal() {
                             purchaseDate: e.target.value,
                           }))
                         }
-                        placeholder="15 ก.พ. 2567"
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500"
+                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 cursor-pointer"
                       />
                     </div>
                     <div>
@@ -651,22 +733,77 @@ export function SparePartFormModal() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Left Column: Image Upload Area */}
             <div className="md:col-span-4 space-y-2">
-              <label className="block text-xs font-bold text-slate-800">
-                รูปภาพอะไหล่ (ถ้ามี)
-              </label>
-              <div className="h-72 w-full rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/20 hover:bg-emerald-50/40 transition-colors flex flex-col items-center justify-center p-4 text-center cursor-pointer">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-3">
-                  <UploadCloud className="h-7 w-7" />
-                </div>
-                <p className="font-semibold text-emerald-800 text-xs mb-1">
-                  ลากไฟล์มาวางที่นี่
-                </p>
-                <p className="text-2xs text-slate-500 mb-3">
-                  หรือ คลิกเพื่ออัปโหลดรูปภาพ
-                </p>
-                <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-2xs text-slate-500">
-                  รองรับ JPG, PNG
-                </span>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800">
+                  รูปภาพอะไหล่ (ถ้ามี)
+                </label>
+                {form.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                    className="text-2xs text-rose-500 hover:text-rose-700 font-medium cursor-pointer"
+                  >
+                    ลบรูปภาพ
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+                onChange={(e) => handleImageFile(e.target.files?.[0])}
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  handleImageFile(e.dataTransfer.files?.[0]);
+                }}
+                className={`relative h-72 w-full rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-4 text-center cursor-pointer overflow-hidden group ${
+                  isDragging
+                    ? "border-emerald-500 bg-emerald-100/50 scale-[1.01]"
+                    : form.imageUrl
+                    ? "border-slate-200 bg-slate-50"
+                    : "border-emerald-300 bg-emerald-50/20 hover:bg-emerald-50/40"
+                }`}
+              >
+                {form.imageUrl ? (
+                  <>
+                    <img
+                      src={form.imageUrl}
+                      alt="Preview"
+                      className="h-full w-full object-contain rounded-xl"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-2">
+                      <UploadCloud className="h-8 w-8 mb-1" />
+                      <p className="text-xs font-medium">คลิกเพื่อเปลี่ยนรูป</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-3 group-hover:scale-105 transition-transform">
+                      <UploadCloud className="h-7 w-7" />
+                    </div>
+                    <p className="font-semibold text-emerald-800 text-xs mb-1">
+                      ลากไฟล์มาวางที่นี่
+                    </p>
+                    <p className="text-2xs text-slate-500 mb-3">
+                      หรือ คลิกเพื่ออัปโหลดรูปภาพ
+                    </p>
+                    <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-2xs text-slate-500 font-medium">
+                      รองรับ JPG, PNG, WEBP
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -714,14 +851,23 @@ export function SparePartFormModal() {
                       หมวดหมู่ *
                     </label>
                     <select
-                      value={form.category}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, category: e.target.value }))
-                      }
+                      value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
+                      onChange={(e) => {
+                        const gid = Number(e.target.value);
+                        const g = availableGroups.find((x) => x.id === gid);
+                        setForm((f) => ({
+                          ...f,
+                          groupId: gid,
+                          category: g?.name || f.category,
+                        }));
+                      }}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-emerald-500"
                     >
-                      <option value="ไฟฟ้า">ไฟฟ้า</option>
-                      <option value="เครื่องมือแพทย์">เครื่องมือแพทย์</option>
+                      {availableGroups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -753,14 +899,17 @@ export function SparePartFormModal() {
                     <div className="relative">
                       <input
                         type="number"
-                        value={form.qtyInStock}
+                        placeholder="0"
+                        value={form.qtyInStock === 0 ? "" : form.qtyInStock}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            qtyInStock: Number(e.target.value),
+                            qtyInStock:
+                              e.target.value === "" ? 0 : Number(e.target.value),
                           }))
                         }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 focus:border-emerald-500"
+                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         required
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
@@ -775,14 +924,17 @@ export function SparePartFormModal() {
                     <div className="relative">
                       <input
                         type="number"
-                        value={form.minStock}
+                        placeholder="0"
+                        value={form.minStock === 0 ? "" : form.minStock}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            minStock: Number(e.target.value),
+                            minStock:
+                              e.target.value === "" ? 0 : Number(e.target.value),
                           }))
                         }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 focus:border-emerald-500"
+                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         required
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
@@ -798,14 +950,17 @@ export function SparePartFormModal() {
                       <input
                         type="number"
                         step="0.01"
-                        value={form.price}
+                        placeholder="0.00"
+                        value={form.price === 0 ? "" : form.price}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
-                            price: Number(e.target.value),
+                            price:
+                              e.target.value === "" ? 0 : Number(e.target.value),
                           }))
                         }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 focus:border-emerald-500"
+                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         required
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
@@ -859,8 +1014,7 @@ export function SparePartFormModal() {
                       วันที่สั่งซื้อ *
                     </label>
                     <input
-                      type="text"
-                      placeholder="เช่น 15 ก.พ. 2567"
+                      type="date"
                       value={form.purchaseDate}
                       onChange={(e) =>
                         setForm((f) => ({
@@ -868,7 +1022,7 @@ export function SparePartFormModal() {
                           purchaseDate: e.target.value,
                         }))
                       }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
+                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 cursor-pointer"
                     />
                   </div>
                   <div>
@@ -953,18 +1107,28 @@ export function SparePartDeleteModal() {
 
         {/* Item Preview Card */}
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 flex items-center justify-between text-left">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 font-bold text-sm">
-              <UploadCloud className="h-5 w-5" />
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 border border-slate-200 overflow-hidden text-slate-400 shrink-0">
+              {targetItem.imageUrl ? (
+                <img
+                  src={targetItem.imageUrl}
+                  alt={targetItem.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : targetItem.category === "ไฟฟ้า" || targetItem.group?.name === "ไฟฟ้า" ? (
+                <BatteryCharging className="h-5 w-5 text-slate-500" />
+              ) : (
+                <Wrench className="h-5 w-5 text-slate-500" />
+              )}
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-800">{targetItem.name}</p>
-              <p className="text-2xs text-slate-500">รหัส: {targetItem.code}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 truncate">{targetItem.name}</p>
+              <p className="text-2xs text-slate-500 font-mono">รหัส: {targetItem.code}</p>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 ml-2">
             <span className="h-1 w-1 rounded-full bg-emerald-500" />
-            คงเหลือ {targetItem.qtyInStock} ชิ้น
+            คงเหลือ {targetItem.qtyInStock} {targetItem.unit || "ชิ้น"}
           </span>
         </div>
 
