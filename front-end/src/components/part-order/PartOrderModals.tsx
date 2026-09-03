@@ -31,7 +31,7 @@ export function PartOrderCreateModal() {
   });
 
   const [selectedSparepartId, setSelectedSparepartId] = useState<number>(0);
-  const [qty, setQty] = useState<number>(1);
+  const [qty, setQty] = useState<number | "">(1);
   const [orderNo, setOrderNo] = useState<string>("");
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
@@ -52,15 +52,22 @@ export function PartOrderCreateModal() {
     setSelectedSparepartId(id);
     const matched = spareParts?.find((p) => p.id === id);
     if (matched) {
-      setTotalPrice(Number(matched.price) * qty);
+      const currentQty = typeof qty === "number" ? qty : 0;
+      setTotalPrice(Number(matched.price) * currentQty);
     }
   };
 
-  const handleQtyChange = (val: number) => {
-    const q = Math.max(1, val);
-    setQty(q);
+  const handleQtyChange = (valStr: string) => {
+    if (valStr === "") {
+      setQty("");
+      setTotalPrice(0);
+      return;
+    }
+    const parsed = parseInt(valStr, 10);
+    const val = isNaN(parsed) ? 0 : parsed;
+    setQty(val);
     if (currentPart) {
-      setTotalPrice(Number(currentPart.price) * q);
+      setTotalPrice(Number(currentPart.price) * val);
     }
   };
 
@@ -198,9 +205,10 @@ export function PartOrderCreateModal() {
                   min="1"
                   step="1"
                   required
+                  placeholder="0"
                   value={qty}
                   onFocus={(e) => e.target.select()}
-                  onChange={(e) => handleQtyChange(parseInt(e.target.value) || 1)}
+                  onChange={(e) => handleQtyChange(e.target.value)}
                   className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs font-mono font-bold text-slate-900 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-slate-400 font-medium">

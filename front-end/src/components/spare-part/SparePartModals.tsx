@@ -222,7 +222,7 @@ export function SparePartFormModal() {
         name: editItem.name,
         groupId: editItem.groupId || editItem.group?.id || (availableGroups[0]?.id ?? 1),
         category: editItem.category || editItem.group?.name || availableGroups[0]?.name || "ไฟฟ้า",
-        unit: editItem.unit || "ชิ้น",
+        unit: editItem.unit ?? "",
         price: editItem.price || 0,
         minStock: editItem.minStock || 0,
         qtyInStock: editItem.qtyInStock || 0,
@@ -230,6 +230,7 @@ export function SparePartFormModal() {
     } else {
       setForm({
         ...empty,
+        unit: "ชิ้น",
         groupId: availableGroups[0]?.id ?? 1,
         category: availableGroups[0]?.name ?? "ไฟฟ้า",
       });
@@ -597,7 +598,7 @@ export function SparePartFormModal() {
                   <input
                     type="text"
                     placeholder="เช่น ชิ้น, อัน, กล่อง"
-                    value={form.unit || "ชิ้น"}
+                    value={form.unit}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, unit: e.target.value }))
                     }
