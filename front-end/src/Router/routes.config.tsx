@@ -17,6 +17,8 @@ import RepairHistory from "../Pages/RepairHistory";
 import PartStock from "../Pages/PartStock";
 import OrderSpareParts from "../Pages/OrderSpareParts";
 import { ToolCase } from "lucide-react";
+import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
+import PendingEvaluations from "../Pages/PendingEvaluations";
 
 interface AppRote {
   path: string;
@@ -74,23 +76,31 @@ export const APP_ROUTE: AppRote[] = [
     roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: true,
   },
-  {
-    path: "help-desk",
-    title: "แจ้งซ่อมครุภัณฑ์",
-    element: <div>help-desk</div>,
-    icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-    showInNav: true,
-  },
+  // {
+  //   path: "help-desk",
+  //   title: "แจ้งซ่อมครุภัณฑ์",
+  //   element: <PendingEvaluations />,
+  //   icon: Wrench,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
   {
     path: "track-status",
     title: "ติดตามสถานะ",
-    element: <div>track-status</div>,
+    element: <TrackingAssetCenter />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
-  // -------- สำหรับ Department ------------
+  // -------- สำหรับ ช่าง ------------
+  {
+    path: "accept-work",
+    title: "งานซ่อม",
+    element: <PendingEvaluations />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF],
+    showInNav: true,
+  },
   // {
   //   path: "test-1",
   //   title: "AssetStock",
