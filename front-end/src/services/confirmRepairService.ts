@@ -1,90 +1,89 @@
-import { RepairConfirmationDto, RepairJob } from "../Types/TypeRepairWorkflow";
+import type {
+  RepairConfirmationDto,
+  RepairJob,
+  RepairUser,
+} from "../Types/TypeRepairWorkflow";
 import {
-  cloneRepairJobs,
-  getRepairStatus,
-  repairReceiverOptions,
-  repairJobsMock,
-} from "../mockData/repairJobData";
+  advanceNextRepairStep,
+  fetchDetailedRepairJobs,
+  fetchRepairJobDetail,
+  fetchRepairJobSummaries,
+  fetchRepairReceivers,
+  mapApiRepairJob,
+  toRepairApiError,
+} from "./repairApiService";
 
-const MOCK_DELAY_MS = 180;
-
-function waitForMockApi(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, MOCK_DELAY_MS));
-}
-
-function addMonths(dateString: string, months: number): string | null {
-  if (months <= 0) return null;
-  const date = new Date(`${dateString}T00:00:00`);
-  date.setMonth(date.getMonth() + months);
+function addMonths(dateString: string, months: number): string {
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  const originalDay = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + Math.max(0, months));
+  const lastDay = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  date.setUTCDate(Math.min(originalDay, lastDay));
   return date.toISOString().slice(0, 10);
 }
 
 export async function getRepairConfirmations(): Promise<RepairJob[]> {
-  await waitForMockApi();
-  return cloneRepairJobs()
-    .filter(
-      (job) =>
-        job.status?.statusCode === "WAITING_DELIVERY" ||
-        job.status?.statusCode === "COMPLETED",
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  try {
+    const [waitingJobs, completedJobs] = await Promise.all([
+      fetchRepairJobSummaries({ statusCode: "WAITING_DELIVERY" }),
+      fetchRepairJobSummaries({ statusCode: "COMPLETED" }),
+    ]);
+    const summaries = [...waitingJobs, ...completedJobs].filter(
+      (job, index, jobs) =>
+        jobs.findIndex((item) => item.id === job.id) === index,
     );
+    const details = await fetchDetailedRepairJobs(summaries);
+    return details
+      .map(mapApiRepairJob)
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  } catch (error) {
+    throw toRepairApiError(error, "ไม่สามารถโหลดรายการยืนยันการซ่อมได้");
+  }
 }
 
 export async function getRepairConfirmationById(
   jobId: string,
 ): Promise<RepairJob> {
-  await waitForMockApi();
-  const job = cloneRepairJobs().find((item) => item.jobId === jobId);
-  if (!job) throw new Error("ไม่พบข้อมูลงานซ่อมที่เลือก");
-  return job;
+  try {
+    return mapApiRepairJob(await fetchRepairJobDetail(jobId));
+  } catch (error) {
+    throw toRepairApiError(error, "ไม่พบข้อมูลงานซ่อมที่เลือก");
+  }
+}
+
+export async function getRepairReceivers(
+  job: RepairJob,
+): Promise<RepairUser[]> {
+  try {
+    return await fetchRepairReceivers(job);
+  } catch (error) {
+    if (job.reporter) return [job.reporter];
+    throw toRepairApiError(error, "ไม่สามารถโหลดรายชื่อผู้รับมอบได้");
+  }
 }
 
 export async function confirmRepair(
   dto: RepairConfirmationDto,
 ): Promise<RepairJob> {
-  await waitForMockApi();
-  const job = repairJobsMock.find((item) => item.jobId === dto.jobId);
-  if (!job) throw new Error("ไม่พบข้อมูลงานซ่อมที่เลือก");
+  try {
+    const job = mapApiRepairJob(await fetchRepairJobDetail(dto.jobId));
+    if (job.status?.statusCode !== "WAITING_DELIVERY") {
+      throw new Error("งานนี้ไม่ได้อยู่ในสถานะรอตรวจรับ กรุณาโหลดข้อมูลใหม่");
+    }
 
-  const confirmedAt = new Date().toISOString();
-  const confirmedBy = repairReceiverOptions.find(
-    (receiver) => receiver.userId === dto.receiverId,
-  ) || {
-    userId: dto.receiverId,
-    firstName: dto.receiverName,
-    lastName: "",
-  };
-
-  job.confirmation = {
-    completedDate: dto.completedDate,
-    receiverId: dto.receiverId,
-    receiverName: dto.receiverName,
-    warrantyMonths: dto.warrantyMonths,
-    warrantyEndDate: addMonths(dto.completedDate, dto.warrantyMonths),
-    repairSummary: dto.repairSummary,
-    confirmedBy,
-    confirmedAt,
-  };
-  job.receiverId = dto.receiverId;
-  job.returnDate = `${dto.completedDate}T00:00:00.000Z`;
-  job.status = getRepairStatus("COMPLETED");
-  job.jobStatusId = job.status.jobStatusId;
-  job.workflowStep =
-    job.actionType === "SELF_REPAIR"
-      ? 6
-      : job.actionType === "PURCHASE_REPLACEMENT"
-        ? 10
-        : 9;
-  job.readyForConfirmation = false;
-  job.assetStatusCode =
-    job.actionType === "PURCHASE_REPLACEMENT" ? "WAIT_DISPOSAL" : "NORMAL";
-  job.availabilityStatusCode =
-    job.actionType === "PURCHASE_REPLACEMENT" ? "UNAVAILABLE" : "AVAILABLE";
-  job.updatedAt = confirmedAt;
-  job.updatedBy = confirmedBy.userId;
-
-  return { ...job };
+    const updatedJob = await advanceNextRepairStep(dto.jobId, {
+      receiverId: dto.receiverId,
+      warrantyDate: addMonths(dto.completedDate, dto.warrantyMonths),
+      note: dto.repairSummary,
+    });
+    return mapApiRepairJob(updatedJob);
+  } catch (error) {
+    throw toRepairApiError(error, "ไม่สามารถบันทึกผลตรวจรับได้");
+  }
 }
