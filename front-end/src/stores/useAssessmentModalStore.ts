@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import type { RepairJob } from "../Types/TypeAssessment";
+import type { RepairListItem } from "../Types/TypeAssessment";
 
 export type AssessmentViewMode = "list" | "form";
 
 interface AssessmentState {
   viewMode: AssessmentViewMode;
-  selectedJob: RepairJob | null;
-  openAssessmentForm: (job: RepairJob) => void;
+  selectedJob: RepairListItem | null;
+  openAssessmentForm: (job: RepairListItem) => void;
   closeForm: () => void;
 }
 
