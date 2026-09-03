@@ -1,41 +1,37 @@
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import PartOrderTable from "../components/part-order/PartOrderTable";
 import {
+  PartOrderCreateModal,
   PartOrderPurchasingModal,
   PartOrderDetailModal,
 } from "../components/part-order/PartOrderModals";
+import { usePartOrderModalStore } from "../stores/usePartOrderModalStore";
 
 export default function OrderSpareParts() {
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const { openCreateModal } = usePartOrderModalStore();
 
   return (
-    <div className="space-y-4 p-4 md:p-6 bg-slate-50/50 min-h-screen">
-      {/* Title Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">
-          รายการสั่งซื้ออะไหล่
-        </h1>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-4">
+      {/* Filter & Action Bar */}
+      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
         {/* Search Input */}
-        <div className="relative min-w-[260px] flex-1 max-w-md">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="ค้นหาอะไหล่, รหัสใบสั่งซื้อ, ผู้ขอเบิก..."
+            placeholder="ค้นหาอะไหล่, รหัสใบสั่งซื้อ..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
+            className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
           />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         </div>
 
         {/* Standard Date Picker Filter */}
-        <div className="relative inline-flex items-center h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs hover:border-slate-300 transition-colors shadow-2xs">
-          <span className="text-slate-500 mr-2 whitespace-nowrap">วันที่สั่งซื้อ:</span>
+        <div className="relative inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors shadow-2xs">
+          <span className="text-slate-500 mr-2 whitespace-nowrap text-xs">วันที่สั่งซื้อ:</span>
           <input
             type="date"
             value={dateFilter}
@@ -54,6 +50,19 @@ export default function OrderSpareParts() {
             ล้างวันที่
           </button>
         )}
+
+        {/* Spacer */}
+        <div className="flex-1 hidden md:block" />
+
+        {/* ปุ่มสั่งซื้ออะไหล่เพิ่ม */}
+        <button
+          type="button"
+          onClick={() => openCreateModal()}
+          className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer shrink-0 active:scale-95"
+        >
+          <Plus className="h-4 w-4 stroke-[2.5]" />
+          สั่งซื้ออะไหล่เพิ่ม
+        </button>
       </div>
 
       {/* Table Container */}
@@ -65,8 +74,10 @@ export default function OrderSpareParts() {
       </div>
 
       {/* Modals */}
+      <PartOrderCreateModal />
       <PartOrderPurchasingModal />
       <PartOrderDetailModal />
     </div>
   );
 }
+

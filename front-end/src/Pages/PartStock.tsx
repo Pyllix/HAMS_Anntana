@@ -13,7 +13,7 @@ import { useAuthStore } from "../stores/authStore";
 
 export default function PartStock() {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF";
+  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
 
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -42,13 +42,6 @@ export default function PartStock() {
 
   return (
     <div className="space-y-4">
-      {/* Title */}
-      <div className="pt-2">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-          รายการสต็อกอะไหล่ทั้งหมดในระบบ
-        </h1>
-      </div>
-
       {/* Filter / Search Bar */}
       <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
         {/* Search */}

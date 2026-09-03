@@ -172,10 +172,10 @@ export async function updatePurchasingInfo(
     localOrders = localOrders.map((o) =>
       o.id === id
         ? {
-            ...o,
-            ...dto,
-            status: "PENDING_APPROVAL" as PartOrderStatus,
-          }
+          ...o,
+          ...dto,
+          status: "PENDING_APPROVAL" as PartOrderStatus,
+        }
         : o,
     );
     const item = localOrders.find((o) => o.id === id);
@@ -201,13 +201,46 @@ export async function updateOrderStatus(
     localOrders = localOrders.map((o) =>
       o.id === id
         ? {
-            ...o,
-            status,
-            orderDate: o.orderDate || today,
-          }
+          ...o,
+          status,
+          orderDate: o.orderDate || today,
+        }
         : o,
     );
     const item = localOrders.find((o) => o.id === id);
     return item!;
   }
+}
+
+export async function createPartOrder(data: {
+  sparepartId: number;
+  partName: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  orderNo: string;
+}): Promise<PartOrder> {
+  const newOrder: PartOrder = {
+    id: Date.now(),
+    orderNo: data.orderNo,
+    partName: data.partName,
+    quantity: data.quantity,
+    unit: data.unit,
+    category: data.category,
+    urgency: "NORMAL",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    sparepart_id: data.sparepartId,
+    unitPrice: data.unitPrice,
+    totalPrice: data.totalPrice,
+    sparepart_add_doc: data.orderNo,
+    orderDate: new Date().toISOString().split("T")[0],
+    status: "RECEIVED",
+    createdAt: new Date().toISOString(),
+  };
+
+  localOrders = [newOrder, ...localOrders];
+  return newOrder;
 }

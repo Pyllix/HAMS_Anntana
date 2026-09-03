@@ -103,12 +103,6 @@ export async function createSparepart(
     const saved: Sparepart = {
       ...res.data,
       category: dto.category || res.data?.group?.name || "ไฟฟ้า",
-      brand: dto.brand,
-      imageUrl: dto.imageUrl,
-      compatibleModel: dto.compatibleModel,
-      lifespan: dto.lifespan,
-      purchaseDate: dto.purchaseDate,
-      storageLocation: dto.storageLocation,
     };
     localSpareparts = [saved, ...localSpareparts.filter((i) => i.id !== saved.id)];
     return saved;
@@ -124,12 +118,6 @@ export async function createSparepart(
       qtyInStock: Number(dto.qtyInStock ?? 0),
       groupId: Number(dto.groupId || 1),
       category: dto.category || "ไฟฟ้า",
-      brand: dto.brand,
-      imageUrl: dto.imageUrl,
-      compatibleModel: dto.compatibleModel,
-      lifespan: dto.lifespan,
-      purchaseDate: dto.purchaseDate,
-      storageLocation: dto.storageLocation,
     };
     localSpareparts = [fallbackItem, ...localSpareparts];
     return fallbackItem;

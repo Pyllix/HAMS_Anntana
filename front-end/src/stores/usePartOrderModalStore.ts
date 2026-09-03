@@ -2,6 +2,12 @@ import { create } from "zustand";
 import type { PartOrder } from "../Types/TypePartOrder";
 
 interface PartOrderModalState {
+  // Modal สร้างรายการสั่งซื้ออะไหล่ใหม่ (Create Order / Stock-In)
+  isCreateModalOpen: boolean;
+  preselectedSparepartId: number | null;
+  openCreateModal: (sparepartId?: number) => void;
+  closeCreateModal: () => void;
+
   // Modal ระบุข้อมูลจัดซื้อ (Add / Edit Purchasing Info)
   isPurchasingModalOpen: boolean;
   selectedOrder: PartOrder | null;
@@ -15,6 +21,13 @@ interface PartOrderModalState {
 }
 
 export const usePartOrderModalStore = create<PartOrderModalState>((set) => ({
+  isCreateModalOpen: false,
+  preselectedSparepartId: null,
+  openCreateModal: (sparepartId) =>
+    set({ isCreateModalOpen: true, preselectedSparepartId: sparepartId ?? null }),
+  closeCreateModal: () =>
+    set({ isCreateModalOpen: false, preselectedSparepartId: null }),
+
   isPurchasingModalOpen: false,
   selectedOrder: null,
   openPurchasingModal: (order) =>

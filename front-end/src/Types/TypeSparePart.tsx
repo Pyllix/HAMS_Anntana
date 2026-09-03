@@ -19,16 +19,11 @@ export interface Sparepart {
   qtyInStock: number;
   groupId: number;
   group?: SparepartGroup;
-  brand?: string;
   category?: string;
-  imageUrl?: string | null;
-  compatibleModel?: string;
-  lifespan?: string;
-  purchaseDate?: string;
-  storageLocation?: string;
   isLowStock?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string | null;
 }
 
 // ─── Stock Status Helper ──────────────────────────────────────────────────────
@@ -52,12 +47,6 @@ export interface CreateSparepartDto {
   minStock?: number;
   qtyInStock?: number;
   category?: string;
-  brand?: string;
-  imageUrl?: string | null;
-  compatibleModel?: string;
-  lifespan?: string;
-  purchaseDate?: string;
-  storageLocation?: string;
 }
 
 export interface UpdateSparepartDto extends Partial<CreateSparepartDto> {}
