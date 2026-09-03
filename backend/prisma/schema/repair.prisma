@@ -108,6 +108,13 @@ model RepairJob {
   mechanicRepairs MechanicRepair[]
   sparepartTxns   SparepartTxn[]
 
+  @@index([sectionId])
+  @@index([jobStatusId])
+  @@index([assetId])
+  @@index([reporterId])
+  @@index([createdAt])
+  @@index([dueDate])
+  @@index([actionType, urgencyStatus])
   @@map("repair_job")
 }
 
@@ -123,6 +130,8 @@ model RepairJobStep {
   stepMaster StepMaster @relation(fields: [stepMasterId], references: [id])
   user       User?      @relation(fields: [completedBy], references: [id])
 
+  @@index([jobId])
+  @@index([stepMasterId])
   @@map("repair_job_step")
 }
 
@@ -137,5 +146,7 @@ model MechanicRepair {
   job  RepairJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user User      @relation(fields: [userId], references: [id])
 
+  @@index([jobId])
+  @@index([userId])
   @@map("mechanic_repair")
 }
