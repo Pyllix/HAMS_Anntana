@@ -4,14 +4,8 @@ import {
   X,
   Plus,
   Lock,
-  UploadCloud,
   Printer,
   Trash2,
-  MapPin,
-  Briefcase,
-  BatteryCharging,
-  Wrench,
-  Calendar,
 } from "lucide-react";
 import {
   useSparePartDetailModalStore,
@@ -61,27 +55,21 @@ export function SparePartDetailModal() {
       <div className="relative w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-              <Briefcase className="h-5 w-5" />
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-bold text-slate-900 text-lg">
+                {selectedItem.name}
+              </h2>
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${st.cls}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                {st.label}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="font-bold text-slate-900 text-lg">
-                  {selectedItem.name}
-                </h2>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${st.cls}`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-                  {st.label}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                รหัส: {selectedItem.code} | หมวดหมู่: {selectedItem.group?.name || selectedItem.category || "ทั่วไป"} |
-                ยี่ห้อ: {selectedItem.brand || "-"}
-              </p>
-            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              รหัส: {selectedItem.code} | หมวดหมู่: {selectedItem.group?.name || selectedItem.category || "ทั่วไป"}
+            </p>
           </div>
           <button
             onClick={closeModal}
@@ -92,126 +80,88 @@ export function SparePartDetailModal() {
         </div>
 
         {/* Content Body */}
-        <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-50/40">
-          {/* Left Column: Image & Location */}
-          <div className="md:col-span-4 space-y-4">
-            <div className="h-56 w-full rounded-2xl bg-white border border-slate-200 flex flex-col items-center justify-center p-4 text-center shadow-2xs">
-              {selectedItem.imageUrl ? (
-                <img
-                  src={selectedItem.imageUrl}
-                  alt={selectedItem.name}
-                  className="h-full w-full object-contain rounded-xl"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-slate-400">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 mb-2">
-                    {selectedItem.category === "ไฟฟ้า" ? (
-                      <BatteryCharging className="h-8 w-8 text-slate-600" />
-                    ) : (
-                      <Wrench className="h-8 w-8 text-slate-600" />
-                    )}
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    รูปภาพอะไหล่ ({selectedItem.code}.jpg)
+        <div className="p-6 space-y-4 bg-slate-50/40">
+          {/* Green Summary Box */}
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold text-emerald-800 mb-1">
+                  คงเหลือในคลัง
+                </p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl font-extrabold text-emerald-600">
+                    {selectedItem.qtyInStock}
+                  </span>
+                  <span className="text-sm font-semibold text-emerald-700">
+                    {selectedItem.unit || "ชิ้น"}
                   </span>
                 </div>
-              )}
-            </div>
-
-            {/* Location Card */}
-            <div className="rounded-xl bg-white border border-slate-200 p-3.5 flex items-start gap-3 shadow-2xs">
-              <div className="p-2 rounded-lg bg-rose-50 text-rose-500 shrink-0">
-                <MapPin className="h-4 w-4" />
               </div>
-              <div className="text-xs">
-                <p className="font-semibold text-slate-800 mb-0.5">สถานที่จัดเก็บ</p>
-                <p className="text-slate-500 leading-relaxed">
-                  {selectedItem.storageLocation ||
-                    "ตู้เก็บอะไหล่ C, ชั้นวางที่ 2 (โซนอุปกรณ์ไฟฟ้า)"}
-                </p>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">จุดสั่งซื้อขั้นต่ำ :</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedItem.minStock} {selectedItem.unit || "ชิ้น"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">ราคาต่อหน่วย :</span>
+                  <span className="font-semibold text-slate-800">
+                    {Number(selectedItem.price).toLocaleString("th-TH", {
+                      minimumFractionDigits: 2,
+                    })}{" "}
+                    บาท
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-emerald-200/60">
+                  <span className="text-emerald-800 font-semibold">
+                    มูลค่ารวมในคลัง :
+                  </span>
+                  <span className="font-bold text-emerald-700">
+                    {totalValue} บาท
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Inventory Numbers & Specs */}
-          <div className="md:col-span-8 space-y-4">
-            {/* Green Summary Box */}
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-emerald-800 mb-1">
-                    คงเหลือในคลัง
-                  </p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-extrabold text-emerald-600">
-                      {selectedItem.qtyInStock}
-                    </span>
-                    <span className="text-sm font-semibold text-emerald-700">ชิ้น</span>
-                  </div>
-                </div>
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">จุดสั่งซื้อขั้นต่ำ :</span>
-                    <span className="font-semibold text-slate-800">
-                      {selectedItem.minStock} ชิ้น
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">ราคาต่อหน่วย :</span>
-                    <span className="font-semibold text-slate-800">
-                      {Number(selectedItem.price).toLocaleString("th-TH", {
-                        minimumFractionDigits: 2,
-                      })}{" "}
-                      บาท
-                    </span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-emerald-200/60">
-                    <span className="text-emerald-800 font-semibold">
-                      มูลค่ารวมในคลัง :
-                    </span>
-                    <span className="font-bold text-emerald-700">
-                      {totalValue} บาท
-                    </span>
-                  </div>
-                </div>
+          {/* Timestamps & Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs text-xs space-y-2">
+              <p className="font-bold text-slate-800 border-b border-slate-100 pb-2">
+                วันที่สร้างรายการ
+              </p>
+              <div>
+                <p className="font-medium text-slate-700">
+                  {selectedItem.createdAt
+                    ? new Date(selectedItem.createdAt).toLocaleString("th-TH", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                    : "-"}
+                </p>
               </div>
             </div>
 
-            {/* Technical Spec & Purchase Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs text-xs space-y-2">
-                <p className="font-bold text-slate-800 border-b border-slate-100 pb-2">
-                  ข้อมูลเชิงเทคนิค
+            <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs text-xs space-y-2">
+              <p className="font-bold text-slate-800 border-b border-slate-100 pb-2">
+                อัปเดตล่าสุด
+              </p>
+              <div>
+                <p className="font-medium text-slate-700">
+                  {selectedItem.updatedAt
+                    ? new Date(selectedItem.updatedAt).toLocaleString("th-TH", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                    : "-"}
                 </p>
-                <div>
-                  <p className="text-slate-400">รหัสอ้างอิง</p>
-                  <p className="font-medium text-slate-700">{selectedItem.code}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400">รุ่นที่รองรับ</p>
-                  <p className="font-medium text-slate-700">
-                    {selectedItem.compatibleModel ||
-                      "เครื่องสำรองไฟ ขนาด 1000VA ขึ้นไป"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-slate-400">อายุการใช้งานโดยประมาณ</p>
-                  <p className="font-medium text-slate-700">
-                    {selectedItem.lifespan || "2 - 3 ปี"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-2xs text-xs space-y-2">
-                <p className="font-bold text-slate-800 border-b border-slate-100 pb-2">
-                  ข้อมูลวันที่สั่งซื้อ
-                </p>
-                <div>
-                  <p className="text-slate-400">วันที่สั่งซื้อล่าสุด</p>
-                  <p className="font-medium text-slate-700">
-                    {selectedItem.purchaseDate || "15 ก.พ. 2567"}
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -257,38 +207,13 @@ export function SparePartFormModal() {
     name: "",
     groupId: availableGroups[0]?.id ?? 1,
     category: availableGroups[0]?.name ?? "ไฟฟ้า",
-    brand: "",
+    unit: "ชิ้น",
     price: 0,
     minStock: 0,
     qtyInStock: 0,
-    imageUrl: "",
-    compatibleModel: "",
-    lifespan: "",
-    purchaseDate: "",
-    storageLocation: "",
   };
 
   const [form, setForm] = useState<CreateSparepartDto>(empty);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editFileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleImageFile = (file?: File) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      alert("กรุณาเลือกไฟล์รูปภาพที่ถูกต้อง (JPG, PNG, WEBP)");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      alert("ขนาดไฟล์ภาพต้องไม่เกิน 2MB");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setForm((f) => ({ ...f, imageUrl: e.target?.result as string }));
-    };
-    reader.readAsDataURL(file);
-  };
 
   useEffect(() => {
     if (editItem) {
@@ -297,15 +222,10 @@ export function SparePartFormModal() {
         name: editItem.name,
         groupId: editItem.groupId || editItem.group?.id || (availableGroups[0]?.id ?? 1),
         category: editItem.category || editItem.group?.name || availableGroups[0]?.name || "ไฟฟ้า",
-        brand: editItem.brand || "",
+        unit: editItem.unit || "ชิ้น",
         price: editItem.price || 0,
         minStock: editItem.minStock || 0,
         qtyInStock: editItem.qtyInStock || 0,
-        imageUrl: editItem.imageUrl || "",
-        compatibleModel: editItem.compatibleModel || "",
-        lifespan: editItem.lifespan || "",
-        purchaseDate: editItem.purchaseDate || "",
-        storageLocation: editItem.storageLocation || "",
       });
     } else {
       setForm({
@@ -334,18 +254,13 @@ export function SparePartFormModal() {
         <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in duration-200">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                <Briefcase className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-base">
-                  แก้ไขข้อมูลสต็อกอะไหล่
-                </h2>
-                <p className="text-xs text-slate-500">
-                  จัดการข้อมูลพื้นฐานและปรับปรุงจำนวนคงคลัง
-                </p>
-              </div>
+            <div>
+              <h2 className="font-bold text-slate-900 text-base">
+                แก้ไขข้อมูลสต็อกอะไหล่
+              </h2>
+              <p className="text-xs text-slate-500">
+                จัดการข้อมูลพื้นฐานและปรับปรุงจำนวนคงคลัง
+              </p>
             </div>
             <button
               onClick={closeModal}
@@ -365,46 +280,7 @@ export function SparePartFormModal() {
           >
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               {/* Left Column */}
-              <div className="md:col-span-5 space-y-4">
-                {/* Image Preview Box */}
-                <input
-                  type="file"
-                  ref={editFileInputRef}
-                  accept="image/png, image/jpeg, image/webp"
-                  className="hidden"
-                  onChange={(e) => handleImageFile(e.target.files?.[0])}
-                />
-                <div
-                  onClick={() => editFileInputRef.current?.click()}
-                  className="relative h-44 w-full rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/70 transition-colors flex flex-col items-center justify-center p-3 text-center cursor-pointer overflow-hidden group"
-                >
-                  {form.imageUrl ? (
-                    <>
-                      <img
-                        src={form.imageUrl}
-                        alt="Preview"
-                        className="h-full w-full object-contain rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
-                        <UploadCloud className="h-6 w-6 mb-1" />
-                        <span className="text-2xs font-medium">คลิกเพื่อเปลี่ยนรูป</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-1.5 group-hover:scale-105 transition-transform">
-                        <UploadCloud className="h-6 w-6" />
-                      </div>
-                      <span className="text-xs text-slate-500 font-medium">
-                        คลิกเพื่อเพิ่ม/เปลี่ยนรูปภาพ
-                      </span>
-                      <span className="text-2xs text-slate-400 mt-0.5">
-                        รองรับ JPG, PNG
-                      </span>
-                    </>
-                  )}
-                </div>
-
+              <div className="md:col-span-6 space-y-4">
                 {/* ข้อมูลพื้นฐาน */}
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-slate-800">ข้อมูลพื้นฐาน</p>
@@ -503,14 +379,15 @@ export function SparePartFormModal() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        ยี่ห้อ
+                        หน่วยนับ
                       </label>
                       <input
                         type="text"
-                        value={form.brand}
+                        value={form.unit || "ชิ้น"}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, brand: e.target.value }))
+                          setForm((f) => ({ ...f, unit: e.target.value }))
                         }
+                        placeholder="เช่น ชิ้น, อัน, กล่อง"
                         className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
@@ -519,7 +396,7 @@ export function SparePartFormModal() {
               </div>
 
               {/* Right Column */}
-              <div className="md:col-span-7 space-y-4">
+              <div className="md:col-span-6 space-y-4">
                 {/* Stock Adjustment Box */}
                 <div className="rounded-xl border border-emerald-300 bg-emerald-50/40 p-4">
                   <div className="flex items-center justify-between">
@@ -532,7 +409,7 @@ export function SparePartFormModal() {
                           {form.qtyInStock}
                         </span>
                         <span className="text-xs font-semibold text-emerald-700">
-                          ชิ้น
+                          {form.unit || "ชิ้น"}
                         </span>
                       </div>
                     </div>
@@ -546,7 +423,7 @@ export function SparePartFormModal() {
                           onClick={() =>
                             setForm((f) => ({
                               ...f,
-                              qtyInStock: f.qtyInStock + 1,
+                              qtyInStock: (f.qtyInStock ?? 0) + 1,
                             }))
                           }
                           className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
@@ -558,7 +435,7 @@ export function SparePartFormModal() {
                           onClick={() =>
                             setForm((f) => ({
                               ...f,
-                              qtyInStock: Math.max(0, f.qtyInStock - 1),
+                              qtyInStock: Math.max(0, (f.qtyInStock ?? 0) - 1),
                             }))
                           }
                           className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
@@ -573,7 +450,7 @@ export function SparePartFormModal() {
                 {/* Price Box */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 shadow-2xs">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500">💲 ราคาต่อหน่วย</span>
+                    <span className="text-slate-500">ราคาต่อหน่วย</span>
                     <span className="font-bold text-slate-900 text-sm">
                       {Number(form.price).toLocaleString("th-TH", {
                         minimumFractionDigits: 2,
@@ -596,80 +473,6 @@ export function SparePartFormModal() {
                     }
                     className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500"
                   />
-                </div>
-
-                {/* Detailed Specs */}
-                <div className="space-y-3">
-                  <p className="text-xs font-bold text-slate-800">ข้อมูลรายละเอียด</p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                        รุ่นที่รองรับ *
-                      </label>
-                      <input
-                        type="text"
-                        value={form.compatibleModel}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            compatibleModel: e.target.value,
-                          }))
-                        }
-                        placeholder="เช่น เครื่องสำรองไฟ ขนาด 1000VA ขึ้นไป"
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                        อายุการใช้งาน *
-                      </label>
-                      <input
-                        type="text"
-                        value={form.lifespan}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, lifespan: e.target.value }))
-                        }
-                        placeholder="2 - 3 ปี"
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                        วันที่สั่งซื้อ *
-                      </label>
-                      <input
-                        type="date"
-                        value={form.purchaseDate}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            purchaseDate: e.target.value,
-                          }))
-                        }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                        สถานที่จัดเก็บ *
-                      </label>
-                      <input
-                        type="text"
-                        value={form.storageLocation}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            storageLocation: e.target.value,
-                          }))
-                        }
-                        placeholder="ตู้เก็บอะไหล่ C, ชั้นวางที่ 2"
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -703,16 +506,11 @@ export function SparePartFormModal() {
       <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <Plus className="h-5 w-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <h2 className="font-bold text-slate-900 text-base">เพิ่มอะไหล่ใหม่</h2>
-              <p className="text-xs text-slate-500">
-                กรอกรายละเอียดข้อมูลอะไหล่เพื่อบันทึกเข้าระบบสต็อก
-              </p>
-            </div>
+          <div>
+            <h2 className="font-bold text-slate-900 text-base">เพิ่มอะไหล่ใหม่</h2>
+            <p className="text-xs text-slate-500">
+              กรอกรายละเอียดข้อมูลอะไหล่เพื่อบันทึกเข้าระบบสต็อก
+            </p>
           </div>
           <button
             onClick={closeModal}
@@ -730,317 +528,164 @@ export function SparePartFormModal() {
           }}
           className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
         >
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left Column: Image Upload Area */}
-            <div className="md:col-span-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-800">
-                  รูปภาพอะไหล่ (ถ้ามี)
-                </label>
-                {form.imageUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
-                    className="text-2xs text-rose-500 hover:text-rose-700 font-medium cursor-pointer"
-                  >
-                    ลบรูปภาพ
-                  </button>
-                )}
+          <div className="space-y-4">
+            {/* ข้อมูลพื้นฐาน */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold text-slate-800">ข้อมูลพื้นฐาน</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    รหัสอะไหล่ *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น EL-BT-001"
+                    value={form.code}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, code: e.target.value }))
+                    }
+                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    ชื่ออะไหล่ *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น แบตเตอรี่ UPS"
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
               </div>
 
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/png, image/jpeg, image/webp"
-                className="hidden"
-                onChange={(e) => handleImageFile(e.target.files?.[0])}
-              />
-
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  handleImageFile(e.dataTransfer.files?.[0]);
-                }}
-                className={`relative h-72 w-full rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-4 text-center cursor-pointer overflow-hidden group ${
-                  isDragging
-                    ? "border-emerald-500 bg-emerald-100/50 scale-[1.01]"
-                    : form.imageUrl
-                    ? "border-slate-200 bg-slate-50"
-                    : "border-emerald-300 bg-emerald-50/20 hover:bg-emerald-50/40"
-                }`}
-              >
-                {form.imageUrl ? (
-                  <>
-                    <img
-                      src={form.imageUrl}
-                      alt="Preview"
-                      className="h-full w-full object-contain rounded-xl"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-2">
-                      <UploadCloud className="h-8 w-8 mb-1" />
-                      <p className="text-xs font-medium">คลิกเพื่อเปลี่ยนรูป</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-3 group-hover:scale-105 transition-transform">
-                      <UploadCloud className="h-7 w-7" />
-                    </div>
-                    <p className="font-semibold text-emerald-800 text-xs mb-1">
-                      ลากไฟล์มาวางที่นี่
-                    </p>
-                    <p className="text-2xs text-slate-500 mb-3">
-                      หรือ คลิกเพื่ออัปโหลดรูปภาพ
-                    </p>
-                    <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-2xs text-slate-500 font-medium">
-                      รองรับ JPG, PNG, WEBP
-                    </span>
-                  </>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    หมวดหมู่ *
+                  </label>
+                  <select
+                    value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
+                    onChange={(e) => {
+                      const gid = Number(e.target.value);
+                      const g = availableGroups.find((x) => x.id === gid);
+                      setForm((f) => ({
+                        ...f,
+                        groupId: gid,
+                        category: g?.name || f.category,
+                      }));
+                    }}
+                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-emerald-500"
+                  >
+                    {availableGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    หน่วยนับ *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ชิ้น, อัน, กล่อง"
+                    value={form.unit || "ชิ้น"}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, unit: e.target.value }))
+                    }
+                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
+                    required
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Right Column: Form Fields */}
-            <div className="md:col-span-8 space-y-4">
-              {/* ข้อมูลพื้นฐาน */}
-              <div className="space-y-2.5">
-                <p className="text-xs font-bold text-slate-800">ข้อมูลพื้นฐาน</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      รหัสอะไหล่ *
-                    </label>
+            {/* ข้อมูลสต็อกและราคา */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-800">ข้อมูลสต็อกและราคา</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    จำนวนสต็อกเริ่มต้น *
+                  </label>
+                  <div className="relative">
                     <input
-                      type="text"
-                      placeholder="เช่น EL-BT-001"
-                      value={form.code}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, code: e.target.value }))
-                      }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      ชื่ออะไหล่ *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="เช่น แบตเตอรี่ UPS"
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, name: e.target.value }))
-                      }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      หมวดหมู่ *
-                    </label>
-                    <select
-                      value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
-                      onChange={(e) => {
-                        const gid = Number(e.target.value);
-                        const g = availableGroups.find((x) => x.id === gid);
-                        setForm((f) => ({
-                          ...f,
-                          groupId: gid,
-                          category: g?.name || f.category,
-                        }));
-                      }}
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-emerald-500"
-                    >
-                      {availableGroups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      ยี่ห้อ *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="เช่น UPS, Medline"
-                      value={form.brand}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, brand: e.target.value }))
-                      }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ข้อมูลสต็อกและราคา */}
-              <div className="space-y-2.5 pt-2 border-t border-slate-100">
-                <p className="text-xs font-bold text-slate-800">ข้อมูลสต็อกและราคา</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      จำนวนรับเข้าครั้งแรก *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={form.qtyInStock === 0 ? "" : form.qtyInStock}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            qtyInStock:
-                              e.target.value === "" ? 0 : Number(e.target.value),
-                          }))
-                        }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        required
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
-                        ชิ้น
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      จุดสั่งซื้อขั้นต่ำ *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={form.minStock === 0 ? "" : form.minStock}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            minStock:
-                              e.target.value === "" ? 0 : Number(e.target.value),
-                          }))
-                        }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        required
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
-                        ชิ้น
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      ราคาต่อหน่วย
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={form.price === 0 ? "" : form.price}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            price:
-                              e.target.value === "" ? 0 : Number(e.target.value),
-                          }))
-                        }
-                        className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                        required
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
-                        บาท
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ข้อมูลรายละเอียด */}
-              <div className="space-y-2.5 pt-2 border-t border-slate-100">
-                <p className="text-xs font-bold text-slate-800">ข้อมูลรายละเอียด</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      รุ่นที่รองรับ *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="เช่น เครื่องสำรองไฟ ขนาด 1000VA ขึ้นไป"
-                      value={form.compatibleModel}
+                      type="number"
+                      placeholder="0"
+                      value={form.qtyInStock === 0 ? "" : form.qtyInStock}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          compatibleModel: e.target.value,
+                          qtyInStock:
+                            e.target.value === "" ? 0 : Number(e.target.value),
                         }))
                       }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
+                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                      required
                     />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      อายุการใช้งาน *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="เช่น 2 - 3 ปี"
-                      value={form.lifespan}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, lifespan: e.target.value }))
-                      }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
-                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
+                      {form.unit || "ชิ้น"}
+                    </span>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      วันที่สั่งซื้อ *
-                    </label>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    จุดสั่งซื้อขั้นต่ำ *
+                  </label>
+                  <div className="relative">
                     <input
-                      type="date"
-                      value={form.purchaseDate}
+                      type="number"
+                      placeholder="0"
+                      value={form.minStock === 0 ? "" : form.minStock}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          purchaseDate: e.target.value,
+                          minStock:
+                            e.target.value === "" ? 0 : Number(e.target.value),
                         }))
                       }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 cursor-pointer"
+                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                      required
                     />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
+                      {form.unit || "ชิ้น"}
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      สถานที่จัดเก็บ *
-                    </label>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    ราคาต่อหน่วย *
+                  </label>
+                  <div className="relative">
                     <input
-                      type="text"
-                      placeholder="เช่น ตู้เก็บอะไหล่ C, ชั้นวางที่ 2"
-                      value={form.storageLocation}
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={form.price === 0 ? "" : form.price}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          storageLocation: e.target.value,
+                          price:
+                            e.target.value === "" ? 0 : Number(e.target.value),
                         }))
                       }
-                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500"
+                      className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                      required
                     />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-2xs text-slate-400">
+                      บาท
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1107,24 +752,9 @@ export function SparePartDeleteModal() {
 
         {/* Item Preview Card */}
         <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 flex items-center justify-between text-left">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 border border-slate-200 overflow-hidden text-slate-400 shrink-0">
-              {targetItem.imageUrl ? (
-                <img
-                  src={targetItem.imageUrl}
-                  alt={targetItem.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : targetItem.category === "ไฟฟ้า" || targetItem.group?.name === "ไฟฟ้า" ? (
-                <BatteryCharging className="h-5 w-5 text-slate-500" />
-              ) : (
-                <Wrench className="h-5 w-5 text-slate-500" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-800 truncate">{targetItem.name}</p>
-              <p className="text-2xs text-slate-500 font-mono">รหัส: {targetItem.code}</p>
-            </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-slate-800 truncate">{targetItem.name}</p>
+            <p className="text-2xs text-slate-500 font-mono">รหัส: {targetItem.code}</p>
           </div>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 ml-2">
             <span className="h-1 w-1 rounded-full bg-emerald-500" />
