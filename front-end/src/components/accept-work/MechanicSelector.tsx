@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Search, X, Plus, Check } from "lucide-react";
-import type { User } from "../../Types/TypeUser";
+import type { Mechanic } from "../../Types/TypeAssessment";
 
 export interface MechanicSelectorProps {
-  usersList: User[];
+  usersList: Mechanic[];
   selectedMechanicIds: (string | number)[];
-  onToggleMechanic: (id: number | string) => void;
+  onToggleMechanic: (id: string) => void;
 }
 
 export default function MechanicSelector({
@@ -31,28 +31,18 @@ export default function MechanicSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Helper Functions สำหรับแปลง User/ID
-  const getUserId = (user: User | any): string => {
+  const getUserId = (user: Mechanic | string | number): string => {
     if (!user) return "";
     if (typeof user === "string" || typeof user === "number")
       return String(user);
-    const u = user as Record<string, unknown>;
-    const id = user?.id ?? u?.userId ?? u?.user_id ?? u?._id;
-    return id !== undefined && id !== null ? String(id) : "";
+    return user.id ? String(user.id) : "";
   };
 
-  const getUserFirstName = (user: User): string => {
-    const u = user as unknown as Record<string, unknown>;
-    return (
-      user?.firstname ||
-      (u?.firstName as string) ||
-      user?.userName ||
-      (u?.name as string) ||
-      "Unknown"
-    );
+  const getUserFirstName = (user: Mechanic): string => {
+    return user.firstname || user.userName || "Unknown";
   };
 
-  const getUserInitials = (user: User): string => {
+  const getUserInitials = (user: Mechanic): string => {
     return getUserFirstName(user).substring(0, 2).toUpperCase();
   };
 

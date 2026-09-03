@@ -1,29 +1,67 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Loader2, Pencil } from "lucide-react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import AssetInfoCard from "./AssetInfoCard";
 import CommonEvaluationFields from "./CommonEvaluationFields";
 import InternalSpareFields from "./InternalSpareFields";
+import type { SelectedSpareItem } from "./InternalSpareFields";
 import ExternalVendorFields from "./ExternalVendorFields";
 import MechanicSelector from "./MechanicSelector";
-import { useAssessmentStore } from "../../stores/useAssessmentStore";
-import type { SpareItem } from "./InternalSpareFields";
+import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import type {
-  EvaluationDto,
-  EvaluationSpareDto,
-  ActionTypeUI,
-  AssessmentFormState,
+  RepairDetailDto,
+  StepActionType,
+  Mechanic,
+  RepairDetail,
+  RepairMetaLookups,
 } from "../../Types/TypeAssessment";
-import type { User } from "../../Types/TypeUser";
-import { createEvaluation, getUsers } from "../../services/assessmentService";
+import {
+  createEvaluation,
+  getMechanics,
+  getRepairMetaLookups,
+} from "../../services/assessmentService";
+
+export type ActionTypeUI =
+  | "ซ่อมเองได้"
+  | "ขอเบิกอะไหล่ภายใน"
+  | "ขอเบิกอะไหล่ภายนอก"
+  | "ส่งซ่อมภายนอก"
+  | "ขอซื้อทดแทน";
+
+export interface AssessmentFormState {
+  symptomCause: string;
+  diagnosis?: string;
+  solution: string;
+  causeId: string | number;
+  isRepeatRepair?: boolean;
+  dueDate: string | number;
+  technicalDiagnosisDetail: string;
+}
 
 const INITIAL_FORM_STATE: AssessmentFormState = {
   symptomCause: "",
+  diagnosis: "",
   solution: "",
-  causeCategory: "",
-  isRepeat: undefined,
-  estimatedDays: "",
-  technicalDiagnosis: "",
+  causeId: "",
+  isRepeatRepair: false,
+  dueDate: "",
+  technicalDiagnosisDetail: "",
+};
+
+const ACTION_TYPE_MAP: Record<ActionTypeUI, StepActionType> = {
+  ซ่อมเองได้: "SELF_REPAIR",
+  ขอเบิกอะไหล่ภายใน: "INTERNAL_STOCK",
+  ขอเบิกอะไหล่ภายนอก: "EXTERNAL_STOCK",
+  ส่งซ่อมภายนอก: "OUTSOURCE",
+  ขอซื้อทดแทน: "PURCHASE_REPLACEMENT",
+};
+
+const REVERSE_ACTION_TYPE_MAP: Record<StepActionType, ActionTypeUI> = {
+  SELF_REPAIR: "ซ่อมเองได้",
+  INTERNAL_STOCK: "ขอเบิกอะไหล่ภายใน",
+  EXTERNAL_STOCK: "ขอเบิกอะไหล่ภายนอก",
+  OUTSOURCE: "ส่งซ่อมภายนอก",
+  PURCHASE_REPLACEMENT: "ขอซื้อทดแทน",
 };
 
 const normalizeMechanicIds = (ids: (string | number)[]): string[] => {
@@ -32,14 +70,6 @@ const normalizeMechanicIds = (ids: (string | number)[]): string[] => {
     .filter(
       (id) => id !== "" && id !== "null" && id !== "undefined" && id !== "NaN",
     );
-};
-
-const normalizeSpares = (spares: SpareItem[]): EvaluationSpareDto[] => {
-  return (spares || []).map((item) => ({
-    sparepartId: Number(item.id) || 0,
-    qty: Number(item.quantity) || 1,
-    unitPrice: Number(item.price) || 0,
-  }));
 };
 
 export default function AssessmentForm() {
@@ -51,17 +81,27 @@ export default function AssessmentForm() {
   const [actionStatus, setActionStatus] = useState<ActionTypeUI>("ซ่อมเองได้");
   const [formState, setFormState] =
     useState<AssessmentFormState>(INITIAL_FORM_STATE);
-  const [usersList, setUsersList] = useState<User[]>([]);
   const [selectedMechanicIds, setSelectedMechanicIds] = useState<
     (string | number)[]
   >([]);
-  const [selectedSpares, setSelectedSpares] = useState<SpareItem[]>([]);
+  const [selectedSpares, setSelectedSpares] = useState<SelectedSpareItem[]>([]);
   const [vendorId, setVendorId] = useState<string>("");
 
-  const currentJobId = selectedJob?.jobId;
-  const draftStorageKey = `draft_assessment_${currentJobId}`;
+  const currentJobId = selectedJob?.id;
+  const displayJobNo = selectedJob?.jobNo || `JOB-${currentJobId || ""}`;
+  const draftStorageKey = `draft_assessment_${displayJobNo}`;
 
-  // 1. Reset State หรือโหลดข้อมูลแบบร่างจาก localStorage เมื่อเปลี่ยน Job
+  const { data: metaLookups } = useQuery<RepairMetaLookups>({
+    queryKey: ["repairMetaLookups"],
+    queryFn: getRepairMetaLookups,
+  });
+
+
+  const { data: mechanics = [] } = useQuery<Mechanic[]>({
+    queryKey: ["repairMechanics"],
+    queryFn: getMechanics,
+  });
+
   useEffect(() => {
     if (!currentJobId) return;
 
@@ -88,61 +128,41 @@ export default function AssessmentForm() {
   }, [currentJobId, draftStorageKey]);
 
   // Mutation บันทึกการประเมิน
-  const { mutate: handleEvaluationSubmit, isPending: isSubmitting } =
-    useMutation({
-      mutationFn: createEvaluation,
-      onSuccess: () => {
-        alert("บันทึกผลการประเมินสำเร็จ");
-        if (currentJobId) {
-          localStorage.removeItem(draftStorageKey);
-        }
-        queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
-        closeForm();
-      },
-      onError: (err: unknown) => {
-        const errorObj = err as {
-          response?: { data?: { message?: string } };
-          message?: string;
-        };
-        const errorMsg =
-          errorObj?.response?.data?.message ||
-          errorObj?.message ||
-          "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
-        alert(`ไม่สามารถทำรายการได้: ${errorMsg}`);
-      },
-    });
-
-  // ดึงรายชื่อผู้ใช้งาน
-  useEffect(() => {
-    let isMounted = true;
-    const fetchUsers = async () => {
-      try {
-        const res = await getUsers();
-        const list: User[] = Array.isArray(res)
-          ? res
-          : (res as { data: User[] })?.data || [];
-        if (isMounted) setUsersList(list);
-      } catch (error) {
-        console.error("Failed to fetch users:", error);
+  const mutation = useMutation({
+    mutationFn: async (dto: RepairDetailDto) => {
+      if (!currentJobId) return;
+      return await createEvaluation(String(currentJobId), dto);
+    },
+    onSuccess: () => {
+      alert("บันทึกผลการประเมินสำเร็จ");
+      if (draftStorageKey) {
+        localStorage.removeItem(draftStorageKey);
       }
-    };
+      queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
+      queryClient.invalidateQueries({ queryKey: ["repairList"] });
+      closeForm();
+    },
+    onError: (err: unknown) => {
+      const errorObj = err as {
+        response?: { data?: { message?: string | string[] } };
+        message?: string;
+      };
+      const rawMsg = errorObj?.response?.data?.message || errorObj?.message;
+      const errorMsg = Array.isArray(rawMsg) ? rawMsg.join(", ") : rawMsg;
+      alert(
+        `ไม่สามารถทำรายการได้: ${errorMsg || "เกิดข้อผิดพลาดในการบันทึกข้อมูล"}`,
+      );
+    },
+  });
 
-    fetchUsers();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Form Validation Logic
   const isFormValid = useMemo(() => {
     const hasCommonFields =
       Boolean(actionStatus) &&
-      Boolean(formState.symptomCause?.trim()) &&
+      Boolean(formState.symptomCause?.trim() || formState.diagnosis?.trim()) &&
       Boolean(formState.solution?.trim()) &&
-      Boolean(formState.technicalDiagnosis?.trim()) &&
-      Boolean(formState.causeCategory) &&
-      formState.isRepeat !== undefined &&
-      Boolean(String(formState.estimatedDays ?? "").trim()) &&
+      Boolean(formState.causeId) &&
+      formState.isRepeatRepair !== undefined &&
+      Boolean(String(formState.dueDate ?? "").trim()) &&
       selectedMechanicIds.length > 0;
 
     if (!hasCommonFields) return false;
@@ -199,34 +219,55 @@ export default function AssessmentForm() {
   };
 
   const handleSubmit = () => {
-    if (!selectedJob || !isFormValid) return;
+    if (!selectedJob || !isFormValid || !currentJobId) return;
 
-    const cleanMechanicIds = normalizeMechanicIds(selectedMechanicIds);
-    const cleanVendorId = Number(vendorId) || undefined;
+    const stepActionType = ACTION_TYPE_MAP[actionStatus];
+    const selectedDetail = selectedJob as unknown as RepairDetail;
 
-    const dto: EvaluationDto = {
-      jobId: selectedJob.jobId,
-      actionType: actionStatus,
-      diagnosis: formState.symptomCause?.trim(),
-      solution: formState.solution?.trim(),
-      causeCategory: formState.causeCategory,
-      isRepeatRepair: Boolean(formState.isRepeat),
-      dueDate: String(formState.estimatedDays).trim(),
-      technicalDiagnosis: formState.technicalDiagnosis?.trim(),
-      assigneeIds: cleanMechanicIds,
-      ...(actionStatus === "ขอเบิกอะไหล่ภายใน" ||
-      actionStatus === "ขอเบิกอะไหล่ภายนอก"
-        ? { spares: normalizeSpares(selectedSpares) }
-        : {}),
-      ...(actionStatus === "ส่งซ่อมภายนอก"
-        ? {
-            companyId: cleanVendorId,
-            vendorId: cleanVendorId,
-          }
-        : {}),
+    // คำนวณ DueDate
+    let formattedDueDate = new Date().toISOString();
+    if (formState.dueDate) {
+      const days = Number(formState.dueDate);
+      if (!isNaN(days) && days > 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        formattedDueDate = d.toISOString();
+      } else {
+        const parsedDate = new Date(formState.dueDate);
+        if (!isNaN(parsedDate.getTime())) {
+          formattedDueDate = parsedDate.toISOString();
+        }
+      }
+    }
+
+    // สร้าง DTO Object
+    const dto: RepairDetailDto = {
+      stepActionType: stepActionType,
+      actionType: selectedDetail?.actionType || "REPAIR",
+      techCategoryId: Number(
+        selectedDetail?.techCategoryId || selectedDetail?.asset?.type?.id || 1,
+      ),
+      jobTypeId: Number(selectedDetail?.jobTypeId || 1),
+      diagnosis:
+        formState.diagnosis?.trim() || formState.symptomCause?.trim() || "-",
+      solution: formState.solution?.trim() || "-",
+      causeId: Number(formState.causeId) || 0,
+      isRepeatRepair: Boolean(formState.isRepeatRepair),
+      dueDate: formattedDueDate,
+      mechanicIds: normalizeMechanicIds(selectedMechanicIds),
+      companyId: stepActionType === "OUTSOURCE" ? vendorId || null : undefined,
+      spareParts:
+        stepActionType === "INTERNAL_STOCK" ||
+        stepActionType === "EXTERNAL_STOCK"
+          ? selectedSpares.map((sp) => ({
+              sparepartId: Number(sp.id),
+              qty: Number(sp.quantity) || 1,
+            }))
+          : undefined,
     };
 
-    handleEvaluationSubmit(dto);
+    // ยิง Mutation
+    mutation.mutate(dto);
   };
 
   if (!selectedJob) return null;
@@ -246,14 +287,14 @@ export default function AssessmentForm() {
           </button>
           <div className="text-xs text-slate-400 flex items-center gap-1.5">
             <span className="font-semibold text-emerald-600">
-              ประเมินการซ่อม ({selectedJob.jobNo || `JOB-${selectedJob.jobId}`})
+              ประเมินการซ่อม ({displayJobNo})
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 rounded-md bg-emerald-50 text-emerald-600 text-xs font-bold font-mono">
-            {selectedJob.jobNo || `JOB-${selectedJob.jobId}`}
+            {displayJobNo}
           </span>
           <span className="px-3 py-1 rounded-md bg-amber-50 text-amber-600 text-xs font-semibold">
             ● รอดำเนินการประเมิน
@@ -273,21 +314,25 @@ export default function AssessmentForm() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
               <span className="p-1 rounded-md bg-emerald-50 text-emerald-600">
-                ✏️
+                <Pencil className="w-4 h-4" />
               </span>
               บันทึกผลการประเมินและการดำเนินการ
             </div>
           </div>
 
           <CommonEvaluationFields
-            actionStatus={actionStatus}
-            setActionStatus={handleActionStatusChange}
-            formState={formState}
-            setFormState={setFormState}
+            actionStatus={ACTION_TYPE_MAP[actionStatus]}
+            setActionStatus={(stepAction) => {
+              const mapped = REVERSE_ACTION_TYPE_MAP[stepAction];
+              if (mapped) handleActionStatusChange(mapped);
+            }}
+            formState={formState as any}
+            setFormState={setFormState as any}
+            causes={metaLookups?.causes || []}
           />
 
           <MechanicSelector
-            usersList={usersList}
+            usersList={mechanics}
             selectedMechanicIds={selectedMechanicIds}
             onToggleMechanic={handleToggleMechanic}
           />
@@ -304,8 +349,8 @@ export default function AssessmentForm() {
           {actionStatus === "ส่งซ่อมภายนอก" && (
             <ExternalVendorFields
               key={actionStatus}
-              vendorId={vendorId}
-              setVendorId={setVendorId}
+              companyId={vendorId}
+              setCompanyId={(id) => setVendorId(id)}
             />
           )}
 
@@ -313,7 +358,7 @@ export default function AssessmentForm() {
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={mutation.isPending}
               onClick={handleSaveDraft}
               className="px-5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
             >
@@ -322,16 +367,18 @@ export default function AssessmentForm() {
 
             <button
               type="button"
-              disabled={!isFormValid || isSubmitting}
+              disabled={!isFormValid || mutation.isPending}
               onClick={handleSubmit}
               className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold shadow-2xs transition-colors ${
-                isFormValid && !isSubmitting
+                isFormValid && !mutation.isPending
                   ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
             >
-              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isSubmitting ? "กำลังบันทึก..." : "บันทึกผลการประเมิน"}
+              {mutation.isPending && (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              )}
+              {mutation.isPending ? "กำลังบันทึก..." : "บันทึกผลการประเมิน"}
             </button>
           </div>
         </div>
