@@ -1,147 +1,180 @@
-import type { User } from "./TypeUser";
-
-// ─── Enums & Literals 
-
-export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 export type PriorityFilter = "ALL" | UrgencyStatus;
 export type AssessmentTab = "PENDING" | "REPAIR_LIST" | "CONFIRM_REPAIR";
 
-export type ActionTypeUI =
-  | "ซ่อมเองได้"
-  | "ขอเบิกอะไหล่ภายใน"
-  | "ขอเบิกอะไหล่ภายนอก"
-  | "ส่งซ่อมภายนอก"
-  | "ขอซื้อทดแทน";
+export type StepActionType =
+  | "SELF_REPAIR" // ซ่อมเองได้
+  | "INTERNAL_STOCK" // ขอเบิกอะไหล่ภายใน
+  | "EXTERNAL_STOCK" // ขอเบิกอะไหล่ภายนอก
+  | "OUTSOURCE" // ส่งซ่อมภายนอก
+  | "PURCHASE_REPLACEMENT"; // ขอซื้อทดแทน
 
-export type ActionType = ActionTypeUI;
+export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 
-// ─── Entities (Master Data) 
-
-export interface Asset {
-  assetId: number;
-  assetCode: string;
-  assetName: string;
-}
-
-export interface RepairCause {
-  causeId: number;
-  causeCode: string;
-  causeName: string;
-}
-
-export interface TechCategory {
-  techCategoryId: number;
-  categoryCode: string;
-  categoryName: string;
-  isActive: number;
+export interface BaseLookup {
+  id: number;
+  code?: string;
+  name: string;
 }
 
 export interface Company {
   id: string;
-  code: string;
   name: string;
-  tel: string;
-  email: string;
-  address: string;
-  fax: string;
-  group: string;
-  remark: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface SparePart {
-  sparepartId: string | number;
-  sparepartCode: number;
+  id: string;
+  code: string;
   name: string;
-  unit: string;
-  price: number;
-  minStock?: number;
   qtyInStock: number;
-  groupId?: number;
+  price: number;
+  unit: string;
 }
 
-export interface SelectedSparePart extends SparePart {
-  quantity: number;
+export interface Mechanic {
+  id: string;
+  employeeId: string;
+  userName: string;
+  firstname: string;
+  lastname: string;
+  email: string;
+  role: string;
+  imageUrl: string | null;
+  sectionId?: string;
+  section?: {
+    id: string;
+    name: string;
+    code: string;
+  };
 }
 
-// ─── Main Model 
+export interface RepairMetaLookups {
+  jobStatuses: BaseLookup[];
+  jobTypes: BaseLookup[];
+  causes: BaseLookup[];
+}
 
-export interface RepairJob {
-  jobId: number;
+export interface RepairListItem {
+  id: string;
   jobNo: string;
-  assetId: number;
-  sectionId?: number;
-  reporterId?: number;
+  symptom: string;
+  urgencyStatus: UrgencyStatus;
+  createdAt: string;
+  asset?: {
+    id: string;
+    name: string;
+    noid: string;
+    type?: {
+      id: number;
+      name: string;
+    };
+  };
+}
+
+export interface RepairDetail {
+  id: string;
+  jobNo: string;
+  assetId?: string;
+  sectionId?: string;
+  reporterId?: string;
   jobTypeId?: number;
   reportType?: string;
   jobStatusId?: number;
-  companyId?: number;
-  billNo?: string;
-  symptom: string;
-  diagnosis?: string;
+  companyId?: string | null;
+  diagnosis?: string | null;
+  symptom?: string;
   solution?: string;
   causeId?: number;
-  urgencyStatus: UrgencyStatus;
+  actionType?: string;
+  urgencyStatus?: UrgencyStatus;
   dueDate?: string;
-  returnDate?: string;
+  returnDate?: string | null;
   isRepeatRepair?: boolean;
   techCategoryId?: number;
-  receiverId?: number;
-  createdAt: string;
-  createdBy?: number;
+  createdAt?: string;
   updatedAt?: string;
-  updatedBy?: number;
 
-  asset?: Asset;
-  cause?: RepairCause;
-  techCategory?: TechCategory;
-  company?: Company;
-  assignees?: User[];
+  status?: {
+    id?: number;
+    code?: string;
+    label?: string;
+    name?: string;
+  };
+
+  asset?: {
+    id: string;
+    noid: string;
+    name: string;
+    model?: string;
+    serialNo?: string;
+    budgetType?: string;
+    acqType?: string;
+    price?: string;
+    warrantyDate?: string;
+    riskLevel?: string;
+    remark?: string;
+    imageUrl?: string;
+    type?: {
+      id: number;
+      name: string;
+    };
+  };
+
+  section?: {
+    id: string;
+    code?: string;
+    name?: string;
+    tel?: string;
+    building?: string;
+  };
+
+  reporter?: {
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    employeeId?: string;
+  };
+
+  mechanicRepairs?: Array<{
+    id: number;
+    userId: string;
+    user?: Mechanic;
+  }>;
+
+  sparepartTxns?: Array<{
+    id: number;
+    sparepartId: number;
+    qty: number;
+    unitPrice: string;
+    sparepart?: {
+      id: number;
+      code: string;
+      name: string;
+      unit: string;
+      price: string;
+      qtyInStock: number;
+    };
+  }>;
+
+  savedEvaluation?: RepairDetailDto | null;
 }
 
-// ─── Form State (สำหรับผูกข้อมูลฟอร์มประเมินของช่าง) ─────────────────────────
-
-export interface AssessmentFormState {
-  symptomCause?: string; 
-  solution?: string; 
-  causeCategory?: string; 
-  causeId?: number; 
-  isRepeat?: boolean; 
-  isRepeatRepair?: boolean; 
-  estimatedDays?: number | string; 
-  technicalDiagnosis?: string; 
-  dueDate?: string; 
-  vendorId?: string | number; 
-  companyId?: number; 
-  techCategoryId?: number; 
-  assigneeIds?: (string | number)[]; 
-  spares?: SelectedSparePart[]; 
-  [key: string]: any; 
-}
-
-
-
-export interface EvaluationSpareDto {
-  sparepartId: number;
-  qty: number;
-  unitPrice: number;
-}
-
-export interface EvaluationDto {
-  jobId: number;
-  actionType: ActionTypeUI;
+export interface RepairDetailDto {
+  stepActionType: StepActionType;
+  actionType?: string;
+  techCategoryId?: number;
+  jobTypeId?: number;
   symptomCause?: string;
   diagnosis?: string;
-  solution?: string;
-  causeCategory?: string;
-  causeId?: number;
-  isRepeatRepair?: boolean;
-  dueDate?: string;
-  technicalDiagnosis?: string;
-  assigneeIds: string[];
-  vendorId?: string | number;
-  companyId?: number;
-  techCategoryId?: number;
-  spares?: EvaluationSpareDto[];
+  solution: string;
+  causeId: number;
+  isRepeatRepair: boolean;
+  dueDate: string;
+  technicalDiagnosisDetail?: string;
+  mechanicIds: string[];
+  companyId?: string | null;
+  spareParts?: Array<{
+    sparepartId: number;
+    qty: number;
+  }>;
 }
