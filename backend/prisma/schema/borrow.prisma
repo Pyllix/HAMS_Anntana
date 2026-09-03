@@ -53,5 +53,9 @@ model BorrowTransaction {
   cancelledByUser User?        @relation("BorrowCancelledBy", fields: [cancelled_by_user_id], references: [id])
   borrowStatus    BorrowStatus @relation(fields: [borrow_status_id], references: [id])
 
+  @@index([asset_id])
+  @@index([borrower_id])
+  @@index([borrow_status_id])
+  @@index([createdAt])
   @@map("borrow_transaction")
 }

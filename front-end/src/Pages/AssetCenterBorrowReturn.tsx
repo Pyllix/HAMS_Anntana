@@ -21,10 +21,14 @@ import { useReturnModalStore } from "../stores/useReturnModalStore";
 import ReturnModal from "../components/borrow-return/ReturnModal";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
+import { useAuthStore } from "../stores/authStore";
 export default function AssetCenterBorrowReturn() {
+  const user = useAuthStore((state) => state.user);
+    const sectionId = user?.section_id;
+    
   const { data: assets } = useQuery({
-    queryKey: ["assets"],
-    queryFn: getAssets,
+    queryKey: ["assets", sectionId],
+    queryFn: () => getAssets(sectionId),
   });
 
   const { data: assetTypes } = useQuery({

@@ -11,6 +11,7 @@ import { getAssets } from "../../services/assetService";
 import { useMemo } from "react";
 import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
+import { useAuthStore } from "../../stores/authStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -171,9 +172,13 @@ interface Props {
 }
 
 export default function AssetsTable({ search, category, type }: Props) {
+
+  const user = useAuthStore((state) => state.user);
+  const sectionId = user?.section_id;
+  
   const { data: assets } = useQuery({
-    queryKey: ["assets"],
-    queryFn: getAssets,
+    queryKey: ["assets", sectionId],
+    queryFn: () => getAssets(sectionId),
   });
 
   const filteredAssets = useMemo(() => {

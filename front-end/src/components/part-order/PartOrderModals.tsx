@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   X,
   UploadCloud,
@@ -10,11 +10,250 @@ import {
   User,
   PlusCircle,
   FileSpreadsheet,
+  ShoppingCart,
 } from "lucide-react";
 import { usePartOrderModalStore } from "../../stores/usePartOrderModalStore";
-import { stockInSparepart } from "../../services/sparepartService";
-import { updateOrderStatus } from "../../services/partOrderService";
+import { stockInSparepart, getSpareParts } from "../../services/sparepartService";
+import { updateOrderStatus, createPartOrder } from "../../services/partOrderService";
 import type { StockInSparepartDto } from "../../Types/TypeSparePart";
+
+// ─── 0. Modal สร้างคำสั่งซื้ออะไหล่ใหม่ (Create Part Order / Stock-In) ─────────
+
+export function PartOrderCreateModal() {
+  const { isCreateModalOpen, preselectedSparepartId, closeCreateModal } =
+    usePartOrderModalStore();
+  const queryClient = useQueryClient();
+
+  const { data: spareParts } = useQuery({
+    queryKey: ["spareParts"],
+    queryFn: getSpareParts,
+    enabled: isCreateModalOpen,
+  });
+
+  const [selectedSparepartId, setSelectedSparepartId] = useState<number>(0);
+  const [qty, setQty] = useState<number>(1);
+  const [orderNo, setOrderNo] = useState<string>("");
+  const [totalPrice, setTotalPrice] = useState<number>(0);
+
+  const currentPart = spareParts?.find((p) => p.id === selectedSparepartId);
+
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      const initialId = preselectedSparepartId || spareParts?.[0]?.id || 0;
+      setSelectedSparepartId(initialId);
+      setOrderNo("");
+      setQty(1);
+      const matched = spareParts?.find((p) => p.id === initialId);
+      setTotalPrice(matched ? Number(matched.price) : 0);
+    }
+  }, [isCreateModalOpen, preselectedSparepartId, spareParts]);
+
+  const handlePartChange = (id: number) => {
+    setSelectedSparepartId(id);
+    const matched = spareParts?.find((p) => p.id === id);
+    if (matched) {
+      setTotalPrice(Number(matched.price) * qty);
+    }
+  };
+
+  const handleQtyChange = (val: number) => {
+    const q = Math.max(1, val);
+    setQty(q);
+    if (currentPart) {
+      setTotalPrice(Number(currentPart.price) * q);
+    }
+  };
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!currentPart) return;
+      if (!orderNo.trim()) {
+        alert("กรุณากรอกเลขที่เอกสาร / ใบสั่งซื้อ");
+        throw new Error("Doc No. is required");
+      }
+
+      const dto: StockInSparepartDto = {
+        sparepartId: currentPart.id,
+        qty: Number(qty),
+        totalPrice: Number(totalPrice),
+        sparepartAddDoc: orderNo.trim(),
+      };
+
+      try {
+        await stockInSparepart(dto);
+      } catch (err) {
+        console.warn("Backend stockIn warning:", err);
+      }
+
+      await createPartOrder({
+        sparepartId: currentPart.id,
+        partName: currentPart.name,
+        category: currentPart.group?.name || currentPart.category || "ทั่วไป",
+        unit: currentPart.unit || "ชิ้น",
+        quantity: Number(qty),
+        unitPrice: Number(currentPart.price),
+        totalPrice: Number(totalPrice),
+        orderNo: orderNo.trim(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["spareParts"] });
+      queryClient.invalidateQueries({ queryKey: ["partOrders"] });
+      closeCreateModal();
+    },
+  });
+
+  if (!isCreateModalOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+      <div className="relative w-full max-w-[500px] rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-slate-900 text-base">
+              สั่งซื้ออะไหล่เพิ่ม (Stock-In)
+            </h2>
+            <p className="text-2xs text-slate-500">
+              ส่งรายการสั่งซื้อเพื่อเพิ่มจำนวนคงคลังในระบบสต็อก
+            </p>
+          </div>
+          <button
+            onClick={closeCreateModal}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+          className="p-6 space-y-4 text-xs"
+        >
+          {/* 1. เลือกอะไหล่จากรายการสต็อก */}
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">
+              เลือกอะไหล่ที่ต้องการสั่งซื้อ <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedSparepartId}
+              onChange={(e) => handlePartChange(Number(e.target.value))}
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 focus:outline-hidden transition-all"
+              required
+            >
+              {spareParts?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  [{p.code}] {p.name} (คงเหลือ: {p.qtyInStock} {p.unit || "ชิ้น"})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* สรุปข้อมูลอะไหล่ที่เลือก */}
+          {currentPart && (
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center text-slate-600">
+              <div>
+                <p className="font-semibold text-slate-800">{currentPart.name}</p>
+                <p className="text-2xs text-slate-500 font-mono">
+                  หมวดหมู่: {currentPart.group?.name || currentPart.category || "ทั่วไป"} | หน่วย: {currentPart.unit || "ชิ้น"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xs text-slate-400">ราคา/หน่วย</p>
+                <p className="font-mono font-bold text-slate-800">
+                  {Number(currentPart.price).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 2. เลขที่เอกสารสั่งซื้อ */}
+          <div>
+            <label className="block text-xs font-bold text-slate-800 mb-1">
+              เลขที่เอกสาร / ใบสั่งซื้อ (Doc No.) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="เช่น PO-500 หรือ INV-2569-001"
+              value={orderNo}
+              onChange={(e) => setOrderNo(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* 3. จำนวนที่สั่งซื้อ */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                จำนวนที่สั่งซื้อ <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                  value={qty}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => handleQtyChange(parseInt(e.target.value) || 1)}
+                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs font-mono font-bold text-slate-900 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-slate-400 font-medium">
+                  {currentPart?.unit || "ชิ้น"}
+                </span>
+              </div>
+            </div>
+
+            {/* 4. ราคารวมทั้งสิ้น */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                ราคารวมทั้งสิ้น <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={totalPrice === 0 ? "" : totalPrice}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setTotalPrice(parseFloat(e.target.value) || 0)}
+                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs font-mono font-bold text-emerald-700 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-slate-400 font-medium">
+                  บาท
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex justify-end items-center gap-2.5 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={closeCreateModal}
+              className="px-5 h-9 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="px-6 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+            >
+              {mutation.isPending ? "กำลังบันทึก..." : "ยืนยันการสั่งซื้อ"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ─── 1. Modal รับเข้าสต็อก / เพิ่มจำนวนอะไหล่ (ERD: SPAREPART_ADD) ─────────────
 
@@ -30,8 +269,9 @@ export function PartOrderPurchasingModal() {
 
   useEffect(() => {
     if (selectedOrder) {
-      setQty(0);
-      setTotalPrice(0);
+      setQty(selectedOrder.quantity || 1);
+      const up = selectedOrder.unitPrice || 0;
+      setTotalPrice(up > 0 ? Number((up * (selectedOrder.quantity || 1)).toFixed(2)) : (selectedOrder.totalPrice || 0));
       setSparepartAddDoc(selectedOrder.orderNo || "");
     }
   }, [selectedOrder, isPurchasingModalOpen]);
@@ -48,7 +288,7 @@ export function PartOrderPurchasingModal() {
     mutationFn: async () => {
       if (!selectedOrder) return;
       const dto: StockInSparepartDto = {
-        sparepartId: selectedOrder.id,
+        sparepartId: selectedOrder.sparepart_id || selectedOrder.id,
         qty: Number(qty),
         totalPrice: Number(totalPrice),
         sparepartAddDoc: sparepartAddDoc || selectedOrder.orderNo,
@@ -219,23 +459,18 @@ export function PartOrderDetailModal() {
       <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-              <Package className="h-5 w-5" />
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-slate-900 text-base">
+                รายละเอียดใบสั่งซื้อ
+              </h2>
+              <span className="font-mono font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                {selectedOrder.orderNo}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-bold text-slate-900 text-base">
-                  รายละเอียดใบสั่งซื้อ
-                </h2>
-                <span className="font-mono font-bold text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                  {selectedOrder.orderNo}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                ข้อมูลสรุปการสั่งซื้ออะไหล่และการขอเบิก
-              </p>
-            </div>
+            <p className="text-xs text-slate-500">
+              ข้อมูลสรุปการสั่งซื้ออะไหล่และการขอเบิก
+            </p>
           </div>
           <button
             onClick={closeDetailModal}
@@ -262,28 +497,38 @@ export function PartOrderDetailModal() {
           </div>
 
           <div className="space-y-2 border-t border-slate-100 pt-3">
-            <p className="font-bold text-slate-800 flex items-center gap-1.5">
-              <User className="h-4 w-4 text-slate-500" />
-              ข้อมูลผู้ขอเบิก
+            <p className="font-bold text-slate-800">
+              ข้อมูลการสั่งซื้อและรับเข้าสต็อก (SPAREPART_ADD)
             </p>
-            <div className="grid grid-cols-2 gap-2 text-slate-600 pl-5">
-              <p>ผู้ขอเบิก: <span className="font-medium text-slate-800">{selectedOrder.requesterName}</span></p>
-              <p>หน่วยงาน: <span className="font-medium text-slate-800">{selectedOrder.department}</span></p>
-            </div>
-          </div>
-
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <p className="font-bold text-slate-800 flex items-center gap-1.5">
-              <Store className="h-4 w-4 text-slate-500" />
-              ข้อมูลการจัดซื้อ (SPAREPART_ADD)
-            </p>
-            <div className="space-y-1.5 text-slate-600 pl-5">
-              <p>ยี่ห้อ/รุ่น: <span className="font-medium text-slate-800">{selectedOrder.brandModel || "-"}</span></p>
-              <p>ร้านค้า/บริษัท: <span className="font-medium text-slate-800">{selectedOrder.supplier || "-"}</span></p>
-              <p>ราคาต่อหน่วย: <span className="font-mono text-slate-800">{selectedOrder.unitPrice ? `${selectedOrder.unitPrice.toLocaleString()} บาท` : "-"}</span></p>
-              <p>ราคารวมทั้งสิ้น: <span className="font-mono font-bold text-emerald-700">{selectedOrder.totalPrice ? `${selectedOrder.totalPrice.toLocaleString()} บาท` : "-"}</span></p>
-              <p>เอกสารแนบ: <span className="font-medium text-slate-800">{selectedOrder.sparepart_add_doc || "-"}</span></p>
-              <p>หมายเหตุ: <span className="font-medium text-slate-800">{selectedOrder.note || "-"}</span></p>
+            <div className="space-y-2 text-slate-600 pl-5">
+              <div className="flex justify-between">
+                <span>เลขที่เอกสารจัดซื้อ:</span>
+                <span className="font-mono font-bold text-slate-800">{selectedOrder.orderNo || selectedOrder.sparepart_add_doc || "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>จำนวนที่สั่งซื้อ:</span>
+                <span className="font-bold text-slate-800">{selectedOrder.quantity} {selectedOrder.unit || "ชิ้น"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>ราคาต่อหน่วย:</span>
+                <span className="font-mono text-slate-800">
+                  {selectedOrder.unitPrice ? `${Number(selectedOrder.unitPrice).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : "-"}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-100 pt-1.5">
+                <span className="font-semibold text-slate-800">ราคารวมทั้งสิ้น:</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {selectedOrder.totalPrice ? `${Number(selectedOrder.totalPrice).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : "-"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>วันที่ทำรายการ:</span>
+                <span className="text-slate-700">{selectedOrder.orderDate || "-"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>ผู้บันทึกรายการ:</span>
+                <span className="text-slate-700">{selectedOrder.requesterName || "เจ้าหน้าที่พัสดุ"}</span>
+              </div>
             </div>
           </div>
         </div>

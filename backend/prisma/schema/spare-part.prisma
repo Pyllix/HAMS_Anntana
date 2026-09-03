@@ -29,6 +29,7 @@ model Sparepart {
   sparepartAdds    SparepartAdd[]
   sparepartTxns    SparepartTxn[]
 
+  @@index([groupId])
   @@map("spareparts")
 }
 
@@ -46,6 +47,7 @@ model SparepartAdd {
   sparepart Sparepart @relation(fields: [sparepartId], references: [id])
   user      User      @relation(fields: [addBy], references: [id])
 
+  @@index([sparepartId])
   @@map("sparepart_adds")
 }
 
@@ -64,5 +66,8 @@ model SparepartTxn {
   user      User       @relation(fields: [txnBy], references: [id])
   repairJob RepairJob? @relation(fields: [jobId], references: [id])
 
+  @@index([sparepartId])
+  @@index([jobId])
+  @@index([txnType])
   @@map("sparepart_txns")
 }

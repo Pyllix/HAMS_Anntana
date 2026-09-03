@@ -7,8 +7,6 @@ import {
   Eye,
   Pencil,
   Trash2,
-  BatteryCharging,
-  Wrench,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpareParts } from "../../services/sparepartService";
@@ -58,7 +56,7 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
 
 function ActionsCell({ row }: { row: Sparepart }) {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF";
+  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
 
   return (
     <div className="flex items-center gap-2">
@@ -98,28 +96,6 @@ function ActionsCell({ row }: { row: Sparepart }) {
 
 const columns: Array<ColumnDef<typeof features, Sparepart>> = [
   {
-    id: "image",
-    header: "รูปภาพ",
-    cell: (info) => {
-      const item = info.row.original;
-      return (
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 border border-gray-200 overflow-hidden text-gray-400">
-          {item.imageUrl ? (
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="h-full w-full object-cover"
-            />
-          ) : item.category === "ไฟฟ้า" || item.group?.name === "ไฟฟ้า" ? (
-            <BatteryCharging className="h-5 w-5 text-gray-500" />
-          ) : (
-            <Wrench className="h-5 w-5 text-gray-500" />
-          )}
-        </div>
-      );
-    },
-  },
-  {
     id: "code",
     header: "รหัสอะไหล่",
     cell: (info) => {
@@ -151,18 +127,6 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
       return (
         <span className="text-sm text-gray-600 whitespace-nowrap">
           {row.group?.name || row.category || "-"}
-        </span>
-      );
-    },
-  },
-  {
-    id: "brand",
-    header: "ยี่ห้อ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <span className="text-sm text-gray-600 whitespace-nowrap">
-          {row.brand || "-"}
         </span>
       );
     },
@@ -246,7 +210,7 @@ export default function SparePartTable({
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6;
+  const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -259,8 +223,7 @@ export default function SparePartTable({
       const matchesSearch =
         search === "" ||
         item.name?.toLowerCase().includes(sl) ||
-        item.code?.toLowerCase().includes(sl) ||
-        item.brand?.toLowerCase().includes(sl);
+        item.code?.toLowerCase().includes(sl);
       const matchesCategory =
         category === "ALL" ||
         item.category === category ||

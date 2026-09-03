@@ -7,12 +7,17 @@ import type {
   Section,
 } from "../types/TypeAsset";
 
-export async function getAssets(): Promise<Asset[]> {
+export async function getAssets(
+  section_id?: string | number,
+): Promise<Asset[]> {
   const token = localStorage.getItem("token");
 
   const res = await axios.get("https://hams-anntana.onrender.com/asset", {
     headers: {
       Authorization: `Bearer ${token}`,
+    },
+    params: {
+      ...(section_id && { section_id }),
     },
   });
 
@@ -22,14 +27,11 @@ export async function getAssets(): Promise<Asset[]> {
 export async function getAssetTypes(): Promise<AssetType[]> {
   const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/asset-type",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  const res = await axios.get("https://hams-anntana.onrender.com/asset-type", {
+    headers: {
+      Authorization: `Bearer ${token}`,
     },
-  );
+  });
 
   return res.data;
 }
@@ -67,14 +69,11 @@ export async function getAssetStatuses(): Promise<AssetStatus[]> {
 export async function getSections(): Promise<Section[]> {
   const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/sections",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  const res = await axios.get("https://hams-anntana.onrender.com/sections", {
+    headers: {
+      Authorization: `Bearer ${token}`,
     },
-  );
+  });
 
   return res.data;
 }
@@ -108,5 +107,3 @@ export async function getAssetsBySection(sectionId: string): Promise<Asset[]> {
 
   return res.data.data;
 }
-
-

@@ -15,6 +15,7 @@
 | 4 | **`GET /users`** | **ขาด Filter ด้านแผนก** ใน `QueryUserDto`<br>มีแค่ `role`, `search` แต่ไม่มี `section_id` สำหรับ Dropdown แยกรายแผนก | 🟡 **ปานกลาง (Medium)** | ✅ **เสร็จสิ้น** |
 | 5 | **`GET /spare-parts/transactions`** | **ขาด Filter ด้านช่วงเวลาและผู้ทำรายการ** ใน `QuerySparepartTxnDto`<br>มีแค่ `sparepartId`, `jobId`, `txnType` แต่ไม่มี `startDate`, `endDate`, `userId` | 🟡 **ปานกลาง (Medium)** | ✅ **เสร็จสิ้น** |
 | 6 | **`GET /company`, `GET /sections`** | **ไม่มี Search และ Pagination**<br>ดึงข้อมูลทั้งหมดออกมาแบบ Flat Array (ปัจจุบันยังไม่ส่งผลมากเพราะข้อมูลหลักสิบถึงร้อยรายการ) | 🟢 **ต่ำ (Low)** | รอดำเนินการ |
+| 7 | **`GET /asset/statistics` (ใหม่)** | **API สรุปผลรวมและแจกแจงตาม Status สำหรับหน้า Dashboard / KPI Boxes**<br>รองรับการนับยอดรวม (Total Assets), ยอดแยกตาม Asset Status (ปกติ, ชำรุด, ส่งซ่อม), และ Availability (พร้อมใช้, ถูกยืม) โดยใช้ `prisma.groupBy()` แทนการวนลูปนับบน Frontend | 🟡 **ปานกลาง (Medium)** | 📋 **รอดำเนินการ** |
 
 ---
 
@@ -57,6 +58,18 @@
   * คืนค่าเป็น Array ทั้งหมด (`findMany`)
 * **แนวทางแก้ไข:**
   * เพิ่ม `PaginationDto` และ Search filter เมื่อปริมาณข้อมูลเริ่มมีขนาดใหญ่
+
+---
+
+### 🟡 7. โมดูล Asset Summary & Statistics (`GET /asset/statistics`)
+* **ความต้องการ:**
+  * หน้า Frontend ต้องการแสดงกล่อง KPI/Card Summary (เช่น จำนวนครุภัณฑ์ทั้งหมด, ปกติ, ชำรุด, กำลังซ่อม, พร้อมใช้งาน, ถูกยืม) ด้านบนของตารางครุภัณฑ์ที่มี Pagination
+* **ปัญหาเดิมหากคำนวณที่ Frontend:**
+  * การบังคับดึง `limit=99999` มานับเองทำให้เกิด Network Overhead และหน้าเว็บกระตุก
+* **แนวทางแก้ไข (Enterprise Pattern):**
+  * เพิ่ม Endpoint `GET /asset/statistics?section_id=...`
+  * ใช้ `prisma.asset.count()` และ `prisma.asset.groupBy()` บน PostgreSQL Engine เพื่อความรวดเร็วระดับ milliseconds
+  * คืน Response เป็นก้อน JSON ขนาดเล็ก ให้ Frontend นำไปผูกกับ Card Boxes ได้ทันที และสามารถคลิกที่ Card เพื่อ Filter ตารางได้
 
 ---
 
