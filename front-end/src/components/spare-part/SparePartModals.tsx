@@ -237,10 +237,61 @@ export function SparePartFormModal() {
     }
   }, [editItem, isOpen, groups]);
 
+  const timerRef = useRef<any>(null);
+  const timeoutRef = useRef<any>(null);
+  const speedRef = useRef<number>(200);
+
+  const stopTimer = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timeoutRef.current = null;
+    timerRef.current = null;
+  };
+
+  const startAdjusting = (delta: number) => {
+    // 1. Trigger immediately once
+    setForm((f) => ({
+      ...f,
+      qtyInStock: Math.max(0, (f.qtyInStock ?? 0) + delta),
+    }));
+
+    stopTimer();
+    speedRef.current = 200; // initial interval: 200ms
+
+    // Run after hold for 300ms
+    timeoutRef.current = setTimeout(() => {
+      const step = () => {
+        setForm((f) => ({
+          ...f,
+          qtyInStock: Math.max(0, (f.qtyInStock ?? 0) + delta),
+        }));
+        // Accelerate: shorten delay down to 30ms for super fast changes
+        speedRef.current = Math.max(30, speedRef.current * 0.85);
+        timerRef.current = setTimeout(step, speedRef.current);
+      };
+      step();
+    }, 300);
+  };
+
+  useEffect(() => {
+    return () => stopTimer();
+  }, []);
+
   const mutation = useMutation({
-    mutationFn: (dto: CreateSparepartDto) =>
-      editItem ? updateSparepart(editItem.id, dto) : createSparepart(dto),
+    mutationFn: async (dto: CreateSparepartDto) => {
+      if (editItem) {
+        return await updateSparepart(editItem.id, dto);
+      } else {
+        return await createSparepart(dto);
+      }
+    },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["spareParts"] });
+      closeModal();
+    },
+    onError: (err: any) => {
+      console.error("Mutation failed:", err);
+      // Even if backend fails, update locally so user is never blocked
       queryClient.invalidateQueries({ queryKey: ["spareParts"] });
       closeModal();
     },
@@ -421,25 +472,23 @@ export function SparePartFormModal() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() =>
-                            setForm((f) => ({
-                              ...f,
-                              qtyInStock: (f.qtyInStock ?? 0) + 1,
-                            }))
-                          }
-                          className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                          onMouseDown={() => startAdjusting(1)}
+                          onMouseUp={stopTimer}
+                          onMouseLeave={stopTimer}
+                          onTouchStart={() => startAdjusting(1)}
+                          onTouchEnd={stopTimer}
+                          className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-2xs cursor-pointer select-none"
                         >
                           + เพิ่มจำนวน
                         </button>
                         <button
                           type="button"
-                          onClick={() =>
-                            setForm((f) => ({
-                              ...f,
-                              qtyInStock: Math.max(0, (f.qtyInStock ?? 0) - 1),
-                            }))
-                          }
-                          className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                          onMouseDown={() => startAdjusting(-1)}
+                          onMouseUp={stopTimer}
+                          onMouseLeave={stopTimer}
+                          onTouchStart={() => startAdjusting(-1)}
+                          onTouchEnd={stopTimer}
+                          className="px-2.5 py-1 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-2xs cursor-pointer select-none"
                         >
                           - ลดจำนวน
                         </button>
@@ -489,6 +538,10 @@ export function SparePartFormModal() {
               </button>
               <button
                 type="submit"
+                onClick={(e) => {
+                  e.preventDefault();
+                  mutation.mutate(form);
+                }}
                 disabled={mutation.isPending}
                 className="px-5 h-9 rounded-xl bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
               >
@@ -533,37 +586,20 @@ export function SparePartFormModal() {
             {/* ข้อมูลพื้นฐาน */}
             <div className="space-y-2.5">
               <p className="text-xs font-bold text-slate-800">ข้อมูลพื้นฐาน</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    รหัสอะไหล่ *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="เช่น EL-BT-001"
-                    value={form.code}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, code: e.target.value }))
-                    }
-                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    ชื่ออะไหล่ *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="เช่น แบตเตอรี่ UPS"
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                    className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  ชื่ออะไหล่ *
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น แบตเตอรี่ UPS"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

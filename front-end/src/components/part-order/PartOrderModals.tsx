@@ -11,6 +11,8 @@ import {
   PlusCircle,
   FileSpreadsheet,
   ShoppingCart,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 import { usePartOrderModalStore } from "../../stores/usePartOrderModalStore";
 import { stockInSparepart, getSpareParts } from "../../services/sparepartService";
@@ -34,8 +36,25 @@ export function PartOrderCreateModal() {
   const [qty, setQty] = useState<number | "">(1);
   const [orderNo, setOrderNo] = useState<string>("");
   const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [searchPartTerm, setSearchPartTerm] = useState<string>("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentPart = spareParts?.find((p) => p.id === selectedSparepartId);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isCreateModalOpen) {
@@ -43,6 +62,8 @@ export function PartOrderCreateModal() {
       setSelectedSparepartId(initialId);
       setOrderNo("");
       setQty(1);
+      setSearchPartTerm("");
+      setIsDropdownOpen(false);
       const matched = spareParts?.find((p) => p.id === initialId);
       setTotalPrice(matched ? Number(matched.price) : 0);
     }
@@ -55,7 +76,18 @@ export function PartOrderCreateModal() {
       const currentQty = typeof qty === "number" ? qty : 0;
       setTotalPrice(Number(matched.price) * currentQty);
     }
+    setIsDropdownOpen(false);
+    setSearchPartTerm("");
   };
+
+  const filteredParts = (spareParts || []).filter((p) => {
+    const term = searchPartTerm.toLowerCase().trim();
+    if (!term) return true;
+    const nameMatch = p.name.toLowerCase().includes(term);
+    const codeMatch = (p.code || "").toLowerCase().includes(term);
+    const catMatch = (p.group?.name || p.category || "").toLowerCase().includes(term);
+    return nameMatch || codeMatch || catMatch;
+  });
 
   const handleQtyChange = (valStr: string) => {
     if (valStr === "") {
@@ -114,7 +146,7 @@ export function PartOrderCreateModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-      <div className="relative w-full max-w-[500px] rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-[500px] max-w-[95vw] rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
@@ -141,42 +173,99 @@ export function PartOrderCreateModal() {
           }}
           className="p-6 space-y-4 text-xs"
         >
-          {/* 1. เลือกอะไหล่จากรายการสต็อก */}
-          <div>
+          {/* 1. เลือกอะไหล่จากรายการสต็อก (Searchable Combobox) */}
+          <div className="relative" ref={dropdownRef}>
             <label className="block text-xs font-bold text-slate-800 mb-1">
               เลือกอะไหล่ที่ต้องการสั่งซื้อ <span className="text-red-500">*</span>
             </label>
-            <select
-              value={selectedSparepartId}
-              onChange={(e) => handlePartChange(Number(e.target.value))}
-              className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 focus:outline-hidden transition-all"
-              required
-            >
-              {spareParts?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  [{p.code}] {p.name} (คงเหลือ: {p.qtyInStock} {p.unit || "ชิ้น"})
-                </option>
-              ))}
-            </select>
+
+            {/* Input Trigger / Search Box */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="พิมพ์เพื่อค้นหาชื่ออะไหล่ หรือรหัส..."
+                value={isDropdownOpen ? searchPartTerm : (currentPart ? `[${currentPart.code || 'ไม่มีรหัส'}] ${currentPart.name}` : "")}
+                onFocus={() => {
+                  setIsDropdownOpen(true);
+                  setSearchPartTerm("");
+                }}
+                onChange={(e) => {
+                  setSearchPartTerm(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-8 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-hidden transition-all shadow-2xs"
+              />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen((prev) => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+
+            {/* Dropdown Options List */}
+            {isDropdownOpen && (
+              <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl py-1 text-xs divide-y divide-slate-50 animate-in fade-in zoom-in-95 duration-100">
+                {filteredParts.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-slate-400">
+                    ไม่พบรายการอะไหล่ที่ค้นหา "{searchPartTerm}"
+                  </div>
+                ) : (
+                  filteredParts.map((p) => {
+                    const isSelected = p.id === selectedSparepartId;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handlePartChange(p.id)}
+                        className={`w-full text-left px-3.5 py-2.5 hover:bg-emerald-50/80 transition-colors flex items-center justify-between cursor-pointer ${isSelected ? "bg-emerald-50 text-emerald-800 font-semibold" : "text-slate-700"
+                          }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="truncate text-xs">
+                            <span className="font-mono text-slate-500 text-2xs mr-1">
+                              [{p.code || "SP"}]
+                            </span>
+                            {p.name}
+                          </p>
+                          <p className="text-2xs text-slate-400 mt-0.5">
+                            {p.group?.name || p.category || "ทั่วไป"} | ฿{Number(p.price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-2xs text-slate-500">
+                          คงเหลือ <strong className="font-bold text-emerald-600">{p.qtyInStock}</strong> {p.unit || "ชิ้น"}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
-          {/* สรุปข้อมูลอะไหล่ที่เลือก */}
-          {currentPart && (
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center text-slate-600">
-              <div>
-                <p className="font-semibold text-slate-800">{currentPart.name}</p>
-                <p className="text-2xs text-slate-500 font-mono">
-                  หมวดหมู่: {currentPart.group?.name || currentPart.category || "ทั่วไป"} | หน่วย: {currentPart.unit || "ชิ้น"}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-2xs text-slate-400">ราคา/หน่วย</p>
-                <p className="font-mono font-bold text-slate-800">
-                  {Number(currentPart.price).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-                </p>
-              </div>
-            </div>
-          )}
+          {/* สรุปข้อมูลอะไหล่ที่เลือก (Fixed layout to avoid jumping) */}
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 min-h-[58px] flex items-center justify-between text-slate-600">
+            {currentPart ? (
+              <>
+                <div className="min-w-0 pr-2">
+                  <p className="font-semibold text-slate-800 truncate">{currentPart.name}</p>
+                  <p className="text-2xs text-slate-500 font-mono truncate">
+                    หมวดหมู่: {currentPart.group?.name || currentPart.category || "ทั่วไป"} | หน่วย: {currentPart.unit || "ชิ้น"}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-2xs text-slate-400">ราคา/หน่วย</p>
+                  <p className="font-mono font-bold text-slate-800">
+                    {Number(currentPart.price).toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-2xs text-slate-400 italic">กรุณาเลือกรายการอะไหล่</p>
+            )}
+          </div>
 
           {/* 2. เลขที่เอกสารสั่งซื้อ */}
           <div>

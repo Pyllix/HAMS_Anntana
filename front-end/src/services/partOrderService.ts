@@ -129,15 +129,52 @@ let localOrders: PartOrder[] = loadSavedOrders();
 
 export async function getPartOrders(): Promise<PartOrder[]> {
   try {
+    // 1. ลองดึงข้อมูลประวัติการสั่งซื้อ/รับเข้าอะไหล่จริงจาก Backend
     const res = await axios.get(
-      `${BASE_URL}/part-orders?limit=100`,
+      `${BASE_URL}/spare-parts/stock-in-history?limit=100`,
       getHeaders(),
     );
     const data = res.data;
-    const items = Array.isArray(data) ? data : (data?.data ?? []);
-    if (items.length > 0) return items;
+    const historyList = Array.isArray(data) ? data : (data?.data ?? []);
+
+    if (historyList.length > 0) {
+      // แปลงข้อมูลจาก SparepartAdd ให้เป็น PartOrder เพื่อนำไปแสดงในตาราง
+      const mappedOrders: PartOrder[] = historyList.map((item: any) => {
+        const orderDateStr = item.createdAt
+          ? new Date(item.createdAt).toISOString().split("T")[0]
+          : "2026-03-20";
+
+        return {
+          id: item.id,
+          orderNo: item.sparepartAddDoc || `PO-${item.id}`,
+          partName: item.sparepart?.name || "ไม่ระบุชื่ออะไหล่",
+          quantity: item.qty || 0,
+          unit: item.sparepart?.unit || "ชิ้น",
+          category: item.sparepart?.group?.name || "ทั่วไป",
+          urgency: "NORMAL",
+          requesterName: item.user ? `${item.user.firstname || ""} ${item.user.lastname || ""}`.trim() || "เจ้าหน้าที่พัสดุ" : "เจ้าหน้าที่พัสดุ",
+          department: "แผนกพัสดุ",
+          sparepart_id: item.sparepartId,
+          unitPrice: item.totalPrice && item.qty ? Number((item.totalPrice / item.qty).toFixed(2)) : 0,
+          totalPrice: item.totalPrice ? Number(item.totalPrice) : 0,
+          sparepart_add_doc: item.sparepartAddDoc || "",
+          orderDate: orderDateStr,
+          status: "RECEIVED" as PartOrderStatus,
+          createdAt: item.createdAt,
+        };
+      });
+
+      // รวมรายการจาก localStorage ที่อาจยังไม่ขึ้น backend (ถ้ามี)
+      const saved = loadSavedOrders();
+      const backendDocNos = new Set(mappedOrders.map((o) => o.orderNo));
+      const extraSaved = saved.filter((s) => !backendDocNos.has(s.orderNo));
+
+      return [...mappedOrders, ...extraSaved];
+    }
+
     return loadSavedOrders();
-  } catch {
+  } catch (err) {
+    console.warn("Could not fetch stock-in-history from backend, using fallback:", err);
     return loadSavedOrders();
   }
 }

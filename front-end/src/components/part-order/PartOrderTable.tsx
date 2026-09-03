@@ -151,11 +151,13 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
 interface PartOrderTableProps {
   search?: string;
   dateFilter?: string;
+  categoryFilter?: string;
 }
 
 export default function PartOrderTable({
   search = "",
   dateFilter = "ALL",
+  categoryFilter = "ALL",
 }: PartOrderTableProps) {
   const { data: spareParts = [], isLoading: isPartsLoading } = useQuery({
     queryKey: ["spareParts"],
@@ -169,17 +171,30 @@ export default function PartOrderTable({
 
   const isLoading = isPartsLoading || isOrdersLoading;
 
-  // รายการคำสั่งซื้ออะไหล่ทั้งหมด (เรียงรายการใหม่ล่าสุดไว้บนสุด)
+  // รายการคำสั่งซื้ออะไหล่ทั้งหมด (เรียงรายการใหม่ล่าสุดไว้บนสุด และ map หมวดหมู่จาก spareParts)
   const realOrders: PartOrder[] = useMemo(() => {
-    return orders;
-  }, [orders]);
+    const partsMap = new Map(spareParts.map((p) => [p.id, p]));
+    return orders.map((o) => {
+      const part = o.sparepart_id ? partsMap.get(o.sparepart_id) : undefined;
+      const realCategory =
+        part?.group?.name ||
+        part?.category ||
+        (o.category && o.category !== "ทั่วไป" ? o.category : undefined) ||
+        "ทั่วไป";
+
+      return {
+        ...o,
+        category: realCategory,
+      };
+    });
+  }, [orders, spareParts]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateFilter]);
+  }, [search, dateFilter, categoryFilter]);
 
   const filteredData = useMemo(() => {
     return realOrders.filter((item) => {
@@ -196,9 +211,14 @@ export default function PartOrderTable({
         item.orderDate === dateFilter ||
         (item.orderDate && item.orderDate.startsWith(dateFilter));
 
-      return matchesSearch && matchesDate;
+      const matchesCategory =
+        !categoryFilter ||
+        categoryFilter === "ALL" ||
+        item.category === categoryFilter;
+
+      return matchesSearch && matchesDate && matchesCategory;
     });
-  }, [realOrders, search, dateFilter]);
+  }, [realOrders, search, dateFilter, categoryFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;

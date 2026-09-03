@@ -39,7 +39,7 @@ export function getSparePartStatus(item: Sparepart): SparePartStockStatus {
 // ─── DTOs ──────────────────────────────────────────────────────────────────────
 
 export interface CreateSparepartDto {
-  code: string;
+  code?: string;
   name: string;
   groupId: number;
   price: number;

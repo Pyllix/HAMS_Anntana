@@ -18,8 +18,27 @@ function getHeaders() {
   };
 }
 
+const STORAGE_KEY = "hams_spareparts_storage_v1";
+
+function loadSavedSpareparts(): Sparepart[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSparepartsToStorage(items: Sparepart[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // ignore
+  }
+}
+
 // Local store for fallback/offline persistence
-let localSpareparts: Sparepart[] = [];
+let localSpareparts: Sparepart[] = loadSavedSpareparts();
 
 // ─── Spare Part Groups ────────────────────────────────────────────────────────
 
@@ -56,9 +75,15 @@ export async function getSpareParts(): Promise<Sparepart[]> {
     const data = res.data;
     const items: Sparepart[] = Array.isArray(data) ? data : (data?.data ?? []);
     if (items.length > 0) {
+      const localMap = new Map(localSpareparts.map((l) => [l.id, l]));
+      // Merge: take backend item, but override with local changes if edited
+      const merged = items.map((item) => {
+        const local = localMap.get(item.id);
+        return local ? { ...item, ...local } : item;
+      });
       const backendIds = new Set(items.map((i) => i.id));
       const newLocals = localSpareparts.filter((l) => !backendIds.has(l.id));
-      return [...items, ...newLocals];
+      return [...merged, ...newLocals];
     }
     return localSpareparts;
   } catch (err) {
@@ -84,8 +109,7 @@ export async function getSparepartById(id: number): Promise<Sparepart> {
 export async function createSparepart(
   dto: CreateSparepartDto,
 ): Promise<Sparepart> {
-  const payload = {
-    code: dto.code,
+  const payload: Record<string, any> = {
     name: dto.name,
     unit: dto.unit || "ชิ้น",
     price: Number(dto.price),
@@ -93,6 +117,9 @@ export async function createSparepart(
     qtyInStock: Number(dto.qtyInStock ?? 0),
     groupId: Number(dto.groupId || 1),
   };
+  if (dto.code) {
+    payload.code = dto.code;
+  }
 
   try {
     const res = await axios.post(
@@ -105,12 +132,13 @@ export async function createSparepart(
       category: dto.category || res.data?.group?.name || "ไฟฟ้า",
     };
     localSpareparts = [saved, ...localSpareparts.filter((i) => i.id !== saved.id)];
+    saveSparepartsToStorage(localSpareparts);
     return saved;
   } catch (err) {
     console.warn("Backend create spare part failed, saving locally:", err);
     const fallbackItem: Sparepart = {
       id: Date.now(),
-      code: dto.code,
+      code: dto.code || `SP-${Date.now().toString().slice(-4)}`,
       name: dto.name,
       unit: dto.unit || "ชิ้น",
       price: Number(dto.price),
@@ -120,6 +148,7 @@ export async function createSparepart(
       category: dto.category || "ไฟฟ้า",
     };
     localSpareparts = [fallbackItem, ...localSpareparts];
+    saveSparepartsToStorage(localSpareparts);
     return fallbackItem;
   }
 }
@@ -147,13 +176,26 @@ export async function updateSparepart(
       ...res.data,
       ...dto,
     };
-    localSpareparts = localSpareparts.map((i) => (i.id === id ? { ...i, ...updated } : i));
+    const exists = localSpareparts.some((i) => i.id === id);
+    if (exists) {
+      localSpareparts = localSpareparts.map((i) => (i.id === id ? { ...i, ...updated } : i));
+    } else {
+      localSpareparts = [updated, ...localSpareparts];
+    }
+    saveSparepartsToStorage(localSpareparts);
     return updated;
   } catch (err) {
     console.warn("Backend update failed, updating locally:", err);
-    localSpareparts = localSpareparts.map((i) =>
-      i.id === id ? ({ ...i, ...dto } as Sparepart) : i,
-    );
+    const exists = localSpareparts.some((i) => i.id === id);
+    const fallback = { id, ...dto } as Sparepart;
+    if (exists) {
+      localSpareparts = localSpareparts.map((i) =>
+        i.id === id ? ({ ...i, ...dto } as Sparepart) : i,
+      );
+    } else {
+      localSpareparts = [fallback, ...localSpareparts];
+    }
+    saveSparepartsToStorage(localSpareparts);
     const item = localSpareparts.find((i) => i.id === id);
     return item!;
   }
@@ -169,6 +211,7 @@ export async function deleteSparepart(id: number): Promise<void> {
     console.warn("Backend delete failed, removing locally:", err);
   }
   localSpareparts = localSpareparts.filter((i) => i.id !== id);
+  saveSparepartsToStorage(localSpareparts);
 }
 
 // ─── Stock In & Reports ───────────────────────────────────────────────────────
