@@ -57,7 +57,7 @@ export async function getSpareParts(): Promise<SparePart[]> {
   return res.data;
 }
 
-export async function getRepairMetaLookups(): Promise<RepairMetaLookups[]> {
+export async function getRepairMetaLookups(): Promise<RepairMetaLookups> {
   const res = await axios.get(`${BASE_URL}/repairs/lookups/meta`, getHeaders());
   return res.data;
 }
