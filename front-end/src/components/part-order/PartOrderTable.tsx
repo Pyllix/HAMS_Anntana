@@ -151,11 +151,13 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
 interface PartOrderTableProps {
   search?: string;
   dateFilter?: string;
+  categoryFilter?: string;
 }
 
 export default function PartOrderTable({
   search = "",
   dateFilter = "ALL",
+  categoryFilter = "ALL",
 }: PartOrderTableProps) {
   const { data: spareParts = [], isLoading: isPartsLoading } = useQuery({
     queryKey: ["spareParts"],
@@ -169,47 +171,30 @@ export default function PartOrderTable({
 
   const isLoading = isPartsLoading || isOrdersLoading;
 
-  // สร้างรายการคำสั่งซื้อจากสต็อกจริงที่มีอยู่ในระบบ โดยให้รายการใหม่สุดอยู่บนสุด (Row แรก)
+  // รายการคำสั่งซื้ออะไหล่ทั้งหมด (เรียงรายการใหม่ล่าสุดไว้บนสุด และ map หมวดหมู่จาก spareParts)
   const realOrders: PartOrder[] = useMemo(() => {
-    // รายการที่ผู้ใช้สั่งซื้อเพิ่มเข้ามาใหม่
-    const userCreated = orders.filter((o) => o.id > 1000);
+    const partsMap = new Map(spareParts.map((p) => [p.id, p]));
+    return orders.map((o) => {
+      const part = o.sparepart_id ? partsMap.get(o.sparepart_id) : undefined;
+      const realCategory =
+        part?.group?.name ||
+        part?.category ||
+        (o.category && o.category !== "ทั่วไป" ? o.category : undefined) ||
+        "ทั่วไป";
 
-    if (!spareParts || spareParts.length === 0) return orders;
-
-    // สร้าง Order เริ่มต้นสำหรับอะไหล่แต่ละชิ้นในตารางสต็อกจริง
-    const fromStock: PartOrder[] = spareParts.map((part, idx) => {
-      const poNum = 499 - idx;
-      const initialQty = Math.max(1, part.qtyInStock > 0 ? part.qtyInStock : 5);
-      const price = Number(part.price) || 0;
       return {
-        id: part.id,
-        orderNo: `PO-${poNum}`,
-        partName: part.name,
-        quantity: initialQty,
-        unit: part.unit || "ชิ้น",
-        category: part.group?.name || part.category || "ทั่วไป",
-        urgency: "NORMAL",
-        requesterName: "เจ้าหน้าที่พัสดุ",
-        department: "แผนกพัสดุ",
-        unitPrice: price,
-        totalPrice: Number((price * initialQty).toFixed(2)),
-        orderDate: "2026-03-20",
-        status: "RECEIVED",
-        sparepart_id: part.id,
-        sparepart_add_doc: `PO-${poNum}`,
+        ...o,
+        category: realCategory,
       };
     });
-
-    // ให้ userCreated (รายการสั่งซื้อใหม่ล่าสุด) อยู่ด้านบนสุดเสมอ
-    return [...userCreated, ...fromStock];
-  }, [spareParts, orders]);
+  }, [orders, spareParts]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateFilter]);
+  }, [search, dateFilter, categoryFilter]);
 
   const filteredData = useMemo(() => {
     return realOrders.filter((item) => {
@@ -226,9 +211,14 @@ export default function PartOrderTable({
         item.orderDate === dateFilter ||
         (item.orderDate && item.orderDate.startsWith(dateFilter));
 
-      return matchesSearch && matchesDate;
+      const matchesCategory =
+        !categoryFilter ||
+        categoryFilter === "ALL" ||
+        item.category === categoryFilter;
+
+      return matchesSearch && matchesDate && matchesCategory;
     });
-  }, [realOrders, search, dateFilter]);
+  }, [realOrders, search, dateFilter, categoryFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;

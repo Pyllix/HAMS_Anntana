@@ -17,127 +17,165 @@ function getHeaders() {
 }
 
 // ─── Initial Part Orders ──────────────────────────────────────────────────────
-const initialOrders: PartOrder[] = [
+const defaultFallbackOrders: PartOrder[] = [
   {
-    id: 1,
+    id: 101,
     orderNo: "PO-499",
-    partName: "หลอดนีออน 20 W PH",
+    partName: "ฟิวส์เซรามิก 10A 250V (แพ็ก 10 ชิ้น)",
     quantity: 10,
-    unit: "หลอด",
-    category: "วัสดุไฟฟ้า",
-    urgency: "EMERGENCY",
-    requesterName: "นายมานะ อดทน",
-    department: "ช่าง",
-    brandModel: "Philips Super 80 T8 20W",
-    supplier: "ร้านไฟฟ้าแสงทอง พลาซ่า",
-    unitPrice: 65.0,
-    totalPrice: 650.0,
-    orderDate: "",
-    status: "PENDING_PURCHASE_INFO",
+    unit: "แพ็ก",
+    category: "อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ",
+    urgency: "NORMAL",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    unitPrice: 150.0,
+    totalPrice: 1500.0,
+    orderDate: "2026-03-20",
+    status: "RECEIVED",
+    sparepart_id: 1,
   },
   {
-    id: 2,
+    id: 102,
     orderNo: "PO-498",
-    partName: "แบตเตอรี่เครื่องกระตุกหัวใจ (Li-ion 14.4V)",
+    partName: "แบตเตอรี่สำรองฉุกเฉินสำหรับ Defibrillator 12V 4.5Ah",
     quantity: 2,
     unit: "ก้อน",
-    category: "อะไหล่เครื่องมือแพทย์",
+    category: "อะไหล่ระบบไฟฟ้าและแหล่งจ่ายไฟ",
     urgency: "NORMAL",
-    requesterName: "นส. ใจดี รักเรียน",
-    department: "เจ้าหน้าที่ศูนย์",
-    brandModel: "Mindray รุ่น LI24I001A (Original Part)",
-    supplier: "บริษัท เอสแพคกรุ๊ป(ประเทศไทย) จำกัด",
-    unitPrice: 8500.0,
-    totalPrice: 17000.0,
-    orderDate: "",
-    status: "PENDING_PURCHASE_INFO",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    unitPrice: 3200.0,
+    totalPrice: 6400.0,
+    orderDate: "2026-03-18",
+    status: "RECEIVED",
+    sparepart_id: 2,
   },
   {
-    id: 3,
+    id: 103,
     orderNo: "PO-497",
-    partName: "รางปลั๊กไฟ 5 ช่อง (สายยาว 5 เมตร)",
+    partName: "วาล์วควบคุมแรงดันออกซิเจนความแม่นยำสูง (O2 Regulator Valve)",
     quantity: 5,
     unit: "ชุด",
-    category: "วัสดุไฟฟ้า",
-    urgency: "EMERGENCY",
-    requesterName: "นายสมชาย รักเรียน",
-    department: "ช่าง",
-    brandModel: "TOSHINO รุ่น ET-9155M",
-    supplier: "บริษัท อมร อีเล็คโทรนิคส์ จำกัด",
-    unitPrice: 450.0,
-    totalPrice: 4500.0,
-    orderDate: "2026-03-21",
-    status: "APPROVED",
-  },
-  {
-    id: 4,
-    orderNo: "PO-496",
-    partName: "ลำโพงคอมพิวเตอร์ 2.1 Channel (มี Subwoofer)",
-    quantity: 2,
-    unit: "เครื่อง",
-    category: "วัสดุคอมพิวเตอร์",
+    category: "อะไหล่ระบบท่อและก๊าซทางการแพทย์",
     urgency: "NORMAL",
-    requesterName: "นส. ใจดี รักเรียน",
-    department: "เจ้าหน้าที่ศูนย์",
-    brandModel: "Microlab รุ่น X2",
-    supplier: "บริษัท แอดไวซ์ไอทีอินฟินิทจำกัด(มหาชน)",
-    unitPrice: 1590.0,
-    totalPrice: 3180.0,
-    orderDate: "2026-03-10",
-    status: "ORDERING",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    unitPrice: 4500.0,
+    totalPrice: 22500.0,
+    orderDate: "2026-03-15",
+    status: "RECEIVED",
+    sparepart_id: 3,
   },
   {
-    id: 5,
+    id: 104,
+    orderNo: "PO-496",
+    partName: "ท่อสายส่งก๊าซทางการแพทย์แรงดันสูง (High-Pressure Hose)",
+    quantity: 3,
+    unit: "เส้น",
+    category: "อะไหล่ระบบท่อและก๊าซทางการแพทย์",
+    urgency: "NORMAL",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    unitPrice: 1200.0,
+    totalPrice: 3600.0,
+    orderDate: "2026-03-10",
+    status: "RECEIVED",
+    sparepart_id: 4,
+  },
+  {
+    id: 105,
     orderNo: "PO-495",
-    partName: "สาย SpO2 Sensor Finger Probe ผู้ใหญ่",
+    partName: "เซนเซอร์วัดค่าออกซิเจนในเลือด SpO2 Reusable Finger Probe",
     quantity: 4,
     unit: "เส้น",
-    category: "อะไหล่เครื่องมือแพทย์",
-    urgency: "URGENT",
-    requesterName: "นายธนากร สมบูรณ์",
-    department: "ศูนย์ครุภัณฑ์",
-    brandModel: "Nellcor DOC-10 OxiMax Compatible",
-    supplier: "บริษัท เมดิคอลซัพพลาย จำกัด",
-    unitPrice: 2400.0,
-    totalPrice: 9600.0,
+    category: "อุปกรณ์ เซนเซอร์ และหัววัด",
+    urgency: "NORMAL",
+    requesterName: "เจ้าหน้าที่พัสดุ",
+    department: "แผนกพัสดุ",
+    unitPrice: 2800.0,
+    totalPrice: 11200.0,
     orderDate: "2026-03-05",
     status: "RECEIVED",
-  },
-  {
-    id: 6,
-    orderNo: "PO-494",
-    partName: "ชุดปั๊มสูญญากาศ Suction Diaphragm Pump",
-    quantity: 1,
-    unit: "ชุด",
-    category: "กลไก/เครื่องกล",
-    urgency: "NORMAL",
-    requesterName: "นายมานะ อดทน",
-    department: "ช่าง",
-    brandModel: "KNF Neuberger NMP830",
-    supplier: "บริษัท ไทยเมดิคอลเทค จำกัด",
-    unitPrice: 8900.0,
-    totalPrice: 8900.0,
-    orderDate: "",
-    status: "PENDING_APPROVAL",
+    sparepart_id: 5,
   },
 ];
 
-let localOrders: PartOrder[] = [...initialOrders];
+const ORDER_STORAGE_KEY = "hams_part_orders_storage_v2";
+
+function loadSavedOrders(): PartOrder[] {
+  try {
+    const saved = localStorage.getItem(ORDER_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn("Error reading orders from localStorage:", e);
+  }
+  return defaultFallbackOrders;
+}
+
+function saveOrdersToStorage(list: PartOrder[]) {
+  try {
+    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn("Error saving orders to localStorage:", e);
+  }
+}
+
+let localOrders: PartOrder[] = loadSavedOrders();
 
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getPartOrders(): Promise<PartOrder[]> {
   try {
+    // 1. ลองดึงข้อมูลประวัติการสั่งซื้อ/รับเข้าอะไหล่จริงจาก Backend
     const res = await axios.get(
-      `${BASE_URL}/part-orders?limit=100`,
+      `${BASE_URL}/spare-parts/stock-in-history?limit=100`,
       getHeaders(),
     );
     const data = res.data;
-    const items = Array.isArray(data) ? data : (data?.data ?? []);
-    if (items.length > 0) return items;
-    return localOrders;
-  } catch {
-    return localOrders;
+    const historyList = Array.isArray(data) ? data : (data?.data ?? []);
+
+    if (historyList.length > 0) {
+      // แปลงข้อมูลจาก SparepartAdd ให้เป็น PartOrder เพื่อนำไปแสดงในตาราง
+      const mappedOrders: PartOrder[] = historyList.map((item: any) => {
+        const orderDateStr = item.createdAt
+          ? new Date(item.createdAt).toISOString().split("T")[0]
+          : "2026-03-20";
+
+        return {
+          id: item.id,
+          orderNo: item.sparepartAddDoc || `PO-${item.id}`,
+          partName: item.sparepart?.name || "ไม่ระบุชื่ออะไหล่",
+          quantity: item.qty || 0,
+          unit: item.sparepart?.unit || "ชิ้น",
+          category: item.sparepart?.group?.name || "ทั่วไป",
+          urgency: "NORMAL",
+          requesterName: item.user ? `${item.user.firstname || ""} ${item.user.lastname || ""}`.trim() || "เจ้าหน้าที่พัสดุ" : "เจ้าหน้าที่พัสดุ",
+          department: "แผนกพัสดุ",
+          sparepart_id: item.sparepartId,
+          unitPrice: item.totalPrice && item.qty ? Number((item.totalPrice / item.qty).toFixed(2)) : 0,
+          totalPrice: item.totalPrice ? Number(item.totalPrice) : 0,
+          sparepart_add_doc: item.sparepartAddDoc || "",
+          orderDate: orderDateStr,
+          status: "RECEIVED" as PartOrderStatus,
+          createdAt: item.createdAt,
+        };
+      });
+
+      // รวมรายการจาก localStorage ที่อาจยังไม่ขึ้น backend (ถ้ามี)
+      const saved = loadSavedOrders();
+      const backendDocNos = new Set(mappedOrders.map((o) => o.orderNo));
+      const extraSaved = saved.filter((s) => !backendDocNos.has(s.orderNo));
+
+      return [...mappedOrders, ...extraSaved];
+    }
+
+    return loadSavedOrders();
+  } catch (err) {
+    console.warn("Could not fetch stock-in-history from backend, using fallback:", err);
+    return loadSavedOrders();
   }
 }
 
@@ -241,6 +279,9 @@ export async function createPartOrder(data: {
     createdAt: new Date().toISOString(),
   };
 
-  localOrders = [newOrder, ...localOrders];
+  const current = loadSavedOrders();
+  const updated = [newOrder, ...current];
+  localOrders = updated;
+  saveOrdersToStorage(updated);
   return newOrder;
 }
