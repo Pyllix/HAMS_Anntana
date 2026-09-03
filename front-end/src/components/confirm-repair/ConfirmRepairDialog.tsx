@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
-import { repairReceiverOptions } from "../../mockData/repairJobData";
 import { useConfirmRepairModalStore } from "../../stores/useConfirmRepairModalStore";
 import { RepairConfirmationDto } from "../../Types/TypeRepairWorkflow";
-import { confirmRepair } from "../../services/confirmRepairService";
+import {
+  confirmRepair,
+  getRepairReceivers,
+} from "../../services/confirmRepairService";
 
 function localDateString(): string {
   const today = new Date();
@@ -21,6 +23,12 @@ export default function ConfirmRepairDialog() {
   const [warrantyMonths, setWarrantyMonths] = useState(6);
   const [repairSummary, setRepairSummary] = useState("");
   const [validationError, setValidationError] = useState("");
+
+  const { data: receiverOptions = [] } = useQuery({
+    queryKey: ["repairReceivers", job?.sectionId, job?.reporterId],
+    queryFn: () => (job ? getRepairReceivers(job) : Promise.resolve([])),
+    enabled: isOpen && Boolean(job),
+  });
 
   useEffect(() => {
     if (!isOpen || !job) return;
@@ -53,7 +61,13 @@ export default function ConfirmRepairDialog() {
 
   if (!isOpen || !job) return null;
 
-  const selectedReceiver = repairReceiverOptions.find(
+  const availableReceivers =
+    receiverOptions.length > 0
+      ? receiverOptions
+      : job.reporter
+        ? [job.reporter]
+        : [];
+  const selectedReceiver = availableReceivers.find(
     (receiver) => receiver.userId === receiverId,
   );
 
@@ -178,7 +192,7 @@ export default function ConfirmRepairDialog() {
                   className="h-11 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 >
                   <option value="">เลือกผู้รับมอบ</option>
-                  {repairReceiverOptions.map((receiver) => (
+                  {availableReceivers.map((receiver) => (
                     <option key={receiver.userId} value={receiver.userId}>
                       {receiver.firstName} {receiver.lastName} ·{" "}
                       {receiver.sectionName}
