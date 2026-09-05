@@ -12,7 +12,7 @@ import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
 import AssetStock from "../Pages/AssetStock";
 import ConfirmRepair from "../Pages/ConfirmRepair";
-import PendingEvaluationsPage from "../Pages/PendingEvaluations";
+import RepairRequestPage from "../Pages/RepairRequestPage";
 import RepairHistory from "../Pages/RepairHistory";
 import PartStock from "../Pages/PartStock";
 import OrderSpareParts from "../Pages/OrderSpareParts";
@@ -76,14 +76,14 @@ export const APP_ROUTE: AppRote[] = [
     roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: true,
   },
-  // {
-  //   path: "help-desk",
-  //   title: "แจ้งซ่อมครุภัณฑ์",
-  //   element: <PendingEvaluations />,
-  //   icon: Wrench,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
+  {
+    path: "help-desk",
+    title: "แจ้งซ่อมครุภัณฑ์",
+    element: <RepairRequestPage />,
+    icon: Wrench,
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
   {
     path: "track-status",
     title: "ติดตามสถานะ",
