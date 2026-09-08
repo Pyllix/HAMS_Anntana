@@ -216,7 +216,7 @@ UNAVAILABLE ──► AVAILABLE
 | 7 | **ยกเลิกคำขอ (Cancel - Pending/Approved)** | ไม่เปลี่ยน | `RESERVED → AVAILABLE` | `→ CANCELLED` | เฉพาะก่อนส่งมอบของ |
 | 8 | **ผู้ยืมส่งคืน (รอตรวจรับ)** | ไม่เปลี่ยน | คง `BORROWED` | `→ PENDING_VERIFICATION` | บันทึก `return_date`, รอศูนย์ตรวจรับ |
 | 9 | **คืนปกติ (Return - Operational)** | ไม่เปลี่ยน | `BORROWED → AVAILABLE` | `→ RETURNED_OPERATIONAL` / `RETURNED` | บันทึก `return_date` |
-| 10 | **คืนชำรุด (Return - Damaged)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED_DAMAGED` | บันทึก `return_date` |
+| 10 | **คืนชำรุด (Return - Damaged)** | `NORMAL → DAMAGED` | `BORROWED → UNAVAILABLE` | `→ RETURNED_DAMAGED` | บันทึก `return_date` (ไม่สร้างใบแจ้งซ่อมอัตโนมัติ — เจ้าหน้าที่ศูนย์ฯ จะเป็นผู้เปิดแจ้งซ่อมแบบ Manual ในภายหลัง) |
 | 11 | **ส่งซ่อม (Send to Repair)** | `DAMAGED → UNDER_REPAIR` | คง `UNAVAILABLE` | — | |
 | 12 | **ซ่อมเสร็จ (Repair Complete)** | `UNDER_REPAIR → NORMAL` | `UNAVAILABLE → AVAILABLE` | — | |
 | 13 | **จำหน่าย (Disposal)** | `NORMAL/DAMAGED/UNDER_REPAIR → DISPOSAL` | `→ UNAVAILABLE` | — | สร้างบันทึกใน DISPOSAL (`disposal_doc_no`, `approved_date`) |
@@ -232,23 +232,39 @@ UNAVAILABLE ──► AVAILABLE
 
 ---
 
-## Disposal Entity (การจำหน่ายครุภัณฑ์)
+## Direct Asset Disposal Flow (การจำหน่ายครุภัณฑ์โดยตรงโดยเจ้าหน้าที่พัสดุ)
 
-โครงสร้างตาราง `DISPOSAL` อ้างอิงตาม `hams_schema.dbml`:
+> **ข้อกำหนดสิทธิ์:** ดำเนินการโดย **`PARCEL_STAFF`** โดยตรง (Direct Disposal — ไม่ต้องมีขั้นตอนรออนุมัติหลายขั้นในระบบ)
+
+### Business Concept & Workflow
+1. **การจำหน่ายโดยตรง (Direct Disposal)**: เจ้าหน้าที่พัสดุเปิดฟอร์มจำหน่ายครุภัณฑ์ที่อยู่ในสถานะ `WAIT_DISPOSAL` หรือ `DAMAGED` หรือตามผลการประเมิน
+2. **การบันทึกเอกสารและประวัติถาวร (Audit Trail)**:
+   - บันทึกเลขที่เอกสารอนุมัติจำหน่าย (`disposal_doc_no`), วันที่จำหน่าย (`disposed_date`), วิธีการจำหน่าย (`disposal_method`), URL ไฟล์เอกสารแนบ (`disposal_doc_url`), เหตุผลการจำหน่าย (`disposal_reason`), และหมายเหตุ (`remark`)
+   - ระบบบันทึก `disposed_by_user_id = session.user.id`
+3. **การทำงานแบบ Atomic Transaction**:
+   - อัปเดตสถานะของตัวครุภัณฑ์ทันที: `asset.asset_status_id = DISPOSED`, `asset.availability_status_id = UNAVAILABLE`
+   - สร้างระเบียนประวัติถาวรลงในตาราง `AssetDisposal`
+
+### Data Model: ASSET_DISPOSAL (ประวัติการจำหน่ายครุภัณฑ์)
 
 | Column | Type | Required | FK | Description |
 |---|---|---|---|---|
-| `disposal_id` | UUID | ✅ PK | | ID ประจำรายการจำหน่าย |
+| `id` | UUID | ✅ PK | | ID ประจำรายการจำหน่าย |
+| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่ถูกจำหน่าย |
 | `disposal_doc_no` | VARCHAR(255) | ✅ | | หมายเลขเอกสารการจำหน่าย |
-| `approved_date` | TIMESTAMPTZ | ✅ | | วันที่อนุมัติจำหน่าย |
-| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่จำหน่าย |
+| `disposal_doc_url` | TEXT | | | URL หรือ Path ไฟล์เอกสารแนบการจำหน่าย |
+| `disposed_date` | TIMESTAMPTZ | ✅ | | วันที่จำหน่าย |
+| `disposal_method` | ENUM | ✅ | | วิธีการจำหน่าย (`AUCTION`, `DONATION`, `DESTROY`, `TRANSFORM`) |
+| `disposal_reason` | TEXT | ✅ | | เหตุผลหรือสาเหตุการจำหน่าย |
+| `disposed_by_user_id` | UUID | ✅ | USER | เจ้าหน้าที่พัสดุผู้ทำรายการจำหน่าย |
+| `remark` | TEXT | | | หมายเหตุเพิ่มเติม |
 | `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่บันทึก |
 | `updatedAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่แก้ไขล่าสุด |
-| `deleteAt` | TIMESTAMPTZ | | | Soft delete |
 
-```
-POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_date) + อัปเดต AssetStatus → DISPOSAL
-```
+### RESTful Endpoints สำหรับการจำหน่าย
+- `POST /api/v1/disposals` ➔ บันทึกการจำหน่าย Direct Disposal (เฉพาะ `PARCEL_STAFF`)
+- `GET /api/v1/disposals` ➔ ดึงประวัติรายการจำหน่ายทั้งหมด (Filter: `?startDate=...&endDate=...&disposalMethod=...`, Paginated)
+- `GET /api/v1/assets/:id/disposal` ➔ ดึงประวัติและเอกสารการจำหน่ายเฉพาะครุภัณฑ์ชิ้นนั้น
 
 ---
 
@@ -552,15 +568,37 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 
 ---
 
+## Spare Parts Management (ระบบการจัดการอะไหล่)
+
+> อ้างอิงจาก `docs/hams_schema.dbml`, UC4 (จัดการสต็อกอะไหล่), และ UC5 (สั่งซื้ออะไหล่)
+
+### สรุปหน้าที่และความสัมพันธ์ของตารางอะไหล่
+
+1. **`SPAREPART` (รายการอะไหล่ในคลัง)**:
+   - บันทึกข้อมูล Master ของอะไหล่แต่ละชนิด: รหัสอะไหล่ (`sparepart_code`), ชื่ออะไหล่ (`name`), หน่วยนับ (`unit`), ราคาต่อหน่วย (`price`), จำนวนขั้นต่ำเตือนสั่งซื้อ (`min_stock`), และจำนวนคงเหลือในคลัง (`qty_in_stock`)
+   - ผูกกับกลุ่มอะไหล่ `SPAREPART_GROUP`
+   - เมื่อสร้างรายการอะไหล่ครั้งแรก สามารถเริ่มต้น `qty_in_stock = 0` หรือหากระบุจำนวนเริ่มต้น ระบบจะสร้างประวัติใน `SPAREPART_ADD` ให้เบื้องหลัง
+2. **`SPAREPART_ADD` (ใบสั่งซื้อ/รับเข้าอะไหล่)**:
+   - ใช้เฉพาะกรณีบันทึกการรับเข้า/สั่งซื้ออะไหล่เพิ่มเข้าคลัง (`SPAREPART.qty_in_stock += qty`)
+   - เก็บเลขอ้างอิงเอกสารหรือใบเสร็จ (`sparepart_add_doc`), จำนวนที่เพิ่ม (`qty`), ราคารวม (`total_price`), และผู้บันทึก (`add_by`)
+3. **`SPAREPART_TXN` (สมุดบันทึกการเบิก-คืนอะไหล่ในงานซ่อม)**:
+   - ผูกกับใบงานซ่อม (`job_id`) เสมอเพื่อบันทึกประวัติการเบิก-คืนอะไหล่ของแต่ละงานซ่อม
+   - ประเภทรายการ (`txn_type`):
+     - `WITHDRAW`: เบิกอะไหล่ออกไปใช้ในงานซ่อม ➔ ตรวจสอบสต็อก `qty_in_stock >= qty` และตัดสต็อก `qty_in_stock -= qty` (บันทึกพร้อมกันใน Batch Handover ตอนช่างรับของจริง)
+     - `RETURN`: คืนอะไหล่ที่เบิกเกินหรือไม่ถูกใช้งานกลับเข้าคลัง ➔ ช่างถืออะไหล่มาส่งคืนที่ห้องพัสดุ และ **`PARCEL_STAFF` เป็นผู้กดยืนยันการคืนในระบบ** (`POST /api/v1/spare-parts/transactions` with `txnType: "RETURN"`) ซึ่งจะเพิ่มสต็อก `SPAREPART.qty_in_stock += qty` กลับเข้าคลังทันที
+   - บันทึกราคา Snapshot `unit_price` จาก `SPAREPART.price` ณ เวลาที่เบิก เพื่อคำนวณต้นทุนค่าซ่อมที่แท้จริง
+
+---
+
 ## Maintenance & Repair Flow (ระบบการแจ้งซ่อมและบำรุงรักษา)
 
-> อ้างอิงจาก `docs/hams_schema.dbml`, `docs/repair_step_flow.md`, UC3 (ส่งซ่อมครุภัณฑ์) และ UC8 (จัดการการซ่อม/บำรุงรักษา)
+> อ้างอิงจาก `docs/hams_schema.dbml`, `docs/repair_step_flow.md`, `docs/repair_flow_matrix.md`, UC3 (ส่งซ่อมครุภัณฑ์) และ UC8 (จัดการการซ่อม/บำรุงรักษา)
 
-### ภาพรวมกระบวนการทำงาน 4 ขั้นตอนหลัก
+### ภาพรวมกระบวนการทำงาน 4 ช่วงหลัก (2-Tier Triage & Diagnosis Workflow)
 
 ```
-[1. แจ้งซ่อมออนไลน์] ──► [2. ช่างรับงาน & วินิจฉัย] ──► [3. ดำเนินการ & แจ้งแล้วเสร็จ] ──► [4. ตรวจรับ ส่งมอบ & ปิดงาน]
-  (User ทั่วไป)          (เลือก Action Type & Steps)       (ทำตาม Steps + แจ้งผู้ส่งซ่อม)       (กรอกวันรับประกัน & ผู้รับคืน)
+[1. แจ้งซ่อมออนไลน์] ──► [2. หัวหน้าช่าง Triage & มอบหมาย] ──► [3. ช่างวินิจฉัย & ซ่อมบำรุง] ──► [4. ส่งมอบ/ตรวจรับ & ปิดงาน]
+  (User/แผนกทั่วไป)         (MAINTENANCE_HEAD + Workload)        (ช่างตรวจจริง + 4 แทร็กซ่อม)       (ส่งคืนวอร์ด / พัสดุรับเครื่อง)
 ```
 
 ---
@@ -571,118 +609,95 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 - **ผู้ดำเนินการ**: เจ้าหน้าที่หน่วยงาน (`DEPARTMENT_STAFF`, `PARCEL_STAFF`, ฯลฯ)
 - **ข้อมูลที่บันทึก**:
   - `asset_id`: ครุภัณฑ์ที่ต้องการส่งซ่อม
-  - `symptom`: อาการชำรุด หรือบันทึกส่งซ่อม
+  - `symptom`: อาการชำรุด หรือบันทึกส่งซ่อมเบื้องต้น
   - `urgency_status`: ระดับความเร่งด่วน (`NORMAL`, `URGENT`, `EMERGENCY`)
   - `report_type`: ประเภทรายงาน (`Repair` ซ่อมชำรุด, `Maintenance` บำรุงรักษาตามรอบ)
   - `reporter_id`: ผู้แจ้งซ่อม (ดึงจาก Login User)
   - `section_id`: แผนกของผู้แจ้ง/ครุภัณฑ์
-  - `createdAt`: วันที่ส่งซ่อม
 - **สถานะระบบ**:
   - สร้าง `job_no` อัตโนมัติ (รูปแบบ `REP-YYYYMM-XXXX`)
-  - `REPAIR_JOB.job_status_id` = `PENDING` (รอช่างรับงาน)
+  - `REPAIR_JOB.job_status_id` = `PENDING_ASSIGN` (รอมอบหมายงานให้ช่าง)
   - `ASSET.asset_status_id` ➔ `UNDER_REPAIR` (อยู่ระหว่างซ่อม)
   - `ASSET.availability_status_id` ➔ `UNAVAILABLE` (ไม่พร้อมใช้งาน)
 
-#### 2. ช่างรับงาน & วินิจฉัยเลือกประเภทการดำเนินการ (Diagnosis & Action Selection)
-- **ผู้ดำเนินการ**: ช่างซ่อมบำรุง (`MAINTENANCE_STAFF`)
-- **การรับงาน**: มอบหมายช่างผู้รับผิดชอบบันทึกลงใน `MECHANIC_REPAIR` และปรับสถานะงานซ่อมเป็น `IN_PROGRESS`
-- **การวินิจฉัยและวางแผน**:
-  - บันทึก `diagnosis` (ผลการตรวจเช็ค/สาเหตุ), `solution` (แนวทางแก้ไข)
-  - เลือก `cause_id` (มูลเหตุปัญหา จากตาราง `CAUSE`), `tech_category_id` (หมวดช่าง), `job_type_id` (ประเภทงาน)
-  - ระบุ `due_date` (กำหนดแล้วเสร็จโดยประมาณ) และ `is_repeat_repair` (ประวัติการซ่อมซ้ำ)
-  - เลือก **ประเภทการดำเนินการ (`action_type`)**:
-    - `REPAIR` (ตรวจซ่อม)
-    - `FABRICATE` (สร้างใหม่)
-    - `MODIFY` (ปรับปรุง)
-    - `PREVENTIVE` (เชิงรุก)
-  - เลือก **ประเภทขั้นตอนการจัดหา/ดำเนินการ (`step_action_type`)** 1 ใน 5 ประเภทโดยการตัดสินใจของช่าง (Explicit Selection โดยไม่มีการเบิกแบบผสม):
-    1. `SELF_REPAIR` (ดำเนินการซ่อมเอง / ไม่ใช้อะไหล่)
-    2. `INTERNAL_STOCK` (ขอเบิกอะไหล่ในคลังอย่างเดียว) ➔ ช่างเลือกอะไหล่จาก Master ที่มีพร้อมในคลัง (`qty_in_stock >= qty`) ผูกรายการอะไหล่ `SPAREPART_TXN`
-    3. `EXTERNAL_STOCK` (ขอเบิกอะไหล่นอกคลัง / จัดซื้ออะไหล่อย่างเดียว) ➔ ช่างเลือกอะไหล่จาก Master ในระบบ (`SPAREPART`) ที่ของหมดหรือสต็อกไม่พอ เพื่อส่งเรื่องขอจัดซื้อจัดหาภายนอก
-    4. `OUTSOURCE` (ส่งซ่อมบริษัทภายนอก) ➔ ผูกบริษัทคู่ค้า `company_id` และเลขใบเสร็จ `bill_no`
-    5. `PURCHASE_REPLACEMENT` (ขอซื้อทดแทน / ประเมินไม่คุ้มซ่อม)
-- **การสร้างขั้นตอนย่อยอัตโนมัติ (`REPAIR_JOB_STEP`)**:
-  - ระบบจะ Clone แม่แบบขั้นตอนจาก `STEP_MASTER` ตามประเภท `step_action_type` ที่เลือก
-  - **Form Boundaries:** เมื่อ Submit ฟอร์มรับงาน & วินิจฉัย (`PATCH /repairs/:id/diagnose`) ขั้นตอน Step 2 (ธุรการจ่ายงาน), Step 3 (ช่างวินิจฉัย) และ Step 4 (ตั้งเรื่องขอเบิก/ส่งซ่อม/ซ่อมเอง) จะถูก Auto-completed ทันทีในครั้งเดียว
+#### 2. Tier 1: หัวหน้าช่างคัดกรอง & จ่ายงาน (Triage, Workload Balancing & Dispatch)
+- **ผู้ดำเนินการ**: หัวหน้าช่างซ่อมบำรุง (`MAINTENANCE_HEAD` เท่านั้น — ช่างทั่วไปไม่มีสิทธิ์จ่ายงานให้ผู้อื่น)
+- **กระบวนการคัดกรองเบื้องต้น (Initial Triage)**:
+  - ตรวจสอบประเภทเครื่องมือ (`Asset Type`, `Equipment Type`) และอาการแจ้งเสีย (`symptom`)
+  - ระบุหมวดช่าง (`techCategoryId` จากตาราง `TECH_CATEGORY`)
+- **ระบบกระจายงานอย่างสมดุล (Workload Balancing)**:
+  - เรียกดูภาระงานคงค้างของช่างแต่ละคนผ่าน `GET /api/v1/repairs/mechanic-workloads` เพื่อตรวจเช็คจำนวน Active Jobs
+- **การมอบหมายงาน (`POST /api/v1/repairs/:id/assign`)**:
+  - รองรับการมอบหมายช่างผู้รับผิดชอบได้ **หลายคนต่อ 1 งานซ่อม (`MechanicRepair[]`)**
+  - หัวหน้าช่างสามารถมอบหมายงานให้ตนเองได้ (Self-assign)
+  - ปรับสถานะงานซ่อมเป็น `IN_PROGRESS` และแจ้งเตือนช่างที่ได้รับมอบหมาย
+
+#### 3. Tier 2: ช่างตรวจเช็คจริง วินิจฉัย & เลือกแผนการซ่อม (Detailed Diagnosis & 4 Action Tracks)
+- **ผู้ดำเนินการ**: ช่างซ่อมบำรุงผู้รับผิดชอบงาน (`MAINTENANCE_STAFF`) หรือหัวหน้าช่าง (`MAINTENANCE_HEAD`)
+- **การตรวจเช็คและวินิจฉัยเชิงลึก**:
+  - เปิดตรวจเช็คเครื่องจริง บันทึกผลวินิจฉัยเชิงลึก (`diagnosis`), สาเหตุที่แท้จริง (`causeId` จากตาราง `CAUSE`), แนวทางแก้ไข (`solution`), ประมาณการแล้วเสร็จ (`due_date`), และประวัติการซ่อมซ้ำ (`is_repeat_repair`)
+  - เลือกประเภทการดำเนินการ (`action_type`): `REPAIR`, `FABRICATE`, `MODIFY`, `PREVENTIVE`
+  - *การขอเปลี่ยนช่าง (Re-assignment):* หากพบว่าเป็นเคสเฉพาะทางเกินความเชี่ยวชาญ ช่างสามารถกดส่งเรื่องกลับให้หัวหน้าช่างเพื่อมอบหมายใหม่ได้
+- **การเลือกประเภทขั้นตอนการจัดหา/ดำเนินการ (`step_action_type` - 4 แทร็กหลัก)**:
+  1. **`SELF_REPAIR` (ดำเนินการซ่อมเอง / ไม่ใช้อะไหล่)**:
+     - ดำเนินการซ่อม ปรับปรุง หรือทดสอบเครื่องโดยตรงโดยไม่ต้องขอเบิกอะไหล่
+  2. **`WITH_PARTS` (ดำเนินการซ่อมโดยใช้อะไหล่ — Mixed Requisition & Batch Handover)**:
+     - ยุบรวมการเบิกอะไหล่ในคลังและนอกคลังเข้าด้วยกันในใบเดียว
+     - 1 ใบเบิกรองรับรายการอะไหล่หลายชิ้น โดยแต่ละชิ้นระบุ `stockType: "INTERNAL" | "EXTERNAL"`
+     - **การเตรียมอะไหล่:**
+       - **อะไหล่ในคลัง (`INTERNAL`):** พัสดุจัดเตรียมของใส่เซ็ตรองาน
+       - **อะไหล่นอกคลัง (`EXTERNAL`):** พัสดุสั่งซื้อภายนอก เมื่อของมาส่งบันทึกรับเข้าคลังผ่าน `SPAREPART_ADD`
+     - **ระบบจัดการสถานะอัตโนมัติ:** หากมีรายการ `EXTERNAL` ระบบจะปรับสถานะงานซ่อมเป็น `WAITING_PARTS` (รออะไหล่)
+     - **การจ่ายของพร้อมกันรอบเดียว (Batch Handover):**
+       - เมื่ออะไหล่ครบชุด (ทั้ง `INTERNAL` และ `EXTERNAL`) พัสดุกดแจ้งพร้อมส่งมอบ (Step 6)
+       - ช่างมารับของที่ห้องพัสดุและกดยืนยันรับมอบครบชุด (Step 7)
+       - ระบบบันทึก Timestamp การรับมอบรอบเดียว (Step 7 `completeAt`), สร้างรายการ `SPAREPART_TXN` (`WITHDRAW`) ให้กับอะไหล่ทุกชิ้นพร้อมกันใน Database Transaction เดียว และปรับสถานะงานกลับเป็น `IN_PROGRESS` (เริ่มนับเวลาช่างลงมือซ่อมจริง) เพื่อความสมบูรณ์และง่ายต่อการ Audit บัญชีพัสดุ 100%
+  3. **`OUTSOURCE` (ส่งซ่อมบริษัทภายนอก — ช่างแจ้งข้อมูล / พัสดุจัดจ้างภายนอก)**:
+     - ช่างวินิจฉัยและระบุว่าต้องส่งซ่อมภายนอก (`stepActionType: "OUTSOURCE"`) พร้อมรายละเอียดอาการ
+     - **เจ้าหน้าที่พัสดุ (`PARCEL_STAFF`) เป็นผู้ติดต่อประสานงานกับบริษัทภายนอก**, เลือกบริษัทคู่ค้า (`company_id`), และจัดการเอกสารใบสั่งจ้าง/ใบเสนอราคา (`bill_no`) ➔ ปรับสถานะงานซ่อมเป็น `OUTSOURCED`
+     - เมื่อบริษัทนำเครื่องกลับมาส่ง ช่างร่วมตรวจสอบสภาพเครื่องก่อนปิดงาน
+  4. **`UNREPAIRABLE` (ซ่อมไม่ได้ / แทงชำรุด — Custody Handshake Flow & แผนกรับแจ้งเตือน)**:
+     - ใช้เมื่อประเมินว่าชำรุดหนัก ซ่อมไม่คุ้มค่า หรือไม่มีอะไหล่ทดแทน
+     - ช่างบันทึกผลวินิจฉัยและเหตุผลที่ไม่สามารถซ่อมได้ (`unrepairable_reason`) ➔ กดยื่นเรื่องส่งคืนพัสดุ (สถานะงานซ่อมเป็น `UNREPAIRABLE`)
+     - ช่างนำเครื่องจริงไปส่งมอบที่ห้องพัสดุ
+     - เจ้าหน้าที่พัสดุ (`PARCEL_STAFF`) ตรวจรับเครื่องจริงที่ห้องพัสดุ ➔ กดยืนยันรับมอบเครื่อง (`PATCH /repairs/:id/complete-unrepairable`)
+     - ระบบบันทึก `received_by_user_id = session.user.id`, ปรับสถานะครุภัณฑ์เป็น **`AssetStatus = WAIT_DISPOSAL` (รอจำหน่าย)** และ `AvailabilityStatus = UNAVAILABLE`, ปิด Job สมบูรณ์
+     - **ระบบแจ้งเตือนไปยังแผนกต้นเรื่อง:** ส่ง Email Notification และแสดงสถานะบนหน้า Tracking งานซ่อม เพื่อให้แผนกทราบผลและนำข้อมูลไปทำเรื่องขอจัดซื้อเครื่องทดแทน
 
 ---
 
-### แม่แบบขั้นตอนของงานซ่อม (Repair Step Master Template & Lifecycle)
+### แม่แบบขั้นตอนของงานซ่อม (Repair Step Master Template - 4 Tracks)
 
-> อ้างอิงจากรายละเอียดฉบับสมบูรณ์ใน `docs/repair_flow_matrix.md`:
-
-| Step # | ชื่อขั้นตอน (Label) | กรณีเบิกในคลัง (`INTERNAL_STOCK`) | กรณีเบิกนอกคลัง (`EXTERNAL_STOCK`) | กรณีส่งซ่อมบริษัท (`OUTSOURCE`) | กรณีขอซื้อทดแทน (`PURCHASE_REPLACEMENT`) | กรณีซ่อมเอง (`SELF_REPAIR`) |
-|:---:|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | วันแจ้งซ่อม | ✅ (ช่วงที่ 1: แจ้งซ่อม) | ✅ (ช่วงที่ 1: แจ้งซ่อม) | ✅ (ช่วงที่ 1: แจ้งซ่อม) | ✅ (ช่วงที่ 1: แจ้งซ่อม) | ✅ (ช่วงที่ 1: แจ้งซ่อม) |
-| 2 | ธุรการรับ Job / จ่ายงาน | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) |
-| 3 | ช่างรับ Job / วินิจฉัย | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) | ✅ (ช่วงที่ 2: ฟอร์มวินิจฉัย) |
-| 4 | ขั้นตอนตั้งต้นของเคส | ขอเบิกอะไหล่ในคลัง | ขอเบิก/จัดซื้อนอกคลัง | ขอส่งซ่อมบริษัทภายนอก | ขอซื้อเครื่องทดแทน | ซ่อมเองและทดสอบ (ช่วงที่ 3) |
-| 5 | การอนุมัติ / รอส่งมอบ | อนุมัติจัดหาในคลัง | อนุมัติจัดหานอกคลัง | อนุมัติส่งซ่อมบริษัท | อนุมัติขอซื้อทดแทน | แล้วเสร็จ/รอตรวจรับงาน |
-| 6 | การรับพัสดุ / สรุปงาน | พัสดุจ่ายอะไหล่ในคลัง | พัสดุแจ้งรับอะไหล่ | พัสดุรับเครื่องคืนจากบริษัท | พัสดุรับเครื่องใหม่เข้าคลัง | ตรวจรับงานและสรุป Job (ปิดงาน) |
-| 7 | ช่างรับมอบ / ดำเนินการ | ช่างรับวัสดุ/ดำเนินการซ่อม | ช่างรับอะไหล่/ดำเนินการซ่อม | ช่างรับเครื่องและทดสอบ | ช่างรับเครื่องใหม่/ส่งมอบ | - |
-| 8 | แจ้งแล้วเสร็จ | แล้วเสร็จ / รอตรวจรับงาน | แล้วเสร็จ / รอตรวจรับงาน | แล้วเสร็จ / รอตรวจรับงาน | แล้วเสร็จ / รอตรวจรับงาน | - |
-| 9 | ปิดงาน | ตรวจรับงานและสรุป Job | ตรวจรับงานและสรุป Job | ตรวจรับงานและสรุป Job | ตรวจรับงานและสรุป Job | - |
+| Step # | ชื่อขั้นตอน (Label) | 1. ซ่อมเอง (`SELF_REPAIR`) | 2. ใช้อะไหล่ (`WITH_PARTS`) | 3. ส่งซ่อมนอก (`OUTSOURCE`) | 4. ซ่อมไม่ได้ (`UNREPAIRABLE`) |
+|:---:|---|:---:|:---:|:---:|:---:|
+| 1 | วันแจ้งซ่อม | ✅ (แจ้งซ่อม) | ✅ (แจ้งซ่อม) | ✅ (แจ้งซ่อม) | ✅ (แจ้งซ่อม) |
+| 2 | หัวหน้าช่าง Triage & จ่ายงาน | ✅ (จ่ายงาน) | ✅ (จ่ายงาน) | ✅ (จ่ายงาน) | ✅ (จ่ายงาน) |
+| 3 | ช่างตรวจเช็ค & วินิจฉัย | ✅ (วินิจฉัย) | ✅ (วินิจฉัย) | ✅ (วินิจฉัย) | ✅ (วินิจฉัย) |
+| 4 | ขั้นตอนตั้งต้นของแทร็ก | ซ่อมเองและทดสอบ | ขอเบิกอะไหล่ (ผสม In/Out) | ขอส่งซ่อมภายนอก (พัสดุจัดจ้าง) | ยื่นเรื่องแทงชำรุด |
+| 5 | การจัดหา / ดำเนินการ | - | พัสดุจ่ายของ/สั่งซื้อภายนอก | พัสดุส่งบริษัทภายนอกซ่อม | ช่างนำส่งเครื่องที่ห้องพัสดุ |
+| 6 | การรับมอบ / ตรวจรับ | - | ช่างรับอะไหล่ & ลงมือซ่อม | รับเครื่องคืนและทดสอบ | พัสดุกดยืนยันรับมอบเครื่อง |
+| 7 | แจ้งแล้วเสร็จ | แล้วเสร็จ / รอส่งมอบ | แล้วเสร็จ / รอส่งมอบ | แล้วเสร็จ / รอส่งมอบ | สรุปส่งมอบเข้าคลังพัก |
+| 8 | ปิดงาน | ตรวจรับและปิด Job | ตรวจรับและปิด Job | ตรวจรับและปิด Job | ปรับเป็น WAIT_DISPOSAL |
 
 ---
 
-### สถานะงานซ่อม (`JobStatus`) 10 สถานะ
-1. `WAITING_HANDOVER` (รอรับเครื่องจากหน่วยงาน)
-2. `PENDING_ASSIGN` (รอมอบหมายงานให้ช่าง)
-3. `IN_PROGRESS` (ช่างกำลังดำเนินการซ่อม)
-4. `WAITING_PARTS` (สั่งซื้อ/รออะไหล่)
-5. `PARCEL_PROCESSING` (พัสดุกำลังดำเนินการ)
-6. `OUTSOURCED` (ส่งซ่อมบริษัทภายนอก)
-7. `UNREPAIRABLE` (แทงชำรุด/เห็นควรจำหน่าย)
-8. `WAITING_DELIVERY` (เสร็จแล้วรอรับคืน)
-9. `COMPLETED` (ส่งคืน/ดำเนินการเรียบร้อย)
-10. `CANCELLED` (ยกเลิกงานซ่อม)
-
----
-
-#### รายละเอียดการตัดสต็อกและบันทึกข้อมูลอะไหล่ในขั้นตอน Step 6 - 9 (Stock Deduction & Transaction Rules)
-
-1. **กรณีเบิกอะไหล่ในคลัง (`INTERNAL_STOCK`)**:
-   - **Step 6 (ขอเบิกอะไหล่ในคลัง)**: ช่างเลือกรายการอะไหล่และจำนวน (`qty`) จาก Master `SPAREPART`
-   - **Step 7 (อนุมัติจัดหาในคลัง)**: เมื่อผู้มีอำนาจอนุมัติ ระบบจะทำการตัด/กันสต็อกทันที (`SPAREPART.qty_in_stock -= qty`) เพื่อป้องกัน Race Condition จากงานซ่อมอื่น
-   - **Step 8 (พัสดุแจ้งรับอะไหล่)**: เจ้าหน้าที่พัสดุเตรียมของและแจ้งพร้อมส่งมอบ
-   - **Step 9 (ช่างรับวัสดุในคลัง)**: ช่างกดรับมอบของจริง บันทึกประวัติ `SPAREPART_TXN` (ประเภท `WITHDRAW`, บันทึก `unit_price` ณ วันเบิก, `job_id`, `txn_by`)
-
-2. **กรณีขอเบิกอะไหล่นอกคลัง / สั่งซื้อ (`EXTERNAL_STOCK`)**:
-   - **Step 6 (ขอเบิกอะไหล่นอกคลัง)**: ช่างเลือกรายการอะไหล่ที่สต็อกไม่พอเพื่อตั้งเรื่องขอซื้อ
-   - **Step 7 (อนุมัติจัดหานอกคลัง)**: ผู้บริหาร/ผู้มีอำนาจอนุมัติสั่งซื้อ
-   - **Step 8 (พัสดุแจ้งรับอะไหล่)**: พัสดุตรวจรับของจากผู้ขาย บันทึกการรับเข้าผ่าน `SPAREPART_ADD` (`SPAREPART.qty_in_stock += qty`, บันทึกเลขเอกสารจัดซื้อ `sparepart_add_doc`, ราคารวม `total_price`)
-   - **Step 9 (ช่างรับอะไหล่)**: ช่างกดรับมอบของจริง ระบบตัดสต็อกจ่ายงานซ่อมทันที (`SPAREPART.qty_in_stock -= qty`) พร้อมบันทึก `SPAREPART_TXN` (`WITHDRAW` ผูกกับ `job_id` เพื่อคิดต้นทุนงานซ่อม)
-
-3. **การคืนอะไหล่ที่เหลือ/ไม่ได้ใช้งานกลับเข้าคลัง (`SPAREPART_TXN` - `RETURN`)**:
-   - ช่างสามารถทำรายการคืนอะไหล่ส่วนที่เบิกเกินหรือไม่ได้ใช้งานจริงได้ก่อนการปิดงานซ่อม (ก่อน Step 12)
-   - ระบบจะเพิ่มสต็อกคืนคลัง (`SPAREPART.qty_in_stock += return_qty`)
-   - บันทึกประวัติ `SPAREPART_TXN` ด้วย `txn_type = 'RETURN'` โดยผูกกับ `job_id` เดิม เพื่อคำนวณต้นทุนการใช้อะไหล่สุทธิ (`WITHDRAW` - `RETURN`) ได้อย่างถูกต้องแม่นยำ
-
-4. **การป้องกันการเบิกแบบผสม (Mixed Requisition Prevention & Validation Rules)**:
-   - **กรณี `INTERNAL_STOCK` (เบิกในคลัง)**:
-     - Frontend กรองแสดงเฉพาะอะไหล่ที่มีสต็อก (`qty_in_stock > 0`) และจำกัดให้ระบุจำนวน `qty <= qty_in_stock`
-     - Backend API Validate สต็อกทุกรายการ หากพบว่ารายการใดมี `qty_in_stock < qty` จะปฏิเสธคำขอด้วย `400 Bad Request` พร้อมแจ้งเตือนให้สลับไปเลือกประเภท `EXTERNAL_STOCK`
-   - **กรณี `EXTERNAL_STOCK` (เบิกนอกคลัง/สั่งซื้อ)**:
-     - ทุกรายการอะไหล่ที่เลือกในใบงานนี้จะถูกส่งเข้า Flow ขอจัดซื้อจัดหาภายนอกทั้งหมด (ไม่นำอะไหล่ในคลังมาปะปน)
-     - ป้องกันการเกิดสถานะก้ำกึ่งระหว่างรอของนอกและเบิกของในพร้อมกัน
-
-#### 3. การดำเนินการซ่อมและการแจ้งแล้วเสร็จ (Progress & Completion Notification)
-- ช่างกดอัปเดตบันทึกเวลา `completeAt` เมื่อทำแต่ละขั้นตอนย่อยสำเร็จ
-- เมื่อซ่อมเสร็จ ช่างจะกดบันทึกขั้นตอนที่ 11 **"แล้วเสร็จ"** ➔ ระบบส่งการแจ้งเตือนไปยังผู้ส่งซ่อม/แผนกเจ้าของเครื่องให้เตรียมมารับเครื่องคืน
-
-#### 4. การส่งมอบคืน ตรวจรับ และปิดสรุปงาน (Handover, Warranty & Close Job)
-- เมื่อผู้ส่งซ่อม/เจ้าหน้าที่แผนกมารับเครื่องคืน:
-  - บันทึก **ขั้นตอนที่ 10 (ประกันงานซ่อมถึงวันที่)**
-  - บันทึก **ขั้นตอนที่ 11 (วันที่ส่งมอบคืน `return_date` และผู้รับคืน `receiver_id`)**
-- ดำเนินการ **ขั้นตอนที่ 12 (สรุป Job / ปิดงาน)**:
+### การส่งมอบคืน ตรวจรับ และปิดสรุปงาน (Handover, Tracking & Close Job)
+- **กรณีซ่อมสำเร็จ (`SELF_REPAIR`, `WITH_PARTS`, `OUTSOURCE`):**
+  - ผู้แจ้งซ่อมสามารถติดตามสถานะงานได้ตลอดเวลาผ่านหน้า **Repair Tracking UI**
+  - เมื่อซ่อมเสร็จ ระบบส่ง Notification แจ้งเตือนไปยังแผนกผู้แจ้งซ่อม
+  - เจ้าหน้าที่จากแผนกเดินมาตรวจรับเครื่อง (การขนย้ายเครื่องกลับให้ประสานงานหน้างานตามความเหมาะสม)
+  - ช่าง/ผู้ส่งมอบบันทึกวันส่งมอบ `return_date` และระบุผู้ตรวจรับเครื่องคืน `receiver_id`
   - `REPAIR_JOB.job_status_id` ➔ `COMPLETED`
   - `ASSET.asset_status_id` ➔ ปลดกลับเป็น `NORMAL` (ปกติ)
   - `ASSET.availability_status_id` ➔ ปลดกลับเป็น `AVAILABLE` (ว่าง/พร้อมใช้งาน)
-  *(หมายเหตุ: กรณี `PURCHASE_REPLACEMENT` ครุภัณฑ์เดิมจะถูกปรับสถานะเป็น `WAIT_DISPOSAL` หรือ `DISPOSAL` ตามขั้นตอนการตัดจำหน่าย)*
+- **กรณีซ่อมไม่ได้ (`UNREPAIRABLE`):**
+  - พัสดุกดยืนยันรับมอบเครื่องจริง (`complete-unrepairable`)
+  - `REPAIR_JOB.job_status_id` ➔ `COMPLETED`
+  - `ASSET.asset_status_id` ➔ ปรับเป็น `WAIT_DISPOSAL` (รอจำหน่าย)
+  - `ASSET.availability_status_id` ➔ คงเป็น `UNAVAILABLE` (ไม่พร้อมใช้งาน)
+  - แจ้งเตือนผู้แจ้งซ่อม/แผนกผ่าน Email และ Repair Tracking
 
 ---
-
-## Data Models: Maintenance & Spare Parts (Lookup & Transactional)
 
 ### SPAREPART (ตารางอะไหล่)
 | Column | Type | Required | FK | Description |
@@ -718,7 +733,8 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 | `txn_id` | INT | ✅ PK | | ID ประวัติรายการ |
 | `sparepart_id` | INT | ✅ | SPAREPART | อะไหล่ที่เบิก/คืน |
 | `job_id` | UUID | ✅ | REPAIR_JOB | งานซ่อมที่เบิกใช้ |
-| `txn_type` | VARCHAR(100) | ✅ | | ประเภท (`WITHDRAW`, `RETURN`) |
+| `txn_type` | VARCHAR(100) | ✅ | | ประเภท (`WITHDRAW`, `RETURN`, `PENDING_WITHDRAW`) |
+| `stock_type` | ENUM | ✅ | | แหล่งที่มาของอะไหล่ (`INTERNAL` ในคลัง / `EXTERNAL` สั่งซื้อนอกคลัง) |
 | `qty` | INT | ✅ | | จำนวน |
 | `unit_price` | NUMERIC(15,2) | ✅ | | ราคา Snapshot ต่อหน่วย ณ วันเบิก |
 | `txn_date` | TIMESTAMPTZ | ✅ | | วันเวลาที่ทำรายการ |
@@ -736,9 +752,9 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 | `job_type_id` | INT | ✅ | JOB_TYPE | ประเภทงานซ่อม |
 | `report_type` | ENUM | ✅ | | `Repair` / `Maintenance` |
 | `job_status_id` | INT | ✅ | JOB_STATUS | สถานะงานซ่อม |
-| `company_id` | UUID | | COMPANY | บริษัทคู่ค้า (กรณีส่งซ่อมนอก) |
-| `bill_no` | TEXT | | | เลขใบเสร็จค่าซ่อม |
-| `diagnosis` | TEXT | | | ผลการวินิจฉัย/สาเหตุ |
+| `company_id` | UUID | | COMPANY | บริษัทคู่ค้า (กรณีส่งซ่อมนอก โดยพัสดุติดต่อ) |
+| `bill_no` | TEXT | | | เลขใบเสร็จ/สัญญาค่าซ่อม |
+| `diagnosis` | TEXT | | | ผลการวินิจฉัย/สาเหตุเชิงลึก |
 | `symptom` | TEXT | | | บันทึกส่งซ่อม/อาการเบื้องต้น |
 | `solution` | TEXT | | | วิธีการแก้ไข |
 | `cause_id` | INT | | CAUSE | มูลเหตุของปัญหา |
@@ -748,7 +764,8 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 | `return_date` | TIMESTAMPTZ | | | วันที่ส่งมอบคืน |
 | `is_repeat_repair` | BOOLEAN | | | ซ่อมซ้ำอาการเดิมหรือไม่ |
 | `tech_category_id` | INT | | TECH_CATEGORY | หมวดช่างที่รับผิดชอบ |
-| `receiver_id` | UUID | | USER | ผู้รับมอบเครื่องคืน |
+| `unrepairable_reason` | TEXT | | | เหตุผลที่ไม่สามารถซ่อมได้ (กรณี UNREPAIRABLE) |
+| `receiver_id` | UUID | | USER | ผู้รับมอบเครื่องคืนจากแผนก |
 | `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาแจ้งซ่อม |
 | `created_by` | UUID | ✅ | USER | ผู้สร้างรายการ |
 | `updatedAt` | TIMESTAMPTZ | ✅ | | |
@@ -767,8 +784,80 @@ POST  /asset/:id/disposal        → create Disposal (disposal_doc_no, approved_
 |---|---|---|---|---|
 | `mechanic_repair_id` | INT | ✅ PK | | ID รายการ |
 | `job_id` | UUID | ✅ | REPAIR_JOB | งานซ่อม |
-| `user_id` | UUID | ✅ | USER | ช่างผู้รับผิดชอบ |
+| `user_id` | UUID | ✅ | USER | ช่างผู้รับผิดชอบ (รองรับหลายคนต่อ 1 งาน) |
 | `createdAt` | TIMESTAMPTZ | ✅ | | |
 | `updatedAt` | TIMESTAMPTZ | ✅ | | |
 | `deleteAt` | TIMESTAMPTZ | | | Soft delete |
 
+### ASSET_DISPOSAL (ประวัติการจำหน่ายครุภัณฑ์แบบ Direct Disposal)
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `id` | UUID | ✅ PK | | ID รายการจำหน่าย |
+| `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่จำหน่าย |
+| `disposal_doc_no` | VARCHAR(255) | ✅ | | เลขที่เอกสารการจำหน่าย |
+| `disposal_doc_url` | TEXT | | | URL ไฟล์เอกสารแนบ |
+| `disposed_date` | TIMESTAMPTZ | ✅ | | วันที่จำหน่าย |
+| `disposal_method` | ENUM | ✅ | | วิธีการจำหน่าย (`AUCTION`, `DONATION`, `DESTROY`, `TRANSFORM`) |
+| `disposal_reason` | TEXT | ✅ | | เหตุผลการจำหน่าย |
+| `disposed_by_user_id` | UUID | ✅ | USER | เจ้าหน้าที่พัสดุผู้ทำรายการ |
+| `remark` | TEXT | | | หมายเหตุเพิ่มเติม |
+| `createdAt` | TIMESTAMPTZ | ✅ | | |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | |
+
+---
+
+## System Enums Reference Summary
+
+```typescript
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  PARCEL_STAFF = 'PARCEL_STAFF',
+  ASSET_CENTER_STAFF = 'ASSET_CENTER_STAFF',
+  DEPARTMENT_STAFF = 'DEPARTMENT_STAFF',
+  MAINTENANCE_HEAD = 'MAINTENANCE_HEAD',
+  MAINTENANCE_STAFF = 'MAINTENANCE_STAFF',
+}
+
+export enum StepActionType {
+  SELF_REPAIR = 'SELF_REPAIR',
+  WITH_PARTS = 'WITH_PARTS',
+  OUTSOURCE = 'OUTSOURCE',
+  UNREPAIRABLE = 'UNREPAIRABLE',
+}
+
+export enum StockType {
+  INTERNAL = 'INTERNAL',
+  EXTERNAL = 'EXTERNAL',
+}
+
+export enum DisposalMethod {
+  AUCTION = 'AUCTION',       // ขายทอดตลาด
+  DONATION = 'DONATION',     // บริจาค/โอน
+  DESTROY = 'DESTROY',       // ทำลาย/ทิ้ง
+  TRANSFORM = 'TRANSFORM',   // แปรสภาพ/แยกชิ้นส่วน
+}
+```
+
+---
+
+## Future Roadmap & Planned Capabilities (Phase 2)
+
+> รายการฟีเจอร์ระดับสถาปัตยกรรมและแผนการพัฒนาในระยะถัดไป (Phase 2) โดยมีข้อกำหนดขอบเขตการทำงานเบื้องต้นดังนี้:
+
+### 1. Two-Factor Authentication via Authenticator App (2FA - TOTP) [Task 15]
+* **ขอบเขตสิทธิ์ (Role Scoping):** จำกัดการบังคับใช้/เปิดใช้งานเฉพาะ Role ที่มีสิทธิ์จัดการข้อมูลระดับสูงและมีความเสี่ยงต่อระบบ ได้แก่ **`ADMIN`**, **`PARCEL_STAFF`**, และ **`ASSET_CENTER_STAFF`** เท่านั้น (เจ้าหน้าที่หน่วยงานทั่วไป `DEPARTMENT_STAFF` ยังคงใช้การล็อกอินแบบปกติ)
+* **รูปแบบการทำงาน:** รองรับ Time-based One-Time Password (TOTP) ตามมาตรฐาน RFC 6238 ร่วมกับ Authenticator App เช่น Google Authenticator หรือ Microsoft Authenticator
+* **กระบวนการ:** การลงทะเบียนผ่าน Secret Key / QR Code และการตรวจยืนยัน 6-digit OTP ในขั้นตอน Authentication Flow
+
+### 2. Smart Asset Recommendation for Wear Leveling (ระบบแนะนำครุภัณฑ์เพื่อกระจายภาระการใช้งาน) [Task 16]
+* **วัตถุประสงค์หลัก:** แก้ปัญหาการยืมกระจุกตัวอยู่เฉพาะเครื่องใดเครื่องหนึ่งซ้ำๆ (Prevent Asset Hotspot Usage & Prevent Accelerated Wear-and-Tear)
+* **หลักการคำนวณ:** ประมวลผลจาก **ความถี่และประวัติระยะเวลาการถูกยืมในอดีต (Borrow Frequency & Historical Usage Distribution)** ร่วมกับสถานะความพร้อมใช้งาน เพื่อจัดลำดับแนะนำเครื่องที่ถูกใช้งานน้อยกว่า หรือเครื่องที่มีการหมุนเวียนเหมาะสมให้ผู้ขอยืมเลือกใช้งาน
+
+### 3. Repair Economic Viability Analysis (การประเมินความคุ้มค่าเชิงเศรษฐศาสตร์ในการซ่อมครั้งต่อไป) [Task 17]
+* **วัตถุประสงค์:** ช่วยประเมินความคุ้มค่าก่อนตัดสินใจซ่อมเครื่องเดิมซ้ำ เพื่อเป็นข้อมูลสนับสนุนการตัดสินใจของหัวหน้าช่าง (`MAINTENANCE_HEAD`), ช่างซ่อม (`MAINTENANCE_STAFF`), และฝ่ายพัสดุ/ผู้บริหาร ในการเลือกแทร็กซ่อมต่อ หรือแทงชำรุดรอจำหน่าย (`UNREPAIRABLE`)
+* **หมายเหตุ:** *(สูตรและเกณฑ์ตัวชี้วัดการประเมินจะได้รับการสรุปในรายละเอียดเชิงลึกอีกครั้งเมื่อเริ่มพัฒนาฟีเจอร์นี้)*
+
+### 4. Bulk CSV / XLSX Status Sync with e-GP (ระบบอัปเดตสถานะครุภัณฑ์แบบกลุ่มจากระบบจัดซื้อจัดจ้างภาครัฐ) [Task 18]
+* **วัตถุประสงค์:** รองรับการนำเข้าไฟล์ `.csv` หรือ `.xlsx` ที่ Export ออกมาจากระบบหลักของรัฐบาล (e-GP) เช่น ข้อมูลรายการจำหน่ายครุภัณฑ์ประจำปี
+* **หลักการทำงาน:** Parser ข้อมูลและจับคู่ระเบียนตาม `noid` (หมายเลขครุภัณฑ์) หรือ `serial_no` และดำเนินการ Batch Update สถานะของครุภัณฑ์ในระบบ HAMS (เช่น สลับสถานะเป็น `DISPOSED` หรือ `WAIT_DISPOSAL`) ให้ตรงกับ e-GP โดยอัตโนมัติอย่างรวดเร็วและแม่นยำ

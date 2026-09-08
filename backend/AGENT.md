@@ -258,8 +258,18 @@ refactor(users): extract permission check to guard
 - ❌ Do not edit Prisma migration files after they are generated
 - ❌ Do not return Prisma model objects directly from controllers — always map to response DTO
 - ❌ Do not disable ESLint rules globally
-
----
+- ❌ **Do not allow `ADMIN` role to execute operational transactions**: `ADMIN` is strictly for user management, system configs, and Master Data. Never add `UserRole.ADMIN` to operational endpoints such as borrow approvals, handovers, returns, desk extensions, extension approvals, or direct asset transfers
+- ❌ **Do not implement approval workflows for Asset Transfers**: Transfers are **Direct Transfers** (no pending approval steps) that atomically update `asset.section_id` and record immutable transfer document history
+- ❌ **Do not omit `expectedReturnDate` in Borrowing creation**: All borrow requests must capture `expectedReturnDate` to ensure accurate overdue tracking and notification
+- ❌ **Do not allow `MAINTENANCE_STAFF` to assign repair jobs to others**: Job assignment, triage, and technician dispatch are strictly reserved for `MAINTENANCE_HEAD` (though `MAINTENANCE_HEAD` can self-assign)
+- ❌ **Do not split `INTERNAL_STOCK` and `EXTERNAL_STOCK` into separate tracks in `StepMaster`**: Always use the consolidated `WITH_PARTS` track with line-item `stockType: "INTERNAL" | "EXTERNAL"`
+- ❌ **Do not record piecemeal/separate `SparepartTxn` (WITHDRAW) timestamps for mixed requisitions**: For `WITH_PARTS`, execute a **Batch Handover** where all parts (both in-stock and procured) have their withdrawal transactions created atomically in a single timestamp when the technician confirms physical receipt (Step 7), ensuring a clean and auditable trail
+- ❌ **Do not skip the parcel staff custody acceptance step for `UNREPAIRABLE` cases**: When a repair is deemed unrepairable, the technician submits the finding, but the asset status is updated to `WAIT_DISPOSAL` and the job is closed only when `PARCEL_STAFF` confirms physical receipt (`complete-unrepairable`)
+- ❌ **Do not create multi-step approval workflows for Asset Disposals**: Disposals are **Direct Disposals** executed directly by `PARCEL_STAFF`, atomically updating `asset.asset_status_id = DISPOSED`, `availability_status_id = UNAVAILABLE`, and creating an audit record in `AssetDisposal`
+- ❌ **Do not auto-create Repair Jobs upon returning damaged assets**: When an asset is returned damaged (`RETURNED_DAMAGED`), update `asset.asset_status_id = DAMAGED` and `availability_status_id = UNAVAILABLE`. Do NOT automatically spawn a `RepairJob`; let `ASSET_CENTER_STAFF` or the ward manually file the repair ticket with proper symptom details.
+- ❌ **Do not block online borrow extensions solely because the item is overdue**: Allow users to submit `POST /borrowings/:id/extensions` with type `ONLINE` even when `isOverdue: true`, pending `ASSET_CENTER_STAFF` review and approval.
+- ❌ **Do not let technicians directly select external vendors for `OUTSOURCE` repairs**: Technicians diagnose and mark `stepActionType: "OUTSOURCE"`, but `PARCEL_STAFF` is responsible for selecting the vendor (`company_id`), managing quotations/POs, and coordinating with the vendor.
+- ❌ **Do not allow technicians to directly execute stock return transactions**: Unused spare parts must be physically handed back to the warehouse, and `PARCEL_STAFF` records the return transaction (`SPAREPART_TXN` with `txn_type = "RETURN"`) into stock.
 
 ## TBD
 
