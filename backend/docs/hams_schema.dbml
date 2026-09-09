@@ -415,6 +415,7 @@ Table REPAIR_JOB {
   job_status_id      int                 [not null, ref: > JOB_STATUS.job_status_id]
   company_id         uuid                [not null, ref: > COMPANY.company_id]
   bill_no            text                [note: 'เลขใบเสร็จ']
+  repair_cost        decimal(15,2)       [note: 'ค่าใช้จ่ายการซ่อมจริง / ค่าบริการส่งซ่อมภายนอก']
   diagnosis          text                [note: 'อาการ/สาเหตุ']
   symptom            text                [note: 'บันทึกส่งซ่อม']
   solution           text                [note: 'วิธีการแก้ไข']

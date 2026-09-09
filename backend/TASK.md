@@ -149,6 +149,7 @@
 ## 3. โมดูลที่ออกแบบได้ถูกต้องตาม Best Practice แล้ว (Benchmark)
 * **`Repairs Module` (`GET /repairs?...`)**: รวม Filter 10 มิติ (`statusCode`, `urgencyStatus`, `actionType`, `stepActionType`, `mechanicId`, `assetId`, `sectionId`, `startDate`, `endDate`, `search`) ไว้ในเส้นเดียว พร้อม Data Isolation ตาม Role
 * **`Repair Dispatch & Triage` (`POST /repairs/:id/assign`, `GET /repairs/mechanic-workloads`)**: แยกหน้าที่หัวหน้าช่างชัดเจน พร้อมระบบคำนวณ Workload Balancing
+* **`Outsource Repairs & Cost Tracking` (`company_id`, `bill_no`, `repair_cost`)**: บันทึกบริษัทคู่ค้า เลขที่ใบสั่งจ้าง/ใบแจ้งหนี้ และจำนวนเงินค่าใช้จ่ายการซ่อมจริง (`repair_cost`) โดยเจ้าหน้าที่พัสดุ
 * **`Spare Parts Module` (`GET /spare-parts?...`)**: รองรับ `sparePartGroupId`, `isLowStock`, `search`, `page`, `limit` ในเส้นเดียวชัดเจน
 * **`Spare Parts Transactions` (`GET /spare-parts/transactions?...`)**: รองรับ `sparepartId`, `jobId`, `txnType`, `userId`, `startDate`, `endDate`, `page`, `limit` ครบถ้วน
 * **`Disposals Module` (`POST /disposals`, `GET /disposals?...`, `GET /assets/:id/disposal`)**: รองรับ Direct Disposal, Filtering ตามช่วงเวลาและวิธีการจำหน่าย พร้อม Pagination
