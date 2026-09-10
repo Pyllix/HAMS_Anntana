@@ -10,6 +10,15 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 - **Department (หน่วยงาน / แผนก)**: Internal hospital units or wards where assets are stationed or utilized.
 - **Spare Part (อะไหล่)**: Inventory items and parts used specifically for the repair and maintenance of assets.
 - **Maintenance Ticket / Repair Job (ใบแจ้งซ่อม / งานซ่อม)**: A documented request generated when an asset requires repair or scheduled maintenance.
+- **Repair Economic Viability (การวิเคราะห์ความคุ้มค่าในการซ่อม)**: กระบวนการประเมินความคุ้มค่าของการซ่อมบำรุงครุภัณฑ์รายเครื่อง โดยเจ้าหน้าที่พัสดุ (`PARCEL_STAFF`) เพื่อประกอบการตัดสินใจส่งซ่อม หรือเสนอคณะกรรมการแทงจำหน่ายพัสดุ
+- **Viability Status (สถานะความคุ้มค่า)**: ผลลัพธ์จากการประเมินตามเกณฑ์ Rule-based Decision Tree แบ่งเป็น:
+  - `VIABLE` (คุ้มค่า): ค่าซ่อมสะสมอยู่ในเกณฑ์ปกติ (< 50% ของราคาเครื่อง) และอายุยังไม่เกิน Useful Life
+  - `WARNING` (เฝ้าระวัง): ค่าซ่อมสะสม 50% - 70% หรือซ่อมถี่เกิน 3 ครั้งในรอบปี หรือใกล้หมด Useful Life
+  - `UNVIABLE` (ไม่คุ้มค่า - แนะนำแทงจำหน่าย): ค่าซ่อมสะสม $\ge 70\%$ ของราคาเครื่อง หรืออายุเกิน Useful Life ร่วมกับค่าซ่อม $\ge 50\%$
+- **Cumulative Repair Cost (ต้นทุนค่าซ่อมสะสม)**: ผลรวมของค่าใช้จ่ายซ่อมภายนอก (`repairCost`) บวกมูลค่าอะไหล่สุทธิที่เบิกใช้จริง (`WITHDRAW` - `RETURN` ใน `SparepartTxn`) จากงานซ่อมทั้งหมดของเครื่อง
+- **Smart Asset Borrow Recommendation (ระบบแนะนำครุภัณฑ์สำหรับการยืม)**: ระบบจัดลำดับและแนะนำครุภัณฑ์ที่พร้อมใช้งาน เพื่อกระจายภาระการใช้งาน (Load Balancing & Wear-and-Tear Distribution) ป้องกันการยืมเครื่องเดิมซ้ำซาก
+- **Balanced Usage Rotation Algorithm (อัลกอริทึมหมุนเวียนการใช้งาน)**: ตรรกะจัดลำดับเครื่องรุ่นเดียวกันที่พร้อมใช้งาน (`AVAILABLE` และ `NORMAL`) โดยพิจารณาจากวันใช้งานในรอบ 90 วันล่าสุด ร่วมกับระยะเวลาจอดพักเครื่อง (`idleDays` นับจาก `return_date` ล่าสุด)
+- **Smart Swap Nudge (คำแนะนำสลับเครื่องอัตโนมัติ)**: กลไกแจ้งเตือนหน้าจอเมื่อผู้ใช้เลือกเครื่องที่มีการใช้งานสูง เพื่อเสนอแนะสลับไปยังเครื่องรุ่นเดียวกันที่ผ่านการใช้งานน้อยกว่าและพักเครื่องนานกว่า
 - **Audit (การตรวจนับครุภัณฑ์)**: The process of verifying physical asset counts against system records.
 - **User Roles**: Categorized accesses including Parcel Staff, Asset Center Staff, Department Staff, Maintenance Staff, Managers, and Admins.
 
