@@ -436,7 +436,7 @@ describe('RepairsService', () => {
       });
     });
 
-    it('should allow PARCEL_STAFF to record companyId in OUTSOURCE track at Step 5 and reject premature billNo', async () => {
+    it('should allow PARCEL_STAFF to record companyId, billNo, and repairCost in OUTSOURCE track at Step 5', async () => {
       mockPrisma.repairJob.findUnique.mockResolvedValue({
         id: 'job-uuid-1',
         jobStatus: { code: 'PARCEL_PROCESSING' },
@@ -456,21 +456,11 @@ describe('RepairsService', () => {
       mockPrisma.repairJob.update.mockResolvedValue({});
       mockPrisma.repairJobStep.update.mockResolvedValue({ id: 105, completeAt: new Date() });
 
-      // Reject billNo on Step 5
-      await expect(
-        service.updateStepProgress(
-          'job-uuid-1',
-          5,
-          { billNo: 'INV-1' },
-          mockParcelUser,
-        ),
-      ).rejects.toThrow(BadRequestException);
-
-      // Successfully record companyId on Step 5
+      // Successfully record companyId, billNo, and repairCost on Step 5 by PARCEL_STAFF
       await service.updateStepProgress(
         'job-uuid-1',
         5,
-        { companyId: 'comp-1' },
+        { companyId: 'comp-1', billNo: 'INV-2026-001', repairCost: 3500 },
         mockParcelUser,
       );
 
@@ -478,11 +468,13 @@ describe('RepairsService', () => {
         where: { id: 'job-uuid-1' },
         data: expect.objectContaining({
           companyId: 'comp-1',
+          billNo: 'INV-2026-001',
+          repairCost: 3500,
         }),
       });
     });
 
-    it('should allow MAINTENANCE_STAFF to record billNo and repairCost in OUTSOURCE track at Step 6 and reject PARCEL_STAFF', async () => {
+    it('should allow MAINTENANCE_STAFF to complete Step 6 and reject premature/postmature billNo in Step 6', async () => {
       mockPrisma.repairJob.findUnique.mockResolvedValue({
         id: 'job-uuid-1',
         jobStatus: { code: 'OUTSOURCED' },
@@ -506,24 +498,33 @@ describe('RepairsService', () => {
         service.updateStepProgress(
           'job-uuid-1',
           6,
-          { billNo: 'INV-2026-999', repairCost: 3500 },
+          { note: 'ช่างรับเครื่องคืนและทดสอบ' },
           mockParcelUser,
         ),
       ).rejects.toThrow(ForbiddenException);
 
-      // MAINTENANCE_STAFF should be allowed
+      // billNo/repairCost must be rejected on Step 6 (must be on Step 5)
+      await expect(
+        service.updateStepProgress(
+          'job-uuid-1',
+          6,
+          { billNo: 'INV-2026-999' },
+          mockUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      // MAINTENANCE_STAFF should be allowed with standard note
       await service.updateStepProgress(
         'job-uuid-1',
         6,
-        { billNo: 'INV-2026-999', repairCost: 3500 },
+        { note: 'ทดสอบการทำงานผ่านเกณฑ์' },
         mockUser,
       );
 
       expect(mockPrisma.repairJob.update).toHaveBeenCalledWith({
         where: { id: 'job-uuid-1' },
         data: expect.objectContaining({
-          billNo: 'INV-2026-999',
-          repairCost: 3500,
+          jobStatusId: 2,
         }),
       });
     });

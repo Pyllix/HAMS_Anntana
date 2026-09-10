@@ -7,12 +7,6 @@ export class UpdateRepairStepDto {
   @IsOptional()
   note?: string;
 
-  @ApiPropertyOptional({
-    description: 'เลขที่เอกสารอ้างอิง เช่น เลขที่ใบสั่งซื้อ/PO หรือเลขที่หนังสือส่งซ่อม (สามารถระบุได้ทุกสเต็ป)',
-  })
-  @IsString()
-  @IsOptional()
-  docNo?: string;
 
   @ApiPropertyOptional({
     description: '[เฉพาะแทร็ก OUTSOURCE - สเต็ป 5] รหัสบริษัทภายนอกที่ส่งซ่อม (ระบุโดย PARCEL_STAFF)',
@@ -23,7 +17,7 @@ export class UpdateRepairStepDto {
   companyId?: string;
 
   @ApiPropertyOptional({
-    description: '[เฉพาะแทร็ก OUTSOURCE - สเต็ป 6] เลขที่บิล/ใบเสร็จ/ใบแจ้งหนี้จากบริษัทภายนอก (ระบุโดย MAINTENANCE_STAFF เมื่อรับเครื่องคืน)',
+    description: '[เฉพาะแทร็ก OUTSOURCE - สเต็ป 5] เลขที่บิล/ใบแจ้งหนี้/ใบสั่งจ้างจากบริษัทภายนอก (ระบุโดย PARCEL_STAFF)',
     example: 'INV-2026-0899',
   })
   @IsString()
@@ -31,7 +25,7 @@ export class UpdateRepairStepDto {
   billNo?: string;
 
   @ApiPropertyOptional({
-    description: '[เฉพาะแทร็ก OUTSOURCE - สเต็ป 6] ค่าซ่อมจริงตามบิลจากบริษัทภายนอก (ระบุโดย MAINTENANCE_STAFF)',
+    description: '[เฉพาะแทร็ก OUTSOURCE - สเต็ป 5] ค่าซ่อมจริงตามบิลจากบริษัทภายนอก (ระบุโดย PARCEL_STAFF)',
     example: 3500.0,
   })
   @IsNumber()

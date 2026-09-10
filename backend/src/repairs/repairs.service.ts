@@ -746,10 +746,10 @@ export class RepairsService {
 
     if (
       (dto.billNo || dto.repairCost !== undefined) &&
-      !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 6)
+      !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5)
     ) {
       throw new BadRequestException(
-        'billNo and repairCost can only be specified on Step 6 of OUTSOURCE track',
+        'billNo and repairCost can only be specified on Step 5 of OUTSOURCE track',
       );
     }
 
@@ -772,6 +772,8 @@ export class RepairsService {
             data: {
               jobStatusId: outsourcedStatusId,
               companyId: dto.companyId ?? job.companyId,
+              billNo: dto.billNo ?? job.billNo,
+              repairCost: dto.repairCost !== undefined ? dto.repairCost : job.repairCost,
               updatedBy: user.id,
             },
           });
@@ -781,8 +783,6 @@ export class RepairsService {
             where: { id: jobId },
             data: {
               jobStatusId: inProgressStatusId,
-              billNo: dto.billNo ?? job.billNo,
-              repairCost: dto.repairCost !== undefined ? dto.repairCost : job.repairCost,
               updatedBy: user.id,
             },
           });
