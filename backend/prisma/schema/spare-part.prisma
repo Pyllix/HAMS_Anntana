@@ -56,6 +56,7 @@ model SparepartTxn {
   sparepartId Int      @map("sparepart_id")
   jobId       String?  @map("job_id")
   txnType     String   @map("txn_type") @db.VarChar(100) // WITHDRAW / RETURN / ADJUST
+  stockType   String?  @map("stock_type") @db.VarChar(20) // INTERNAL / EXTERNAL
   qty         Int
   unitPrice   Decimal  @map("unit_price") @db.Decimal(15, 2)
   txnDate     DateTime @default(now()) @map("txn_date")

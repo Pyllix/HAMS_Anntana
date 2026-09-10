@@ -100,7 +100,8 @@ const companies = [
 ];
 
 const sections = [
-  { code: 'CENTER', name: 'ศูนย์บริการและซ่อมบำรุงครุภัณฑ์กลาง (Asset Center)', tel: '1000', building: 'อาคารสนับสนุนทางการแพทย์ ชั้น 1' },
+  { code: 'CENTER', name: 'ศูนย์ครุภัณฑ์กลาง (Asset Center)', tel: '1000', building: 'อาคารสนับสนุนทางการแพทย์ ชั้น 1' },
+  { code: 'MAINTENANCE', name: 'แผนกช่างและซ่อมบำรุง (Maintenance Department)', tel: '1020', building: 'อาคารสนับสนุนทางการแพทย์ ชั้น B1' },
   { code: 'IT', name: 'ศูนย์เทคโนโลยีสารสนเทศ (IT Department)', tel: '1234', building: 'อาคารบริหาร ชั้น 3' },
   { code: 'PARCEL', name: 'ฝ่ายพัสดุและจัดซื้อ (Parcel Department)', tel: '1050', building: 'อาคารบริหาร ชั้น 2' },
   { code: 'OPD', name: 'แผนกผู้ป่วยนอก (Outpatient Department)', tel: '1100', building: 'อาคารผู้ป่วยนอก ชั้น 1' },
@@ -201,7 +202,7 @@ const systemUsers = [
     email: 'maintenance@hospital.go.th',
     password: 'Maintenance@1234',
     role: 'MAINTENANCE_STAFF' as const,
-    sectionCode: 'CENTER',
+    sectionCode: 'MAINTENANCE',
   },
   // Additional users ensuring at least 2 users per section
   {
@@ -323,6 +324,67 @@ const systemUsers = [
     password: 'DeptStaff@1234',
     role: 'DEPARTMENT_STAFF' as const,
     sectionCode: 'PHARMACY',
+  },
+  // ── Maintenance Heads & Technicians for Testing ────────────────────────────
+  {
+    employeeId: 'GOV-67022',
+    userName: 'head_maintenance',
+    firstname: 'สมศักดิ์',
+    lastname: 'หัวหน้าฝ่ายวิศวกรรมการแพทย์',
+    email: 'head_maintenance@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_HEAD' as const,
+    sectionCode: 'MAINTENANCE',
+  },
+  {
+    employeeId: 'GOV-67023',
+    userName: 'head_it',
+    firstname: 'ธีรเดช',
+    lastname: 'หัวหน้างานเทคโนโลยีสารสนเทศ',
+    email: 'head_it@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_HEAD' as const,
+    sectionCode: 'MAINTENANCE',
+  },
+  {
+    employeeId: 'GOV-67024',
+    userName: 'mech_bio1',
+    firstname: 'อนุพงษ์',
+    lastname: 'ช่างเครื่องมือแพทย์ 1',
+    email: 'mech_bio1@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_STAFF' as const,
+    sectionCode: 'MAINTENANCE',
+  },
+  {
+    employeeId: 'GOV-67025',
+    userName: 'mech_bio2',
+    firstname: 'ชัชชัย',
+    lastname: 'ช่างเครื่องมือแพทย์ 2',
+    email: 'mech_bio2@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_STAFF' as const,
+    sectionCode: 'MAINTENANCE',
+  },
+  {
+    employeeId: 'GOV-67026',
+    userName: 'mech_it',
+    firstname: 'วรวิทย์',
+    lastname: 'ช่างเทคนิคคอมพิวเตอร์',
+    email: 'mech_it@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_STAFF' as const,
+    sectionCode: 'MAINTENANCE',
+  },
+  {
+    employeeId: 'GOV-67027',
+    userName: 'mech_general',
+    firstname: 'บุญส่ง',
+    lastname: 'ช่างซ่อมบำรุงทั่วไป/อาคาร',
+    email: 'mech_general@hospital.go.th',
+    password: 'Maintenance@1234',
+    role: 'MAINTENANCE_STAFF' as const,
+    sectionCode: 'MAINTENANCE',
   },
 ];
 
@@ -843,6 +905,156 @@ async function main() {
       availability_status_id: availMap['UNAVAILABLE'],
       owner_id: userMap['parcel'] || adminId,
     },
+
+    // 11. เครื่องวัดสัญญาณชีพศูนย์กลางครุภัณฑ์ พร้อมให้ยืม (Special: False, Backup: True) @ CENTER
+    {
+      noid: 'EQ-2567-CEN-011',
+      name: 'เครื่องติดตามสัญญาณชีพผู้ป่วยชนิดเคลื่อนย้ายได้ (Portable Vital Signs Monitor)',
+      model: 'Mindray VS-900',
+      serialNo: 'SN-VSM-2567-011',
+      budgetType: 'เงินงบประมาณแผ่นดิน ปี 2567',
+      acqType: 'ประกวดราคาอิเล็กทรอนิกส์(e-bidding)',
+      acqDoc: 'DOC-2567-CEN-011',
+      price: '125000',
+      warrantyDate: '2029-03-31',
+      receivedDate: new Date('2024-03-15'),
+      pmType: PmType.EM,
+      pmIntervalMonth: 6,
+      calType: CalType.EC,
+      calIntervalMonth: 12,
+      equipment_type_id: eqTypeMap['เครื่องมือช่วยชีวิต'],
+      riskLevel: RiskLevel.HIGH,
+      isSpecial: false,
+      isBackup: true,
+      remark: 'เครื่องพูลกลางประจำศูนย์ครุภัณฑ์ พร้อมให้แผนกต่างๆ เบิกยืมหมุนเวียน',
+      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514',
+      section_id: sectionMap['CENTER'],
+      company_id: companyMap['COMP001'],
+      type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['assetcenter'] || adminId,
+    },
+
+    // 12. เครื่องให้ออกซิเจนผสมอากาศอัตราการไหลสูง กำลังถูกยืม (Special: True, Backup: True) @ CENTER
+    {
+      noid: 'EQ-2567-CEN-012',
+      name: 'เครื่องให้ออกซิเจนผสมอากาศด้วยอัตราการไหลสูง (High Flow Nasal Cannula)',
+      model: 'Fisher & Paykel Airvo 2',
+      serialNo: 'SN-HFNC-2567-012',
+      budgetType: 'งบลงทุนและพัฒนา ปี 2567',
+      acqType: 'คัดเลือก',
+      acqDoc: 'DOC-2567-CEN-012',
+      price: '220000',
+      warrantyDate: '2029-05-31',
+      receivedDate: new Date('2024-05-01'),
+      pmType: PmType.EM,
+      pmIntervalMonth: 3,
+      calType: CalType.EC,
+      calIntervalMonth: 6,
+      equipment_type_id: eqTypeMap['เครื่องมือช่วยชีวิต'],
+      riskLevel: RiskLevel.HIGH,
+      isSpecial: true,
+      isBackup: true,
+      remark: 'เครื่องศูนย์กลางครุภัณฑ์ ปัจจุบันอยู่ระหว่างถูกยืมไปใช้งานที่หอผู้ป่วย',
+      imageUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982',
+      section_id: sectionMap['CENTER'],
+      company_id: companyMap['COMP003'],
+      type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['BORROWED'],
+      owner_id: userMap['assetcenter'] || adminId,
+    },
+
+    // 13. เครื่องให้สารละลายทางหลอดเลือดดำ พร้อมใช้งาน (Special: False, Backup: True) @ CENTER
+    {
+      noid: 'EQ-2566-CEN-013',
+      name: 'เครื่องควบคุมการให้สารละลายทางหลอดเลือดดำ (Infusion Pump)',
+      model: 'Terumo TE-171',
+      serialNo: 'SN-INF-2566-013',
+      budgetType: 'งบค่าเสื่อม ปี 2566',
+      acqType: 'เฉพาะเจาะจง',
+      acqDoc: 'DOC-2566-CEN-040',
+      price: '55000',
+      warrantyDate: '2028-08-31',
+      receivedDate: new Date('2023-08-15'),
+      pmType: PmType.IM,
+      pmIntervalMonth: 6,
+      calType: CalType.IC,
+      calIntervalMonth: 12,
+      equipment_type_id: eqTypeMap['เครื่องมือเพื่อการรักษา'],
+      riskLevel: RiskLevel.MEDIUM,
+      isSpecial: false,
+      isBackup: true,
+      remark: 'เครื่องสำรองส่วนกลางพร้อมใช้งาน ตรวจสอบและสอบเทียบมาตรฐานแล้ว',
+      imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef',
+      section_id: sectionMap['CENTER'],
+      company_id: companyMap['COMP001'],
+      type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['assetcenter'] || adminId,
+    },
+
+    // 14. เครื่องกระตุกหัวใจ AED พกพาศูนย์กลาง รอซ่อมบำรุง (Special: True, Backup: False) @ CENTER
+    {
+      noid: 'EQ-2566-CEN-014',
+      name: 'เครื่องฟื้นคืนคลื่นหัวใจด้วยไฟฟ้าแบบอัตโนมัติ (Automated External Defibrillator - AED)',
+      model: 'Philips HeartStart FRx',
+      serialNo: 'SN-AED-2566-014',
+      budgetType: 'เงินบริจาคมูลนิธิโรงพยาบาล',
+      acqType: 'บริจาค',
+      acqDoc: 'DOC-DON-2566-019',
+      price: '78000',
+      warrantyDate: '2028-02-28',
+      receivedDate: new Date('2023-02-10'),
+      pmType: PmType.EM,
+      pmIntervalMonth: 6,
+      calType: CalType.EC,
+      calIntervalMonth: 12,
+      equipment_type_id: eqTypeMap['เครื่องมือช่วยชีวิต'],
+      riskLevel: RiskLevel.HIGH,
+      isSpecial: true,
+      isBackup: false,
+      remark: 'แบตเตอรี่เสื่อมสภาพและแผ่นนำไฟฟ้าหมดอายุ อยู่ระหว่างส่งซ่อมเปลี่ยนอุปกรณ์',
+      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514',
+      section_id: sectionMap['CENTER'],
+      company_id: companyMap['COMP001'],
+      type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['UNDER_REPAIR'],
+      availability_status_id: availMap['UNAVAILABLE'],
+      owner_id: userMap['assetcenter'] || adminId,
+    },
+
+    // 15. เครื่องดูดเสมหะชนิดเคลื่อนย้ายได้ พร้อมใช้งาน (Special: False, Backup: True) @ CENTER
+    {
+      noid: 'EQ-2567-CEN-015',
+      name: 'เครื่องดูดเสมหะและของเหลวชนิดเคลื่อนย้ายสะดวก (Portable Suction Unit)',
+      model: 'Devilbiss Vacu-Aide 7305',
+      serialNo: 'SN-SUC-2567-015',
+      budgetType: 'เงินบำรุงโรงพยาบาล (ไม่ระบุปี)',
+      acqType: 'เฉพาะเจาะจง',
+      acqDoc: 'DOC-2567-CEN-055',
+      price: '32000',
+      warrantyDate: '2029-01-15',
+      receivedDate: new Date('2024-01-10'),
+      pmType: PmType.IM,
+      pmIntervalMonth: 6,
+      calType: CalType.IC,
+      calIntervalMonth: 12,
+      equipment_type_id: eqTypeMap['เครื่องมือสนับสนุน'],
+      riskLevel: RiskLevel.LOW,
+      isSpecial: false,
+      isBackup: true,
+      remark: 'เครื่องสำรองพูลกลางศูนย์ครุภัณฑ์ พร้อมเบิกจ่ายฉุกเฉิน',
+      imageUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982',
+      section_id: sectionMap['CENTER'],
+      company_id: companyMap['COMP003'],
+      type_id: typeMap['เครื่องมือแพทย์'],
+      asset_status_id: statusMap['NORMAL'],
+      availability_status_id: availMap['AVAILABLE'],
+      owner_id: userMap['assetcenter'] || adminId,
+    },
   ];
 
   for (const asset of mockAssets) {
@@ -1104,78 +1316,47 @@ async function main() {
     }
   }
 
-  // 9.5 StepMaster (Streamlined Action Types Workflow Templates)
-  console.log('📋 Seeding StepMaster templates...');
+  // 9.5 StepMaster (Streamlined 4 Action Types Workflow Templates)
+  console.log('📋 Seeding StepMaster templates (4 Tracks)...');
   const stepMasterTemplates: { stepNumber: number; actionType: StepActionType; label: string }[] = [
-    // 1. INTERNAL_STOCK
-    { stepNumber: 1, actionType: StepActionType.INTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
-    { stepNumber: 2, actionType: StepActionType.INTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
-    { stepNumber: 3, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
-    { stepNumber: 4, actionType: StepActionType.INTERNAL_STOCK, label: 'ขอเบิกอะไหล่ในคลัง' },
-    { stepNumber: 5, actionType: StepActionType.INTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่ในคลัง' },
-    { stepNumber: 6, actionType: StepActionType.INTERNAL_STOCK, label: 'พัสดุจ่ายอะไหล่ในคลัง' },
-    { stepNumber: 7, actionType: StepActionType.INTERNAL_STOCK, label: 'ช่างรับวัสดุ/ดำเนินการซ่อม' },
-    { stepNumber: 8, actionType: StepActionType.INTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 9, actionType: StepActionType.INTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
-
-    // 2. EXTERNAL_STOCK
-    { stepNumber: 1, actionType: StepActionType.EXTERNAL_STOCK, label: 'วันแจ้งซ่อม' },
-    { stepNumber: 2, actionType: StepActionType.EXTERNAL_STOCK, label: 'ธุรการรับ Job / จ่ายงาน' },
-    { stepNumber: 3, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับ Job / วินิจฉัย' },
-    { stepNumber: 4, actionType: StepActionType.EXTERNAL_STOCK, label: 'ขอเบิก/จัดซื้ออะไหล่นอกคลัง' },
-    { stepNumber: 5, actionType: StepActionType.EXTERNAL_STOCK, label: 'อนุมัติจัดหาอะไหล่นอกคลัง' },
-    { stepNumber: 6, actionType: StepActionType.EXTERNAL_STOCK, label: 'พัสดุแจ้งรับอะไหล่' },
-    { stepNumber: 7, actionType: StepActionType.EXTERNAL_STOCK, label: 'ช่างรับอะไหล่/ดำเนินการซ่อม' },
-    { stepNumber: 8, actionType: StepActionType.EXTERNAL_STOCK, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 9, actionType: StepActionType.EXTERNAL_STOCK, label: 'ตรวจรับงานและสรุป Job' },
-
-    // 3. OUTSOURCE
-    { stepNumber: 1, actionType: StepActionType.OUTSOURCE, label: 'วันแจ้งซ่อม' },
-    { stepNumber: 2, actionType: StepActionType.OUTSOURCE, label: 'ธุรการรับ Job / จ่ายงาน' },
-    { stepNumber: 3, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับ Job / วินิจฉัย' },
-    { stepNumber: 4, actionType: StepActionType.OUTSOURCE, label: 'ขอส่งซ่อมบริษัทภายนอก' },
-    { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'อนุมัติส่งซ่อมบริษัทภายนอก' },
-    { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'พัสดุรับเครื่องกลับจากบริษัท' },
-    { stepNumber: 7, actionType: StepActionType.OUTSOURCE, label: 'ช่างรับเครื่องและทดสอบ' },
-    { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 9, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับงานและสรุป Job' },
-
-    // 4. PURCHASE_REPLACEMENT (10 Steps with Two-tier Approval)
-    { stepNumber: 1, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'วันแจ้งซ่อม' },
-    { stepNumber: 2, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ธุรการรับ Job / จ่ายงาน' },
-    { stepNumber: 3, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับ Job / วินิจฉัย' },
-    { stepNumber: 4, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ขอซื้อเครื่องทดแทน' },
-    { stepNumber: 5, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุตรวจสอบและเสนอความเห็น' },
-    { stepNumber: 6, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน' },
-    { stepNumber: 7, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'พัสดุรับเครื่องใหม่เข้าคลัง' },
-    { stepNumber: 8, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ช่างรับเครื่องใหม่และส่งมอบ' },
-    { stepNumber: 9, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 10, actionType: StepActionType.PURCHASE_REPLACEMENT, label: 'ตรวจรับงานและสรุป Job' },
-
-    // 5. SELF_REPAIR
+    // 1. SELF_REPAIR (6 Steps)
     { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
-    { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'ธุรการรับ Job / จ่ายงาน' },
-    { stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างรับ Job / วินิจฉัย' },
-    { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ดำเนินการซ่อมและทดสอบการใช้งาน' },
-    { stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอตรวจรับงาน' },
-    { stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับงานและสรุป Job' },
-  ];
+    { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ซ่อมเองและทดสอบ' },
+    { stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอส่งมอบ' },
+    { stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับและปิด Job' },
 
-  // Clean old step master entries that might not be in the new schema (e.g. step numbers > max per actionType)
-  await prisma.stepMaster.deleteMany({
-    where: {
-      OR: [
-        { actionType: StepActionType.SELF_REPAIR, stepNumber: { gt: 6 } },
-        { actionType: StepActionType.PURCHASE_REPLACEMENT, stepNumber: { gt: 10 } },
-        {
-          actionType: {
-            notIn: [StepActionType.SELF_REPAIR, StepActionType.PURCHASE_REPLACEMENT],
-          },
-          stepNumber: { gt: 9 },
-        },
-      ],
-    },
-  });
+    // 2. WITH_PARTS (8 Steps)
+    { stepNumber: 1, actionType: StepActionType.WITH_PARTS, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.WITH_PARTS, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.WITH_PARTS, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.WITH_PARTS, label: 'ขอเบิกอะไหล่ (ผสม In/Out)' },
+    { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' },
+    { stepNumber: 6, actionType: StepActionType.WITH_PARTS, label: 'ช่างรับอะไหล่ & ลงมือซ่อม' },
+    { stepNumber: 7, actionType: StepActionType.WITH_PARTS, label: 'แล้วเสร็จ / รอส่งมอบ' },
+    { stepNumber: 8, actionType: StepActionType.WITH_PARTS, label: 'ตรวจรับและปิด Job' },
+
+    // 3. OUTSOURCE (8 Steps)
+    { stepNumber: 1, actionType: StepActionType.OUTSOURCE, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.OUTSOURCE, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.OUTSOURCE, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.OUTSOURCE, label: 'ขอส่งซ่อมภายนอก (พัสดุจัดจ้าง)' },
+    { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'พัสดุส่งบริษัทภายนอกซ่อม' },
+    { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'รับเครื่องคืนและทดสอบ' },
+    { stepNumber: 7, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอส่งมอบ' },
+    { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับและปิด Job' },
+
+    // 4. UNREPAIRABLE (8 Steps)
+    { stepNumber: 1, actionType: StepActionType.UNREPAIRABLE, label: 'วันแจ้งซ่อม' },
+    { stepNumber: 2, actionType: StepActionType.UNREPAIRABLE, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
+    { stepNumber: 3, actionType: StepActionType.UNREPAIRABLE, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
+    { stepNumber: 4, actionType: StepActionType.UNREPAIRABLE, label: 'ยื่นเรื่องแทงชำรุด' },
+    { stepNumber: 5, actionType: StepActionType.UNREPAIRABLE, label: 'ช่างนำส่งเครื่องที่ห้องพัสดุ' },
+    { stepNumber: 6, actionType: StepActionType.UNREPAIRABLE, label: 'พัสดุกดยืนยันรับมอบเครื่อง' },
+    { stepNumber: 7, actionType: StepActionType.UNREPAIRABLE, label: 'สรุปส่งมอบเข้าคลังพัก' },
+    { stepNumber: 8, actionType: StepActionType.UNREPAIRABLE, label: 'ปรับเป็น WAIT_DISPOSAL' },
+  ];
 
   for (const st of stepMasterTemplates) {
     const existing = await prisma.stepMaster.findFirst({
@@ -1190,6 +1371,16 @@ async function main() {
       });
     }
   }
+
+  // Clean out any steps with step numbers exceeding their max or obsolete action types
+  await prisma.stepMaster.deleteMany({
+    where: {
+      OR: [
+        { actionType: StepActionType.SELF_REPAIR, stepNumber: { gt: 6 } },
+        { actionType: { in: [StepActionType.WITH_PARTS, StepActionType.OUTSOURCE, StepActionType.UNREPAIRABLE] }, stepNumber: { gt: 8 } },
+      ],
+    },
+  });
 
   console.log('\n✨ Enhanced database seeding complete!');
 }

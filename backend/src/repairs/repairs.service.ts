@@ -14,6 +14,9 @@ import { RejectRepairStepDto } from './dto/reject-repair-step.dto';
 import { CancelRepairJobDto } from './dto/cancel-repair-job.dto';
 import { ReturnRepairSparePartDto } from './dto/return-repair-spare-part.dto';
 import { QueryRepairJobDto } from './dto/query-repair-job.dto';
+import { AssignRepairJobDto } from './dto/assign-repair-job.dto';
+import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
+import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
 import {
   ActionType,
   Prisma,
@@ -58,111 +61,103 @@ export class RepairsService {
     let nextSeq = 1;
     if (latest && latest.jobNo) {
       const parts = latest.jobNo.split('-');
-      const lastSeq = parseInt(parts[2], 10);
-      if (!isNaN(lastSeq)) {
-        nextSeq = lastSeq + 1;
+      if (parts.length === 3) {
+        const parsed = parseInt(parts[2], 10);
+        if (!isNaN(parsed)) {
+          nextSeq = parsed + 1;
+        }
       }
     }
 
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   }
 
-  private isValidCalendarDate(dateStr?: string | null): boolean {
-    if (!dateStr || typeof dateStr !== 'string') return false;
-    const regex = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/;
-    const match = dateStr.match(regex);
-    if (!match) return false;
-
-    const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const day = parseInt(match[3], 10);
-
-    if (month < 1 || month > 12) return false;
-    if (day < 1 || day > 31) return false;
-
-    const date = new Date(year, month - 1, day);
-    return (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    );
+  private async getCallerSectionId(user: any): Promise<string | null> {
+    if (user.section_id) {
+      return user.section_id;
+    }
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { section_id: true },
+    });
+    return dbUser?.section_id || null;
   }
 
-  private calculateOverdueInfo(job: { dueDate?: Date | string | null; jobStatus?: { code?: string } | null }): {
-    isOverdue: boolean;
-    overdueDays: number;
-  } {
+  private isValidCalendarDate(dateStr: string): boolean {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+
+    const parts = dateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+
+    if (month < 1 || month > 12) return false;
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return day >= 1 && day <= daysInMonth;
+  }
+
+  private calculateOverdueInfo(job: {
+    dueDate: Date | null;
+    jobStatus?: { code: string } | null;
+  }) {
     if (!job.dueDate) {
       return { isOverdue: false, overdueDays: 0 };
     }
 
-    const completedOrCancelled = ['COMPLETED', 'CANCELLED'];
     const statusCode = job.jobStatus?.code;
-    if (statusCode && completedOrCancelled.includes(statusCode)) {
+    if (statusCode === 'COMPLETED' || statusCode === 'CANCELLED') {
       return { isOverdue: false, overdueDays: 0 };
     }
 
-    const due = new Date(job.dueDate);
     const now = new Date();
-    const diffMs = now.getTime() - due.getTime();
-
+    const diffMs = now.getTime() - new Date(job.dueDate).getTime();
     if (diffMs > 0) {
       const overdueDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      return { isOverdue: true, overdueDays };
+      return { isOverdue: true, overdueDays: Math.max(1, overdueDays) };
     }
 
     return { isOverdue: false, overdueDays: 0 };
   }
 
-  private async getCallerSectionId(user: any, tx?: Prisma.TransactionClient): Promise<string | null> {
-    if (user?.section_id) return user.section_id;
-    if (user?.id) {
-      const client = tx || this.prisma;
-      const dbUser = await client.user.findUnique({
-        where: { id: user.id },
-        select: { section_id: true },
-      });
-      return dbUser?.section_id ?? null;
-    }
-    return null;
-  }
-
   // ───────────────────────────────────────────────────────────────────────────
-  // 1. Create Repair Request (แจ้งซ่อม)
+  // 1. Online Request (แจ้งซ่อม) - UC3
   // ───────────────────────────────────────────────────────────────────────────
 
   async createRequest(dto: CreateRepairRequestDto, user: any) {
     const asset = await this.prisma.asset.findUnique({
       where: { id: dto.assetId },
-      include: { status: true },
+      include: { status: true, availabilityStatus: true },
     });
 
     if (!asset) {
-      throw new NotFoundException(`Asset with ID ${dto.assetId} not found`);
+      throw new NotFoundException(`Asset #${dto.assetId} not found`);
     }
 
-    // 1. Guard against disposed or lost asset
-    if (asset.status?.code === 'DISPOSAL' || asset.status?.code === 'WAIT_DISPOSAL') {
-      throw new BadRequestException(`Cannot request repair for disposed asset "${asset.name}" (${asset.noid})`);
-    }
-    if (asset.status?.code === 'LOST') {
-      throw new BadRequestException(`Cannot request repair for lost asset "${asset.name}" (${asset.noid})`);
+    // Asset status validation
+    const blockedStatuses = ['DISPOSAL', 'LOST'];
+    if (blockedStatuses.includes(asset.status.code)) {
+      throw new BadRequestException(
+        `Cannot request repair for an asset with status '${asset.status.name}' (${asset.status.code})`,
+      );
     }
 
-    // 2. Guard against duplicate active repair requests for the same asset
-    const activeRepairJob = await this.prisma.repairJob.findFirst({
+    // Check for active (in-progress) repair tickets on the same asset
+    const activeJob = await this.prisma.repairJob.findFirst({
       where: {
         assetId: dto.assetId,
         jobStatus: {
-          code: { notIn: ['COMPLETED', 'CANCELLED'] },
+          code: {
+            notIn: ['COMPLETED', 'CANCELLED'],
+          },
         },
       },
-      include: { jobStatus: true },
     });
 
-    if (activeRepairJob) {
-      throw new BadRequestException(
-        `Asset "${asset.name}" (${asset.noid}) already has an active repair job #${activeRepairJob.jobNo} (Status: ${activeRepairJob.jobStatus?.name || activeRepairJob.jobStatus?.code})`,
+    if (activeJob) {
+      throw new ConflictException(
+        `Asset already has an active repair ticket (${activeJob.jobNo}) in progress`,
       );
     }
 
@@ -170,7 +165,6 @@ export class RepairsService {
     const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
     const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
 
-    // Default JobType to first available if not specified
     const defaultJobType = await this.prisma.jobType.findFirst({
       orderBy: { id: 'asc' },
     });
@@ -227,10 +221,185 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 2. Diagnose and Plan (ช่างรับงาน วินิจฉัย และ Clone Steps)
+  // 2. Workload Balancing & Assignment (หัวหน้าช่าง Triage & Dispatch)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async getMechanicWorkloads() {
+    const mechanics = await this.prisma.user.findMany({
+      where: {
+        role: { in: [UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD] },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        employeeId: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        imageUrl: true,
+        section_id: true,
+        section: { select: { id: true, name: true } },
+      },
+      orderBy: { firstname: 'asc' },
+    });
+
+    return Promise.all(
+      mechanics.map(async (mech) => {
+        const activeJobsCount = await this.prisma.mechanicRepair.count({
+          where: {
+            userId: mech.id,
+            job: {
+              jobStatus: {
+                code: { notIn: ['COMPLETED', 'CANCELLED'] },
+              },
+            },
+          },
+        });
+
+        return {
+          ...mech,
+          activeJobsCount,
+        };
+      }),
+    );
+  }
+
+  async assignJob(jobId: string, dto: AssignRepairJobDto, user: any) {
+    if (user.role !== UserRole.MAINTENANCE_HEAD) {
+      throw new ForbiddenException('Only MAINTENANCE_HEAD can triage and assign repair jobs');
+    }
+
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: { jobStatus: true, repairJobSteps: { include: { stepMaster: true } } },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
+      throw new BadRequestException(`Cannot assign a repair job that is ${job.jobStatus.code}`);
+    }
+
+    const techCategory = await this.prisma.techCategory.findUnique({
+      where: { id: dto.techCategoryId, deleteAt: null },
+    });
+    if (!techCategory) {
+      throw new NotFoundException(`Tech Category #${dto.techCategoryId} not found`);
+    }
+
+    if (!dto.mechanicIds || dto.mechanicIds.length === 0) {
+      throw new BadRequestException('At least one mechanic must be assigned');
+    }
+
+    for (const mechId of dto.mechanicIds) {
+      const mech = await this.prisma.user.findUnique({
+        where: { id: mechId, deletedAt: null },
+      });
+      if (!mech) {
+        throw new NotFoundException(`Mechanic user #${mechId} not found`);
+      }
+      if (mech.role !== UserRole.MAINTENANCE_STAFF && mech.role !== UserRole.MAINTENANCE_HEAD) {
+        throw new BadRequestException(
+          `User "${mech.firstname} ${mech.lastname}" (${mech.role}) is not a maintenance technician or head`,
+        );
+      }
+    }
+
+    const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedJob = await tx.repairJob.update({
+        where: { id: jobId },
+        data: {
+          techCategoryId: dto.techCategoryId,
+          jobStatusId: inProgressStatusId,
+          updatedBy: user.id,
+        },
+      });
+
+      await tx.mechanicRepair.deleteMany({ where: { jobId } });
+      for (const mechId of dto.mechanicIds) {
+        await tx.mechanicRepair.create({
+          data: {
+            jobId,
+            userId: mechId,
+          },
+        });
+      }
+
+      const step2 = job.repairJobSteps?.find((s) => s.stepMaster.stepNumber === 2);
+      if (step2 && !step2.completeAt) {
+        await tx.repairJobStep.update({
+          where: { id: step2.id },
+          data: {
+            completeAt: new Date(),
+            completedBy: user.id,
+          },
+        });
+      }
+
+      return updatedJob;
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 3. Ticket Modification (แก้ไขข้อมูลใบแจ้งซ่อม)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async updateRepairRequest(jobId: string, dto: UpdateRepairRequestDto, user: any) {
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: { jobStatus: true },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code !== 'PENDING_ASSIGN' && job.jobStatus.code !== 'WAITING_HANDOVER') {
+      throw new BadRequestException(
+        `Cannot edit repair request details once it has progressed beyond PENDING_ASSIGN (Current status: ${job.jobStatus.code})`,
+      );
+    }
+
+    const isReporter = job.reporterId === user.id;
+    const isAuthorizedRole = user.role === UserRole.MAINTENANCE_HEAD || user.role === UserRole.ADMIN;
+
+    if (!isReporter && !isAuthorizedRole) {
+      throw new ForbiddenException('You do not have permission to edit this repair request');
+    }
+
+    if (dto.jobTypeId) {
+      const jt = await this.prisma.jobType.findUnique({
+        where: { id: dto.jobTypeId, deletedAt: null },
+      });
+      if (!jt) throw new NotFoundException(`Job Type #${dto.jobTypeId} not found`);
+    }
+
+    return this.prisma.repairJob.update({
+      where: { id: jobId },
+      data: {
+        symptom: dto.symptom ?? job.symptom,
+        urgencyStatus: dto.urgencyStatus ?? job.urgencyStatus,
+        reportType: dto.reportType ?? job.reportType,
+        jobTypeId: dto.jobTypeId ?? job.jobTypeId,
+        updatedBy: user.id,
+      },
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 4. Diagnose and Plan (ช่างรับงาน วินิจฉัย และ Clone Steps - 4 Tracks)
   // ───────────────────────────────────────────────────────────────────────────
 
   async diagnoseAndPlan(id: string, dto: DiagnoseRepairJobDto, user: any) {
+    if (user.role !== UserRole.MAINTENANCE_STAFF && user.role !== UserRole.MAINTENANCE_HEAD) {
+      throw new ForbiddenException('Only maintenance staff or head can diagnose repair jobs');
+    }
+
     const job = await this.prisma.repairJob.findUnique({
       where: { id },
       include: {
@@ -250,7 +419,6 @@ export class RepairsService {
       throw new BadRequestException(`Cannot modify completed or cancelled repair job`);
     }
 
-    // Guard against re-diagnosing a job that has already progressed beyond the diagnosis boundary
     if (job.repairJobSteps && job.repairJobSteps.length > 0) {
       const hasProgressedBeyondDiagnosis = job.repairJobSteps.some(
         (s) =>
@@ -265,85 +433,66 @@ export class RepairsService {
       }
     }
 
-    // Validate Lookups
+    const effectiveTechCategoryId = dto.techCategoryId ?? job.techCategoryId;
+    if (!effectiveTechCategoryId) {
+      throw new BadRequestException('techCategoryId is required for diagnosis');
+    }
+
     const [cause, techCat, jobType] = await Promise.all([
       this.prisma.cause.findUnique({ where: { id: dto.causeId } }),
-      this.prisma.techCategory.findUnique({ where: { id: dto.techCategoryId } }),
+      this.prisma.techCategory.findUnique({ where: { id: effectiveTechCategoryId } }),
       this.prisma.jobType.findUnique({ where: { id: dto.jobTypeId } }),
     ]);
 
     if (!cause) throw new NotFoundException(`Cause #${dto.causeId} not found`);
-    if (!techCat) throw new NotFoundException(`Tech category #${dto.techCategoryId} not found`);
+    if (!techCat) throw new NotFoundException(`Tech category #${effectiveTechCategoryId} not found`);
     if (!jobType) throw new NotFoundException(`Job type #${dto.jobTypeId} not found`);
 
-    // Validate dueDate calendar date format if provided
     if (dto.dueDate && !this.isValidCalendarDate(dto.dueDate)) {
       throw new BadRequestException(
         `Invalid dueDate format or calendar date value: "${dto.dueDate}". Expected a valid date in YYYY-MM-DD format.`,
       );
     }
 
-    // 1. Validate OUTSOURCE vs Non-OUTSOURCE rules
-    if (dto.stepActionType === StepActionType.OUTSOURCE) {
-      if (!dto.companyId) {
-        throw new BadRequestException('Company ID is required for OUTSOURCE action type');
-      }
-      const company = await this.prisma.company.findUnique({
-        where: { id: dto.companyId, deletedAt: null },
-      });
-      if (!company) {
-        throw new NotFoundException(`Company #${dto.companyId} not found`);
-      }
+    // Validation per StepActionType (4 Tracks)
+    if (dto.stepActionType === StepActionType.SELF_REPAIR) {
       if (dto.spareParts && dto.spareParts.length > 0) {
-        throw new BadRequestException('Spare parts requisition is not allowed for OUTSOURCE action type');
+        throw new BadRequestException('Spare parts requisition is not allowed for SELF_REPAIR action type');
       }
-    } else {
-      if (dto.companyId) {
-        throw new BadRequestException(`Company ID cannot be specified for ${dto.stepActionType} action type`);
+      if (dto.unrepairableReason) {
+        throw new BadRequestException('unrepairableReason cannot be specified for SELF_REPAIR');
       }
-      if (dto.billNo) {
-        throw new BadRequestException(`Bill number cannot be specified for ${dto.stepActionType} action type`);
-      }
-    }
-
-    // 2. Validate INTERNAL_STOCK vs Other Action Types regarding spare parts
-    if (dto.stepActionType === StepActionType.INTERNAL_STOCK) {
+    } else if (dto.stepActionType === StepActionType.WITH_PARTS) {
       if (!dto.spareParts || dto.spareParts.length === 0) {
-        throw new BadRequestException('At least one spare part must be selected for INTERNAL_STOCK action type');
+        throw new BadRequestException('At least one spare part must be selected for WITH_PARTS action type');
       }
-    } else if (dto.spareParts && dto.spareParts.length > 0) {
-      throw new BadRequestException(
-        `Spare parts requisition from internal inventory is not allowed for ${dto.stepActionType} action type`,
-      );
-    }
+      if (dto.unrepairableReason) {
+        throw new BadRequestException('unrepairableReason cannot be specified for WITH_PARTS');
+      }
 
-    // 3. Guard against duplicate spare parts in the same request payload
-    if (dto.spareParts && dto.spareParts.length > 0) {
       const spIds = dto.spareParts.map((item) => item.sparepartId);
       if (new Set(spIds).size !== spIds.length) {
         throw new BadRequestException('Duplicate spare parts found in requisition list');
       }
-    }
-
-    // Validate Mechanics: All assigned users must have role MAINTENANCE_STAFF
-    const mechanicIds = dto.mechanicIds && dto.mechanicIds.length > 0 ? dto.mechanicIds : [user.id];
-    for (const mechId of mechanicIds) {
-      const mech = await this.prisma.user.findUnique({
-        where: { id: mechId, deletedAt: null },
-      });
-      if (!mech) {
-        throw new NotFoundException(`Mechanic user #${mechId} not found`);
+    } else if (dto.stepActionType === StepActionType.OUTSOURCE) {
+      if (dto.spareParts && dto.spareParts.length > 0) {
+        throw new BadRequestException('Spare parts requisition is not allowed for OUTSOURCE action type');
       }
-      if (mech.role !== UserRole.MAINTENANCE_STAFF) {
-        throw new BadRequestException(
-          `User "${mech.firstname} ${mech.lastname}" (${mech.id}) does not have role MAINTENANCE_STAFF (Current role: ${mech.role}). Only maintenance staff can be assigned as mechanics.`,
-        );
+      if (dto.unrepairableReason) {
+        throw new BadRequestException('unrepairableReason cannot be specified for OUTSOURCE');
+      }
+    } else if (dto.stepActionType === StepActionType.UNREPAIRABLE) {
+      if (dto.spareParts && dto.spareParts.length > 0) {
+        throw new BadRequestException('Spare parts requisition is not allowed for UNREPAIRABLE action type');
+      }
+      if (!dto.unrepairableReason) {
+        throw new BadRequestException('unrepairableReason is required for UNREPAIRABLE action type');
       }
     }
 
-    // Validate Spare Parts for INTERNAL_STOCK: Stock must not be deficient
+    // Validate spare parts for WITH_PARTS
     const sparePartMap: Record<number, any> = {};
-    if (dto.spareParts && dto.spareParts.length > 0) {
+    if (dto.stepActionType === StepActionType.WITH_PARTS && dto.spareParts && dto.spareParts.length > 0) {
       for (const item of dto.spareParts) {
         const sp = await this.prisma.sparepart.findUnique({
           where: { id: item.sparepartId, deletedAt: null },
@@ -351,32 +500,30 @@ export class RepairsService {
         if (!sp) {
           throw new NotFoundException(`Spare part #${item.sparepartId} not found`);
         }
-        if (sp.qtyInStock < item.qty) {
+
+        if (item.stockType === 'INTERNAL' && sp.qtyInStock < item.qty) {
           throw new BadRequestException(
-            `Insufficient stock for spare part "${sp.name}" (${sp.code}). In stock: ${sp.qtyInStock}, Requested: ${item.qty}. Please select EXTERNAL_STOCK or adjust quantity.`,
+            `Insufficient stock for spare part "${sp.name}" (${sp.code}). In stock: ${sp.qtyInStock}, Requested: ${item.qty}. Please adjust quantity or select EXTERNAL stockType.`,
           );
         }
         sparePartMap[item.sparepartId] = sp;
       }
     }
 
-    // Determine initial JobStatus according to Action Type:
-    // - INTERNAL_STOCK / EXTERNAL_STOCK / OUTSOURCE -> PARCEL_PROCESSING (ตั้งเรื่องขอเบิก/จัดซื้อ/ส่งซ่อม)
-    // - PURCHASE_REPLACEMENT -> UNREPAIRABLE (แทงชำรุด/ขอซื้อทดแทน)
-    // - SELF_REPAIR -> IN_PROGRESS (ช่างดำเนินการซ่อมเอง)
+    // Determine target initial status
     let targetStatusCode = 'IN_PROGRESS';
-    if (
-      dto.stepActionType === StepActionType.INTERNAL_STOCK ||
-      dto.stepActionType === StepActionType.EXTERNAL_STOCK ||
-      dto.stepActionType === StepActionType.OUTSOURCE
-    ) {
+    if (dto.stepActionType === StepActionType.WITH_PARTS) {
+      const hasExternal = dto.spareParts?.some((item) => item.stockType === 'EXTERNAL');
+      targetStatusCode = hasExternal ? 'WAITING_PARTS' : 'PARCEL_PROCESSING';
+    } else if (dto.stepActionType === StepActionType.OUTSOURCE) {
       targetStatusCode = 'PARCEL_PROCESSING';
-    } else if (dto.stepActionType === StepActionType.PURCHASE_REPLACEMENT) {
+    } else if (dto.stepActionType === StepActionType.UNREPAIRABLE) {
       targetStatusCode = 'UNREPAIRABLE';
+    } else if (dto.stepActionType === StepActionType.SELF_REPAIR) {
+      targetStatusCode = 'IN_PROGRESS';
     }
     const initialJobStatusId = await this.getStatusId('jobStatus', targetStatusCode);
 
-    // Fetch master steps template using stepActionType
     const stepMasters = await this.prisma.stepMaster.findMany({
       where: { actionType: dto.stepActionType },
       orderBy: { stepNumber: 'asc' },
@@ -394,34 +541,32 @@ export class RepairsService {
           diagnosis: dto.diagnosis,
           solution: dto.solution,
           causeId: dto.causeId,
-          techCategoryId: dto.techCategoryId,
+          techCategoryId: effectiveTechCategoryId,
           jobTypeId: dto.jobTypeId,
           actionType: dto.actionType,
           jobStatusId: initialJobStatusId,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           isRepeatRepair: dto.isRepeatRepair ?? false,
-          companyId: dto.companyId ?? null,
-          billNo: dto.billNo ?? null,
+          companyId: null,
+          billNo: null,
+          repairCost: null,
+          unrepairableReason: dto.unrepairableReason ?? null,
           updatedBy: user.id,
         },
       });
 
-      // 2. Assign Mechanics
-      const mechanicIds = dto.mechanicIds && dto.mechanicIds.length > 0 ? dto.mechanicIds : [user.id];
-      await tx.mechanicRepair.deleteMany({ where: { jobId: id } });
-      for (const mechId of mechanicIds) {
+      // 2. Ensure mechanic assignment is preserved from assignJob, or attach diagnosing user if unassigned
+      const assignedCount = await tx.mechanicRepair.count({ where: { jobId: id } });
+      if (assignedCount === 0) {
         await tx.mechanicRepair.create({
           data: {
             jobId: id,
-            userId: mechId,
+            userId: user.id,
           },
         });
       }
 
-      // 3. Process Spare Parts Transactions (Record PENDING_WITHDRAW without deducting stock yet)
-      // If re-diagnosing:
-      // - If previous transactions were WITHDRAW (already approved/deducted), revert stock increment
-      // - Clean up previous sparepart transactions for this job
+      // 3. Clear old transactions and insert PENDING_WITHDRAW with stockType
       const existingTxns = await tx.sparepartTxn.findMany({
         where: { jobId: id },
       });
@@ -437,15 +582,15 @@ export class RepairsService {
         await tx.sparepartTxn.deleteMany({ where: { jobId: id } });
       }
 
-      if (dto.spareParts && dto.spareParts.length > 0) {
+      if (dto.stepActionType === StepActionType.WITH_PARTS && dto.spareParts) {
         for (const item of dto.spareParts) {
           const sp = sparePartMap[item.sparepartId];
-          // Create PENDING_WITHDRAW record in sparepart_txns (stock will be deducted upon parcel approval)
           await tx.sparepartTxn.create({
             data: {
               sparepartId: item.sparepartId,
               jobId: id,
               txnType: 'PENDING_WITHDRAW',
+              stockType: item.stockType,
               qty: item.qty,
               unitPrice: sp.price,
               txnBy: user.id,
@@ -454,8 +599,7 @@ export class RepairsService {
         }
       }
 
-      // 4. Clone Steps from StepMaster (Delete old steps if re-diagnosing)
-      // Form Boundary: Steps 1-4 are auto-completed on single form submission (or 1-3 for SELF_REPAIR)
+      // 4. Clone Steps from StepMaster (Auto-complete initial steps 1-4, or 1-3 for SELF_REPAIR)
       await tx.repairJobStep.deleteMany({ where: { jobId: id } });
       const now = new Date();
       const autoCompletedThreshold = dto.stepActionType === StepActionType.SELF_REPAIR ? 3 : 4;
@@ -483,7 +627,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 3. Update Step Progress
+  // 5. Update Step Progress & Batch Handover
   // ───────────────────────────────────────────────────────────────────────────
 
   async updateStepProgress(
@@ -527,14 +671,12 @@ export class RepairsService {
       throw new NotFoundException(`Step #${stepNumber} not found for this job`);
     }
 
-    // 1. Guard against duplicate step completion
     if (targetStep.completeAt) {
       throw new BadRequestException(
         `Step #${stepNumber} ("${targetStep.stepMaster.label}") has already been completed`,
       );
     }
 
-    // 2. Guard against skipping steps (must complete in sequential order)
     const previousIncompleteStep = job.repairJobSteps.find(
       (s) => s.stepMaster.stepNumber < stepNumber && !s.completeAt,
     );
@@ -544,14 +686,13 @@ export class RepairsService {
       );
     }
 
-    // Strict Step-level Role Validation (Separation of Duties - ADMIN excluded from approval steps)
     this.validateStepRole(currentStepActionType, stepNumber, user.role);
 
     const totalSteps = job.repairJobSteps.length;
-    const isPenultimateStep = stepNumber === totalSteps - 1; // "แล้วเสร็จ / รอตรวจรับงาน"
-    const isFinalStep = stepNumber === totalSteps; // "ตรวจรับงานและสรุป Job"
+    const isPenultimateStep = stepNumber === totalSteps - 1;
+    const isFinalStep = stepNumber === totalSteps;
 
-    if (isFinalStep) {
+    if (isFinalStep && currentStepActionType !== StepActionType.UNREPAIRABLE) {
       if (!dto.receiverId) {
         throw new BadRequestException(
           'receiverId is required for the final step (ตรวจรับงานและสรุป Job)',
@@ -586,16 +727,36 @@ export class RepairsService {
           `Receiver "${receiver.firstname} ${receiver.lastname}" must either be the original repair requester or belong to the same department/section`,
         );
       }
-    } else {
+    } else if (!isFinalStep) {
       if (dto.receiverId) {
         throw new BadRequestException(
-          'receiverId cannot be provided before the final step (ตรวจรับงานและสรุป Job)',
+          'receiverId cannot be provided before the final step',
         );
       }
       if (dto.warrantyDate) {
         throw new BadRequestException(
-          'warrantyDate cannot be provided before the final step (ตรวจรับงานและสรุป Job)',
+          'warrantyDate cannot be provided before the final step',
         );
+      }
+    }
+
+    if (dto.companyId && !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5)) {
+      throw new BadRequestException('companyId can only be specified on Step 5 of OUTSOURCE track');
+    }
+
+    if (
+      (dto.billNo || dto.repairCost !== undefined) &&
+      !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5)
+    ) {
+      throw new BadRequestException(
+        'billNo and repairCost can only be specified on Step 5 of OUTSOURCE track',
+      );
+    }
+
+    if (currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5 && dto.companyId) {
+      const comp = await this.prisma.company.findUnique({ where: { id: dto.companyId } });
+      if (!comp) {
+        throw new NotFoundException(`Company #${dto.companyId} not found`);
       }
     }
 
@@ -605,75 +766,52 @@ export class RepairsService {
       // Step-specific Dynamic JobStatus Transitions
       if (currentStepActionType === StepActionType.OUTSOURCE) {
         if (stepNumber === 5) {
-          // อนุมัติส่งซ่อมบริษัทภายนอก -> OUTSOURCED
           const outsourcedStatusId = await this.getStatusId('jobStatus', 'OUTSOURCED');
           await tx.repairJob.update({
             where: { id: jobId },
-            data: { jobStatusId: outsourcedStatusId, updatedBy: user.id },
+            data: {
+              jobStatusId: outsourcedStatusId,
+              companyId: dto.companyId ?? job.companyId,
+              billNo: dto.billNo ?? job.billNo,
+              repairCost: dto.repairCost !== undefined ? dto.repairCost : job.repairCost,
+              updatedBy: user.id,
+            },
           });
         } else if (stepNumber === 6) {
-          // พัสดุรับเครื่องกลับจากบริษัท -> PARCEL_PROCESSING
-          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
-          });
-        } else if (stepNumber === 7) {
-          // ช่างรับเครื่องและทดสอบ -> IN_PROGRESS
           const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
           await tx.repairJob.update({
             where: { id: jobId },
-            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
+            data: {
+              jobStatusId: inProgressStatusId,
+              updatedBy: user.id,
+            },
           });
         }
-      } else if (currentStepActionType === StepActionType.EXTERNAL_STOCK) {
-        if (stepNumber === 5) {
-          // อนุมัติจัดหาอะไหล่นอกคลัง -> WAITING_PARTS
-          const waitingPartsStatusId = await this.getStatusId('jobStatus', 'WAITING_PARTS');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: waitingPartsStatusId, updatedBy: user.id },
-          });
-        } else if (stepNumber === 6) {
-          // พัสดุแจ้งรับอะไหล่ -> PARCEL_PROCESSING
-          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
-          });
-        } else if (stepNumber === 7) {
-          // ช่างรับอะไหล่/ดำเนินการซ่อม -> IN_PROGRESS
-          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
-          });
-        }
-      } else if (currentStepActionType === StepActionType.INTERNAL_STOCK) {
-        if (stepNumber === 5) {
-          // Parcel approves spare parts requisition (Step 5: อนุมัติจัดหาอะไหล่ในคลัง):
-          // 1. Verify current stock availability for all pending items
+      } else if (currentStepActionType === StepActionType.WITH_PARTS) {
+        if (stepNumber === 6) {
+          // Batch Handover: Convert all PENDING_WITHDRAW to WITHDRAW at this exact timestamp
           const pendingTxns = await tx.sparepartTxn.findMany({
             where: { jobId, txnType: 'PENDING_WITHDRAW' },
           });
 
           for (const pTxn of pendingTxns) {
-            const currentSp = await tx.sparepart.findUnique({
-              where: { id: pTxn.sparepartId },
-            });
-            if (!currentSp || currentSp.qtyInStock < pTxn.qty) {
-              throw new BadRequestException(
-                `Insufficient stock for spare part "${currentSp?.name || pTxn.sparepartId}" upon approval. Available: ${currentSp?.qtyInStock ?? 0}, Requested: ${pTxn.qty}`,
-              );
+            // Deduct stock for INTERNAL items (or procures already added to stock)
+            if (pTxn.stockType === 'INTERNAL') {
+              const currentSp = await tx.sparepart.findUnique({
+                where: { id: pTxn.sparepartId },
+              });
+              if (!currentSp || currentSp.qtyInStock < pTxn.qty) {
+                throw new BadRequestException(
+                  `Insufficient stock for spare part "${currentSp?.name || pTxn.sparepartId}". Available: ${currentSp?.qtyInStock ?? 0}, Requested: ${pTxn.qty}`,
+                );
+              }
+
+              await tx.sparepart.update({
+                where: { id: pTxn.sparepartId },
+                data: { qtyInStock: { decrement: pTxn.qty } },
+              });
             }
 
-            // 2. Deduct stock from inventory
-            await tx.sparepart.update({
-              where: { id: pTxn.sparepartId },
-              data: { qtyInStock: { decrement: pTxn.qty } },
-            });
-
-            // 3. Transition transaction from PENDING_WITHDRAW to WITHDRAW
             await tx.sparepartTxn.update({
               where: { id: pTxn.id },
               data: {
@@ -683,24 +821,7 @@ export class RepairsService {
               },
             });
           }
-        } else if (stepNumber === 6 || stepNumber === 7) {
-          // พัสดุจ่ายอะไหล่ / ช่างรับวัสดุและซ่อม -> IN_PROGRESS
-          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
-          });
-        }
-      } else if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
-        if (stepNumber === 5 || stepNumber === 6 || stepNumber === 7) {
-          // Step 5: พัสดุตรวจ, Step 6: ผู้บริหารอนุมัติ, Step 7: พัสดุรับเครื่องใหม่ -> PARCEL_PROCESSING
-          const parcelStatusId = await this.getStatusId('jobStatus', 'PARCEL_PROCESSING');
-          await tx.repairJob.update({
-            where: { id: jobId },
-            data: { jobStatusId: parcelStatusId, updatedBy: user.id },
-          });
-        } else if (stepNumber === 8) {
-          // Step 8: ช่างรับเครื่องใหม่และส่งมอบ -> IN_PROGRESS
+
           const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
           await tx.repairJob.update({
             where: { id: jobId },
@@ -717,8 +838,7 @@ export class RepairsService {
         }
       }
 
-      // If penultimate step (แล้วเสร็จ / รอตรวจรับงาน) -> set status to WAITING_DELIVERY
-      if (isPenultimateStep) {
+      if (isPenultimateStep && currentStepActionType !== StepActionType.UNREPAIRABLE) {
         const waitingDeliveryStatusId = await this.getStatusId('jobStatus', 'WAITING_DELIVERY');
         await tx.repairJob.update({
           where: { id: jobId },
@@ -726,7 +846,6 @@ export class RepairsService {
         });
       }
 
-      // If final step (ตรวจรับงานและสรุป Job) -> set status to COMPLETED and update returnDate
       if (isFinalStep) {
         const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
         const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
@@ -745,13 +864,12 @@ export class RepairsService {
           },
         });
 
-        // For PURCHASE_REPLACEMENT, original asset goes to WAIT_DISPOSAL / UNAVAILABLE
         const targetAssetStatusId =
-          currentStepActionType === StepActionType.PURCHASE_REPLACEMENT
+          currentStepActionType === StepActionType.UNREPAIRABLE
             ? waitDisposalAssetStatusId
             : normalAssetStatusId;
         const targetAvailabilityId =
-          currentStepActionType === StepActionType.PURCHASE_REPLACEMENT
+          currentStepActionType === StepActionType.UNREPAIRABLE
             ? unavailableStatusId
             : availableStatusId;
 
@@ -765,27 +883,22 @@ export class RepairsService {
         });
       }
 
-      // Update Step Record
       const updatedStep = await tx.repairJobStep.update({
         where: { id: targetStep.id },
         data: {
           completeAt: completionTime,
           completedBy: user.id,
-          note: dto.note ?? targetStep.note,
+          note: dto.note ? `${targetStep.note ? targetStep.note + ' | ' : ''}${dto.note}` : targetStep.note,
         },
         include: { stepMaster: true, user: true },
       });
 
       return {
+        message: `Step #${stepNumber} ("${targetStep.stepMaster.label}") completed successfully`,
         step: updatedStep,
-        job: await this.findOne(jobId, tx),
       };
     });
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 3.1 Advance Next Step Automatically
-  // ───────────────────────────────────────────────────────────────────────────
 
   async advanceNextStep(
     jobId: string,
@@ -806,13 +919,18 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${jobId} not found`);
     }
 
-    if (job.repairJobSteps.length === 0) {
-      throw new BadRequestException('Repair job must be diagnosed before advancing steps');
+    if (!job.repairJobSteps || job.repairJobSteps.length === 0) {
+      throw new BadRequestException(
+        'This job has not been diagnosed yet. Please call /repairs/:id/diagnose first.',
+      );
     }
 
     const nextPendingStep = job.repairJobSteps.find((s) => !s.completeAt);
+
     if (!nextPendingStep) {
-      throw new BadRequestException('All repair steps have already been completed for this job');
+      throw new BadRequestException(
+        'All repair steps have already been completed for this job.',
+      );
     }
 
     return this.updateStepProgress(
@@ -824,7 +942,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 3.2 Reject / Disapprove Approval Step (ตีกลับ/ไม่อนุมัติ)
+  // 6. Reject Step
   // ───────────────────────────────────────────────────────────────────────────
 
   async rejectStep(
@@ -843,9 +961,7 @@ export class RepairsService {
       },
     });
 
-    if (!job) {
-      throw new NotFoundException(`Repair job #${jobId} not found`);
-    }
+    if (!job) throw new NotFoundException(`Repair job #${jobId} not found`);
 
     if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
       throw new BadRequestException(`Cannot reject a completed or cancelled repair job`);
@@ -870,11 +986,9 @@ export class RepairsService {
 
     const stepNumber = nextPendingStep.stepMaster.stepNumber;
 
-    // Strict validation: Only approval steps can be rejected by their designated roles
     let isApprovalStep = false;
     if (
-      (currentStepActionType === StepActionType.INTERNAL_STOCK ||
-        currentStepActionType === StepActionType.EXTERNAL_STOCK ||
+      (currentStepActionType === StepActionType.WITH_PARTS ||
         currentStepActionType === StepActionType.OUTSOURCE) &&
       stepNumber === 5
     ) {
@@ -882,18 +996,6 @@ export class RepairsService {
         throw new ForbiddenException('Step #5 (Approval) rejection can only be performed by PARCEL_STAFF');
       }
       isApprovalStep = true;
-    } else if (currentStepActionType === StepActionType.PURCHASE_REPLACEMENT) {
-      if (stepNumber === 5) {
-        if (user.role !== UserRole.PARCEL_STAFF) {
-          throw new ForbiddenException('Step #5 (Parcel Review) rejection can only be performed by PARCEL_STAFF');
-        }
-        isApprovalStep = true;
-      } else if (stepNumber === 6) {
-        if (user.role !== UserRole.MANAGER) {
-          throw new ForbiddenException('Step #6 (Executive Approval) rejection can only be performed by MANAGER');
-        }
-        isApprovalStep = true;
-      }
     }
 
     if (!isApprovalStep) {
@@ -905,7 +1007,6 @@ export class RepairsService {
     const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Record rejection note and user on the pending step
       const updatedStep = await tx.repairJobStep.update({
         where: { id: nextPendingStep.id },
         data: {
@@ -915,7 +1016,6 @@ export class RepairsService {
         include: { stepMaster: true, user: true },
       });
 
-      // 2. Revert job status back to PENDING_ASSIGN so technician can re-diagnose
       await tx.repairJob.update({
         where: { id: jobId },
         data: {
@@ -924,21 +1024,92 @@ export class RepairsService {
         },
       });
 
-      // 3. Clear any PENDING_WITHDRAW transactions to free up reserved inventory
       await tx.sparepartTxn.deleteMany({
         where: { jobId, txnType: 'PENDING_WITHDRAW' },
       });
 
       return {
-        message: 'Step rejected successfully. The repair job has been returned for re-diagnosis.',
+        message: `Step #${stepNumber} has been rejected. Repair job returned to PENDING_ASSIGN for re-diagnosis.`,
         step: updatedStep,
-        job: await this.findOne(jobId, tx),
       };
     });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 3.3 Cancel Repair Job (ยกเลิกใบงานซ่อมโดยช่าง)
+  // 7. Complete Unrepairable (Custody Handshake Flow)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async completeUnrepairable(jobId: string, dto: CompleteUnrepairableDto, user: any) {
+    if (user.role !== UserRole.PARCEL_STAFF && user.role !== UserRole.MANAGER) {
+      throw new ForbiddenException('Only PARCEL_STAFF can confirm receipt of unrepairable equipment');
+    }
+
+    const job = await this.prisma.repairJob.findUnique({
+      where: { id: jobId },
+      include: {
+        jobStatus: true,
+        asset: true,
+        repairJobSteps: { include: { stepMaster: true } },
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`Repair job #${jobId} not found`);
+    }
+
+    if (job.jobStatus.code !== 'UNREPAIRABLE') {
+      throw new BadRequestException(
+        `Job must be in UNREPAIRABLE status to complete custody handshake (Current status: ${job.jobStatus.code})`,
+      );
+    }
+
+    const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
+    const waitDisposalAssetStatusId = await this.getStatusId('assetStatus', 'WAIT_DISPOSAL');
+    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+    const now = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedJob = await tx.repairJob.update({
+        where: { id: jobId },
+        data: {
+          jobStatusId: completedStatusId,
+          receiverId: user.id,
+          returnDate: now,
+          updatedBy: user.id,
+        },
+      });
+
+      await tx.asset.update({
+        where: { id: job.assetId },
+        data: {
+          asset_status_id: waitDisposalAssetStatusId,
+          availability_status_id: unavailableAvailabilityId,
+          remark: dto.storageLocation
+            ? `${job.asset.remark ? job.asset.remark + ' | ' : ''}สถานที่พักรอจำหน่าย: ${dto.storageLocation}`
+            : job.asset.remark,
+          updatedBy: user.id,
+        },
+      });
+
+      for (const step of job.repairJobSteps) {
+        if (!step.completeAt) {
+          await tx.repairJobStep.update({
+            where: { id: step.id },
+            data: {
+              completeAt: now,
+              completedBy: user.id,
+              note: dto.note ? `${step.note ? step.note + ' | ' : ''}${dto.note}` : step.note,
+            },
+          });
+        }
+      }
+
+      return updatedJob;
+    });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8. Cancel Repair Job (ยกเลิกใบงานซ่อม)
   // ───────────────────────────────────────────────────────────────────────────
 
   async cancelRepairJob(
@@ -946,8 +1117,8 @@ export class RepairsService {
     dto: CancelRepairJobDto,
     user: any,
   ) {
-    if (user.role !== UserRole.MAINTENANCE_STAFF) {
-      throw new ForbiddenException('Only maintenance staff (technicians) can cancel repair jobs');
+    if (user.role !== UserRole.MAINTENANCE_STAFF && user.role !== UserRole.MAINTENANCE_HEAD) {
+      throw new ForbiddenException('Only maintenance staff or head can cancel repair jobs');
     }
 
     const job = await this.prisma.repairJob.findUnique({
@@ -968,7 +1139,6 @@ export class RepairsService {
       throw new BadRequestException(`Cannot cancel a repair job that is already ${job.jobStatus.code}`);
     }
 
-    // Check if the job has already progressed past the diagnosis/approval phase
     const hasProgressedPastApproval = job.repairJobSteps.some(
       (s) =>
         ((s.stepMaster?.stepNumber >= 5) ||
@@ -987,7 +1157,6 @@ export class RepairsService {
     const availableAvailabilityId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update job to CANCELLED
       await tx.repairJob.update({
         where: { id: jobId },
         data: {
@@ -997,12 +1166,10 @@ export class RepairsService {
         },
       });
 
-      // 2. Clear any PENDING_WITHDRAW transactions
       await tx.sparepartTxn.deleteMany({
         where: { jobId, txnType: 'PENDING_WITHDRAW' },
       });
 
-      // 3. Revert Asset status to NORMAL and AVAILABLE
       await tx.asset.update({
         where: { id: job.assetId },
         data: {
@@ -1017,7 +1184,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 4. Spare Parts Return within Repair Job
+  // 9. Spare Parts Return within Repair Job
   // ───────────────────────────────────────────────────────────────────────────
 
   async returnSparePart(
@@ -1025,6 +1192,10 @@ export class RepairsService {
     dto: ReturnRepairSparePartDto,
     user: any,
   ) {
+    if (user.role !== UserRole.PARCEL_STAFF) {
+      throw new ForbiddenException('Only PARCEL_STAFF can process return of spare parts into stock');
+    }
+
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: { jobStatus: true },
@@ -1040,7 +1211,6 @@ export class RepairsService {
     });
     if (!sp) throw new NotFoundException(`Spare part #${dto.sparepartId} not found`);
 
-    // Verify total withdrawn qty for this job
     const withdrawnTxns = await this.prisma.sparepartTxn.findMany({
       where: { jobId, sparepartId: dto.sparepartId, txnType: 'WITHDRAW' },
     });
@@ -1059,13 +1229,11 @@ export class RepairsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Increment inventory stock
       await tx.sparepart.update({
         where: { id: dto.sparepartId },
         data: { qtyInStock: { increment: dto.qty } },
       });
 
-      // 2. Record SPAREPART_TXN (RETURN)
       const txn = await tx.sparepartTxn.create({
         data: {
           sparepartId: dto.sparepartId,
@@ -1078,37 +1246,53 @@ export class RepairsService {
         include: { sparepart: true, user: true },
       });
 
-      return txn;
+      return {
+        message: `Successfully returned ${dto.qty} item(s) of "${sp.name}" to inventory`,
+        transaction: txn,
+      };
     });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. Find All & Query
+  // 10. Lookups & Query
   // ───────────────────────────────────────────────────────────────────────────
 
-  async findAll(query: QueryRepairJobDto, user: any) {
-    const page = query.page ? Number(query.page) : 1;
-    const limit = query.limit ? Number(query.limit) : 20;
-    const search = query.search?.trim();
+  async getLookups() {
+    const [causes, techCategories, jobTypes, stepMasters] = await Promise.all([
+      this.prisma.cause.findMany({ where: { deleteAt: null } }),
+      this.prisma.techCategory.findMany({ where: { isActive: true, deleteAt: null } }),
+      this.prisma.jobType.findMany({ where: { deletedAt: null } }),
+      this.prisma.stepMaster.findMany({ orderBy: [{ actionType: 'asc' }, { stepNumber: 'asc' }] }),
+    ]);
 
+    return {
+      causes,
+      techCategories,
+      jobTypes,
+      stepMasters,
+    };
+  }
+
+  async findAll(query: QueryRepairJobDto, user: any) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
     const where: Prisma.RepairJobWhereInput = {};
 
-    // RBAC Scoping: DEPARTMENT_STAFF can only view jobs for their own section
     if (user.role === UserRole.DEPARTMENT_STAFF) {
-      const userSectionId = await this.getCallerSectionId(user);
-      if (userSectionId) {
-        where.sectionId = userSectionId;
+      const sectionId = await this.getCallerSectionId(user);
+      if (sectionId) {
+        where.sectionId = sectionId;
       }
-    } else if (query.sectionId) {
-      where.sectionId = query.sectionId;
     }
 
     if (query.statusCode) {
       where.jobStatus = { code: query.statusCode };
     }
+
     if (query.actionType) {
       where.actionType = query.actionType;
     }
+
     if (query.stepActionType) {
       where.repairJobSteps = {
         some: {
@@ -1116,56 +1300,66 @@ export class RepairsService {
         },
       };
     }
+
     if (query.urgencyStatus) {
       where.urgencyStatus = query.urgencyStatus;
     }
+
     if (query.reportType) {
       where.reportType = query.reportType;
     }
+
+    if (query.sectionId) {
+      where.sectionId = query.sectionId;
+    }
+
     if (query.assetId) {
       where.assetId = query.assetId;
     }
+
     if (query.reporterId) {
       where.reporterId = query.reporterId;
     }
+
     if (query.mechanicId) {
-      where.mechanicRepairs = { some: { userId: query.mechanicId } };
-    }
-
-    if (query.isOverdue !== undefined) {
-      const now = new Date();
-      if (query.isOverdue) {
-        where.dueDate = { lt: now };
-        where.jobStatus = {
-          code: { notIn: ['COMPLETED', 'CANCELLED'] },
-        };
-      } else {
-        where.OR = [
-          { dueDate: null },
-          { dueDate: { gte: now } },
-          { jobStatus: { code: { in: ['COMPLETED', 'CANCELLED'] } } },
-        ];
-      }
-    }
-
-    if (query.startDate || query.endDate) {
-      if (query.startDate && !this.isValidCalendarDate(query.startDate)) {
-        throw new BadRequestException(
-          `Invalid startDate format or calendar date value: "${query.startDate}". Expected YYYY-MM-DD.`,
-        );
-      }
-      if (query.endDate && !this.isValidCalendarDate(query.endDate)) {
-        throw new BadRequestException(
-          `Invalid endDate format or calendar date value: "${query.endDate}". Expected YYYY-MM-DD.`,
-        );
-      }
-
-      where.createdAt = {
-        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
-        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+      where.mechanicRepairs = {
+        some: { userId: query.mechanicId },
       };
     }
 
+    if (query.startDate) {
+      if (!this.isValidCalendarDate(query.startDate)) {
+        throw new BadRequestException(
+          `Invalid startDate format or calendar date value: "${query.startDate}". Expected a valid date in YYYY-MM-DD format.`,
+        );
+      }
+      where.createdAt = {
+        ...(where.createdAt as any),
+        gte: new Date(`${query.startDate}T00:00:00.000Z`),
+      };
+    }
+
+    if (query.endDate) {
+      if (!this.isValidCalendarDate(query.endDate)) {
+        throw new BadRequestException(
+          `Invalid endDate format or calendar date value: "${query.endDate}". Expected a valid date in YYYY-MM-DD format.`,
+        );
+      }
+      where.createdAt = {
+        ...(where.createdAt as any),
+        lte: new Date(`${query.endDate}T23:59:59.999Z`),
+      };
+    }
+
+    if (query.isOverdue) {
+      const now = new Date();
+      where.dueDate = { lt: now };
+      where.jobStatus = {
+        code: { notIn: ['COMPLETED', 'CANCELLED'] },
+      };
+    }
+
+    const search = query.search?.trim();
     if (search) {
       const searchCondition = [
         { jobNo: { contains: search, mode: 'insensitive' as const } },
@@ -1295,7 +1489,6 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${id} not found`);
     }
 
-    // Calculate total spare parts cost (Withdraw - Return)
     const sparePartsCost = job.sparepartTxns.reduce((acc, t) => {
       const lineCost = Number(t.unitPrice) * t.qty;
       if (t.txnType === 'WITHDRAW') return acc + lineCost;
@@ -1303,6 +1496,8 @@ export class RepairsService {
       return acc;
     }, 0);
 
+    const outsourceCost = job.repairCost ? Number(job.repairCost) : 0;
+    const totalCost = Math.max(0, sparePartsCost) + outsourceCost;
     const overdueInfo = this.calculateOverdueInfo(job);
 
     return {
@@ -1310,7 +1505,9 @@ export class RepairsService {
       isOverdue: overdueInfo.isOverdue,
       overdueDays: overdueInfo.overdueDays,
       summary: {
+        outsourceCost,
         totalSparePartsCost: Math.max(0, sparePartsCost),
+        totalCost,
         totalSteps: job.repairJobSteps.length,
         completedSteps: job.repairJobSteps.filter((s) => s.completeAt !== null).length,
         isOverdue: overdueInfo.isOverdue,
@@ -1322,7 +1519,7 @@ export class RepairsService {
   async getMechanics() {
     return this.prisma.user.findMany({
       where: {
-        role: UserRole.MAINTENANCE_STAFF,
+        role: { in: [UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD] },
         deletedAt: null,
       },
       select: {
@@ -1348,29 +1545,7 @@ export class RepairsService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 7. Master & Metadata Lookups
-  // ───────────────────────────────────────────────────────────────────────────
-
-  async getLookups() {
-    const [jobStatuses, jobTypes, causes, techCategories, stepMasters] = await Promise.all([
-      this.prisma.jobStatus.findMany({ where: { deletedAt: null }, orderBy: { id: 'asc' } }),
-      this.prisma.jobType.findMany({ where: { deletedAt: null }, orderBy: { id: 'asc' } }),
-      this.prisma.cause.findMany({ where: { deleteAt: null }, orderBy: { code: 'asc' } }),
-      this.prisma.techCategory.findMany({ where: { deleteAt: null, isActive: true }, orderBy: { code: 'asc' } }),
-      this.prisma.stepMaster.findMany({ orderBy: [{ actionType: 'asc' }, { stepNumber: 'asc' }] }),
-    ]);
-
-    return {
-      jobStatuses,
-      jobTypes,
-      causes,
-      techCategories,
-      stepMasters,
-    };
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Helper: Strict Step-level Role Validation (Separation of Duties)
+  // Helper: Strict Step-level Role Validation (4 Tracks)
   // ───────────────────────────────────────────────────────────────────────────
 
   private validateStepRole(
@@ -1378,87 +1553,77 @@ export class RepairsService {
     stepNumber: number,
     role: UserRole,
   ) {
-    // 1. Approvals: Step 5 for Stock/Outsource/Replacement (PARCEL_STAFF only), Step 6 for Replacement (MANAGER only)
+    const isMaintenance = role === UserRole.MAINTENANCE_STAFF || role === UserRole.MAINTENANCE_HEAD;
+
+    // Step 5 Approval / External Handling (PARCEL_STAFF only for WITH_PARTS and OUTSOURCE)
     if (
-      (actionType === StepActionType.INTERNAL_STOCK ||
-        actionType === StepActionType.EXTERNAL_STOCK ||
-        actionType === StepActionType.OUTSOURCE) &&
+      (actionType === StepActionType.WITH_PARTS || actionType === StepActionType.OUTSOURCE) &&
       stepNumber === 5
     ) {
       if (role !== UserRole.PARCEL_STAFF) {
         throw new ForbiddenException(
-          `Step #${stepNumber} (Approval) can only be performed by PARCEL_STAFF`,
+          `Step #${stepNumber} (Parcel approval/procurement) can only be performed by PARCEL_STAFF`,
         );
       }
       return;
     }
 
-    if (actionType === StepActionType.PURCHASE_REPLACEMENT) {
+    // Step 6 Handover / Receipt:
+    // - WITH_PARTS: Step 6 is mechanic receiving parts and starting repair
+    if (actionType === StepActionType.WITH_PARTS && stepNumber === 6) {
+      if (!isMaintenance) {
+        throw new ForbiddenException(
+          `Step #6 (Parts receipt & repair execution) can only be performed by MAINTENANCE_STAFF or MAINTENANCE_HEAD`,
+        );
+      }
+      return;
+    }
+
+    // - OUTSOURCE: Step 6 is receiving machine back and testing (performed by MAINTENANCE_STAFF or MAINTENANCE_HEAD)
+    if (actionType === StepActionType.OUTSOURCE && stepNumber === 6) {
+      if (!isMaintenance) {
+        throw new ForbiddenException(
+          `Step #6 (รับเครื่องคืนและทดสอบ) can only be performed by MAINTENANCE_STAFF or MAINTENANCE_HEAD`,
+        );
+      }
+      return;
+    }
+
+    // - UNREPAIRABLE: Step 5 is mechanic delivering machine, Step 6 is parcel staff receiving machine
+    if (actionType === StepActionType.UNREPAIRABLE) {
       if (stepNumber === 5) {
-        // Step 5: พัสดุตรวจสอบและเสนอความเห็น -> PARCEL_STAFF only
+        if (!isMaintenance) {
+          throw new ForbiddenException(`Step #5 can only be performed by maintenance staff`);
+        }
+        return;
+      }
+      if (stepNumber >= 6) {
         if (role !== UserRole.PARCEL_STAFF) {
-          throw new ForbiddenException(
-            `Step #5 (Parcel Review) can only be performed by PARCEL_STAFF`,
-          );
-        }
-        return;
-      }
-      if (stepNumber === 6) {
-        // Step 6: ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน -> MANAGER only
-        if (role !== UserRole.MANAGER) {
-          throw new ForbiddenException(
-            `Step #6 (Executive Approval) can only be performed by MANAGER`,
-          );
+          throw new ForbiddenException(`Custody acceptance steps must be performed by PARCEL_STAFF`);
         }
         return;
       }
     }
 
-    // 2. Parcel Handling: Step 6 for Stock/Outsource, Step 7 for Replacement (PARCEL_STAFF only)
-    if (
-      ((actionType === StepActionType.INTERNAL_STOCK ||
-        actionType === StepActionType.EXTERNAL_STOCK ||
-        actionType === StepActionType.OUTSOURCE) &&
-        stepNumber === 6) ||
-      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 7)
-    ) {
-      if (role !== UserRole.PARCEL_STAFF) {
+    // SELF_REPAIR: Step 4 is repair execution
+    if (actionType === StepActionType.SELF_REPAIR && stepNumber === 4) {
+      if (!isMaintenance) {
         throw new ForbiddenException(
-          `Parcel handover steps can only be performed by PARCEL_STAFF`,
+          `Mechanic operations can only be performed by MAINTENANCE_STAFF or MAINTENANCE_HEAD`,
         );
       }
       return;
     }
 
-    // 3. Mechanic Operations: Step 4 for SELF_REPAIR, Step 7 for Stock/Outsource, Step 8 for Replacement
-    if (
-      (actionType === StepActionType.SELF_REPAIR && stepNumber === 4) ||
-      ((actionType === StepActionType.INTERNAL_STOCK ||
-        actionType === StepActionType.EXTERNAL_STOCK ||
-        actionType === StepActionType.OUTSOURCE) &&
-        stepNumber === 7) ||
-      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 8)
-    ) {
-      if (role !== UserRole.MAINTENANCE_STAFF) {
-        throw new ForbiddenException(
-          `Mechanic operations can only be performed by MAINTENANCE_STAFF`,
-        );
-      }
-      return;
-    }
-
-    // 4. Final Handover & Closure Step (ช่างเป็นผู้บันทึกสรุปและส่งมอบให้หน่วยงาน)
+    // Final Handover & Closure Step (ช่างเป็นผู้บันทึกสรุปและส่งมอบให้หน่วยงาน)
     const isFinalStep =
       (actionType === StepActionType.SELF_REPAIR && stepNumber === 6) ||
-      (actionType === StepActionType.PURCHASE_REPLACEMENT && stepNumber === 10) ||
-      (actionType !== StepActionType.SELF_REPAIR &&
-        actionType !== StepActionType.PURCHASE_REPLACEMENT &&
-        stepNumber === 9);
+      (actionType !== StepActionType.SELF_REPAIR && stepNumber === 8);
 
-    if (isFinalStep) {
-      if (role !== UserRole.MAINTENANCE_STAFF) {
+    if (isFinalStep && actionType !== StepActionType.UNREPAIRABLE) {
+      if (!isMaintenance) {
         throw new ForbiddenException(
-          `Final job completion can only be performed by MAINTENANCE_STAFF`,
+          `Final job completion can only be performed by MAINTENANCE_STAFF or MAINTENANCE_HEAD`,
         );
       }
       return;

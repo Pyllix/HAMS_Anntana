@@ -85,7 +85,9 @@ model RepairJob {
   isRepeatRepair Boolean?       @map("is_repeat_repair")
   techCategoryId Int?           @map("tech_category_id")
   receiverId     String?        @map("receiver_id")
-  warrantyDate   String?        @map("warranty_date") @db.VarChar(30)
+  warrantyDate       String?        @map("warranty_date") @db.VarChar(30)
+  unrepairableReason String?        @map("unrepairable_reason") @db.Text
+  repairCost         Decimal?       @map("repair_cost") @db.Decimal(15, 2)
   createdAt      DateTime       @default(now()) @map("created_at")
   createdBy      String         @map("created_by")
   updatedAt      DateTime       @updatedAt @map("updated_at")
