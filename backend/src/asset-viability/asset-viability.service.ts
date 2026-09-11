@@ -194,15 +194,15 @@ export class AssetViabilityService {
   async findAll(query: QueryAssetViabilityDto): Promise<AssetViabilityListResponseDto> {
     const page = Math.max(1, query.page ?? 1);
     const limit = Math.min(100, Math.max(1, query.limit ?? 20));
-    const sectionId = query.sectionId || query.section_id;
-    const assetTypeId = query.assetTypeId ?? query.asset_type_id;
+    const sectionId = query.sectionId;
+    const assetTypeId = query.assetTypeId;
     const search = query.search?.trim();
 
     // 1. Build dynamic filters for PostgreSQL CTE
     const whereConditions: Prisma.Sql[] = [];
 
     if (!query.includeDisposed) {
-      whereConditions.push(Prisma.sql`ast.code NOT IN ('DISPOSAL', 'LOST')`);
+      whereConditions.push(Prisma.sql`ast.status_code NOT IN ('DISPOSAL', 'LOST')`);
     }
 
     if (sectionId) {

@@ -41,27 +41,12 @@ export class QueryAssetViabilityDto extends PaginationDto {
   sectionId?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter assets by Section ID (Alias for sectionId)',
-  })
-  @IsOptional()
-  @IsUUID()
-  section_id?: string;
-
-  @ApiPropertyOptional({
     description: 'Filter assets by Asset Type ID',
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   assetTypeId?: number;
-
-  @ApiPropertyOptional({
-    description: 'Filter assets by Asset Type ID (Alias for assetTypeId)',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  asset_type_id?: number;
 
   @ApiPropertyOptional({
     enum: ViabilitySortBy,
