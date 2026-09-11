@@ -12,6 +12,13 @@ describe('AssetViabilityService', () => {
     $queryRaw: jest.fn(),
     asset: {
       findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    assetStatus: {
+      findUnique: jest.fn(),
+    },
+    availabilityStatus: {
+      findUnique: jest.fn(),
     },
   };
 
@@ -414,6 +421,95 @@ describe('AssetViabilityService', () => {
 
       expect(result.disposalRecommendation.canInitiateDisposal).toBe(false);
       expect(result.disposalRecommendation.blockReason).toBe('ASSET_CURRENTLY_BORROWED');
+    });
+  });
+
+  describe('requestDisposal', () => {
+    it('should transition an asset to WAIT_DISPOSAL and UNAVAILABLE with reason', async () => {
+      const mockAsset = {
+        id: 'asset-1',
+        noid: 'MD-001',
+        name: 'เครื่องช่วยหายใจ',
+        model: 'PB-840',
+        remark: 'เครื่องเดิม',
+        status: { id: 1, code: 'NORMAL', name: 'ใช้งานปกติ' },
+        availabilityStatus: { id: 10, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
+      };
+
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 4,
+        code: 'WAIT_DISPOSAL',
+        name: 'รอจำหน่าย',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 13,
+        code: 'UNAVAILABLE',
+        name: 'ไม่พร้อมใช้งาน',
+      });
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockAsset,
+        status: { id: 4, code: 'WAIT_DISPOSAL', name: 'รอจำหน่าย' },
+        availabilityStatus: { id: 13, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        remark: 'เครื่องเดิม\n[เสนอรอจำหน่าย]: ค่าซ่อมเกิน 70% | [สถานที่พักซาก]: ห้องพักพัสดุ อาคาร A',
+        updatedAt: new Date(),
+      });
+
+      const result = await service.requestDisposal(
+        'asset-1',
+        { reason: 'ค่าซ่อมเกิน 70%', storageLocation: 'ห้องพักพัสดุ อาคาร A' },
+        'user-1',
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.asset.status.code).toBe('WAIT_DISPOSAL');
+      expect(result.asset.availabilityStatus.code).toBe('UNAVAILABLE');
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'asset-1' },
+          data: expect.objectContaining({
+            asset_status_id: 4,
+            availability_status_id: 13,
+            updatedBy: 'user-1',
+          }),
+        }),
+      );
+    });
+
+    it('should reject when asset is currently BORROWED', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        id: 'asset-borrowed',
+        status: { code: 'NORMAL' },
+        availabilityStatus: { code: 'BORROWED' },
+      });
+
+      await expect(
+        service.requestDisposal('asset-borrowed', { reason: 'ซ่อมไม่คุ้ม' }),
+      ).rejects.toThrow('Cannot request disposal for an asset that is currently borrowed');
+    });
+
+    it('should reject when asset is already WAIT_DISPOSAL', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        id: 'asset-wait',
+        status: { code: 'WAIT_DISPOSAL' },
+        availabilityStatus: { code: 'UNAVAILABLE' },
+      });
+
+      await expect(
+        service.requestDisposal('asset-wait', { reason: 'ซ่อมไม่คุ้ม' }),
+      ).rejects.toThrow('Asset is already in WAIT_DISPOSAL status');
+    });
+
+    it('should reject when asset is already DISPOSAL', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        id: 'asset-disp',
+        status: { code: 'DISPOSAL' },
+        availabilityStatus: { code: 'UNAVAILABLE' },
+      });
+
+      await expect(
+        service.requestDisposal('asset-disp', { reason: 'ซ่อมไม่คุ้ม' }),
+      ).rejects.toThrow('Asset has already been permanently disposed');
     });
   });
 });

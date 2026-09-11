@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import {
@@ -7,6 +7,7 @@ import {
   ViabilityStatusFilter,
   SortOrder,
 } from './dto/query-asset-viability.dto';
+import { RequestDisposalDto } from './dto/request-disposal.dto';
 import {
   AssetViabilityDetailResponseDto,
   AssetViabilityItemDto,
@@ -583,6 +584,103 @@ export class AssetViabilityService {
           suggestedDisposalReason: `แทงจำหน่ายเนื่องจากประเมินแล้วซ่อมไม่คุ้มค่า: ${viabilityResult.viabilityReason}`,
           suggestedDocPrefix: `DISP-${buddhistYear}-`,
         },
+      },
+    };
+  }
+
+  /**
+   * Request asset disposal: Transition asset directly into WAIT_DISPOSAL and set availability to UNAVAILABLE.
+   * Records reason and updates audit remarks.
+   */
+  async requestDisposal(id: string, dto: RequestDisposalDto, userId?: string) {
+    const asset = await this.prisma.asset.findUnique({
+      where: { id },
+      include: {
+        status: true,
+        availabilityStatus: true,
+      },
+    });
+
+    if (!asset) {
+      throw new NotFoundException(`Asset with ID "${id}" not found`);
+    }
+
+    if (asset.status?.code === 'DISPOSAL') {
+      throw new BadRequestException('Asset has already been permanently disposed');
+    }
+
+    if (asset.status?.code === 'LOST') {
+      throw new BadRequestException('Asset is currently marked as lost');
+    }
+
+    if (asset.status?.code === 'WAIT_DISPOSAL') {
+      throw new BadRequestException('Asset is already in WAIT_DISPOSAL status');
+    }
+
+    if (asset.availabilityStatus?.code === 'BORROWED') {
+      throw new BadRequestException('Cannot request disposal for an asset that is currently borrowed');
+    }
+
+    const waitDisposalStatus = await this.prisma.assetStatus.findUnique({
+      where: { code: 'WAIT_DISPOSAL' },
+    });
+    if (!waitDisposalStatus) {
+      throw new NotFoundException('Status WAIT_DISPOSAL not found in database');
+    }
+
+    const unavailableStatus = await this.prisma.availabilityStatus.findUnique({
+      where: { code: 'UNAVAILABLE' },
+    });
+    if (!unavailableStatus) {
+      throw new NotFoundException('Status UNAVAILABLE not found in database');
+    }
+
+    const reasonNote = dto.reason?.trim() ? `[เสนอรอจำหน่าย]: ${dto.reason.trim()}` : '';
+    const locationNote = dto.storageLocation?.trim() ? `[สถานที่พักซาก]: ${dto.storageLocation.trim()}` : '';
+    const additionalNotes = [reasonNote, locationNote].filter(Boolean).join(' | ');
+
+    const updatedRemark = additionalNotes
+      ? (asset.remark ? `${asset.remark}\n${additionalNotes}` : additionalNotes)
+      : asset.remark;
+
+    const updatedAsset = await this.prisma.asset.update({
+      where: { id },
+      data: {
+        asset_status_id: waitDisposalStatus.id,
+        availability_status_id: unavailableStatus.id,
+        remark: updatedRemark,
+        ...(userId && { updatedBy: userId }),
+      },
+      include: {
+        status: true,
+        availabilityStatus: true,
+        section: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'ปรับสถานะครุภัณฑ์เป็น WAIT_DISPOSAL (รอจำหน่าย) และล็อกเป็น UNAVAILABLE เรียบร้อยแล้ว',
+      asset: {
+        id: updatedAsset.id,
+        noid: updatedAsset.noid,
+        name: updatedAsset.name,
+        model: updatedAsset.model,
+        status: {
+          id: updatedAsset.status.id,
+          code: updatedAsset.status.code,
+          name: updatedAsset.status.name,
+        },
+        availabilityStatus: {
+          id: updatedAsset.availabilityStatus?.id,
+          code: updatedAsset.availabilityStatus?.code,
+          name: updatedAsset.availabilityStatus?.name,
+        },
+        section: updatedAsset.section ? { id: updatedAsset.section.id, name: updatedAsset.section.name } : null,
+        remark: updatedAsset.remark,
+        requestedDisposalReason: dto.reason,
+        storageLocation: dto.storageLocation,
+        updatedAt: updatedAsset.updatedAt,
       },
     };
   }

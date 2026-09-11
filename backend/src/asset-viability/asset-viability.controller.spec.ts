@@ -10,6 +10,7 @@ describe('AssetViabilityController', () => {
   const mockAssetViabilityService = {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    requestDisposal: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -71,6 +72,32 @@ describe('AssetViabilityController', () => {
       const result = await controller.findOneAlias('asset-uuid-1');
 
       expect(mockAssetViabilityService.findOne).toHaveBeenCalledWith('asset-uuid-1');
+      expect(result).toBe(mockResult);
+    });
+  });
+
+  describe('requestDisposal', () => {
+    const mockSession = { user: { id: 'user-parcel-1' } } as any;
+
+    it('should delegate request to assetViabilityService.requestDisposal', async () => {
+      const mockResult = { success: true, message: 'Updated' } as any;
+      mockAssetViabilityService.requestDisposal.mockResolvedValue(mockResult);
+
+      const dto = { reason: 'ซ่อมไม่คุ้มค่า', storageLocation: 'ห้องพัสดุ' };
+      const result = await controller.requestDisposal('asset-uuid-1', dto, mockSession);
+
+      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith('asset-uuid-1', dto, 'user-parcel-1');
+      expect(result).toBe(mockResult);
+    });
+
+    it('should support requestDisposalAlias for singular path', async () => {
+      const mockResult = { success: true, message: 'Updated' } as any;
+      mockAssetViabilityService.requestDisposal.mockResolvedValue(mockResult);
+
+      const dto = { reason: 'ซ่อมไม่คุ้มค่า' };
+      const result = await controller.requestDisposalAlias('asset-uuid-1', dto, mockSession);
+
+      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith('asset-uuid-1', dto, 'user-parcel-1');
       expect(result).toBe(mockResult);
     });
   });

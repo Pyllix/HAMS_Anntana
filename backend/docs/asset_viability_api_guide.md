@@ -15,8 +15,9 @@
 | **2** | **`GET`** | `/asset/viability` | **หน้ารวม (Alias)** | **หน้ารวมแบบเอกพจน์ (Alias สำหรับ Frontend):** ทำงานและให้ผลลัพธ์เหมือนเส้นที่ 1 ทุกประการ รองรับหน้าบ้านที่ใช้ Base Path เอกพจน์ เช่น `/asset/...` |
 | **3** | **`GET`** | `/assets/:id/viability` | **เจาะลึก (หลัก)** | **หน้าเจาะลึกรายเครื่อง (พหูพจน์):** ดูผลวิเคราะห์ความคุ้มค่าเจาะจงเครื่องนั้นๆ ตรวจประวัติงานซ่อมและมูลค่าอะไหล่ทุก Job ในอดีต พร้อมเตรียมข้อมูลสำหรับกด **"เสนอแทงจำหน่าย"** (`prefillData`) |
 | **4** | **`GET`** | `/asset/:id/viability` | **เจาะลึก (Alias)** | **หน้าเจาะลึกแบบเอกพจน์ (Alias สำหรับ Frontend):** ทำงานและให้ผลลัพธ์เหมือนเส้นที่ 3 ทุกประการ รองรับหน้าบ้านที่ใช้ Base Path เอกพจน์ เช่น `/asset/:id` |
+| **5** | **`POST`** | `/assets/:id/request-disposal`<br>*(Alias: `/asset/:id/request-disposal`)* | **Action กักเครื่อง (Case C)** | **กดเสนอขอแทงจำหน่าย (ปรับเป็น `WAIT_DISPOSAL`):** เปลี่ยนสถานะเครื่องเป็น "รอจำหน่าย", ล็อกห้ามยืม (`UNAVAILABLE`) ทันที และบันทึกเหตุผลผลประเมินลง Audit Remark |
 
-> 💡 **ทำไมต้องมี 4 เส้น (ทั้ง `assets` และ `asset`)?**
+> 💡 **ทำไมต้องมีทั้ง `assets` และ `asset`?**
 > * ตามมาตรฐาน RESTful ทั่วไป การดึงข้อมูลเป็น Collection มักใช้พหูพจน์ (`/assets/...`)
 > * แต่ในระบบ Frontend บางหน้าที่พัฒนามาก่อนหน้า ได้ใช้ Base Path เป็นเอกพจน์ (`/asset/...`)
 > * Backend จึงเปิดรองรับไว้ทั้ง 2 รูปแบบ เพื่อให้ **ไม่ว่าจะเรียกด้วยพหูพจน์หรือเอกพจน์ ก็ทำงานได้ผลลัพธ์เหมือนกัน 100%** หน้าบ้านไม่ต้องกังวลเรื่องการตั้งชื่อ Path
@@ -178,15 +179,15 @@ Authorization: Bearer <TOKEN>
 
 ---
 
-### Use Case C: การเชื่อมต่อ 1-Click เสนอแทงจำหน่าย (Disposal Prefill Handover)
-เมื่อเจ้าหน้าที่พัสดุตัดสินใจแทงจำหน่ายเครื่องที่ `UNVIABLE`:
-ใน Response ของ `GET /assets/:id/viability` จะมีก้อน `disposalRecommendation.prefillData`:
+### Use Case C: การเชื่อมต่อเสนอแทงจำหน่าย (Disposal Handover Flow)
+เมื่อระบบตรวจพบว่าเครื่องมีสถานะ `UNVIABLE` (ซ่อมไม่คุ้มค่าแล้ว):
+ใน Response ของ `GET /assets/:id/viability` จะมีก้อน `disposalRecommendation.prefillData` เตรียมไว้ให้:
 
 ```json
 {
   "canInitiateDisposal": true,
   "prefillData": {
-    "assetId": "uuid-asset-1",
+    "assetId": "8f74e951-692a-43d9-95e5-3f32d8471bd8",
     "noid": "MD-60-0012",
     "name": "เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน",
     "price": 450000.0,
@@ -198,8 +199,38 @@ Authorization: Bearer <TOKEN>
 }
 ```
 
-**สิ่งที่หน้าบ้านทำ:**
-ผู้ใช้กดปุ่ม **"เสนอแทงจำหน่าย"** ➔ หน้าบ้านนำก้อน `prefillData` ส่งผ่าน Router State ไปยังหน้าเปิดคำร้องขอแทงจำหน่าย (`/disposals/new`) โดยระบบจะกรอกข้อมูล รหัสเครื่อง, เหตุผลประกอบการแทงจำหน่าย, และข้อมูลตัวเลขทางพัสดุให้อัตโนมัติ โดยเจ้าหน้าที่ไม่ต้องพิมพ์เองแม้แต่คำเดียว
+#### 🔗 ลำดับการเรียกใช้ API ของ Use Case C (Step-by-Step API Pairing):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as เจ้าหน้าที่พัสดุ
+    participant UI as Frontend Web
+    participant ViabilityAPI as Asset Viability API
+    participant AssetAPI as Asset API
+
+    User->>UI: เปิดดูเครื่องที่ซ่อมไม่คุ้ม
+    UI->>ViabilityAPI: GET /assets/:id/viability
+    ViabilityAPI-->>UI: viabilityStatus: UNVIABLE + prefillData
+    UI->>User: แสดงปุ่มแดง "🔒 เสนอขอแทงจำหน่าย (ย้ายเข้า WAIT_DISPOSAL)"
+
+    User->>UI: คลิกปุ่ม "เสนอขอแทงจำหน่าย"
+    UI->>ViabilityAPI: POST /assets/:id/request-disposal<br/>{ reason: prefillData.suggestedDisposalReason, storageLocation: "ห้องพักพัสดุ อาคาร A" }
+    ViabilityAPI-->>UI: 200 OK: สถานะเครื่องเปลี่ยนเป็น WAIT_DISPOSAL & UNAVAILABLE ทันที!
+
+    Note over User,AssetAPI: (ระหว่างนี้ เจ้าหน้าที่ทำบันทึกข้อความเสนอ ผอ. ลงนามอนุมัติ)
+
+    User->>UI: เมื่อ ผอ. ลงนาม ได้เลขที่ DISP-2569-0012
+    UI->>AssetAPI: POST /asset/:id/disposal<br/>{ disposalDocNo: "DISP-2569-0012", approvedDate: "..." }
+    AssetAPI-->>UI: 201 Created: ตัดจำหน่ายถาวร (DISPOSAL) สมบูรณ์!
+```
+
+1. **ขั้นที่ 1 (กักเครื่อง & ล็อกห้ามยืม):**
+   - หน้าบ้านยิง **`POST /assets/:id/request-disposal`**
+   - ส่ง `{ reason: prefillData.suggestedDisposalReason, storageLocation: "..." }`
+   - **ผลลัพธ์:** เครื่องจะเปลี่ยนสถานะเป็น **`WAIT_DISPOSAL` (รอจำหน่าย)** และ **`UNAVAILABLE`** ทันที ไม่ต้องจำ ID เลข 4 และบันทึกเหตุผลผลประเมินลงประวัติเครื่องให้อัตโนมัติ
+2. **ขั้นที่ 2 (ตัดจำหน่ายถาวรเมื่อเอกสารอนุมัติ):**
+   - เมื่อได้เลขที่หนังสืออนุมัติจริงจากผู้อำนวยการ ค่อยยิง **`POST /asset/:id/disposal`** พร้อมเลขที่ `disposalDocNo` เพื่อปิดวงจรชีวิตครุภัณฑ์เป็น **`DISPOSAL`**
 
 ---
 
@@ -207,27 +238,26 @@ Authorization: Bearer <TOKEN>
 
 ```tsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 interface ViabilityDetail {
   viability: {
     status: 'VIABLE' | 'WARNING' | 'UNVIABLE';
     reason: string;
     costRatioPercentage: number | null;
-    financials: {
-      originalPrice: number;
-      cumulativeRepairCost: number;
-    };
   };
   disposalRecommendation: {
     canInitiateDisposal: boolean;
-    prefillData: any;
+    prefillData: {
+      assetId: string;
+      noid: string | null;
+      suggestedDisposalReason: string;
+    };
   };
 }
 
 export function AssetViabilityWidget({ assetId }: { assetId: string }) {
   const [data, setData] = useState<ViabilityDetail | null>(null);
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetch(`/assets/${assetId}/viability`, {
@@ -237,11 +267,42 @@ export function AssetViabilityWidget({ assetId }: { assetId: string }) {
       .then((resData) => setData(resData));
   }, [assetId]);
 
+  // ฟังก์ชันสำหรับ Use Case C: กดย้ายเข้าสู่สถานะ WAIT_DISPOSAL ทันที 1-Click
+  const handleRequestDisposal = async () => {
+    if (!data?.disposalRecommendation.prefillData) return;
+    const confirm = window.confirm('ยืนยันเสนอขอแทงจำหน่ายและล็อกเครื่องเข้าสู่สถานะ WAIT_DISPOSAL หรือไม่?');
+    if (!confirm) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/assets/${assetId}/request-disposal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          reason: data.disposalRecommendation.prefillData.suggestedDisposalReason,
+          storageLocation: 'ห้องพักพัสดุรอจำหน่าย อาคาร A',
+        }),
+      });
+
+      if (response.ok) {
+        alert('✅ ปรับสถานะเป็น WAIT_DISPOSAL (รอจำหน่าย) และล็อกห้ามยืมเรียบร้อยแล้ว!');
+        window.location.reload();
+      } else {
+        const err = await response.json();
+        alert(`❌ ไม่สามารถดำเนินการได้: ${err.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!data) return <div>กำลังโหลดการวิเคราะห์ความคุ้มค่า...</div>;
 
   const { viability, disposalRecommendation } = data;
 
-  // 1. กำหนดรูปแบบ Badge ตามสถานะ
   const badgeColors = {
     VIABLE: 'bg-green-100 text-green-800 border-green-300',
     WARNING: 'bg-amber-100 text-amber-800 border-amber-300',
@@ -259,7 +320,7 @@ export function AssetViabilityWidget({ assetId }: { assetId: string }) {
 
       <p className="text-sm text-gray-600 mb-3">{viability.reason}</p>
 
-      {/* แถบเปอร์เซ็นต์ค่าซ่อมสะสม */}
+      {/* แถบสัดส่วนค่าซ่อมสะสม */}
       <div className="mb-4">
         <div className="flex justify-between text-xs text-gray-500 mb-1">
           <span>สัดส่วนค่าซ่อมสะสม</span>
@@ -279,13 +340,14 @@ export function AssetViabilityWidget({ assetId }: { assetId: string }) {
         </div>
       </div>
 
-      {/* ปุ่มกดเสนอแทงจำหน่ายแบบ 1-Click */}
+      {/* ปุ่มกดเสนอแทงจำหน่ายสำหรับ Use Case C */}
       {disposalRecommendation.canInitiateDisposal && (
         <button
-          onClick={() => navigate('/disposals/new', { state: { prefill: disposalRecommendation.prefillData } })}
-          className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition"
+          onClick={handleRequestDisposal}
+          disabled={loading}
+          className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition disabled:opacity-50"
         >
-          🗑️ ดำเนินการเสนอแทงจำหน่าย (1-Click Disposal)
+          {loading ? 'กำลังบันทึก...' : '🔒 เสนอขอแทงจำหน่าย (ปรับเป็น WAIT_DISPOSAL)'}
         </button>
       )}
     </div>
@@ -299,6 +361,6 @@ export function AssetViabilityWidget({ assetId }: { assetId: string }) {
 
 * **Audit รวมทั้งโรงพยาบาล:** ใช้ `GET /assets/viability`
 * **ดูเจาะจงรายเครื่อง + ประวัติอะไหล่:** ใช้ `GET /assets/:id/viability`
-* **เช็กว่าคุ้มซ่อมไหม:** ดูที่ `viabilityStatus` (`VIABLE` = ซ่อมได้, `WARNING` = ชะลอตรวจสอบ, `UNVIABLE` = ห้ามซ่อม)
-* **ส่งแทงจำหน่าย:** นำ `disposalRecommendation.prefillData` ไปวางในฟอร์มแทงจำหน่ายได้ทันที
+* **กักเครื่องไม่คุ้มซ่อม (Case C ขั้นแรก):** ใช้ `POST /assets/:id/request-disposal` ➔ ปรับเป็น `WAIT_DISPOSAL` & `UNAVAILABLE`
+* **ตัดจำหน่ายถาวรเมื่อมีเลขหนังสืออนุมัติ (Case C ขั้นสุดท้าย):** ใช้ `POST /asset/:id/disposal` ➔ ปรับเป็น `DISPOSAL`
 * **Interactive Test:** ทดสอบลองยิง API ผ่านหน้าเว็บ Swagger ได้ที่ `http://localhost:3000/reference` ภายใต้หัวข้อ `Asset Viability`
