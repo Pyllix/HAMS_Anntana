@@ -3,7 +3,7 @@ import {
   Navigate,
   RouterProvider,
 } from "react-router-dom";
-import Login from "../Pages/Login";
+import Login from "../pages/Login";
 import ProtectedRoute from "../Router/ProtectedRoute";
 import AppLayout from "../layout/AppLayout";
 import AdminBorrowReturn from "../Pages/AssetCenterBorrowReturn";
