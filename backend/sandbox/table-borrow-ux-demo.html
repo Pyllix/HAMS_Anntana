@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>เปรียบเทียบ 2 แนวทาง UX: ระบบยืมจาก Table และการแนะนำสลับเครื่อง</title>
+  <title>เปรียบเทียบ UX: แนะนำเครื่องเดียว vs แนะนำหลายตัวเลือก (Hybrid Nudge)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>body { font-family: 'Prompt', sans-serif; }</style>
@@ -14,32 +14,44 @@
 
     <!-- Header -->
     <header class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-      <h1 class="text-xl font-bold text-slate-900">🧪 ทดสอบเปรียบเทียบ 2 แนวทาง UX เมื่อกดยืมจาก Table</h1>
-      <p class="text-xs text-slate-500 mt-1">
-        จำลองหน้าตารางรายการครุภัณฑ์ทั้งหมดของศูนย์ และพฤติกรรมเมื่อผู้ใช้กดปุ่ม <strong>"ยืม"</strong> ที่แถวของเครื่องที่ใช้งานหนัก
-      </p>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span>🧪 ทดสอบระบบแนะนำแบบผสม (Hybrid: 1-Click + หลายตัวเลือก)</span>
+          </h1>
+          <p class="text-xs text-slate-500 mt-1">
+            จำลองหน้าตารางครุภัณฑ์ทั้งหมด และทดสอบการแนะนำเมื่อกดปุ่ม <strong>"ยืม"</strong> เครื่องที่ใช้งานหนัก
+          </p>
+        </div>
+        <span class="text-xs font-semibold px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shrink-0 self-start sm:self-auto">
+          ✓ Hybrid UX Pattern Active
+        </span>
+      </div>
 
       <!-- Tab Switcher -->
       <div class="mt-4 flex flex-wrap gap-2 border-t pt-4">
         <button id="tabBtn1" onclick="switchTab(1)" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-blue-600 text-white shadow-sm">
-          🏆 แนวทางที่ 1: แสดง Banner แนะนำในฟอร์มขอยืม (In-Form Banner)
+          🏆 แนวทางที่ 1: แนะนำในฟอร์ม + ดรอปดาวน์เลือกเครื่องอื่น (In-Form Hybrid)
         </button>
         <button id="tabBtn2" onclick="switchTab(2)" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
-          🥈 แนวทางที่ 2: เด้ง Dialog ดักถามก่อนเปิดฟอร์ม (Intercept Dialog)
+          🥈 แนวทางที่ 2: Dialog ดักถาม + ขยายดูหลายเครื่องได้ (Intercept Dialog Hybrid)
         </button>
       </div>
     </header>
 
     <!-- Context Explanation Banner -->
     <div id="explanationBanner" class="p-4 rounded-xl text-xs border leading-relaxed bg-blue-50 border-blue-200 text-blue-900">
-      <strong>แนวทางที่ 1 (In-Form Banner):</strong> เมื่อกดปุ่ม "ยืม" ที่เครื่องใดก็ตาม ฟอร์มขอยืมจะเปิดขึ้นมาทันที และหากเครื่องนั้นใช้งานหนัก จะมีกล่องสีส้มเตือนอยู่บนหัวฟอร์ม ให้กดสลับเครื่องได้เลย (ไม่รบกวนจังหวะการทำงาน / ไม่มี Modal ซ้อน Modal)
+      <strong>แนวทางที่ 1 (In-Form Hybrid):</strong> เมื่อกดปุ่ม "ยืม" ฟอร์มจะเปิดทันที ด้านบนมีปุ่มสลับเครื่องอันดับ 1 ให้กดในคลิกเดียว <strong>พร้อมปุ่ม [▾ ดูเครื่องอื่น]</strong> ให้เลือกสลับเป็นเครื่องอื่นในรุ่นเดียวกันได้ทันที
     </div>
 
     <!-- Assets Table -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-        <h2 class="font-bold text-slate-800 text-sm">📋 รายการครุภัณฑ์ในศูนย์เครื่องมือแพทย์</h2>
-        <span class="text-xs text-slate-500">ทดลองคลิกปุ่ม "ยืม" ที่แต่ละแถว</span>
+        <div>
+          <h2 class="font-bold text-slate-800 text-sm">📋 รายการครุภัณฑ์ในศูนย์เครื่องมือแพทย์</h2>
+          <p class="text-[11px] text-slate-400">รุ่น: Puritan Bennett 840 (เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน)</p>
+        </div>
+        <span class="text-xs text-slate-500">ทดลองคลิกปุ่ม "ยืมเครื่องนี้"</span>
       </div>
 
       <div class="overflow-x-auto">
@@ -47,24 +59,24 @@
           <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b">
             <tr>
               <th class="p-3.5">รหัสครุภัณฑ์</th>
-              <th class="p-3.5">ชื่อรุ่น / รายการ</th>
-              <th class="p-3.5">แผนกที่ตั้ง</th>
-              <th class="p-3.5">สถานะ 90 วัน</th>
+              <th class="p-3.5">ชื่อรุ่น / สเปก</th>
+              <th class="p-3.5">ประวัติใช้งาน 90 วัน</th>
+              <th class="p-3.5">วันพักในคลัง</th>
               <th class="p-3.5 text-center">จัดการ</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <!-- Row 1: MD-67-003 (Recommended) -->
+            <!-- Row 1: MD-67-003 (Recommended #1) -->
             <tr class="hover:bg-slate-50 transition-colors">
               <td class="p-3.5 font-mono font-bold text-slate-900">MD-67-003</td>
               <td class="p-3.5">
-                <span class="font-medium text-slate-800 block">เครื่องช่วยหายใจ Puritan Bennett 840</span>
+                <span class="font-medium text-slate-800 block">Puritan Bennett 840</span>
                 <span class="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-200">
-                  🌟 เครื่องแนะนำอันดับ 1 (จอดพักมา 45 วัน)
+                  🌟 แนะนำอันดับ 1 (เครื่องใหม่/พักนานสุด)
                 </span>
               </td>
-              <td class="p-3.5 text-slate-600">ศูนย์เครื่องมือแพทย์</td>
-              <td class="p-3.5 text-emerald-600 font-semibold">ใช้งาน 0 วัน (เครื่องว่าง)</td>
+              <td class="p-3.5 text-emerald-600 font-semibold">0.0 วัน (ยังไม่มียืม)</td>
+              <td class="p-3.5 text-slate-700 font-bold">45.2 วัน</td>
               <td class="p-3.5 text-center">
                 <button onclick="handleBorrowClick('MD-67-003', false)" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-medium text-xs">
                   ยืมเครื่องนี้
@@ -72,15 +84,17 @@
               </td>
             </tr>
 
-            <!-- Row 2: MD-67-002 (Moderate) -->
+            <!-- Row 2: MD-67-002 (Moderate #2) -->
             <tr class="hover:bg-slate-50 transition-colors">
               <td class="p-3.5 font-mono font-bold text-slate-900">MD-67-002</td>
               <td class="p-3.5">
-                <span class="font-medium text-slate-800 block">เครื่องช่วยหายใจ Puritan Bennett 840</span>
-                <span class="text-[10px] text-slate-500">ผ่านการใช้งานปานกลาง</span>
+                <span class="font-medium text-slate-800 block">Puritan Bennett 840</span>
+                <span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                  ทางเลือกอันดับ 2
+                </span>
               </td>
-              <td class="p-3.5 text-slate-600">ศูนย์เครื่องมือแพทย์</td>
-              <td class="p-3.5 text-slate-700">ใช้งาน 12.5 วัน (พัก 14 วัน)</td>
+              <td class="p-3.5 text-slate-700">12.5 วัน</td>
+              <td class="p-3.5 text-slate-700 font-bold">14.0 วัน</td>
               <td class="p-3.5 text-center">
                 <button onclick="handleBorrowClick('MD-67-002', false)" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-medium text-xs">
                   ยืมเครื่องนี้
@@ -92,13 +106,13 @@
             <tr class="bg-amber-50/40 hover:bg-amber-50/70 transition-colors border-l-4 border-amber-400">
               <td class="p-3.5 font-mono font-bold text-slate-900">MD-67-001</td>
               <td class="p-3.5">
-                <span class="font-medium text-slate-800 block">เครื่องช่วยหายใจ Puritan Bennett 840</span>
+                <span class="font-medium text-slate-800 block">Puritan Bennett 840</span>
                 <span class="text-[10px] text-amber-800 bg-amber-100 px-2 py-0.5 rounded font-semibold">
-                  ⚠️ ใช้งานสะสมสูง (38 วัน)
+                  ⚠️ ใช้งานสะสมสูง
                 </span>
               </td>
-              <td class="p-3.5 text-slate-600">ศูนย์เครื่องมือแพทย์</td>
-              <td class="p-3.5 text-amber-700 font-semibold">ใช้งาน 38 วัน (พักเพียง 2.5 วัน)</td>
+              <td class="p-3.5 text-amber-700 font-semibold">38.0 วัน (ยืมบ่อย)</td>
+              <td class="p-3.5 text-amber-800 font-bold">2.5 วัน (เพิ่งคืน)</td>
               <td class="p-3.5 text-center">
                 <button onclick="handleBorrowClick('MD-67-001', true)" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-xs shadow-sm">
                   ยืมเครื่องนี้ (ลองคลิก)
@@ -113,10 +127,12 @@
   </div>
 
   <!-- ============================================================== -->
-  <!-- MODAL FOR APPROACH 2: INTERCEPT CONFIRMATION DIALOG            -->
+  <!-- APPROACH 2: INTERCEPT CONFIRMATION DIALOG (WITH MULTI-EXPAND)  -->
   <!-- ============================================================== -->
   <div id="interceptModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+      
+      <!-- Top Message -->
       <div class="flex items-start gap-3">
         <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
           💡
@@ -124,28 +140,70 @@
         <div>
           <h3 class="font-bold text-slate-900 text-sm">คำแนะนำเพื่อกระจายการใช้งาน (Usage Rotation)</h3>
           <p class="text-xs text-slate-600 mt-1 leading-relaxed">
-            เครื่องหมายเลข <strong id="interceptCurrentAsset" class="text-slate-800">MD-67-001</strong> ผ่านการใช้งานมาแล้ว <strong>38 วัน</strong><br/>
-            ระบบพบเครื่องรุ่นเดียวกัน (<strong class="text-emerald-700">MD-67-003</strong>) จอดพักมาแล้ว <strong>45 วัน</strong>
-          </p>
-          <p class="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg mt-2 border border-amber-200">
-            คุณต้องการสลับใช้เครื่องที่แนะนำเพื่อกระจายภาระการใช้งานหรือไม่?
+            เครื่องที่คุณเลือก (<strong id="interceptCurrentAsset" class="text-slate-900">MD-67-001</strong>) ผ่านการใช้งานมาแล้ว <strong>38.0 วัน</strong><br/>
+            ระบบคัดกรองเครื่องรุ่นเดียวกันที่จอดพักนานกว่ามาให้ เพื่อช่วยถนอมอายุการใช้งาน:
           </p>
         </div>
       </div>
 
-      <div class="mt-5 flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-        <button onclick="confirmIntercept(false)" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">
-          ยืนยันใช้เครื่องเดิม
-        </button>
-        <button onclick="confirmIntercept(true)" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm flex items-center gap-1">
-          <span>🔄 สลับใช้เครื่อง MD-67-003</span>
+      <!-- Highlighted Best Choice (One-Click) -->
+      <div class="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-emerald-950 font-mono">MD-67-003</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">🌟 แนะนำอันดับ 1</span>
+          </div>
+          <p class="text-[11px] text-emerald-800 mt-0.5">
+            จอดพักมาแล้ว <strong>45 วัน</strong> (ใช้งานน้อยกว่าเครื่องเดิม 38 วัน)
+          </p>
+        </div>
+        <button onclick="confirmIntercept('MD-67-003')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs shadow-sm shrink-0 flex items-center gap-1">
+          <span>สลับใช้เครื่องนี้</span>
         </button>
       </div>
+
+      <!-- Expandable Alternative List (Dropdown / Accordion) -->
+      <div class="border border-slate-200 rounded-xl overflow-hidden">
+        <button onclick="toggleInterceptAlternatives()" class="w-full px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-left text-xs font-semibold text-slate-700 flex items-center justify-between transition-colors">
+          <span class="flex items-center gap-1.5">
+            <span>เครื่องสำรองอื่นในรุ่นนี้ (พร้อมใช้งาน)</span>
+            <span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-normal">1 เครื่อง</span>
+          </span>
+          <span id="interceptToggleIcon" class="text-slate-400 text-xs">▼ ดูเพิ่มเติม</span>
+        </button>
+
+        <div id="interceptAlternativesList" class="hidden divide-y divide-slate-100 bg-white p-2 space-y-1">
+          <!-- Candidate 2 -->
+          <div class="p-2.5 rounded-lg hover:bg-slate-50 flex items-center justify-between text-xs">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="font-mono font-bold text-slate-800">MD-67-002</span>
+                <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded">อันดับ 2</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-0.5">
+                จอดพักมา 14 วัน • ใช้งานใน 90 วัน: 12.5 วัน
+              </p>
+            </div>
+            <button onclick="confirmIntercept('MD-67-002')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-medium">
+              สลับเครื่องนี้
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+        <span class="text-[11px] text-slate-400">สามารถเลือกใช้เครื่องเดิมได้หากจำเป็น</span>
+        <button onclick="confirmIntercept('ORIGINAL')" class="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg">
+          ยืนยันใช้เครื่องเดิม (MD-67-001)
+        </button>
+      </div>
+
     </div>
   </div>
 
   <!-- ============================================================== -->
-  <!-- BORROW FORM MODAL (SHARED BY BOTH APPROACHES)                  -->
+  <!-- APPROACH 1: BORROW FORM MODAL (WITH IN-FORM HYBRID SELECTOR)   -->
   <!-- ============================================================== -->
   <div id="borrowFormModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -157,32 +215,50 @@
             <span>📋</span> แบบฟอร์มสร้างคำขอยืมครุภัณฑ์
           </h3>
           <span id="approachIndicatorBadge" class="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-mono">
-            Approach: In-Form Banner
+            Approach: In-Form Hybrid Banner
           </span>
         </div>
         <button onclick="closeBorrowForm()" class="text-slate-400 hover:text-slate-700 text-sm">✕</button>
       </div>
 
-      <!-- IN-FORM BANNER (USED IN APPROACH 1) -->
-      <div id="inFormSwapBanner" class="hidden p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-3">
-        <div class="flex items-start gap-2.5">
-          <span class="text-lg">💡</span>
-          <div>
-            <p class="text-xs font-bold text-amber-950">คำแนะนำ: พบเครื่องรุ่นเดียวกันจอดพักนานกว่า</p>
-            <p class="text-[11px] text-amber-800 mt-0.5">
-              เครื่อง <strong>MD-67-003</strong> จอดพักมาแล้ว 45 วัน (ใช้งานน้อยกว่า 38 วัน)
-            </p>
+      <!-- IN-FORM BANNER (HYBRID WITH ONE-CLICK + DROPDOWN EXPAND) -->
+      <div id="inFormSwapBanner" class="hidden p-3.5 bg-amber-50 border border-amber-300 rounded-xl space-y-2.5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-2.5">
+            <span class="text-lg">💡</span>
+            <div>
+              <p class="text-xs font-bold text-amber-950">คำแนะนำ: พบเครื่องรุ่นเดียวกันจอดพักนานกว่า</p>
+              <p class="text-[11px] text-amber-800 mt-0.5">
+                แนะนำ <strong>MD-67-003</strong> จอดพัก 45 วัน (ใช้งานน้อยกว่า 38 วัน)
+              </p>
+            </div>
           </div>
+          <!-- One-click primary button -->
+          <button onclick="swapAssetInsideForm('MD-67-003')" class="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm">
+            🔄 สลับเครื่องนี้
+          </button>
         </div>
-        <button onclick="swapAssetInsideForm('MD-67-003')" class="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm">
-          🔄 สลับใช้เครื่องนี้
-        </button>
+
+        <!-- In-Form Expandable Selector for Other Machines -->
+        <div class="pt-2 border-t border-amber-200/80 flex items-center justify-between text-[11px]">
+          <span class="text-amber-900 font-medium">หรือเลือกเครื่องอื่นในรุ่นเดียวกัน:</span>
+          <select onchange="onInFormDropdownChange(this.value)" class="bg-white border border-amber-300 text-slate-800 rounded-md px-2 py-1 text-xs focus:ring-1 focus:ring-amber-500">
+            <option value="">-- เลือกเครื่องอื่น --</option>
+            <option value="MD-67-003">MD-67-003 (🌟 แนะนำอันดับ 1 - พัก 45 วัน)</option>
+            <option value="MD-67-002">MD-67-002 (อันดับ 2 - พัก 14 วัน)</option>
+          </select>
+        </div>
       </div>
 
       <!-- Success Swap Notification (When Swapped) -->
-      <div id="inFormSuccessBanner" class="hidden p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-        <span>✓</span>
-        <span>สลับเป็นเครื่องแนะนำ <strong>MD-67-003</strong> เรียบร้อยแล้ว</span>
+      <div id="inFormSuccessBanner" class="hidden p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span>✓</span>
+          <span>สลับเป็นเครื่อง <strong id="swappedTargetNoid">MD-67-003</strong> เรียบร้อยแล้ว</span>
+        </div>
+        <button onclick="revertToOriginal()" class="text-[11px] text-slate-500 hover:text-slate-800 underline">
+          ย้อนกลับ
+        </button>
       </div>
 
       <!-- Form Inputs -->
@@ -238,6 +314,7 @@
   <script>
     let currentApproach = 1; // 1 = In-Form Banner, 2 = Intercept Dialog
     let currentSelectedAsset = '';
+    let originalAssetBeforeSwap = '';
 
     function switchTab(tabIndex) {
       currentApproach = tabIndex;
@@ -249,65 +326,63 @@
         btn1.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-blue-600 text-white shadow-sm';
         btn2.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200';
         banner.className = 'p-4 rounded-xl text-xs border leading-relaxed bg-blue-50 border-blue-200 text-blue-900';
-        banner.innerHTML = '<strong>แนวทางที่ 1 (In-Form Banner):</strong> เมื่อกดปุ่ม "ยืม" ที่เครื่องใดก็ตาม ฟอร์มขอยืมจะเปิดขึ้นมาทันที และหากเครื่องนั้นใช้งานหนัก จะมีกล่องสีส้มเตือนอยู่บนหัวฟอร์ม ให้กดสลับเครื่องได้เลย (ไม่รบกวนจังหวะการทำงาน / ไม่มี Modal ซ้อน Modal)';
+        banner.innerHTML = '<strong>แนวทางที่ 1 (In-Form Hybrid):</strong> เมื่อกดปุ่ม "ยืม" ฟอร์มจะเปิดทันที ด้านบนมีปุ่มสลับเครื่องอันดับ 1 ให้กดในคลิกเดียว <strong>พร้อมดรอปดาวน์ [เลือกเครื่องอื่น]</strong> ให้เลือกสลับเป็นเครื่องอื่นในรุ่นเดียวกันได้ทันที';
       } else {
         btn2.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-blue-600 text-white shadow-sm';
         btn1.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200';
         banner.className = 'p-4 rounded-xl text-xs border leading-relaxed bg-amber-50 border-amber-200 text-amber-900';
-        banner.innerHTML = '<strong>แนวทางที่ 2 (Intercept Dialog):</strong> เมื่อกดปุ่ม "ยืม" เครื่องที่ใช้งานหนัก ระบบจะหยุดและเด้ง Dialog ดักถามก่อนว่า "ต้องการสลับเครื่องไหม?" เมื่อผู้ใช้ตัดสินใจเลือกแล้วจึงเปิดฟอร์มขอยืมให้กรอกต่อ';
+        banner.innerHTML = '<strong>แนวทางที่ 2 (Intercept Dialog Hybrid):</strong> เมื่อกดปุ่ม "ยืม" เครื่องที่ใช้งานหนัก ระบบจะเด้ง Dialog แนะนำเครื่องอันดับ 1 เด่นชัดเจน <strong>พร้อมปุ่ม [▼ ดูเครื่องอื่นในรุ่นนี้]</strong> ให้กางดูและกดสลับเป็นเครื่องสำรองเครื่องอื่นได้ด้วย';
       }
     }
 
     // Triggered when clicking "ยืมเครื่องนี้" in Table
     function handleBorrowClick(assetNoid, hasBetterAlternative) {
       currentSelectedAsset = assetNoid;
+      originalAssetBeforeSwap = assetNoid;
 
       if (currentApproach === 1) {
-        // ============================================
-        // APPROACH 1: Open Borrow Form directly with banner if needed
-        // ============================================
+        // APPROACH 1: In-Form Banner
         openBorrowForm(assetNoid, hasBetterAlternative);
       } else {
-        // ============================================
-        // APPROACH 2: Check swap first. If has alternative -> intercept modal
-        // ============================================
+        // APPROACH 2: Intercept Modal
         if (hasBetterAlternative) {
           document.getElementById('interceptCurrentAsset').innerText = assetNoid;
+          // Hide alternatives list by default
+          document.getElementById('interceptAlternativesList').classList.add('hidden');
+          document.getElementById('interceptToggleIcon').innerText = '▼ ดูเพิ่มเติม';
           document.getElementById('interceptModal').classList.remove('hidden');
         } else {
-          // No alternative needed -> proceed to form directly
           openBorrowForm(assetNoid, false);
         }
       }
     }
 
+    // Toggle Alternative list in Approach 2
+    function toggleInterceptAlternatives() {
+      const list = document.getElementById('interceptAlternativesList');
+      const icon = document.getElementById('interceptToggleIcon');
+      const isHidden = list.classList.toggle('hidden');
+      icon.innerText = isHidden ? '▼ ดูเพิ่มเติม' : '▲ ซ่อน';
+    }
+
     // Confirmation choice from Approach 2 Dialog
-    function confirmIntercept(shouldSwap) {
+    function confirmIntercept(chosenNoid) {
       document.getElementById('interceptModal').classList.add('hidden');
-      if (shouldSwap) {
-        openBorrowForm('MD-67-003', false); // Swapped to recommended asset
+      if (chosenNoid === 'ORIGINAL') {
+        openBorrowForm(currentSelectedAsset, false); // Kept original
       } else {
-        openBorrowForm(currentSelectedAsset, false); // Kept original asset
+        openBorrowForm(chosenNoid, false); // Picked MD-67-003 or MD-67-002
       }
     }
 
     // Open Borrow Form Modal
     function openBorrowForm(assetNoid, showInFormBanner) {
+      currentSelectedAsset = assetNoid;
       document.getElementById('formAssetId').value = `${assetNoid} (Puritan Bennett 840)`;
       document.getElementById('approachIndicatorBadge').innerText = 
-        currentApproach === 1 ? 'Approach 1: In-Form Banner' : 'Approach 2: Intercept Dialog';
+        currentApproach === 1 ? 'Approach 1: In-Form Hybrid' : 'Approach 2: Intercept Dialog Hybrid';
 
-      const badge = document.getElementById('formAssetBadge');
-      if (assetNoid === 'MD-67-003') {
-        badge.innerText = '🌟 เครื่องแนะนำอันดับ 1';
-        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
-      } else if (assetNoid === 'MD-67-001') {
-        badge.innerText = '⚠️ ใช้งานสะสมสูง';
-        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300';
-      } else {
-        badge.innerText = 'พร้อมใช้งาน';
-        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-700';
-      }
+      updateFormAssetBadge(assetNoid);
 
       // Show/Hide in-form banners for Approach 1
       const banner = document.getElementById('inFormSwapBanner');
@@ -323,15 +398,43 @@
       document.getElementById('borrowFormModal').classList.remove('hidden');
     }
 
+    function updateFormAssetBadge(assetNoid) {
+      const badge = document.getElementById('formAssetBadge');
+      if (assetNoid === 'MD-67-003') {
+        badge.innerText = '🌟 แนะนำอันดับ 1';
+        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+      } else if (assetNoid === 'MD-67-002') {
+        badge.innerText = 'อันดับ 2 (พัก 14 วัน)';
+        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300';
+      } else if (assetNoid === 'MD-67-001') {
+        badge.innerText = '⚠️ ใช้งานสะสมสูง';
+        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300';
+      } else {
+        badge.innerText = 'พร้อมใช้งาน';
+        badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-700';
+      }
+    }
+
     // Swap button clicked INSIDE Borrow Form (Approach 1)
     function swapAssetInsideForm(newAssetNoid) {
+      currentSelectedAsset = newAssetNoid;
       document.getElementById('formAssetId').value = `${newAssetNoid} (Puritan Bennett 840)`;
-      const badge = document.getElementById('formAssetBadge');
-      badge.innerText = '🌟 เครื่องแนะนำอันดับ 1';
-      badge.className = 'shrink-0 px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+      updateFormAssetBadge(newAssetNoid);
 
+      document.getElementById('swappedTargetNoid').innerText = newAssetNoid;
       document.getElementById('inFormSwapBanner').classList.add('hidden');
       document.getElementById('inFormSuccessBanner').classList.remove('hidden');
+    }
+
+    function onInFormDropdownChange(value) {
+      if (!value) return;
+      swapAssetInsideForm(value);
+    }
+
+    function revertToOriginal() {
+      swapAssetInsideForm(originalAssetBeforeSwap);
+      document.getElementById('inFormSuccessBanner').classList.add('hidden');
+      document.getElementById('inFormSwapBanner').classList.remove('hidden');
     }
 
     function closeBorrowForm() {
