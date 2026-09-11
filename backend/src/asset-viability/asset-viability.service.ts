@@ -206,7 +206,7 @@ export class AssetViabilityService {
     }
 
     if (sectionId) {
-      whereConditions.push(Prisma.sql`a.section_id = ${sectionId}::uuid`);
+      whereConditions.push(Prisma.sql`a.section_id = ${sectionId}`);
     }
 
     if (assetTypeId !== undefined && !isNaN(assetTypeId)) {
