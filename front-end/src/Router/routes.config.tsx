@@ -5,6 +5,7 @@ import {
   History,
   ShoppingCart,
   LucideIcon,
+  FilePlus2,
 } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
@@ -16,6 +17,7 @@ import RepairRequestPage from "../Pages/RepairRequestPage";
 import RepairHistory from "../Pages/RepairHistory";
 import PartStock from "../Pages/PartStock";
 import OrderSpareParts from "../Pages/OrderSpareParts";
+import AcquisitionTypePage from "../Pages/AcquisitionTypePage";
 import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
@@ -73,6 +75,14 @@ export const APP_ROUTE: AppRote[] = [
     title: "สั่งซื้ออะไหล่",
     element: <OrderSpareParts />,
     icon: ToolCase,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "acquisition-types",
+    title: "วิธีการได้มา",
+    element: <AcquisitionTypePage />,
+    icon: FilePlus2,
     roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: true,
   },
