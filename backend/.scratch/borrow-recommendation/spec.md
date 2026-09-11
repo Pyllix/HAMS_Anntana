@@ -73,10 +73,10 @@ WITH candidate_assets AS (
   FROM asset a
   JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
   JOIN availability_status avs ON avs.availability_status_id = a.availability_status_id
-  LEFT JOIN section s ON s.section_id = a.section_id
+  LEFT JOIN sections s ON s.section_id = a.section_id
   WHERE a.model = $1
-    AND ast.code = 'NORMAL'
-    AND avs.code = 'AVAILABLE'
+    AND ast.status_code = 'NORMAL'
+    AND avs.status_code = 'AVAILABLE'
 ),
 borrow_metrics_90d AS (
   SELECT 

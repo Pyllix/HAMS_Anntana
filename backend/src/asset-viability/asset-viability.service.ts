@@ -269,15 +269,15 @@ export class AssetViabilityService {
         s.section_id AS section_id,
         s.name AS section_name,
         ast.asset_status_id AS asset_status_id,
-        ast.code AS asset_status_code,
-        ast.name AS asset_status_name,
+        ast.status_code AS asset_status_code,
+        ast.status_name AS asset_status_name,
         COALESCE(ars.total_repair_count, 0)::int AS total_repair_count,
         COALESCE(ars.recent_repair_count, 0)::int AS recent_repair_count,
         COALESCE(ars.cumulative_repair_cost, 0)::numeric AS cumulative_repair_cost
       FROM asset a
       LEFT JOIN asset_repair_summary ars ON ars.asset_id = a.asset_id
       LEFT JOIN asset_type t ON t.asset_type_id = a.type_id
-      LEFT JOIN section s ON s.section_id = a.section_id
+      LEFT JOIN sections s ON s.section_id = a.section_id
       LEFT JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
       ${whereClause};
     `);
