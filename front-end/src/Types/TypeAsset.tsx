@@ -120,6 +120,7 @@ export interface Asset {
   imageUrl: string;
   receivedDate: string;
   type_id: number;
+  asset_type_id?: number;
   section_id: string;
   company_id: string;
   asset_status_id: number;
@@ -164,4 +165,29 @@ export interface Asset {
     lastname: string;
   };
   currentBorrowing: any | null;
+}
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total?: number;
+  totalPages?: number;
+  hasNextPage?: boolean;
+  hasPreviousPage?: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
+export interface AssetQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  section_id?: string;
+  asset_status_id?: number;
+  asset_type_id?: number;
+  availability_status_id?: number;
+  equipment_type_id?: number;
 }

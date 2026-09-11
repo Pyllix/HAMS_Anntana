@@ -1,35 +1,67 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, ChevronDown, Plus, Check, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getAssetTypes,
   getAssetStatuses,
   getSections,
-  getAssets,
-  getMySectionAssets,
+  getAssetsPaginated,
+  getMySectionAssetsPaginated,
 } from "../services/assetService";
 import StockAssetsTable from "../components/asset-stock/StockAssetsTable";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
 import { useAuthStore } from "../stores/authStore";
-import { ROLES } from "../Router/roles";
+import { ROLES } from "../router/roles";
 
 export default function AssetStock() {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const [inputSearch, setInputSearch] = useState("");
-  const [type, setType] = useState("ALL");
-  const [department, setDepartment] = useState("ALL");
-  const [status, setStatus] = useState("ALL");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [typeId, setTypeId] = useState("ALL");
+  const [sectionId, setSectionId] = useState("ALL");
+  const [statusId, setStatusId] = useState("ALL");
 
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
   const isAssetCenter = role === ROLES.ADMIN || role === ROLES.ASSET_CENTER_STAFF;
 
-  const { data: assets, isLoading } = useQuery({
-    queryKey: ["assets", isAssetCenter ? "all" : (user?.section_id || "my-section")],
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(inputSearch);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [inputSearch]);
+
+  const { data: assetResponse, isLoading } = useQuery({
+    queryKey: [
+      "assets",
+      isAssetCenter ? "all" : (user?.section_id || "my-section"),
+      page,
+      pageSize,
+      debouncedSearch,
+      typeId,
+      sectionId,
+      statusId,
+    ],
     queryFn: () => {
       if (isAssetCenter) {
-        return getAssets();
+        return getAssetsPaginated({
+          page,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          section_id: sectionId !== "ALL" ? sectionId : undefined,
+          asset_type_id: typeId !== "ALL" ? Number(typeId) : undefined,
+          asset_status_id: statusId !== "ALL" ? Number(statusId) : undefined,
+        });
       }
-      return getMySectionAssets();
+      return getMySectionAssetsPaginated({
+        page,
+        limit: pageSize,
+        search: debouncedSearch || undefined,
+      });
     },
   });
 
@@ -49,24 +81,72 @@ export default function AssetStock() {
     enabled: isAssetCenter,
   });
 
-  // Calculate KPIs dynamically
-  const totalAssets = assets?.length || 0;
-  const normalAssets = useMemo(() => {
-    return assets?.filter((a) => a.status?.code === "NORMAL").length || 0;
-  }, [assets]);
+  // Query KPI Counts accurately from server
+  const normalStatus = assetStatuses?.find((s) => s.code === "NORMAL");
+  const damagedStatus = assetStatuses?.find((s) => s.code === "DAMAGED");
 
-  const damagedAssets = useMemo(() => {
+  const { data: normalCountRes } = useQuery({
+    queryKey: [
+      "kpi-normal-assets",
+      isAssetCenter ? "all" : user?.section_id,
+      normalStatus?.id,
+    ],
+    queryFn: () =>
+      getAssetsPaginated({
+        page: 1,
+        limit: 1,
+        section_id: !isAssetCenter && user?.section_id ? user.section_id : undefined,
+        asset_status_id: normalStatus?.id,
+      }),
+    enabled: Boolean(normalStatus?.id),
+  });
+
+  const { data: damagedCountRes } = useQuery({
+    queryKey: [
+      "kpi-damaged-assets",
+      isAssetCenter ? "all" : user?.section_id,
+      damagedStatus?.id,
+    ],
+    queryFn: () =>
+      getAssetsPaginated({
+        page: 1,
+        limit: 1,
+        section_id: !isAssetCenter && user?.section_id ? user.section_id : undefined,
+        asset_status_id: damagedStatus?.id,
+      }),
+    enabled: Boolean(damagedStatus?.id),
+  });
+
+  // Calculate KPIs dynamically
+  const totalAssets = assetResponse?.meta?.total ?? 0;
+  const normalAssets = normalCountRes?.meta?.total ?? 0;
+  const damagedAssets = damagedCountRes?.meta?.total ?? 0;
+
+  const selectedTypeName = useMemo(() => {
+    if (typeId === "ALL") return "ทั้งหมด";
     return (
-      assets?.filter(
-        (a) => a.status?.code === "DAMAGED" || a.status?.code === "UNDER_REPAIR"
-      ).length || 0
+      assetTypes?.find((item) => String(item.id) === String(typeId))?.name ||
+      "ทั้งหมด"
     );
-  }, [assets]);
+  }, [typeId, assetTypes]);
+
+  const selectedSectionName = useMemo(() => {
+    if (sectionId === "ALL") return "ทั้งหมด";
+    return sections?.find((sec) => sec.id === sectionId)?.name || "ทั้งหมด";
+  }, [sectionId, sections]);
+
+  const selectedStatusName = useMemo(() => {
+    if (statusId === "ALL") return "ทั้งหมด";
+    return (
+      assetStatuses?.find((st) => String(st.id) === String(statusId))?.name ||
+      "ทั้งหมด"
+    );
+  }, [statusId, assetStatuses]);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-2 overflow-hidden">
       {/* KPI / Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 shrink-0">
         {/* Total Assets */}
         <div className="flex items-center gap-4 bg-bg-component rounded-sm p-5 shadow-sm">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-700 shrink-0">
@@ -114,7 +194,7 @@ export default function AssetStock() {
       </div>
 
       {/* Filter / Search Bar */}
-      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
+      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4 shrink-0">
         {/* Search input */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -133,20 +213,23 @@ export default function AssetStock() {
             <span className="text-slate-500 shrink-0">ประเภท:</span>
             <span
               className="font-semibold text-emerald-600 truncate"
-              title={type === "ALL" ? "ทั้งหมด" : type}
+              title={selectedTypeName}
             >
-              {type === "ALL" ? "ทั้งหมด" : type}
+              {selectedTypeName}
             </span>
           </div>
           <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
           <select
             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
+            value={typeId}
+            onChange={(e) => {
+              setTypeId(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="ALL">ทั้งหมด</option>
             {assetTypes?.map((item) => (
-              <option key={item.id} value={item.name}>
+              <option key={item.id} value={item.id}>
                 {item.name}
               </option>
             ))}
@@ -160,20 +243,23 @@ export default function AssetStock() {
               <span className="text-slate-500 shrink-0">แผนก:</span>
               <span
                 className="font-semibold text-emerald-600 truncate"
-                title={department === "ALL" ? "ทั้งหมด" : department}
+                title={selectedSectionName}
               >
-                {department === "ALL" ? "ทั้งหมด" : department}
+                {selectedSectionName}
               </span>
             </div>
             <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
             <select
               className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
+              value={sectionId}
+              onChange={(e) => {
+                setSectionId(e.target.value);
+                setPage(1);
+              }}
             >
               <option value="ALL">ทั้งหมด</option>
               {sections?.map((sec) => (
-                <option key={sec.id} value={sec.name}>
+                <option key={sec.id} value={sec.id}>
                   {sec.name}
                 </option>
               ))}
@@ -187,20 +273,23 @@ export default function AssetStock() {
             <span className="text-slate-500 shrink-0">สถานะ:</span>
             <span
               className="font-semibold text-emerald-600 truncate"
-              title={status === "ALL" ? "ทั้งหมด" : status}
+              title={selectedStatusName}
             >
-              {status === "ALL" ? "ทั้งหมด" : status}
+              {selectedStatusName}
             </span>
           </div>
           <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
           <select
             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            value={statusId}
+            onChange={(e) => {
+              setStatusId(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="ALL">ทั้งหมด</option>
             {assetStatuses?.map((st) => (
-              <option key={st.id} value={st.name}>
+              <option key={st.id} value={st.id}>
                 {st.name}
               </option>
             ))}
@@ -209,14 +298,15 @@ export default function AssetStock() {
       </div>
 
       {/* Table Container */}
-      <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden">
+      <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
         <StockAssetsTable
-          assets={assets}
+          assets={assetResponse?.data ?? []}
           isLoading={isLoading}
-          search={inputSearch}
-          type={type}
-          department={isAssetCenter ? department : "ALL"}
-          status={status}
+          currentPage={page}
+          totalPages={assetResponse?.meta?.totalPages ?? 1}
+          totalItems={assetResponse?.meta?.total ?? 0}
+          pageSize={pageSize}
+          onPageChange={setPage}
           isAssetCenter={isAssetCenter}
         />
       </div>
@@ -226,4 +316,3 @@ export default function AssetStock() {
     </div>
   );
 }
-

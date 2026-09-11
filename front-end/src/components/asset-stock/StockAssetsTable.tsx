@@ -1,34 +1,34 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { getAssets } from "../../services/assetService";
 import type { Asset } from "../../types/TypeAsset";
 
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import { useAuthStore } from "../../stores/authStore";
-import { ROLES } from "../../Router/roles";
+import { ROLES } from "../../router/roles";
 
 const features = tableFeatures({});
 
 interface StockAssetsTableProps {
   assets?: Asset[];
   isLoading?: boolean;
-  search?: string;
-  type?: string;
-  department?: string;
-  status?: string;
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
   isAssetCenter?: boolean;
 }
 
 export default function StockAssetsTable({
-  assets,
+  assets = [],
   isLoading = false,
-  search = "",
-  type = "ALL",
-  department = "ALL",
-  status = "ALL",
+  currentPage = 1,
+  totalPages = 1,
+  totalItems = 0,
+  pageSize = 10,
+  onPageChange,
   isAssetCenter: isAssetCenterProp,
 }: StockAssetsTableProps) {
   const role = useAuthStore((state) => state.role);
@@ -163,7 +163,7 @@ export default function StockAssetsTable({
             onClick={() =>
               useAssetDetailModalStore.getState().openModal(info.row.original)
             }
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 transition-colors shadow-xs cursor-pointer"
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 transition-colors shadow-xs cursor-pointer"
           >
             รายละเอียด
           </button>
@@ -173,62 +173,35 @@ export default function StockAssetsTable({
 
     return cols;
   }, [isAssetCenter]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  // Reset ไปหน้า 1 เสมอเมื่อมีการค้นหาหรือเปลี่ยนตัวกรอง
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, type, department, status]);
-
-  const filteredAssets = useMemo(() => {
-    if (!assets) return [];
-
-    return assets.filter((item) => {
-      const searchLower = search.toLowerCase();
-      const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(searchLower) ||
-        item.serialNo?.toLowerCase().includes(searchLower) ||
-        item.model?.toLowerCase().includes(searchLower) ||
-        item.gmdn?.toLowerCase().includes(searchLower) ||
-        item.noid?.toLowerCase().includes(searchLower) ||
-        item.id?.toLowerCase().includes(searchLower);
-
-      const matchesType = type === "ALL" || item.type?.name === type;
-
-      const matchesDepartment =
-        department === "ALL" || item.section?.name === department;
-
-      const matchesStatus = status === "ALL" || item.status?.name === status;
-
-      return matchesSearch && matchesType && matchesDepartment && matchesStatus;
-    });
-  }, [assets, search, type, department, status]);
-
-  const totalItems = filteredAssets.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredAssets.slice(start, start + pageSize);
-  }, [filteredAssets, currentPage, pageSize]);
-
   const table = useTable({
     key: "stock-assets-table",
     features,
     columns,
-    data: paginatedData,
+    data: assets,
   });
 
+  const visiblePages = useMemo(() => {
+    if (totalPages <= 3) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 2) {
+      return [1, 2, 3];
+    }
+    if (currentPage >= totalPages - 1) {
+      return [totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [currentPage - 1, currentPage, currentPage + 1];
+  }, [currentPage, totalPages]);
+
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
+    <div className="w-full flex-1 flex flex-col min-h-0">
+      <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-left">
-          <thead className="font-bold text-md border-b border-slate-200">
+          <thead className="font-bold text-md border-b border-slate-200 bg-white sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="py-3 px-4 font-bold text-slate-800">
+                  <th key={header.id} className="py-2 px-4 font-bold text-slate-800 text-sm">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -244,7 +217,7 @@ export default function StockAssetsTable({
                   กำลังโหลดข้อมูลครุภัณฑ์...
                 </td>
               </tr>
-            ) : paginatedData.length === 0 ? (
+            ) : assets.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="py-8 text-center text-slate-400 text-sm">
                   ไม่พบข้อมูลครุภัณฑ์
@@ -254,7 +227,7 @@ export default function StockAssetsTable({
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-3 px-4 align-middle">
+                    <td key={cell.id} className="py-2 px-4 align-middle text-sm">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -266,43 +239,43 @@ export default function StockAssetsTable({
       </div>
 
       {/* Pagination & Summary footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 text-sm text-slate-500">
+      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
         <div>
           แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
           {Math.min(currentPage * pageSize, totalItems)} จาก {totalItems.toLocaleString()}{" "}
           รายการ
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            disabled={currentPage <= 1 || isLoading}
+            onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .slice(Math.max(0, currentPage - 3), currentPage + 2)
-            .map((page) => (
-              <button
-                key={page}
-                type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${currentPage === page
-                  ? "bg-emerald-600 font-semibold text-white shadow-sm"
-                  : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-              >
-                {page}
-              </button>
-            ))}
+          {visiblePages.map((page) => (
+            <button
+              key={page}
+              type="button"
+              disabled={isLoading}
+              onClick={() => onPageChange(page)}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
+                currentPage === page
+                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
           <button
             type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            disabled={currentPage >= totalPages || isLoading}
+            onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>
