@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
+import { CreateAssetTransferDto } from './dto/create-asset-transfer.dto';
 import { AssetFilterDto } from './dto/asset-filter.dto';
 import { PrismaService } from 'src/prisma.service';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
@@ -342,6 +343,140 @@ export class AssetService {
     return this.prisma.disposal.findMany({
       where: { asset_id: id },
       orderBy: { approvedDate: 'desc' },
+    });
+  }
+
+  // ─── Transfer (การโอนย้ายครุภัณฑ์) ────────────────────────────────────────────
+
+  /**
+   * ดึงประวัติการโอนย้ายครุภัณฑ์ทั้งหมดของโรงพยาบาล (paginated & searchable)
+   */
+  async findAllTransferRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.TransferWhereInput = query.search
+      ? {
+          OR: [
+            { transferDocNo: { contains: query.search, mode: 'insensitive' } },
+            {
+              asset: {
+                OR: [
+                  { name: { contains: query.search, mode: 'insensitive' } },
+                  { model: { contains: query.search, mode: 'insensitive' } },
+                  { serialNo: { contains: query.search, mode: 'insensitive' } },
+                  { noid: { contains: query.search, mode: 'insensitive' } },
+                ],
+              },
+            },
+            {
+              fromSection: {
+                name: { contains: query.search, mode: 'insensitive' },
+              },
+            },
+            {
+              toSection: {
+                name: { contains: query.search, mode: 'insensitive' },
+              },
+            },
+          ],
+        }
+      : {};
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.transfer.findMany({
+        where,
+        orderBy: { transferDate: 'desc' },
+        include: {
+          asset: { include: ASSET_INCLUDE },
+          fromSection: { select: { id: true, code: true, name: true, building: true } },
+          toSection: { select: { id: true, code: true, name: true, building: true } },
+          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        },
+        skip,
+        take: limit,
+      }),
+      this.prisma.transfer.count({ where }),
+    ]);
+
+    return paginate(data as Record<string, unknown>[], total, page, limit);
+  }
+
+  /**
+   * สร้างระเบียนการโอนย้าย (Transfer) พร้อมอัปเดต section_id ของ Asset ไปยังแผนกใหม่โดยอัตโนมัติ
+   */
+  async createTransfer(id: string, dto: CreateAssetTransferDto, userId: string) {
+    const asset = await this.findOne(id);
+
+    // 1. ตรวจสอบสถานะห้ามโอนย้าย
+    if (asset.status?.code === 'DISPOSAL') {
+      throw new BadRequestException('Cannot transfer an asset that has been disposed');
+    }
+
+    if (asset.availabilityStatus?.code === 'BORROWED') {
+      throw new BadRequestException('Cannot transfer an asset that is currently borrowed');
+    }
+
+    // 2. ตรวจสอบว่าไม่ได้โอนย้ายไปยังแผนกเดิม
+    if (asset.section?.id === dto.to_section_id) {
+      throw new BadRequestException('Target section must be different from current section');
+    }
+
+    // 3. ตรวจสอบว่าแผนกปลายทางมีอยู่จริงในระบบ
+    const targetSection = await this.prisma.section.findUnique({
+      where: { id: dto.to_section_id },
+    });
+    if (!targetSection) {
+      throw new NotFoundException(`Target section #${dto.to_section_id} not found`);
+    }
+
+    return this.prisma.$transaction(async (prisma) => {
+      // อัปเดตแผนกของ Asset ไปยังแผนกใหม่
+      await prisma.asset.update({
+        where: { id },
+        data: {
+          section_id: dto.to_section_id,
+          updatedBy: userId,
+        },
+      });
+
+      // บันทึกระเบียนประวัติการโอนย้าย (Direct Transfer)
+      return prisma.transfer.create({
+        data: {
+          asset_id: id,
+          transferDocNo: dto.transferDocNo,
+          transferDate: new Date(dto.transferDate),
+          from_section_id: asset.section?.id || null,
+          to_section_id: dto.to_section_id,
+          fromLocation: dto.fromLocation || asset.section?.building || null,
+          toLocation: dto.toLocation || null,
+          transferred_by: userId,
+          remark: dto.remark || null,
+        },
+        include: {
+          asset: { include: ASSET_INCLUDE },
+          fromSection: { select: { id: true, code: true, name: true, building: true } },
+          toSection: { select: { id: true, code: true, name: true, building: true } },
+          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        },
+      });
+    });
+  }
+
+  /**
+   * ดึงประวัติการโอนย้ายทั้งหมดของ Asset รายเครื่อง
+   */
+  async findTransferRecords(id: string) {
+    await this.findOne(id);
+    return this.prisma.transfer.findMany({
+      where: { asset_id: id },
+      orderBy: { transferDate: 'desc' },
+      include: {
+        fromSection: { select: { id: true, code: true, name: true, building: true } },
+        toSection: { select: { id: true, code: true, name: true, building: true } },
+        transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      },
     });
   }
 }
