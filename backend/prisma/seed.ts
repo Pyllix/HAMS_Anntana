@@ -536,6 +536,7 @@ async function main() {
           firstname: data.firstname,
           lastname: data.lastname,
           email: data.email,
+          emailVerified: true,
           role: data.role,
           section_id: sectionId,
         },

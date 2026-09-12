@@ -14,5 +14,13 @@ services:
       - hams_postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: hams-mailpit
+    ports:
+      - "1025:1025" # SMTP Port สำหรับรับอีเมลจาก Backend
+      - "8025:8025" # Web UI สำหรับเปิดดูอีเมลใน Browser
+    restart: unless-stopped
+
 volumes:
   hams_postgres_data:
