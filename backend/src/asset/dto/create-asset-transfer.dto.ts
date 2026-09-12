@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsDateString, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -46,39 +46,6 @@ export class CreateAssetTransferDto {
   fromLocation?: string;
 
   @ApiPropertyOptional({
-    example: '550e8400-e29b-41d4-a716-446655440001',
-    description: 'UUID ของผู้ขอโอน (หากไม่ระบุจะใช้ผู้ใช้งานที่กำลังล็อกอิน)',
-  })
-  @IsOptional()
-  @IsUUID()
-  requested_by?: string;
-
-  @ApiPropertyOptional({
-    example: '550e8400-e29b-41d4-a716-446655440002',
-    description: 'UUID ของผู้อนุมัติการโอน (หากไม่ระบุจะใช้ผู้ใช้งานที่กำลังล็อกอิน)',
-  })
-  @IsOptional()
-  @IsUUID()
-  approved_by?: string;
-
-  @ApiPropertyOptional({
-    example: '550e8400-e29b-41d4-a716-446655440003',
-    description: 'UUID ของผู้รับมอบในแผนกปลายทาง (หากไม่ระบุจะใช้ผู้ใช้งานที่กำลังล็อกอิน)',
-  })
-  @IsOptional()
-  @IsUUID()
-  received_by?: string;
-
-  @ApiPropertyOptional({
-    example: 'COMPLETED',
-    default: 'COMPLETED',
-    description: 'สถานะการโอนย้าย (เช่น COMPLETED, PENDING)',
-  })
-  @IsOptional()
-  @IsString()
-  transferStatus?: string = 'COMPLETED';
-
-  @ApiPropertyOptional({
     example: 'โอนย้ายถาวรเพื่อรองรับผู้ป่วยวิกฤตฉุกเฉินประจำหอผู้ป่วย ICU',
     description: 'หมายเหตุหรือเหตุผลความจำเป็นในการโอนย้าย',
   })
@@ -86,3 +53,4 @@ export class CreateAssetTransferDto {
   @IsString()
   remark?: string;
 }
+

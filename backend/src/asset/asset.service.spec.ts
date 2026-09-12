@@ -203,6 +203,7 @@ describe('AssetService', () => {
               to_section_id: 'sec-to',
               from_section_id: 'sec-from',
               transferDocNo: 'TF-2026-001',
+              transferred_by: 'user-1',
             }),
           }),
         );

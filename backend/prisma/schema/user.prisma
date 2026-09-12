@@ -24,9 +24,7 @@ model User {
   ownedAssets   Asset[]   @relation("AssetOwner")
 
   //Transfer relations
-  requestedTransfers Transfer[] @relation("TransferRequestedBy")
-  approvedTransfers  Transfer[] @relation("TransferApprovedBy")
-  receivedTransfers  Transfer[] @relation("TransferReceivedBy")
+  transfers Transfer[] @relation("TransferTransferredBy")
 
   //Borrow relations
   borrowedTransactions        BorrowTransaction[] @relation("BorrowerUser")

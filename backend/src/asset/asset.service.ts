@@ -392,9 +392,7 @@ export class AssetService {
           asset: { include: ASSET_INCLUDE },
           fromSection: { select: { id: true, code: true, name: true, building: true } },
           toSection: { select: { id: true, code: true, name: true, building: true } },
-          requestedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          approvedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          receivedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         },
         skip,
         take: limit,
@@ -443,7 +441,7 @@ export class AssetService {
         },
       });
 
-      // บันทึกระเบียนประวัติการโอนย้าย
+      // บันทึกระเบียนประวัติการโอนย้าย (Direct Transfer)
       return prisma.transfer.create({
         data: {
           asset_id: id,
@@ -453,19 +451,14 @@ export class AssetService {
           to_section_id: dto.to_section_id,
           fromLocation: dto.fromLocation || asset.section?.building || null,
           toLocation: dto.toLocation || null,
-          requested_by: dto.requested_by || userId,
-          approved_by: dto.approved_by || userId,
-          received_by: dto.received_by || userId,
-          transferStatus: dto.transferStatus || 'COMPLETED',
+          transferred_by: userId,
           remark: dto.remark || null,
         },
         include: {
           asset: { include: ASSET_INCLUDE },
           fromSection: { select: { id: true, code: true, name: true, building: true } },
           toSection: { select: { id: true, code: true, name: true, building: true } },
-          requestedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          approvedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          receivedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
         },
       });
     });
@@ -482,9 +475,7 @@ export class AssetService {
       include: {
         fromSection: { select: { id: true, code: true, name: true, building: true } },
         toSection: { select: { id: true, code: true, name: true, building: true } },
-        requestedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        approvedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        receivedBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
       },
     });
   }

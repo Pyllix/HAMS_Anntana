@@ -268,11 +268,11 @@ export class AssetController {
   @Post(':id/transfer')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
   @ApiOperation({
-    summary: 'Record Asset Transfer to another Section',
+    summary: 'Record Direct Asset Transfer to another Section',
     description:
-      'Record an asset transfer to another section with transferDocNo, transferDate, to_section_id, etc. ' +
+      'Record a direct asset transfer to another section based on approved transfer documents. ' +
       'Only ASSET_CENTER_STAFF and PARCEL_STAFF can perform this action. ' +
-      'This action automatically updates the asset section_id to the destination section in an atomic transaction.',
+      'This action automatically updates the asset section_id to the destination section and sets transferred_by in an atomic transaction.',
   })
   @ApiResponse({ status: 201, description: 'Transfer record created and asset updated' })
   @ApiResponse({ status: 400, description: 'Asset cannot be transferred (disposed, borrowed, or same section)' })

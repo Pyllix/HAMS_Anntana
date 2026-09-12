@@ -37,7 +37,7 @@
 
 ## 📡 3. รายละเอียด API แต่ละเส้นทาง
 
-### 📌 เส้นที่ 1: `POST /asset/:id/transfer` (บันทึกการโอนย้ายครุภัณฑ์)
+### 📌 เส้นที่ 1: `POST /asset/:id/transfer` (บันทึกการโอนย้ายครุภัณฑ์แบบ Direct Transfer)
 
 #### Path Parameter
 - `:id` (UUID): รหัสครุภัณฑ์ที่ต้องการโอนย้าย
@@ -50,15 +50,11 @@
   "to_section_id": "sec-icu-001",
   "toLocation": "อาคารเฉลิมพระเกียรติ ชั้น 3 ห้อง ICU-1",
   "fromLocation": "ศูนย์เครื่องมือแพทย์ ชั้น 1",
-  "requested_by": "550e8400-e29b-41d4-a716-446655440001",
-  "approved_by": "550e8400-e29b-41d4-a716-446655440002",
-  "received_by": "550e8400-e29b-41d4-a716-446655440003",
-  "transferStatus": "COMPLETED",
   "remark": "โอนย้ายถาวรเพื่อรองรับผู้ป่วยวิกฤตฉุกเฉินประจำหอผู้ป่วย ICU"
 }
 ```
 
-*หมายเหตุ: หากไม่ระบุ `requested_by`, `approved_by` หรือ `received_by` ระบบจะใช้ ID ของผู้ใช้งานที่กำลังล็อกอินให้อัตโนมัติ*
+*หมายเหตุ: หน้าบ้านส่งเฉพาะเลขที่เอกสาร วันที่ และแผนกปลายทาง โดยระบบจะบันทึก `transferred_by` จากผู้ใช้งานที่ล็อกอินให้อัตโนมัติในเบื้องหลัง*
 
 #### Response (`201 Created`)
 ```json
@@ -71,10 +67,7 @@
   "to_section_id": "sec-icu-001",
   "fromLocation": "ศูนย์เครื่องมือแพทย์ ชั้น 1",
   "toLocation": "อาคารเฉลิมพระเกียรติ ชั้น 3 ห้อง ICU-1",
-  "requested_by": "550e8400-e29b-41d4-a716-446655440001",
-  "approved_by": "550e8400-e29b-41d4-a716-446655440002",
-  "received_by": "550e8400-e29b-41d4-a716-446655440003",
-  "transferStatus": "COMPLETED",
+  "transferred_by": "550e8400-e29b-41d4-a716-446655440001",
   "remark": "โอนย้ายถาวรเพื่อรองรับผู้ป่วยวิกฤตฉุกเฉินประจำหอผู้ป่วย ICU",
   "createdAt": "2026-09-12T16:20:00.000Z",
   "fromSection": {
@@ -84,6 +77,12 @@
   "toSection": {
     "id": "sec-icu-001",
     "name": "หอผู้ป่วยวิกฤต (ICU)"
+  },
+  "transferredBy": {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "employeeId": "EMP-0099",
+    "firstname": "กานดา",
+    "lastname": "พัสดุดี"
   }
 }
 ```
@@ -104,7 +103,6 @@
     "transferDate": "2026-09-15T00:00:00.000Z",
     "fromLocation": "ศูนย์เครื่องมือแพทย์ ชั้น 1",
     "toLocation": "อาคารเฉลิมพระเกียรติ ชั้น 3 ห้อง ICU-1",
-    "transferStatus": "COMPLETED",
     "remark": "โอนย้ายถาวรเพื่อรองรับผู้ป่วยวิกฤตฉุกเฉินประจำหอผู้ป่วย ICU",
     "fromSection": {
       "id": "sec-med-center-01",
@@ -114,20 +112,11 @@
       "id": "sec-icu-001",
       "name": "หอผู้ป่วยวิกฤต (ICU)"
     },
-    "requestedBy": {
+    "transferredBy": {
       "id": "user-01",
-      "firstname": "สมชาย",
-      "lastname": "ใจดี"
-    },
-    "approvedBy": {
-      "id": "user-02",
-      "firstname": "ประสิทธิ์",
-      "lastname": "มั่นคง"
-    },
-    "receivedBy": {
-      "id": "user-03",
-      "firstname": "วิภา",
-      "lastname": "พยาบาลเอก"
+      "employeeId": "EMP-0099",
+      "firstname": "กานดา",
+      "lastname": "พัสดุดี"
     }
   }
 ]
@@ -150,7 +139,6 @@
       "id": "e931448b-8255-4a52-9bf0-f8644558509c",
       "transferDocNo": "TF-2567-001",
       "transferDate": "2026-09-15T00:00:00.000Z",
-      "transferStatus": "COMPLETED",
       "asset": {
         "id": "8f74e951-692a-43d9-95e5-3f32d8471bd8",
         "noid": "MD-67-001",
@@ -158,7 +146,13 @@
         "model": "Puritan Bennett 840"
       },
       "fromSection": { "name": "ศูนย์เครื่องมือแพทย์" },
-      "toSection": { "name": "หอผู้ป่วยวิกฤต (ICU)" }
+      "toSection": { "name": "หอผู้ป่วยวิกฤต (ICU)" },
+      "transferredBy": {
+        "id": "user-01",
+        "employeeId": "EMP-0099",
+        "firstname": "กานดา",
+        "lastname": "พัสดุดี"
+      }
     }
   ],
   "meta": {
