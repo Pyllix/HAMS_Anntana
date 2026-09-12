@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HAMS - Asset Economic Viability & Disposal Sandbox</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- ========================================== -->
+  <!-- TOP NAVIGATION / HEADER                    -->
+  <!-- ========================================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 to-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold text-slate-900 tracking-tight">HAMS Economic Viability & Disposal</h1>
+            <span class="text-[11px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+              EQM-WI-040 Standard
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">ระบบประเมินความคุ้มค่าในการซ่อมและเสนอแทงจำหน่ายครุภัณฑ์ทางการแพทย์ (Single-File Sandbox)</p>
+        </div>
+      </div>
+
+      <!-- Mode Selector & API Controls -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        <!-- Mode Switcher -->
+        <div class="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200 text-xs">
+          <button id="btnMockMode" onclick="setMode('mock')" class="px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-white text-slate-900">
+            ⚡ Mock Data (จำลอง)
+          </button>
+          <button id="btnLiveMode" onclick="setMode('live')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900">
+            🌐 Live API (Localhost)
+          </button>
+        </div>
+
+        <!-- Token Drawer Toggle (For Live Mode) -->
+        <button onclick="toggleConfigModal()" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors" title="ตั้งค่าการเชื่อมต่อ API">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- LIVE API CONFIG MODAL                      -->
+  <!-- ========================================== -->
+  <div id="configModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <span>⚙️</span> ตั้งค่าการเชื่อมต่อ Live Backend API
+        </h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-4 py-4 text-xs">
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Backend Base URL</label>
+          <input id="cfgBaseUrl" type="text" value="http://localhost:3000" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 font-mono text-xs" />
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Bearer Auth Token (ถ้ามี)</label>
+          <input id="cfgToken" type="password" placeholder="eyJh..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 font-mono text-xs" />
+          <p class="text-[11px] text-slate-500 mt-1">Token สำหรับเรียกใช้งาน Endpoint ที่มี Role Guard</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveConfig()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-xs">
+          บันทึกการตั้งค่า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MAIN CONTENT CONTAINER                     -->
+  <!-- ========================================== -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- 1. TOP KPI SUMMARY COUNTER CARDS -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+      <!-- Total Evaluated -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ประเมินแล้ว</span>
+          <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs">📊</span>
+        </div>
+        <div class="mt-2">
+          <h3 id="kpiTotal" class="text-2xl font-bold text-slate-900 tracking-tight">-</h3>
+          <span class="text-[11px] text-slate-400">รายการครุภัณฑ์ทั้งหมด</span>
+        </div>
+      </div>
+
+      <!-- Viable Count (🟢) -->
+      <div class="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm bg-gradient-to-b from-white to-emerald-50/30 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider">🟢 คุ้มค่าซ่อม</span>
+          <span class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">✓</span>
+        </div>
+        <div class="mt-2">
+          <h3 id="kpiViable" class="text-2xl font-bold text-emerald-700 tracking-tight">-</h3>
+          <span id="kpiViablePct" class="text-[11px] font-medium text-emerald-600">-</span>
+        </div>
+      </div>
+
+      <!-- Warning Count (🟡) -->
+      <div class="bg-white rounded-2xl p-4 border border-amber-200 shadow-sm bg-gradient-to-b from-white to-amber-50/30 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">🟡 เฝ้าระวัง</span>
+          <span class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs">⚠️</span>
+        </div>
+        <div class="mt-2">
+          <h3 id="kpiWarning" class="text-2xl font-bold text-amber-700 tracking-tight">-</h3>
+          <span id="kpiWarningPct" class="text-[11px] font-medium text-amber-600">-</span>
+        </div>
+      </div>
+
+      <!-- Unviable Count (🔴) -->
+      <div class="bg-white rounded-2xl p-4 border border-rose-200 shadow-sm bg-gradient-to-b from-white to-rose-50/30 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-rose-800 uppercase tracking-wider">🔴 ไม่คุ้มซ่อม</span>
+          <span class="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-xs">✕</span>
+        </div>
+        <div class="mt-2">
+          <h3 id="kpiUnviable" class="text-2xl font-bold text-rose-700 tracking-tight">-</h3>
+          <span id="kpiUnviablePct" class="text-[11px] font-medium text-rose-600">เสนอแทงจำหน่าย</span>
+        </div>
+      </div>
+
+      <!-- Cumulative Cost -->
+      <div class="col-span-2 sm:col-span-1 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ค่าซ่อมสะสมรวม</span>
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs">฿</span>
+        </div>
+        <div class="mt-2">
+          <h3 id="kpiCumulativeCost" class="text-xl font-bold text-slate-900 tracking-tight">-</h3>
+          <span class="text-[11px] text-slate-400">รวมค่าแรงและอะไหล่</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. FILTER & SEARCH TOOLBAR -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        
+        <!-- Status Filter Buttons -->
+        <div class="flex items-center flex-wrap gap-1.5 text-xs">
+          <button onclick="setStatusFilter('ALL')" id="fltBtnALL" class="px-3.5 py-1.5 rounded-xl font-bold transition-all bg-slate-900 text-white shadow-sm">
+            ทั้งหมด (<span id="cntALL">0</span>)
+          </button>
+          <button onclick="setStatusFilter('VIABLE')" id="fltBtnVIABLE" class="px-3.5 py-1.5 rounded-xl font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-800">
+            🟢 คุ้มค่า (<span id="cntVIABLE">0</span>)
+          </button>
+          <button onclick="setStatusFilter('WARNING')" id="fltBtnWARNING" class="px-3.5 py-1.5 rounded-xl font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-800">
+            🟡 เฝ้าระวัง (<span id="cntWARNING">0</span>)
+          </button>
+          <button onclick="setStatusFilter('UNVIABLE')" id="fltBtnUNVIABLE" class="px-3.5 py-1.5 rounded-xl font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-800">
+            🔴 ไม่คุ้มซ่อม (<span id="cntUNVIABLE">0</span>)
+          </button>
+        </div>
+
+        <!-- Search Box -->
+        <div class="relative min-w-[240px]">
+          <input id="searchInput" oninput="onSearchInput()" type="text" placeholder="ค้นหารหัส noid, ชื่อเครื่อง, รุ่น..." class="w-full pl-9 pr-4 py-2 border rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+      </div>
+
+      <!-- Secondary Filters (Department & Sort) -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs text-slate-600">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400 font-medium">แผนก:</span>
+          <select id="sectionFilter" onchange="onFilterChange()" class="bg-slate-50 border rounded-lg px-2.5 py-1 text-xs text-slate-700">
+            <option value="">ทุกแผนก</option>
+            <option value="ศูนย์เครื่องมือแพทย์">ศูนย์เครื่องมือแพทย์</option>
+            <option value="หอผู้ป่วยวิกฤต (ICU)">หอผู้ป่วยวิกฤต (ICU)</option>
+            <option value="แผนกฉุกเฉิน (ER)">แผนกฉุกเฉิน (ER)</option>
+            <option value="หอผู้ป่วยกุมารเวชกรรม">หอผู้ป่วยกุมารเวชกรรม</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400 font-medium">เรียงตาม:</span>
+          <select id="sortBy" onchange="onFilterChange()" class="bg-slate-50 border rounded-lg px-2.5 py-1 text-xs text-slate-700">
+            <option value="costRatio_desc">% ค่าซ่อมสะสม (มาก ➔ น้อย)</option>
+            <option value="cumulativeCost_desc">ยอดเงินค่าซ่อม (มาก ➔ น้อย)</option>
+            <option value="age_desc">อายุเครื่อง (มาก ➔ น้อย)</option>
+            <option value="repairCount_desc">จำนวนครั้งที่ซ่อม (มาก ➔ น้อย)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. VIABILITY ASSETS TABLE -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+          <span>📋 รายการครุภัณฑ์ที่ผ่านการประเมินความคุ้มค่า</span>
+          <span id="badgeTableCount" class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">0 รายการ</span>
+        </h2>
+        <span class="text-[11px] text-slate-400">คลิก "🔍 วิเคราะห์เชิงลึก" เพื่อดูประวัติงานซ่อมและยื่นคำร้องแทงจำหน่าย</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b">
+            <tr>
+              <th class="p-3.5">รหัสครุภัณฑ์ / ชื่อเครื่อง</th>
+              <th class="p-3.5">แผนก</th>
+              <th class="p-3.5 text-right">ราคาซื้อ</th>
+              <th class="p-3.5">ค่าซ่อมสะสม / % สัดส่วน</th>
+              <th class="p-3.5 text-center">อายุ / อายุขัย</th>
+              <th class="p-3.5 text-center">สถานะความคุ้มค่า</th>
+              <th class="p-3.5 text-center">สถานะเครื่อง</th>
+              <th class="p-3.5 text-center">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="viabilityTableBody" class="divide-y divide-slate-100">
+            <!-- Rows injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 4. DEVELOPER TOOLS & JSON INSPECTOR -->
+    <div class="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 text-slate-200">
+      <div class="px-5 py-3.5 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between cursor-pointer" onclick="toggleInspector()">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">API INSPECTOR</span>
+          <span class="text-xs text-slate-300 font-medium">ดู JSON Request / Response สำหรับนักพัฒนา</span>
+        </div>
+        <button id="btnToggleInspector" class="text-slate-400 hover:text-white text-xs flex items-center gap-1">
+          <span>พับเก็บ/เปิดดู</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+      
+      <div id="inspectorContent" class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 1. Audit List Query JSON -->
+          <div>
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-mono">
+              <span>GET /assets/viability</span>
+              <span id="jsonAuditStatus" class="text-emerald-400">200 OK</span>
+            </div>
+            <pre id="jsonAuditView" class="bg-slate-950 p-3.5 rounded-xl text-[11px] font-mono text-sky-300 overflow-x-auto custom-scrollbar border border-slate-800 max-h-60 leading-relaxed"></pre>
+          </div>
+
+          <!-- 2. Deep-dive or Action JSON -->
+          <div>
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-mono">
+              <span id="jsonActionEndpoint">GET /assets/:id/viability</span>
+              <span id="jsonActionStatus" class="text-slate-400">-</span>
+            </div>
+            <pre id="jsonActionView" class="bg-slate-950 p-3.5 rounded-xl text-[11px] font-mono text-amber-200 overflow-x-auto custom-scrollbar border border-slate-800 max-h-60 leading-relaxed">// คลิก "🔍 วิเคราะห์เชิงลึก" ที่แถวใดแถวหนึ่งเพื่อดู JSON รายละเอียด</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============================================================== -->
+  <!-- DEEP-DIVE MODAL (GET /assets/:id/viability)                     -->
+  <!-- ============================================================== -->
+  <div id="detailModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl border border-slate-200 p-6 space-y-5">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between pb-3 border-b border-slate-100">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="modalNoid" class="text-lg font-bold text-slate-900 font-mono">-</h3>
+            <span id="modalViabilityBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full">-</span>
+            <span id="modalAssetStatusBadge" class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">-</span>
+          </div>
+          <p id="modalName" class="text-xs text-slate-500 mt-0.5">-</p>
+        </div>
+        <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      </div>
+
+      <!-- Viability Reason Alert Box -->
+      <div id="modalReasonBox" class="p-4 rounded-xl border flex items-start gap-3">
+        <span id="modalReasonIcon" class="text-xl shrink-0">💡</span>
+        <div>
+          <h4 class="font-bold text-xs uppercase tracking-wider mb-1" id="modalReasonTitle">ผลการวิเคราะห์ตามระเบียบพัสดุ (EQM-WI-040)</h4>
+          <p id="modalReasonText" class="text-xs leading-relaxed">-</p>
+        </div>
+      </div>
+
+      <!-- Metrics Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold block">ราคาซื้อเริ่มต้น</span>
+          <span id="modalPrice" class="font-bold text-slate-800 text-sm">฿0.00</span>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold block">ค่าซ่อมสะสม</span>
+          <span id="modalRepairCost" class="font-bold text-slate-800 text-sm">฿0.00</span>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold block">สัดส่วนค่าซ่อม</span>
+          <span id="modalCostRatio" class="font-bold text-slate-800 text-sm">0.0%</span>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold block">อายุ / เกณฑ์อายุขัย</span>
+          <span id="modalAge" class="font-bold text-slate-800 text-sm">0 ปี</span>
+        </div>
+      </div>
+
+      <!-- Historical Repair Jobs -->
+      <div class="space-y-2">
+        <h4 class="font-bold text-slate-800 text-xs flex items-center justify-between">
+          <span>ประวัติงานซ่อมบำรุงในอดีต (Repair History)</span>
+          <span id="modalRepairCount" class="text-[11px] text-slate-400 font-normal">3 รายการ</span>
+        </h4>
+        <div id="modalRepairList" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- DISPOSAL RECOMMENDATION & ACTION BOX (USE CASE C) -->
+      <div id="modalDisposalActionBox" class="p-4 rounded-xl border space-y-3">
+        <!-- Injected dynamically based on viability status -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex justify-end pt-2 border-t border-slate-100">
+        <button onclick="closeDetailModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER               -->
+  <!-- ========================================== -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 text-xs flex items-center gap-3 animate-bounce">
+    <span class="text-emerald-400 text-base">✓</span>
+    <span id="toastMsg">-</span>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- FOOTER                                     -->
+  <!-- ========================================== -->
+  <footer class="mt-auto py-4 bg-white border-t border-slate-200 text-center text-xs text-slate-500">
+    <p>HAMS Hospital Asset Management • Economic Viability Module (EQM-WI-040)</p>
+  </footer>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT STATE & LOGIC                   -->
+  <!-- ========================================== -->
+  <script>
+    let currentMode = 'mock'; // 'mock' | 'live'
+    let currentStatusFilter = 'ALL';
+    let currentSectionFilter = '';
+    let currentSort = 'costRatio_desc';
+    let currentSearch = '';
+    let currentDetailAsset = null;
+
+    let config = {
+      baseUrl: localStorage.getItem('hams_api_base') || 'http://localhost:3000',
+      token: localStorage.getItem('hams_api_token') || '',
+    };
+
+    // MOCK DATA: 6 Diverse Asset Examples matching all 6 Rules of Decision Tree
+    const MOCK_ASSETS = [
+      {
+        id: 'uuid-defib-01',
+        noid: 'MD-60-009',
+        name: 'เครื่องกระตุกหัวใจด้วยไฟฟ้า (Defibrillator)',
+        model: 'Zoll R-Series Plus',
+        sectionName: 'แผนกฉุกเฉิน (ER)',
+        price: 320000.0,
+        cumulativeRepairCost: 243200.0,
+        costRatioPercentage: 76.0,
+        ageYears: 9.4,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: true,
+        warrantyDate: null,
+        isWarrantyActive: false,
+        viabilityStatus: 'UNVIABLE',
+        viabilityReason: 'ค่าซ่อมสะสม 243,200.00 บาท คิดเป็น 76.0% ของราคาซื้อ ซึ่งเกินเกณฑ์ 70% ตามระเบียบพัสดุ (Rule 2) ร่วมกับอายุการใช้งาน 9.4 ปี เกินเกณฑ์อายุขัย (8 ปี)',
+        totalRepairCount: 5,
+        recentRepairCount: 2,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: [
+          { jobNo: 'REP-2026-004', requestDate: '2026-07-10', cost: 65000, description: 'เปลี่ยนโมดูล High-Voltage Capacitor และแผงควบคุมหลัก', outsourceCost: 45000, spareParts: [{ name: 'HV Capacitor 32uF', qty: 1, cost: 20000 }] },
+          { jobNo: 'REP-2025-089', requestDate: '2025-11-20', cost: 78200, description: 'เปลี่ยนหน้าจอแสดงผล TFT Display และสายเคเบิล ECG', outsourceCost: 50000, spareParts: [{ name: 'TFT Screen Module', qty: 1, cost: 28200 }] },
+          { jobNo: 'REP-2024-031', requestDate: '2024-05-14', cost: 100000, description: 'ซ่อมแซมแผงวงจรชาร์จไฟฟ้าและเปลี่ยนแบตเตอรี่สำรองชุดใหญ่', outsourceCost: 80000, spareParts: [{ name: 'Battery Pack', qty: 2, cost: 20000 }] }
+        ]
+      },
+      {
+        id: 'uuid-vent-01',
+        noid: 'MD-67-001',
+        name: 'เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน',
+        model: 'Puritan Bennett 840',
+        sectionName: 'หอผู้ป่วยวิกฤต (ICU)',
+        price: 850000.0,
+        cumulativeRepairCost: 442000.0,
+        costRatioPercentage: 52.0,
+        ageYears: 6.8,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: false,
+        warrantyDate: null,
+        isWarrantyActive: false,
+        viabilityStatus: 'WARNING',
+        viabilityReason: 'ครุภัณฑ์อยู่ในกลุ่มเฝ้าระวัง: ค่าซ่อมสะสมคิดเป็น 52.0% ของราคาซื้อ (เกณฑ์เฝ้าระวัง 50-69%) และมีงานซ่อม 3 ครั้งในปีล่าสุด',
+        totalRepairCount: 4,
+        recentRepairCount: 3,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: [
+          { jobNo: 'REP-2026-015', requestDate: '2026-08-01', cost: 120000, description: 'เปลี่ยน Flow Sensor และชุด Exhalation Valve', outsourceCost: 30000, spareParts: [{ name: 'Exhalation Valve Module', qty: 1, cost: 90000 }] },
+          { jobNo: 'REP-2026-002', requestDate: '2026-02-14', cost: 150000, description: 'ซ่อมแซมระบบนิวเมติกส์อัดอากาศและเปลี่ยน O2 Blender', outsourceCost: 80000, spareParts: [{ name: 'O2 Blender Assembly', qty: 1, cost: 70000 }] },
+          { jobNo: 'REP-2025-099', requestDate: '2025-10-10', cost: 172000, description: 'เปลี่ยนแผงวงจรประมวลผล Main CPU Board', outsourceCost: 100000, spareParts: [{ name: 'CPU Board', qty: 1, cost: 72000 }] }
+        ]
+      },
+      {
+        id: 'uuid-vent-03',
+        noid: 'MD-67-003',
+        name: 'เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน',
+        model: 'Puritan Bennett 840',
+        sectionName: 'ศูนย์เครื่องมือแพทย์',
+        price: 850000.0,
+        cumulativeRepairCost: 0.0,
+        costRatioPercentage: 0.0,
+        ageYears: 1.2,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: false,
+        warrantyDate: '2027-12-31',
+        isWarrantyActive: true,
+        viabilityStatus: 'VIABLE',
+        viabilityReason: 'ครุภัณฑ์ยังอยู่ในระยะรับประกันการใช้งาน (สิ้นสุดวันที่ 2027-12-31) คุ้มค่าต่อการใช้งาน (Rule 1)',
+        totalRepairCount: 0,
+        recentRepairCount: 0,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: []
+      },
+      {
+        id: 'uuid-ecg-01',
+        noid: 'MD-62-045',
+        name: 'เครื่องตรวจคลื่นไฟฟ้าหัวใจ (12-Lead ECG)',
+        model: 'GE MAC 2000',
+        sectionName: 'แผนกฉุกเฉิน (ER)',
+        price: 180000.0,
+        cumulativeRepairCost: 35000.0,
+        costRatioPercentage: 19.4,
+        ageYears: 4.5,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: false,
+        warrantyDate: null,
+        isWarrantyActive: false,
+        viabilityStatus: 'VIABLE',
+        viabilityReason: 'สภาพครุภัณฑ์และประวัติการซ่อมบำรุงอยู่ในเกณฑ์คุ้มค่าต่อการใช้งาน ค่าซ่อมสะสมคิดเป็น 19.4% ของราคาซื้อ (Rule 6)',
+        totalRepairCount: 2,
+        recentRepairCount: 1,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: [
+          { jobNo: 'REP-2025-045', requestDate: '2025-06-12', cost: 20000, description: 'เปลี่ยนสายสัญญาณ Leadwire และทำความสะอาดหัวพิมพ์เทอร์มอล', outsourceCost: 5000, spareParts: [{ name: 'ECG 10-Lead Cable', qty: 1, cost: 15000 }] },
+          { jobNo: 'REP-2023-080', requestDate: '2023-09-01', cost: 15000, description: 'เปลี่ยนแบตเตอรี่สำรองภายในตัวเครื่อง', outsourceCost: 0, spareParts: [{ name: 'Li-Ion Battery Pack', qty: 1, cost: 15000 }] }
+        ]
+      },
+      {
+        id: 'uuid-incubator-01',
+        noid: 'MD-58-002',
+        name: 'ตู้อบเด็กแรกเกิด (Infant Incubator)',
+        model: 'Dräger Isolette C2000',
+        sectionName: 'หอผู้ป่วยกุมารเวชกรรม',
+        price: 450000.0,
+        cumulativeRepairCost: 328500.0,
+        costRatioPercentage: 73.0,
+        ageYears: 10.1,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: true,
+        warrantyDate: null,
+        isWarrantyActive: false,
+        viabilityStatus: 'UNVIABLE',
+        viabilityReason: 'อายุการใช้งาน 10.1 ปี เกินเกณฑ์อายุขัย (8 ปี) และค่าซ่อมสะสม 73.0% เกินเกณฑ์ 70% ตามระเบียบพัสดุ เข้าเกณฑ์แทงจำหน่าย (Rule 2 & 3)',
+        totalRepairCount: 6,
+        recentRepairCount: 2,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: [
+          { jobNo: 'REP-2026-008', requestDate: '2026-04-18', cost: 88500, description: 'เปลี่ยนฮีตเตอร์ควบคุมอุณหภูมิและเซ็นเซอร์วัดความชื้น', outsourceCost: 35000, spareParts: [{ name: 'Heater Element & Humidity Sensor', qty: 1, cost: 53500 }] },
+          { jobNo: 'REP-2025-060', requestDate: '2025-08-25', cost: 110000, description: 'ซ่อมแซมแผงควบคุมระบบเสียงเตือน Alarms และชุดควบคุมพัดลมระบายอากาศ', outsourceCost: 70000, spareParts: [{ name: 'Circulation Motor Fan', qty: 1, cost: 40000 }] }
+        ]
+      },
+      {
+        id: 'uuid-pump-01',
+        noid: 'MD-65-088',
+        name: 'เครื่องให้สารละลายทางหลอดเลือดดำ (Infusion Pump)',
+        model: 'Terumo TE-112',
+        sectionName: 'ศูนย์เครื่องมือแพทย์',
+        price: 65000.0,
+        cumulativeRepairCost: 36400.0,
+        costRatioPercentage: 56.0,
+        ageYears: 7.2,
+        usefulLifeYears: 8,
+        isUsefulLifeExceeded: false,
+        warrantyDate: null,
+        isWarrantyActive: false,
+        viabilityStatus: 'WARNING',
+        viabilityReason: 'อายุการใช้งานใกล้ครบเกณฑ์ (7.2 จาก 8 ปี) และค่าซ่อมสะสมคิดเป็น 56.0% จัดอยู่ในกลุ่มเฝ้าระวัง (Rule 5)',
+        totalRepairCount: 3,
+        recentRepairCount: 1,
+        assetStatusCode: 'NORMAL',
+        assetStatusName: 'ใช้งานปกติ',
+        availabilityStatusCode: 'AVAILABLE',
+        repairHistory: [
+          { jobNo: 'REP-2026-012', requestDate: '2026-05-30', cost: 18400, description: 'เปลี่ยน Peristaltic Finger Mechanism และเซ็นเซอร์ดักจับฟองอากาศ', outsourceCost: 5000, spareParts: [{ name: 'Air-in-line Sensor', qty: 1, cost: 13400 }] }
+        ]
+      }
+    ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('cfgBaseUrl').value = config.baseUrl;
+      document.getElementById('cfgToken').value = config.token;
+      loadViabilityData();
+    });
+
+    function setMode(mode) {
+      currentMode = mode;
+      const btnMock = document.getElementById('btnMockMode');
+      const btnLive = document.getElementById('btnLiveMode');
+
+      if (mode === 'mock') {
+        btnMock.className = 'px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-white text-slate-900';
+        btnLive.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
+      } else {
+        btnLive.className = 'px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-indigo-600 text-white';
+        btnMock.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
+      }
+
+      loadViabilityData();
+    }
+
+    // Load Main Audit List
+    async function loadViabilityData() {
+      const tbody = document.getElementById('viabilityTableBody');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center py-12 text-slate-400">
+            <svg class="animate-spin w-8 h-8 text-indigo-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+            <span>กำลังประเมินความคุ้มค่าตามเกณฑ์ EQM-WI-040...</span>
+          </td>
+        </tr>
+      `;
+
+      if (currentMode === 'mock') {
+        setTimeout(() => {
+          renderMockView();
+        }, 150);
+      } else {
+        // Live Backend API Mode
+        try {
+          const headers = {};
+          if (config.token) headers['Authorization'] = `Bearer ${config.token}`;
+
+          let url = `${config.baseUrl}/assets/viability?page=1&limit=50`;
+          if (currentStatusFilter !== 'ALL') url += `&viabilityStatus=${currentStatusFilter}`;
+          if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+
+          const res = await fetch(url, { headers });
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+          const json = await res.json();
+          renderLiveView(json);
+          updateJsonView('jsonAuditView', json);
+          document.getElementById('jsonAuditStatus').innerText = `${res.status} OK (LIVE)`;
+          document.getElementById('jsonAuditStatus').className = 'text-emerald-400';
+        } catch (err) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" class="text-center py-8 text-rose-500 bg-rose-50">
+                <span class="text-2xl block mb-1">⚠️</span>
+                <p class="font-bold">ไม่สามารถเชื่อมต่อ Live Backend API ได้ (${err.message})</p>
+                <p class="text-[11px] text-slate-500 mt-1">ตรวจสอบว่า NestJS กำลังรันที่ ${config.baseUrl} หรือสลับกลับไปที่โหมด Mock Data</p>
+                <button onclick="setMode('mock')" class="mt-2 px-3 py-1 bg-slate-800 text-white rounded text-xs">สลับเป็น Mock Mode</button>
+              </td>
+            </tr>
+          `;
+          updateJsonView('jsonAuditView', { error: err.message });
+          document.getElementById('jsonAuditStatus').innerText = 'ERROR';
+          document.getElementById('jsonAuditStatus').className = 'text-rose-400';
+        }
+      }
+    }
+
+    function renderMockView() {
+      // Calculate Summary KPIs
+      let items = [...MOCK_ASSETS];
+
+      const viableCount = items.filter(a => a.viabilityStatus === 'VIABLE').length;
+      const warningCount = items.filter(a => a.viabilityStatus === 'WARNING').length;
+      const unviableCount = items.filter(a => a.viabilityStatus === 'UNVIABLE').length;
+      const totalCost = items.reduce((acc, a) => acc + a.cumulativeRepairCost, 0);
+
+      document.getElementById('kpiTotal').innerText = items.length;
+      document.getElementById('kpiViable').innerText = viableCount;
+      document.getElementById('kpiViablePct').innerText = `${Math.round((viableCount / items.length) * 100)}% ของครุภัณฑ์`;
+      document.getElementById('kpiWarning').innerText = warningCount;
+      document.getElementById('kpiWarningPct').innerText = `${Math.round((warningCount / items.length) * 100)}% เฝ้าระวัง`;
+      document.getElementById('kpiUnviable').innerText = unviableCount;
+      document.getElementById('kpiCumulativeCost').innerText = `฿${totalCost.toLocaleString('th-TH', { maximumFractionDigits: 0 })}`;
+
+      document.getElementById('cntALL').innerText = items.length;
+      document.getElementById('cntVIABLE').innerText = viableCount;
+      document.getElementById('cntWARNING').innerText = warningCount;
+      document.getElementById('cntUNVIABLE').innerText = unviableCount;
+
+      // Filter by Status
+      if (currentStatusFilter !== 'ALL') {
+        items = items.filter(a => a.viabilityStatus === currentStatusFilter);
+      }
+
+      // Filter by Section
+      if (currentSectionFilter) {
+        items = items.filter(a => a.sectionName === currentSectionFilter);
+      }
+
+      // Filter by Search
+      if (currentSearch) {
+        const q = currentSearch.toLowerCase();
+        items = items.filter(a => 
+          a.noid.toLowerCase().includes(q) || 
+          a.name.toLowerCase().includes(q) || 
+          a.model.toLowerCase().includes(q)
+        );
+      }
+
+      // Sort
+      if (currentSort === 'costRatio_desc') {
+        items.sort((a, b) => (b.costRatioPercentage || 0) - (a.costRatioPercentage || 0));
+      } else if (currentSort === 'cumulativeCost_desc') {
+        items.sort((a, b) => b.cumulativeRepairCost - a.cumulativeRepairCost);
+      } else if (currentSort === 'age_desc') {
+        items.sort((a, b) => b.ageYears - a.ageYears);
+      } else if (currentSort === 'repairCount_desc') {
+        items.sort((a, b) => b.totalRepairCount - a.totalRepairCount);
+      }
+
+      renderTableRows(items);
+
+      const summaryPayload = {
+        summary: {
+          totalEvaluated: MOCK_ASSETS.length,
+          viableCount,
+          warningCount,
+          unviableCount,
+          totalCumulativeRepairCost: totalCost
+        },
+        items: items
+      };
+      updateJsonView('jsonAuditView', summaryPayload);
+      document.getElementById('jsonAuditStatus').innerText = '200 OK (MOCK)';
+      document.getElementById('jsonAuditStatus').className = 'text-emerald-400';
+    }
+
+    function renderLiveView(json) {
+      const summary = json.summary || {};
+      document.getElementById('kpiTotal').innerText = summary.totalEvaluated ?? 0;
+      document.getElementById('kpiViable').innerText = summary.viableCount ?? 0;
+      document.getElementById('kpiWarning').innerText = summary.warningCount ?? 0;
+      document.getElementById('kpiUnviable').innerText = summary.unviableCount ?? 0;
+      document.getElementById('kpiCumulativeCost').innerText = `฿${Number(summary.totalCumulativeRepairCost || 0).toLocaleString('th-TH')}`;
+
+      document.getElementById('cntALL').innerText = summary.totalEvaluated ?? 0;
+      document.getElementById('cntVIABLE').innerText = summary.viableCount ?? 0;
+      document.getElementById('cntWARNING').innerText = summary.warningCount ?? 0;
+      document.getElementById('cntUNVIABLE').innerText = summary.unviableCount ?? 0;
+
+      renderTableRows(json.items || []);
+    }
+
+    function renderTableRows(items) {
+      const tbody = document.getElementById('viabilityTableBody');
+      document.getElementById('badgeTableCount').innerText = `${items.length} รายการ`;
+
+      if (items.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center py-12 text-slate-400">
+              <span class="text-3xl block mb-2">🔍</span>
+              <p class="font-semibold text-slate-700">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = items.map(asset => {
+        // Viability Badge
+        let viabBadge = '';
+        if (asset.viabilityStatus === 'VIABLE') {
+          viabBadge = `<span class="px-2.5 py-1 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">🟢 คุ้มค่าซ่อม</span>`;
+        } else if (asset.viabilityStatus === 'WARNING') {
+          viabBadge = `<span class="px-2.5 py-1 rounded-full font-bold text-[10px] bg-amber-100 text-amber-800 border border-amber-300">🟡 เฝ้าระวัง</span>`;
+        } else {
+          viabBadge = `<span class="px-2.5 py-1 rounded-full font-bold text-[10px] bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">🔴 ไม่คุ้มค่าซ่อม</span>`;
+        }
+
+        // Cost ratio bar color
+        const ratio = asset.costRatioPercentage || 0;
+        let barColor = 'bg-emerald-500';
+        if (ratio >= 70) barColor = 'bg-rose-500';
+        else if (ratio >= 50) barColor = 'bg-amber-500';
+
+        // Asset status badge
+        const isDisposal = asset.assetStatusCode === 'WAIT_DISPOSAL';
+        const assetStatusBadge = isDisposal
+          ? `<span class="px-2 py-0.5 rounded font-bold text-[10px] bg-purple-100 text-purple-800 border border-purple-300">รอจำหน่าย</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">ปกติ</span>`;
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors ${asset.viabilityStatus === 'UNVIABLE' ? 'bg-rose-50/20' : ''}">
+            <td class="p-3.5">
+              <span class="font-mono font-bold text-slate-900 block text-xs">${asset.noid || 'ไม่มีรหัส'}</span>
+              <span class="text-[11px] text-slate-700 font-medium">${asset.name}</span>
+              <span class="text-[10px] text-slate-400 block">${asset.model || ''}</span>
+            </td>
+            <td class="p-3.5 text-slate-600 text-xs">${asset.sectionName || '-'}</td>
+            <td class="p-3.5 text-right font-mono font-medium text-slate-700">฿${Number(asset.price || 0).toLocaleString('th-TH')}</td>
+            <td class="p-3.5 min-w-[140px]">
+              <div class="flex items-center justify-between text-xs font-mono font-bold text-slate-800 mb-1">
+                <span>฿${Number(asset.cumulativeRepairCost || 0).toLocaleString('th-TH')}</span>
+                <span class="${ratio >= 70 ? 'text-rose-600' : ratio >= 50 ? 'text-amber-600' : 'text-emerald-600'}">${ratio}%</span>
+              </div>
+              <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div class="${barColor} h-1.5 rounded-full" style="width: ${Math.min(100, ratio)}%"></div>
+              </div>
+            </td>
+            <td class="p-3.5 text-center font-mono">
+              <span class="font-bold ${asset.isUsefulLifeExceeded ? 'text-rose-600' : 'text-slate-800'}">${asset.ageYears}</span>
+              <span class="text-slate-400"> / ${asset.usefulLifeYears || 8} ปี</span>
+            </td>
+            <td class="p-3.5 text-center">${viabBadge}</td>
+            <td class="p-3.5 text-center">${assetStatusBadge}</td>
+            <td class="p-3.5 text-center">
+              <button onclick="openDetailModal('${asset.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 mx-auto">
+                <span>🔍</span>
+                <span>วิเคราะห์</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Modal Details (GET /assets/:id/viability)
+    async function openDetailModal(assetId) {
+      let asset = null;
+
+      if (currentMode === 'mock') {
+        asset = MOCK_ASSETS.find(a => a.id === assetId);
+        renderModal(asset);
+        updateJsonView('jsonActionView', asset);
+        document.getElementById('jsonActionEndpoint').innerText = `GET /assets/${assetId}/viability (MOCK)`;
+        document.getElementById('jsonActionStatus').innerText = '200 OK';
+      } else {
+        try {
+          const headers = {};
+          if (config.token) headers['Authorization'] = `Bearer ${config.token}`;
+
+          const res = await fetch(`${config.baseUrl}/assets/${assetId}/viability`, { headers });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const json = await res.json();
+          renderModal(json);
+          updateJsonView('jsonActionView', json);
+          document.getElementById('jsonActionEndpoint').innerText = `GET /assets/${assetId}/viability (LIVE)`;
+          document.getElementById('jsonActionStatus').innerText = '200 OK';
+        } catch (err) {
+          alert(`เกิดข้อผิดพลาดในการโหลดรายละเอียด: ${err.message}`);
+        }
+      }
+    }
+
+    function renderModal(data) {
+      // Normalize between mock shape and actual API response shape
+      const assetInfo = data.asset || data;
+      const viability = data.viability || data;
+      const history = data.repairHistory || data.repairHistory || [];
+      const disposalRec = data.disposalRecommendation || {};
+
+      currentDetailAsset = { ...assetInfo, ...viability, id: assetInfo.id || data.id };
+
+      document.getElementById('modalNoid').innerText = assetInfo.noid || assetInfo.id;
+      document.getElementById('modalName').innerText = `${assetInfo.name} (${assetInfo.model}) • แผนก: ${assetInfo.sectionName || '-'}`;
+
+      // Status Badges
+      const isWaitDisposal = assetInfo.assetStatusCode === 'WAIT_DISPOSAL';
+      document.getElementById('modalAssetStatusBadge').innerText = isWaitDisposal ? 'รอจำหน่าย' : 'ใช้งานปกติ';
+      document.getElementById('modalAssetStatusBadge').className = isWaitDisposal 
+        ? 'text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800'
+        : 'text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700';
+
+      const viabBadge = document.getElementById('modalViabilityBadge');
+      const reasonBox = document.getElementById('modalReasonBox');
+      const reasonIcon = document.getElementById('modalReasonIcon');
+      const reasonTitle = document.getElementById('modalReasonTitle');
+
+      if (viability.viabilityStatus === 'VIABLE') {
+        viabBadge.innerText = '🟢 คุ้มค่าซ่อม';
+        viabBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+        reasonBox.className = 'p-4 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-900 flex items-start gap-3';
+        reasonIcon.innerText = '✓';
+        reasonTitle.innerText = 'ผลประเมิน: คุ้มค่าต่อการซ่อมบำรุงใช้งาน (VIABLE)';
+      } else if (viability.viabilityStatus === 'WARNING') {
+        viabBadge.innerText = '🟡 เฝ้าระวัง';
+        viabBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300';
+        reasonBox.className = 'p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 flex items-start gap-3';
+        reasonIcon.innerText = '⚠️';
+        reasonTitle.innerText = 'ผลประเมิน: อยู่ในกลุ่มเฝ้าระวัง (WARNING WATCHLIST)';
+      } else {
+        viabBadge.innerText = '🔴 ไม่คุ้มค่าซ่อม';
+        viabBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 animate-pulse';
+        reasonBox.className = 'p-4 rounded-xl border bg-rose-50 border-rose-200 text-rose-900 flex items-start gap-3';
+        reasonIcon.innerText = '✕';
+        reasonTitle.innerText = 'ผลประเมิน: ไม่คุ้มค่าซ่อม เข้าเกณฑ์เสนอแทงจำหน่าย (UNVIABLE)';
+      }
+
+      document.getElementById('modalReasonText').innerText = viability.viabilityReason || '-';
+
+      // Metrics
+      document.getElementById('modalPrice').innerText = `฿${Number(assetInfo.price || 0).toLocaleString('th-TH')}`;
+      document.getElementById('modalRepairCost').innerText = `฿${Number(viability.cumulativeRepairCost || assetInfo.cumulativeRepairCost || 0).toLocaleString('th-TH')}`;
+      document.getElementById('modalCostRatio').innerText = `${viability.costRatioPercentage || 0}%`;
+      document.getElementById('modalAge').innerText = `${viability.ageYears || 0} / ${viability.usefulLifeYears || 8} ปี`;
+
+      // Repair History
+      document.getElementById('modalRepairCount').innerText = `${history.length} รายการ`;
+      const histContainer = document.getElementById('modalRepairList');
+      if (history.length === 0) {
+        histContainer.innerHTML = `<p class="text-slate-400 text-center py-4 bg-slate-50 rounded-xl text-xs">ไม่มีประวัติงานซ่อมบำรุงในอดีต (ครุภัณฑ์ใหม่)</p>`;
+      } else {
+        histContainer.innerHTML = history.map(job => `
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between font-mono font-semibold text-slate-800">
+              <span>${job.jobNo || 'JOB-001'} (${job.requestDate ? job.requestDate.split('T')[0] : '2026-01-01'})</span>
+              <span class="text-rose-600 font-bold">฿${Number(job.cost || 0).toLocaleString('th-TH')}</span>
+            </div>
+            <p class="text-slate-600 text-[11px]">${job.description || 'งานซ่อมบำรุงตามรอบ'}</p>
+            ${job.spareParts && job.spareParts.length > 0 ? `
+              <div class="pt-1 text-[10px] text-slate-500 border-t border-slate-200/60 flex flex-wrap gap-2">
+                <span class="font-medium">อะไหล่:</span>
+                ${job.spareParts.map(sp => `<span>• ${sp.name} (฿${Number(sp.cost).toLocaleString('th-TH')})</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `).join('');
+      }
+
+      // Disposal Action Box (Use Case C)
+      const actionBox = document.getElementById('modalDisposalActionBox');
+      if (isWaitDisposal) {
+        actionBox.className = 'p-4 rounded-xl border bg-purple-50 border-purple-200 text-purple-950 flex items-center justify-between';
+        actionBox.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🔒</span>
+            <div>
+              <h5 class="font-bold text-xs">ครุภัณฑ์อยู่ในสถานะ "รอจำหน่าย" (WAIT_DISPOSAL)</h5>
+              <p class="text-[11px] text-purple-800">ระบบได้ล็อกสถานะเป็น UNAVAILABLE ห้ามยืมใช้งาน และรอแทงจำหน่ายอย่างเป็นทางการ</p>
+            </div>
+          </div>
+          <span class="text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-200 text-purple-900 shrink-0">
+            ✓ ดำเนินการแล้ว
+          </span>
+        `;
+      } else if (viability.viabilityStatus === 'UNVIABLE' || disposalRec.canInitiateDisposal) {
+        actionBox.className = 'p-4 rounded-xl border bg-gradient-to-r from-rose-50 to-orange-50 border-rose-300 text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+        actionBox.innerHTML = `
+          <div class="flex items-start gap-3">
+            <span class="text-2xl shrink-0">📋</span>
+            <div>
+              <h5 class="font-bold text-xs">ข้อเสนอแนะเชิงนโยบาย (Use Case C): ดำเนินการเสนอแทงจำหน่าย</h5>
+              <p class="text-[11px] text-rose-800 mt-0.5">ครุภัณฑ์เข้าเกณฑ์ไม่คุ้มซ่อม แนะนำกักเครื่องและปรับสถานะเป็น "รอจำหน่าย" (WAIT_DISPOSAL)</p>
+            </div>
+          </div>
+          <button onclick="requestDisposalAction('${currentDetailAsset.id}')" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition-all shrink-0 flex items-center gap-1.5 self-end sm:self-auto">
+            <span>🚨 ยื่นคำร้องขอแทงจำหน่าย</span>
+          </button>
+        `;
+      } else {
+        actionBox.className = 'p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 text-xs flex items-center gap-2';
+        actionBox.innerHTML = `
+          <span>✓</span>
+          <span>ครุภัณฑ์นี้ยังอยู่ในเกณฑ์ที่คุ้มค่าต่อการซ่อมบำรุง ไม่ต้องดำเนินการแทงจำหน่าย</span>
+        `;
+      }
+
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    // ACTION: POST /assets/:id/request-disposal
+    async function requestDisposalAction(assetId) {
+      if (!confirm(`ยืนยันการยื่นคำร้องเสนอแทงจำหน่ายสำหรับเครื่อง ${currentDetailAsset.noid || assetId}?\n\nเมื่อยืนยัน เครื่องจะถูกปรับเป็น WAIT_DISPOSAL และล็อกห้ามยืมใช้งานทันที`)) {
+        return;
+      }
+
+      if (currentMode === 'mock') {
+        // Update mock state
+        const target = MOCK_ASSETS.find(a => a.id === assetId);
+        if (target) {
+          target.assetStatusCode = 'WAIT_DISPOSAL';
+          target.assetStatusName = 'รอจำหน่าย';
+          target.availabilityStatusCode = 'UNAVAILABLE';
+        }
+
+        renderModal(target);
+        renderMockView();
+
+        const mockPostResult = {
+          success: true,
+          message: `Asset ${target.noid} has been successfully transitioned to WAIT_DISPOSAL status and locked to UNAVAILABLE.`,
+          data: {
+            id: target.id,
+            noid: target.noid,
+            assetStatusCode: 'WAIT_DISPOSAL',
+            availabilityStatusCode: 'UNAVAILABLE',
+            disposalRequestedAt: new Date().toISOString()
+          }
+        };
+
+        updateJsonView('jsonActionView', mockPostResult);
+        document.getElementById('jsonActionEndpoint').innerText = `POST /assets/${assetId}/request-disposal (MOCK)`;
+        document.getElementById('jsonActionStatus').innerText = '200 OK';
+
+        showToast(`ยื่นคำร้องเสนอแทงจำหน่ายสำหรับ ${target.noid} สำเร็จ! ปรับเป็น WAIT_DISPOSAL เรียบร้อย`);
+      } else {
+        // Live Backend API Call
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (config.token) headers['Authorization'] = `Bearer ${config.token}`;
+
+          const body = JSON.stringify({
+            reason: currentDetailAsset.viabilityReason || 'ประเมินแล้วไม่คุ้มค่าซ่อมตามระเบียบพัสดุ'
+          });
+
+          const res = await fetch(`${config.baseUrl}/assets/${assetId}/request-disposal`, {
+            method: 'POST',
+            headers,
+            body
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const json = await res.json();
+
+          updateJsonView('jsonActionView', json);
+          document.getElementById('jsonActionEndpoint').innerText = `POST /assets/${assetId}/request-disposal (LIVE)`;
+          document.getElementById('jsonActionStatus').innerText = '200 OK';
+
+          showToast(`ยื่นคำร้องสำเร็จ! สถานะเครื่องปรับเป็น WAIT_DISPOSAL เรียบร้อย`);
+          closeDetailModal();
+          loadViabilityData();
+        } catch (err) {
+          alert(`เกิดข้อผิดพลาดในการยื่นคำร้อง: ${err.message}`);
+        }
+      }
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    function setStatusFilter(status) {
+      currentStatusFilter = status;
+      ['ALL', 'VIABLE', 'WARNING', 'UNVIABLE'].forEach(st => {
+        const btn = document.getElementById(`fltBtn${st}`);
+        if (st === status) {
+          btn.className = 'px-3.5 py-1.5 rounded-xl font-bold transition-all bg-slate-900 text-white shadow-sm';
+        } else {
+          btn.className = 'px-3.5 py-1.5 rounded-xl font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200';
+        }
+      });
+      loadViabilityData();
+    }
+
+    function onFilterChange() {
+      currentSectionFilter = document.getElementById('sectionFilter').value;
+      currentSort = document.getElementById('sortBy').value;
+      loadViabilityData();
+    }
+
+    function onSearchInput() {
+      currentSearch = document.getElementById('searchInput').value.trim();
+      loadViabilityData();
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      t.classList.remove('hidden');
+      setTimeout(() => {
+        t.classList.add('hidden');
+      }, 4000);
+    }
+
+    // Config Helpers
+    function toggleConfigModal() {
+      document.getElementById('configModal').classList.toggle('hidden');
+    }
+
+    function saveConfig() {
+      config.baseUrl = document.getElementById('cfgBaseUrl').value.trim();
+      config.token = document.getElementById('cfgToken').value.trim();
+      localStorage.setItem('hams_api_base', config.baseUrl);
+      localStorage.setItem('hams_api_token', config.token);
+      toggleConfigModal();
+      if (currentMode === 'live') loadViabilityData();
+    }
+
+    // Inspector Helpers
+    function toggleInspector() {
+      document.getElementById('inspectorContent').classList.toggle('hidden');
+    }
+
+    function updateJsonView(id, data) {
+      document.getElementById(id).innerText = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
