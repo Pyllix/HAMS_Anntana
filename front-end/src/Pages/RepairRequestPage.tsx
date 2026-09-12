@@ -1,20 +1,26 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Stethoscope, Wrench, Monitor, Loader2, Search } from "lucide-react";
+import {
+  Stethoscope,
+  Wrench,
+  Monitor,
+  Loader2,
+  Search,
+  ShieldCheck,
+  CheckCircle2,
+} from "lucide-react";
 import { useRepairStore } from "../stores/useRepairModalStore";
 import { getAssetByCode } from "../services/repairService";
 import ConfirmRepairModal from "../components/help-desk/ConfirmRepairModal";
-import type { MainCategory, ReportType, UrgencyStatus } from "../Types/TypeRepair";
+import type { ReportType, UrgencyStatus } from "../Types/TypeRepair";
 
 export default function RepairRequestPage() {
   const {
-    mainCategory,
     reportType,
     assetSearchInput,
     assetInfo,
     urgencyStatus,
     symptom,
-    setMainCategory,
     setReportType,
     setAssetSearchInput,
     setAssetInfo,
@@ -59,75 +65,108 @@ export default function RepairRequestPage() {
     openConfirmModal();
   };
 
-  // Tab Categories Memoization
-  const categories = useMemo(
-    () => [
-      { id: "MEDICAL", label: "ซ่อมเครื่องมือแพทย์", icon: Stethoscope },
-      { id: "GENERAL", label: "ซ่อมบำรุงทั่วไป", icon: Wrench },
-      { id: "COMPUTER", label: "ซ่อมคอมพิวเตอร์", icon: Monitor },
-    ],
-    []
-  );
+  // เช็คว่ากรอกข้อมูลครบตามต้องการหรือยัง
+  const isFormInvalid =
+    !reportType ||
+    !(assetInfo?.assetId || assetSearchInput).trim() ||
+    !symptom.trim();
 
   return (
     <div className="space-y-4">
-      {/* Top Main Category Selection */}
-      <div className="flex gap-2 bg-[#F8FAFC] border border-slate-200/80 rounded-xl p-2">
-        {categories.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = mainCategory === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setMainCategory(tab.id as MainCategory)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium text-sm transition-all cursor-pointer ${
-                isActive
-                  ? "bg-[#00A96E] text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/50"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Main Container */}
       <div className="bg-[#F8FAFC] border border-slate-200/80 rounded-xl p-6 shadow-xs">
         <form onSubmit={handleOpenConfirmModal} className="space-y-6">
           {/* Header */}
           <div className="border-b border-slate-200/60 pb-4">
-            <h2 className="text-base font-bold text-slate-800">รายละเอียดการแจ้ง</h2>
+            <h2 className="text-base font-bold text-slate-800">
+              รายละเอียดการแจ้ง
+            </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               กรุณาระบุข้อมูลให้ครบถ้วนเพื่อให้เจ้าหน้าที่ดำเนินการได้รวดเร็วยิ่งขึ้น
             </p>
           </div>
 
           {/* Sub-Type (reportType) */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <label className="block text-xs font-semibold text-slate-700">
               ประเภทการแจ้ง <span className="text-red-500">*</span>
             </label>
-            <div className="flex gap-3">
-              {[
-                { id: "Repair", label: "แจ้งซ่อมครุภัณฑ์ชำรุด (Repair)" },
-                { id: "Maintenance", label: "บำรุงรักษาตามรอบ (Maintenance)" },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setReportType(item.id as ReportType)}
-                  className={`px-4 py-2 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
-                    reportType === item.id
-                      ? "border-[#00A96E] bg-emerald-50/50 text-[#00A96E] ring-1 ring-[#00A96E]"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* ตัวเลือกที่ 1: แจ้งซ่อมครุภัณฑ์ชำรุด */}
+              <button
+                type="button"
+                onClick={() => setReportType("Repair")}
+                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
+                  reportType === "Repair"
+                    ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    reportType === "Repair"
+                      ? "bg-[#00A96E] text-white"
+                      : "bg-slate-100 text-slate-500"
                   }`}
                 >
-                  {item.label}
-                </button>
-              ))}
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div className="pr-5">
+                  <h4
+                    className={`font-bold text-xs leading-snug ${
+                      reportType === "Repair"
+                        ? "text-emerald-950"
+                        : "text-slate-800"
+                    }`}
+                  >
+                    แจ้งซ่อมครุภัณฑ์ชำรุด
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                    อุปกรณ์เสีย ใช้งานไม่ได้ หรือชำรุด (Repair)
+                  </p>
+                </div>
+                {reportType === "Repair" && (
+                  <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
+                )}
+              </button>
+
+              {/* ตัวเลือกที่ 2: บำรุงรักษาตามรอบ */}
+              <button
+                type="button"
+                onClick={() => setReportType("Maintenance")}
+                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
+                  reportType === "Maintenance"
+                    ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    reportType === "Maintenance"
+                      ? "bg-[#00A96E] text-white"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div className="pr-5">
+                  <h4
+                    className={`font-bold text-xs leading-snug ${
+                      reportType === "Maintenance"
+                        ? "text-emerald-950"
+                        : "text-slate-800"
+                    }`}
+                  >
+                    บำรุงรักษาตามรอบ
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                    ตรวจเช็กสภาพ หรือดูแลเชิงป้องกัน (Maintenance)
+                  </p>
+                </div>
+                {reportType === "Maintenance" && (
+                  <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -213,16 +252,19 @@ export default function RepairRequestPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                ระดับความเร่งด่วน (urgencyStatus) <span className="text-red-500">*</span>
+                ระดับความเร่งด่วน
+                <span className="text-red-500">*</span>
               </label>
               <select
                 value={urgencyStatus}
-                onChange={(e) => setUrgencyStatus(e.target.value as UrgencyStatus)}
+                onChange={(e) =>
+                  setUrgencyStatus(e.target.value as UrgencyStatus)
+                }
                 className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all cursor-pointer"
               >
-                <option value="NORMAL">ปกติ (NORMAL)</option>
-                <option value="URGENT">ด่วน (URGENT)</option>
-                <option value="HIGH_URGENT">ด่วนมาก (HIGH_URGENT)</option>
+                <option value="NORMAL">ปกติ</option>
+                <option value="URGENT">ด่วน</option>
+                <option value="EMERGENCY">ด่วนมาก</option>
               </select>
             </div>
           </div>
@@ -230,7 +272,8 @@ export default function RepairRequestPage() {
           {/* Symptom Details */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              รายละเอียดอาการเสีย (symptom) <span className="text-red-500">*</span>
+              รายละเอียดอาการเสีย
+              <span className="text-red-500">*</span>
             </label>
             <textarea
               rows={4}
