@@ -3,6 +3,7 @@ import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
+import { CreateAssetTransferDto } from './dto/create-asset-transfer.dto';
 import { AssetFilterDto } from './dto/asset-filter.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
@@ -66,6 +67,47 @@ export class AssetController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAllDisposalRecords(@Query() query: PaginationDto) {
     return this.assetService.findAllDisposalRecords(query);
+  }
+
+  // ─── Transfer (การโอนย้ายครุภัณฑ์) ────────────────────────────────────────────
+
+  @Get('transfer')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Find all Completed/Recorded Transfer Records (paginated)',
+    description: 'Find all asset transfer records across all assets with pagination and optional search',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Paginated list of transfer records' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findAllTransferRecords(@Query() query: PaginationDto) {
+    return this.assetService.findAllTransferRecords(query);
+  }
+
+  @Get('transfers')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Find all Completed/Recorded Transfer Records (alias)',
+    description: 'Alias for GET /asset/transfer',
+  })
+  findAllTransferRecordsAlias(@Query() query: PaginationDto) {
+    return this.assetService.findAllTransferRecords(query);
   }
 
   @Get('my-section')
@@ -219,5 +261,66 @@ export class AssetController {
   @ApiResponse({ status: 404, description: 'Asset not found' })
   findDisposalRecords(@Param('id') id: string) {
     return this.assetService.findDisposalRecords(id);
+  }
+
+  // ─── Transfer per Asset ───────────────────────────────────────────────────
+
+  @Post(':id/transfer')
+  @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
+  @ApiOperation({
+    summary: 'Record Asset Transfer to another Section',
+    description:
+      'Record an asset transfer to another section with transferDocNo, transferDate, to_section_id, etc. ' +
+      'Only ASSET_CENTER_STAFF and PARCEL_STAFF can perform this action. ' +
+      'This action automatically updates the asset section_id to the destination section in an atomic transaction.',
+  })
+  @ApiResponse({ status: 201, description: 'Transfer record created and asset updated' })
+  @ApiResponse({ status: 400, description: 'Asset cannot be transferred (disposed, borrowed, or same section)' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (Only ASSET_CENTER_STAFF and PARCEL_STAFF)' })
+  @ApiResponse({ status: 404, description: 'Asset or target section not found' })
+  createTransfer(
+    @Param('id') id: string,
+    @Body() createAssetTransferDto: CreateAssetTransferDto,
+    @Session() session: UserSession,
+  ) {
+    return this.assetService.createTransfer(id, createAssetTransferDto, session.user.id);
+  }
+
+  @Get(':id/transfer')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Get Transfer History for Asset',
+    description: 'Get all transfer records for an asset, ordered by most recent first.',
+  })
+  @ApiResponse({ status: 200, description: 'Transfer records found successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Asset not found' })
+  findTransferRecords(@Param('id') id: string) {
+    return this.assetService.findTransferRecords(id);
+  }
+
+  @Get(':id/transfers')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Get Transfer History for Asset (alias)',
+    description: 'Alias for GET /asset/:id/transfer',
+  })
+  findTransferRecordsAlias(@Param('id') id: string) {
+    return this.assetService.findTransferRecords(id);
   }
 }
