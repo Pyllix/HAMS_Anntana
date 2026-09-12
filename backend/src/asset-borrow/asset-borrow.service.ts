@@ -9,6 +9,12 @@ import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { CreateBorrowExtensionDto } from './dto/create-borrow-extension.dto';
 import { ReviewBorrowExtensionDto } from './dto/review-borrow-extension.dto';
 import { BorrowExtensionFilterDto } from './dto/borrow-extension-filter.dto';
+import { QueryBorrowRecommendationsDto } from './dto/query-borrow-recommendations.dto';
+import {
+  BorrowRecommendationsResponseDto,
+  BorrowRecommendationCandidateDto,
+  SwapCheckResponseDto,
+} from './dto/borrow-recommendation-response.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
 import { ReturnCondition, ReturnMethod, UserRole, RequestSource, BorrowExtensionType, BorrowExtensionStatus, Prisma } from '@prisma/client';
 
@@ -1315,6 +1321,254 @@ export class AssetBorrowService {
     ]);
 
     return paginate(data, total, page, limit);
+  }
+
+  /**
+   * Get smart asset borrow recommendations based on Balanced Usage Rotation (90-day window + idle days).
+   */
+  async getBorrowRecommendations(
+    query: QueryBorrowRecommendationsDto,
+  ): Promise<BorrowRecommendationsResponseDto> {
+    let model = query.model?.trim();
+    let equipmentTypeId = query.equipmentTypeId;
+
+    // If assetId is provided, lookup reference asset to auto-derive model and equipmentTypeId
+    if (query.assetId && (!model || equipmentTypeId === undefined)) {
+      const refAsset = await this.prisma.asset.findUnique({
+        where: { id: query.assetId },
+        select: { model: true, equipment_type_id: true },
+      });
+      if (refAsset) {
+        if (!model) model = refAsset.model;
+        if (equipmentTypeId === undefined && refAsset.equipment_type_id !== null) {
+          equipmentTypeId = refAsset.equipment_type_id;
+        }
+      }
+    }
+
+    const limit = Math.min(50, Math.max(1, query.limit ?? 10));
+
+    // Dynamic filtering conditions for candidate assets
+    const filterConditions: Prisma.Sql[] = [
+      Prisma.sql`ast.status_code = 'NORMAL'`,
+      Prisma.sql`avs.status_code = 'AVAILABLE'`,
+    ];
+
+    if (model && equipmentTypeId !== undefined) {
+      filterConditions.push(
+        Prisma.sql`(a.model = ${model} OR a.equipment_type = ${equipmentTypeId})`,
+      );
+    } else if (model) {
+      filterConditions.push(Prisma.sql`a.model = ${model}`);
+    } else if (equipmentTypeId !== undefined) {
+      filterConditions.push(Prisma.sql`a.equipment_type = ${equipmentTypeId}`);
+    }
+
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(filterConditions, ' AND ')}`;
+
+    // Query candidates with 90-day usage and idle metrics via PostgreSQL CTE (Zero N+1)
+    const rawRows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
+      WITH candidate_assets AS (
+        SELECT 
+          a.asset_id,
+          a.noid,
+          a.name,
+          a.model,
+          a.serial_no,
+          a.receive_date,
+          a.image_url,
+          a.equipment_type AS equipment_type_id,
+          s.name AS section_name
+        FROM asset a
+        JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
+        JOIN availability_status avs ON avs.availability_status_id = a.availability_status_id
+        LEFT JOIN sections s ON s.section_id = a.section_id
+        ${whereClause}
+      ),
+      borrow_metrics_90d AS (
+        SELECT 
+          bt.asset_id,
+          COUNT(bt.borrow_transaction_id)::int AS borrow_count_90d,
+          MAX(bt.return_date) AS last_return_date,
+          COALESCE(SUM(
+            GREATEST(0, EXTRACT(EPOCH FROM (
+              LEAST(COALESCE(bt.return_date, NOW()), NOW()) - 
+              GREATEST(COALESCE(bt.handover_date, bt.created_at), NOW() - INTERVAL '90 days')
+            )) / 86400.0)
+          ), 0) AS usage_days_90d
+        FROM borrow_transaction bt
+        JOIN candidate_assets ca ON ca.asset_id = bt.asset_id
+        WHERE (bt.return_date >= NOW() - INTERVAL '90 days' 
+           OR bt.handover_date >= NOW() - INTERVAL '90 days'
+           OR bt.created_at >= NOW() - INTERVAL '90 days')
+        GROUP BY bt.asset_id
+      )
+      SELECT 
+        ca.asset_id,
+        ca.noid,
+        ca.name,
+        ca.model,
+        ca.serial_no,
+        ca.receive_date,
+        ca.image_url,
+        ca.equipment_type_id,
+        ca.section_name,
+        COALESCE(bm.usage_days_90d, 0)::float AS usage_days_90d,
+        COALESCE(bm.borrow_count_90d, 0)::int AS borrow_count_90d,
+        bm.last_return_date,
+        GREATEST(0, EXTRACT(EPOCH FROM (
+          NOW() - COALESCE(bm.last_return_date, ca.receive_date, NOW())
+        )) / 86400.0)::float AS idle_days
+      FROM candidate_assets ca
+      LEFT JOIN borrow_metrics_90d bm ON bm.asset_id = ca.asset_id
+      ORDER BY 
+        usage_days_90d ASC,
+        idle_days DESC,
+        borrow_count_90d ASC,
+        ca.noid ASC;
+    `);
+
+    const candidates: BorrowRecommendationCandidateDto[] = rawRows.slice(0, limit).map((row, index) => {
+      const usageDays = Number(row.usage_days_90d) || 0;
+      const idleDays = Number(row.idle_days) || 0;
+      const borrowCount = Number(row.borrow_count_90d) || 0;
+      const isRecommended = index === 0;
+
+      let recommendationReason = '';
+      if (isRecommended) {
+        if (usageDays === 0 && borrowCount === 0) {
+          recommendationReason = '🌟 แนะนำเครื่องนี้: ครุภัณฑ์ใหม่พร้อมใช้งาน ยังไม่มีประวัติการยืมในรอบ 90 วัน';
+        } else {
+          recommendationReason = `🌟 แนะนำเครื่องนี้: ผ่านการใช้งานเพียง ${usageDays.toFixed(1)} วันในรอบ 90 วัน และจอดพักมาแล้ว ${Math.floor(idleDays)} วัน เหมาะสำหรับการหมุนเวียนใช้งาน`;
+        }
+      }
+
+      return {
+        assetId: row.asset_id,
+        noid: row.noid,
+        name: row.name,
+        model: row.model,
+        serialNo: row.serial_no,
+        sectionName: row.section_name,
+        imageUrl: row.image_url,
+        usageDays90d: Number(usageDays.toFixed(1)),
+        idleDays: Number(idleDays.toFixed(1)),
+        borrowCount90d: borrowCount,
+        isRecommended,
+        recommendationReason,
+      };
+    });
+
+    return {
+      model,
+      equipmentTypeId,
+      totalAvailable: rawRows.length,
+      recommendedAssetId: candidates[0]?.assetId || null,
+      candidates,
+    };
+  }
+
+  /**
+   * Check if a significantly better alternative asset exists for Smart Swap Nudge.
+   */
+  async checkSwapRecommendation(assetId: string): Promise<SwapCheckResponseDto> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      include: {
+        status: true,
+        availabilityStatus: true,
+      },
+    });
+
+    if (!asset) {
+      throw new NotFoundException(`Asset #${assetId} not found`);
+    }
+
+    // Get borrow metrics for the selected asset specifically
+    const selectedMetricsRows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
+      SELECT 
+        COUNT(bt.borrow_transaction_id)::int AS borrow_count_90d,
+        MAX(bt.return_date) AS last_return_date,
+        COALESCE(SUM(
+          GREATEST(0, EXTRACT(EPOCH FROM (
+            LEAST(COALESCE(bt.return_date, NOW()), NOW()) - 
+            GREATEST(COALESCE(bt.handover_date, bt.created_at), NOW() - INTERVAL '90 days')
+          )) / 86400.0)
+        ), 0)::float AS usage_days_90d,
+        GREATEST(0, EXTRACT(EPOCH FROM (
+          NOW() - COALESCE(MAX(bt.return_date), ${asset.receivedDate}, NOW())
+        )) / 86400.0)::float AS idle_days
+      FROM borrow_transaction bt
+      WHERE bt.asset_id = ${assetId}
+        AND (bt.return_date >= NOW() - INTERVAL '90 days' 
+         OR bt.handover_date >= NOW() - INTERVAL '90 days'
+         OR bt.created_at >= NOW() - INTERVAL '90 days');
+    `);
+
+    const selectedUsageDays = Number(Number(selectedMetricsRows[0]?.usage_days_90d || 0).toFixed(1));
+    const selectedIdleDays = Number(Number(selectedMetricsRows[0]?.idle_days || 0).toFixed(1));
+
+    const selectedAssetSummary = {
+      id: asset.id,
+      noid: asset.noid,
+      usageDays90d: selectedUsageDays,
+      idleDays: selectedIdleDays,
+    };
+
+    // Query available candidates of the same model or equipment type
+    const recommendations = await this.getBorrowRecommendations({
+      model: asset.model,
+      equipmentTypeId: asset.equipment_type_id ?? undefined,
+      limit: 10,
+    });
+
+    // Exclude the selected asset itself from alternatives
+    const alternatives = recommendations.candidates.filter(
+      (candidate) => candidate.assetId !== assetId,
+    );
+
+    if (alternatives.length === 0) {
+      return {
+        selectedAsset: selectedAssetSummary,
+        hasBetterAlternative: false,
+        recommendedAsset: null,
+      };
+    }
+
+    const bestAlternative = alternatives[0];
+    const daysDiff = Number((selectedUsageDays - bestAlternative.usageDays90d).toFixed(1));
+    const idleDiff = bestAlternative.idleDays - selectedIdleDays;
+
+    // Swap Condition:
+    // 1) Alternative has >= 3 fewer usage days OR
+    // 2) Selected asset has >= 7 usage days AND alternative has rested >= 7 days longer
+    const conditionUsage = daysDiff >= 3;
+    const conditionRest = selectedUsageDays >= 7 && idleDiff >= 7;
+
+    if (conditionUsage || conditionRest) {
+      const nudgeReason = `💡 พบเครื่องรุ่นเดียวกัน (หมายเลข ${bestAlternative.noid || bestAlternative.model}) จอดพักมาแล้ว ${Math.floor(bestAlternative.idleDays)} วัน (ผ่านการใช้งานน้อยกว่าเครื่องนี้ ${Math.max(0, daysDiff)} วัน) คุณต้องการสลับใช้เครื่องที่แนะนำเพื่อกระจายการใช้งานหรือไม่?`;
+
+      return {
+        selectedAsset: selectedAssetSummary,
+        hasBetterAlternative: true,
+        recommendedAsset: {
+          id: bestAlternative.assetId,
+          noid: bestAlternative.noid,
+          name: bestAlternative.name,
+          model: bestAlternative.model,
+          usageDays90d: bestAlternative.usageDays90d,
+          idleDays: bestAlternative.idleDays,
+          daysUsageDifference: Math.max(0, daysDiff),
+          nudgeReason,
+        },
+      };
+    }
+
+    return {
+      selectedAsset: selectedAssetSummary,
+      hasBetterAlternative: false,
+      recommendedAsset: null,
+    };
   }
 }
 
