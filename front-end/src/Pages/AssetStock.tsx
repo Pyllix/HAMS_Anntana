@@ -85,19 +85,44 @@ export default function AssetStock() {
   const normalStatus = assetStatuses?.find((s) => s.code === "NORMAL");
   const damagedStatus = assetStatuses?.find((s) => s.code === "DAMAGED");
 
+  const { data: totalCountRes } = useQuery({
+    queryKey: [
+      "kpi-total-assets",
+      isAssetCenter ? "all" : (user?.section_id || "my-section"),
+    ],
+    queryFn: () => {
+      if (isAssetCenter) {
+        return getAssetsPaginated({
+          page: 1,
+          limit: 1,
+        });
+      }
+      return getMySectionAssetsPaginated({
+        page: 1,
+        limit: 1,
+      });
+    },
+  });
+
   const { data: normalCountRes } = useQuery({
     queryKey: [
       "kpi-normal-assets",
       isAssetCenter ? "all" : user?.section_id,
       normalStatus?.id,
     ],
-    queryFn: () =>
-      getAssetsPaginated({
+    queryFn: () => {
+      if (isAssetCenter) {
+        return getAssetsPaginated({
+          page: 1,
+          limit: 1,
+          asset_status_id: normalStatus?.id,
+        });
+      }
+      return getMySectionAssetsPaginated({
         page: 1,
         limit: 1,
-        section_id: !isAssetCenter && user?.section_id ? user.section_id : undefined,
-        asset_status_id: normalStatus?.id,
-      }),
+      });
+    },
     enabled: Boolean(normalStatus?.id),
   });
 
@@ -107,18 +132,24 @@ export default function AssetStock() {
       isAssetCenter ? "all" : user?.section_id,
       damagedStatus?.id,
     ],
-    queryFn: () =>
-      getAssetsPaginated({
+    queryFn: () => {
+      if (isAssetCenter) {
+        return getAssetsPaginated({
+          page: 1,
+          limit: 1,
+          asset_status_id: damagedStatus?.id,
+        });
+      }
+      return getMySectionAssetsPaginated({
         page: 1,
         limit: 1,
-        section_id: !isAssetCenter && user?.section_id ? user.section_id : undefined,
-        asset_status_id: damagedStatus?.id,
-      }),
+      });
+    },
     enabled: Boolean(damagedStatus?.id),
   });
 
-  // Calculate KPIs dynamically
-  const totalAssets = assetResponse?.meta?.total ?? 0;
+  // Calculate KPIs dynamically (Total assets stays fixed, not affected by search query)
+  const totalAssets = totalCountRes?.meta?.total ?? assetResponse?.meta?.total ?? 0;
   const normalAssets = normalCountRes?.meta?.total ?? 0;
   const damagedAssets = damagedCountRes?.meta?.total ?? 0;
 
