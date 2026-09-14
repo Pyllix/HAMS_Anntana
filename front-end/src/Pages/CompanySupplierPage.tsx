@@ -11,39 +11,39 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getAcqTypes,
-  createAcqType,
-  updateAcqType,
-  deleteAcqType,
-} from "../services/acqTypeService";
-import type { AcqType } from "../types/TypeAcqType";
+  getCompanies,
+  createCompany,
+  updateCompany,
+  deleteCompany,
+} from "../services/companyService";
+import type { Company } from "../Types/TypeCompany";
 import {
-  AcqTypeDetailModal,
-  AcqTypeFormModal,
-  AcqTypeDeleteModal,
-  formatAcqCode,
-} from "../components/acq-type/AcqTypeModals";
+  CompanyDetailModal,
+  CompanyFormModal,
+  CompanyDeleteModal,
+} from "../components/company/CompanyModals";
 
-export default function AcquisitionTypePage() {
+export default function CompanySupplierPage() {
   const queryClient = useQueryClient();
 
   // Filter States
   const [inputSearch, setInputSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 6; // Matching mockup display: "แสดง 1 ถึง 6 จาก ..."
 
   // Modal States
-  const [detailItem, setDetailItem] = useState<AcqType | null>(null);
+  const [detailItem, setDetailItem] = useState<Company | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const [formItem, setFormItem] = useState<AcqType | null>(null);
+  const [formItem, setFormItem] = useState<Company | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const [deleteItem, setDeleteItem] = useState<AcqType | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Company | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // Debounce search
@@ -55,56 +55,80 @@ export default function AcquisitionTypePage() {
     return () => clearTimeout(timer);
   }, [inputSearch]);
 
-  // Query acquisition types
-  const { data: acqTypes = [], isLoading } = useQuery({
-    queryKey: ["acqTypes"],
-    queryFn: getAcqTypes,
+  // Query Companies
+  const { data: companies = [], isLoading } = useQuery({
+    queryKey: ["companies"],
+    queryFn: getCompanies,
   });
+
+  // Unique groups strictly from backend companies
+  const availableGroups = useMemo(() => {
+    const groupsSet = new Set<string>();
+    companies.forEach((c) => {
+      if (c.group && c.group.trim()) {
+        groupsSet.add(c.group.trim());
+      }
+    });
+    return Array.from(groupsSet);
+  }, [companies]);
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: createAcqType,
+    mutationFn: createCompany,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["acqTypes"] });
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
       setIsFormOpen(false);
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, dto }: { id: number; dto: any }) => updateAcqType(id, dto),
+    mutationFn: ({ id, dto }: { id: string | number; dto: any }) =>
+      updateCompany(id, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["acqTypes"] });
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
       setIsFormOpen(false);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteAcqType,
+    mutationFn: deleteCompany,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["acqTypes"] });
+      queryClient.invalidateQueries({ queryKey: ["companies"] });
       setIsDeleteOpen(false);
     },
   });
 
   // Filter logic
   const filteredList = useMemo(() => {
-    return acqTypes.filter((item) => {
+    return companies.filter((item) => {
       const q = debouncedSearch.toLowerCase().trim();
-      const code = formatAcqCode(item.id).toLowerCase();
+      const code = String(item.code || "").toLowerCase();
+      const name = String(item.name || "").toLowerCase();
+      const tel = String(item.tel || "").toLowerCase();
+      const group = String(item.group || "").toLowerCase();
+      const id = String(item.id || "").toLowerCase();
+
       const matchesSearch =
         q === "" ||
-        item.name.toLowerCase().includes(q) ||
+        name.includes(q) ||
         code.includes(q) ||
-        (item.description && item.description.toLowerCase().includes(q));
+        tel.includes(q) ||
+        group.includes(q) ||
+        id.includes(q);
 
+      const matchesGroup =
+        groupFilter === "ALL" ||
+        item.group?.toLowerCase() === groupFilter.toLowerCase();
+
+      const itemActive = !item.deletedAt && item.isActive !== false;
       const matchesStatus =
         statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && item.isActive) ||
-        (statusFilter === "INACTIVE" && !item.isActive);
+        (statusFilter === "ACTIVE" && itemActive) ||
+        (statusFilter === "INACTIVE" && !itemActive);
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesGroup && matchesStatus;
     });
-  }, [acqTypes, debouncedSearch, statusFilter]);
+  }, [companies, debouncedSearch, groupFilter, statusFilter]);
 
   // Pagination calculation
   const totalItems = filteredList.length;
@@ -129,7 +153,7 @@ export default function AcquisitionTypePage() {
   }, [currentPage, totalPages]);
 
   // Handlers
-  const handleOpenDetail = (item: AcqType) => {
+  const handleOpenDetail = (item: Company) => {
     setDetailItem(item);
     setIsDetailOpen(true);
   };
@@ -139,29 +163,39 @@ export default function AcquisitionTypePage() {
     setIsFormOpen(true);
   };
 
-  const handleOpenEdit = (item: AcqType) => {
+  const handleOpenEdit = (item: Company) => {
     setFormItem(item);
     setIsFormOpen(true);
   };
 
-  const handleOpenDelete = (item: AcqType) => {
+  const handleOpenDelete = (item: Company) => {
     setDeleteItem(item);
     setIsDeleteOpen(true);
   };
 
   const handleFormSubmit = async (formData: {
+    code: string;
     name: string;
-    description: string;
+    tel: string;
+    fax: string;
+    group: string;
+    address: string;
+    remark: string;
     isActive: boolean;
   }) => {
+    console.log("📝 [UI Submit] Form Data:", formData);
+    const { isActive, ...dto } = formData;
     if (formItem) {
-      await updateMutation.mutateAsync({ id: formItem.id, dto: formData });
+      console.log(`✏️ [UI Action] Updating Company ID: ${formItem.id}`);
+      await updateMutation.mutateAsync({ id: formItem.id, dto });
     } else {
-      await createMutation.mutateAsync(formData);
+      console.log("➕ [UI Action] Creating New Company");
+      await createMutation.mutateAsync(dto);
     }
   };
 
-  const handleDeleteConfirm = async (id: number) => {
+  const handleDeleteConfirm = async (id: string | number) => {
+    console.log(`❌ [UI Action] Confirm Delete Company ID: ${id}`);
     await deleteMutation.mutateAsync(id);
   };
 
@@ -170,6 +204,11 @@ export default function AcquisitionTypePage() {
     if (statusFilter === "INACTIVE") return "ระงับการใช้งาน";
     return "ทั้งหมด";
   }, [statusFilter]);
+
+  const groupLabel = useMemo(() => {
+    if (groupFilter === "ALL") return "ทั้งหมด";
+    return groupFilter;
+  }, [groupFilter]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-3 overflow-hidden">
@@ -181,7 +220,7 @@ export default function AcquisitionTypePage() {
           className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
         >
           <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>เพิ่มวิธีการได้มาใหม่</span>
+          <span>เพิ่มผู้ผลิต</span>
         </button>
       </div>
 
@@ -192,11 +231,37 @@ export default function AcquisitionTypePage() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="ค้นหาชื่อหรือรหัส..."
+            placeholder="ค้นหาชื่อ, รหัส หรือเบอร์โทร..."
             value={inputSearch}
             onChange={(e) => setInputSearch(e.target.value)}
             className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
           />
+        </div>
+
+        {/* Dropdown: หมวดหมู่ */}
+        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer min-w-44 shrink-0 justify-between">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+            <span className="text-slate-500 shrink-0">หมวดหมู่:</span>
+            <span className="font-semibold text-emerald-600 truncate">
+              {groupLabel}
+            </span>
+          </div>
+          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+          <select
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            value={groupFilter}
+            onChange={(e) => {
+              setGroupFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="ALL">ทั้งหมด</option>
+            {availableGroups.map((grp) => (
+              <option key={grp} value={grp}>
+                {grp}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Dropdown: สถานะ */}
@@ -230,15 +295,23 @@ export default function AcquisitionTypePage() {
             <thead className="font-bold text-sm border-b border-slate-200 bg-white sticky top-0 z-10 shadow-xs">
               <tr>
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
-                  รหัสวิธีการได้มา
+                  ID
                 </th>
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
-                  ชื่อวิธีการได้มา
+                  รหัส
                 </th>
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
-                  รายละเอียด
+                  ผู้ผลิต / บริษัท
                 </th>
-                <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">สถานะ</th>
+                <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
+                  เบอร์โทร
+                </th>
+                <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
+                  หมวดหมู่
+                </th>
+                <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
+                  สถานะ
+                </th>
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm text-center">
                   จัดการ
                 </th>
@@ -248,81 +321,91 @@ export default function AcquisitionTypePage() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     className="py-12 text-center text-slate-400 text-base"
                   >
-                    กำลังโหลดข้อมูลวิธีการได้มา...
+                    กำลังโหลดข้อมูลผู้ผลิต/บริษัท...
                   </td>
                 </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     className="py-12 text-center text-slate-400 text-base"
                   >
-                    ไม่พบข้อมูลวิธีการได้มา
+                    ไม่พบข้อมูลผู้ผลิต/บริษัท
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-slate-50/60 transition-colors"
-                  >
-                    <td className="py-4 px-6 align-middle font-mono font-bold text-base text-slate-900">
-                      {formatAcqCode(item.id)}
-                    </td>
-                    <td className="py-4 px-6 align-middle font-bold text-base text-slate-900">
-                      {item.name}
-                    </td>
-                    <td className="py-4 px-6 align-middle text-sm text-slate-600 max-w-sm truncate">
-                      {item.description || "-"}
-                    </td>
-                    <td className="py-4 px-6 align-middle">
-                      <span className="inline-flex items-center gap-2 text-sm font-medium">
-                        <span
-                          className={`h-2.5 w-2.5 rounded-full ${item.isActive ? "bg-emerald-500" : "bg-slate-400"
+                paginatedData.map((item) => {
+                  const isActive = !item.deletedAt && item.isActive !== false;
+                  return (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-slate-50/60 transition-colors"
+                    >
+                      <td className="py-4 px-6 align-middle font-mono text-sm text-slate-500">
+                        {String(item.id).padStart(3, "0")}
+                      </td>
+                      <td className="py-4 px-6 align-middle font-mono font-bold text-sm text-slate-800">
+                        {item.code}
+                      </td>
+                      <td className="py-4 px-6 align-middle font-bold text-sm text-slate-900 max-w-xs truncate">
+                        {item.name}
+                      </td>
+                      <td className="py-4 px-6 align-middle font-mono text-sm text-slate-600 whitespace-nowrap">
+                        {item.tel || "-"}
+                      </td>
+                      <td className="py-4 px-6 align-middle text-sm text-slate-600">
+                        {item.group || "-"}
+                      </td>
+                      <td className="py-4 px-6 align-middle">
+                        <span className="inline-flex items-center gap-2 text-sm font-medium">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              isActive ? "bg-emerald-500" : "bg-slate-400"
                             }`}
-                        />
-                        <span
-                          className={
-                            item.isActive ? "text-slate-800 font-medium" : "text-slate-500"
-                          }
-                        >
-                          {item.isActive ? "ใช้งานปกติ" : "ระงับการใช้งาน"}
+                          />
+                          <span
+                            className={
+                              isActive ? "text-slate-800 font-medium" : "text-slate-500"
+                            }
+                          >
+                            {isActive ? "ใช้งานปกติ" : "ระงับการใช้งาน"}
+                          </span>
                         </span>
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 align-middle">
-                      <div className="flex items-center justify-center gap-4 text-slate-400">
-                        <button
-                          type="button"
-                          title="ดูรายละเอียด"
-                          onClick={() => handleOpenDetail(item)}
-                          className="hover:text-sky-600 transition-colors cursor-pointer p-1"
-                        >
-                          <Eye className="h-5 w-5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="แก้ไข"
-                          onClick={() => handleOpenEdit(item)}
-                          className="hover:text-amber-600 transition-colors cursor-pointer p-1"
-                        >
-                          <Pencil className="h-5 w-5" />
-                        </button>
-                        <button
-                          type="button"
-                          title="ลบ"
-                          onClick={() => handleOpenDelete(item)}
-                          className="hover:text-rose-600 transition-colors cursor-pointer p-1"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="py-4 px-6 align-middle">
+                        <div className="flex items-center justify-center gap-4 text-slate-400">
+                          <button
+                            type="button"
+                            title="ดูรายละเอียด"
+                            onClick={() => handleOpenDetail(item)}
+                            className="hover:text-sky-600 transition-colors cursor-pointer p-1"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="แก้ไข"
+                            onClick={() => handleOpenEdit(item)}
+                            className="hover:text-amber-600 transition-colors cursor-pointer p-1"
+                          >
+                            <Pencil className="h-5 w-5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="ลบ"
+                            onClick={() => handleOpenDelete(item)}
+                            className="hover:text-rose-600 transition-colors cursor-pointer p-1"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -350,10 +433,11 @@ export default function AcquisitionTypePage() {
                 type="button"
                 disabled={isLoading}
                 onClick={() => setCurrentPage(page)}
-                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${currentPage === page
-                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
+                  currentPage === page
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
               >
                 {page}
               </button>
@@ -371,21 +455,23 @@ export default function AcquisitionTypePage() {
       </div>
 
       {/* Modals */}
-      <AcqTypeDetailModal
+      <CompanyDetailModal
         isOpen={isDetailOpen}
         item={detailItem}
         onClose={() => setIsDetailOpen(false)}
+        onEdit={(item) => handleOpenEdit(item)}
       />
 
-      <AcqTypeFormModal
+      <CompanyFormModal
         isOpen={isFormOpen}
         item={formItem}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleFormSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        availableGroups={availableGroups}
       />
 
-      <AcqTypeDeleteModal
+      <CompanyDeleteModal
         isOpen={isDeleteOpen}
         item={deleteItem}
         onClose={() => setIsDeleteOpen(false)}
