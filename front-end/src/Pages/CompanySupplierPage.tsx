@@ -34,7 +34,7 @@ export default function CompanySupplierPage() {
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6; // Matching mockup display: "แสดง 1 ถึง 6 จาก ..."
+  const pageSize = 10;
 
   // Modal States
   const [detailItem, setDetailItem] = useState<Company | null>(null);
