@@ -19,6 +19,7 @@ import {
 import AssetTable from "../components/equipment-stock/AssetTable";
 import AssetFormModal from "../components/equipment-stock/AssetFormModal";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
+import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistoryModal";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
 
 // Tab types matching Figma
@@ -454,6 +455,7 @@ export default function EquipmentStock() {
       {/* Modals */}
       <AssetFormModal />
       <AssetDetailModal />
+      <AssetRepairHistoryModal />
     </div>
   );
 }
