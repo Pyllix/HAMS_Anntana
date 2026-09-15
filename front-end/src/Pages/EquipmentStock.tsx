@@ -18,7 +18,7 @@ import {
 } from "../services/assetService";
 import AssetTable from "../components/equipment-stock/AssetTable";
 import AssetFormModal from "../components/equipment-stock/AssetFormModal";
-import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
+import EquipmentDetailModal from "../components/equipment-stock/EquipmentDetailModal";
 import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistoryModal";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
 
@@ -454,7 +454,7 @@ export default function EquipmentStock() {
 
       {/* Modals */}
       <AssetFormModal />
-      <AssetDetailModal />
+      <EquipmentDetailModal />
       <AssetRepairHistoryModal />
     </div>
   );

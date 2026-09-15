@@ -9,7 +9,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
-import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
+import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
 import { useEquipmentModalStore } from "../../stores/useEquipmentModalStore";
 
 const features = tableFeatures({});
@@ -33,7 +33,7 @@ export default function AssetTable({
   pageSize = 10,
   onPageChange,
 }: AssetTableProps) {
-  const openDetail = useAssetDetailModalStore((state) => state.openModal);
+  const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
   const openEdit = useEquipmentModalStore((state) => state.openEdit);
 
   const formatThaiDate = (dateStr?: string | null) => {
