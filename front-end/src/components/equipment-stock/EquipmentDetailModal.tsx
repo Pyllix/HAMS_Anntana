@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   X,
   Clock,
@@ -8,19 +8,31 @@ import {
   Phone,
   Image as ImageIcon,
   BarChart2,
-  Wrench,
-  ExternalLink,
-  Calendar,
-  User,
   Package,
+  Banknote,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
-import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
 import {
   fetchRepairJobSummaries,
+  fetchDetailedRepairJobs,
   ApiRepairJob,
 } from "../../services/repairApiService";
+
+const THAI_MONTHS = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
+];
 
 const THAI_FULL_MONTHS = [
   "มกราคม",
@@ -63,6 +75,150 @@ function formatThaiFullDate(dateString?: string | null): string {
   } catch {
     return "-";
   }
+}
+
+function formatHistoryDate(dateString?: string | null): string {
+  if (!dateString) return "-";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "-";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = THAI_MONTHS[d.getMonth()];
+    const year = d.getFullYear() + 543;
+    return `${day} ${month} ${year}`;
+  } catch {
+    return "-";
+  }
+}
+
+function calculateJobCost(job: ApiRepairJob): number {
+  const costBreakdown = (
+    job as {
+      costBreakdown?: {
+        totalCost?: number | string;
+        partsCost?: number | string;
+        outsourceCost?: number | string;
+        repairCost?: number | string;
+      };
+    }
+  ).costBreakdown;
+
+  if (costBreakdown?.totalCost) {
+    return Number(costBreakdown.totalCost) || 0;
+  }
+
+  let cost = 0;
+
+  if (job.sparepartTxns && job.sparepartTxns.length > 0) {
+    for (const txn of job.sparepartTxns) {
+      if (txn.txnType === "WITHDRAW") {
+        const qty = Number(txn.qty) || 0;
+        const price = Number(txn.unitPrice) || 0;
+        cost += qty * price;
+      }
+    }
+  }
+
+  const spareParts = (
+    job as {
+      spareParts?: Array<{
+        qty?: number | string;
+        price?: number | string;
+        unitPrice?: number | string;
+        totalPrice?: number | string;
+      }>;
+    }
+  ).spareParts;
+  if (spareParts && spareParts.length > 0) {
+    for (const p of spareParts) {
+      if (p.totalPrice) {
+        cost += Number(p.totalPrice) || 0;
+      } else {
+        const qty = Number(p.qty) || 0;
+        const price = Number(p.unitPrice ?? p.price) || 0;
+        cost += qty * price;
+      }
+    }
+  }
+
+  if (job.repairJobSteps && job.repairJobSteps.length > 0) {
+    for (const step of job.repairJobSteps) {
+      const stepCost = (step as { repairCost?: number | string }).repairCost;
+      if (stepCost) {
+        cost += Number(stepCost) || 0;
+      }
+    }
+  }
+
+  const anyJob = job as {
+    repairCost?: number | string;
+    totalCost?: number | string;
+    cost?: number | string;
+    actualCost?: number | string;
+    totalPrice?: number | string;
+  };
+  const directCost =
+    anyJob.repairCost ??
+    anyJob.totalCost ??
+    anyJob.cost ??
+    anyJob.actualCost ??
+    anyJob.totalPrice;
+
+  if (directCost) {
+    cost += Number(directCost) || 0;
+  }
+
+  return cost;
+}
+
+function calculateJobDowntimeDays(job: ApiRepairJob): number {
+  try {
+    const start = new Date(job.createdAt);
+    if (isNaN(start.getTime())) return 0;
+    const end = job.returnDate
+      ? new Date(job.returnDate)
+      : new Date(job.updatedAt);
+    if (isNaN(end.getTime())) return 0;
+
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs <= 0) return 1;
+    return Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+  } catch {
+    return 0;
+  }
+}
+
+function getRepairTypeLabel(job: ApiRepairJob): string {
+  const firstStepAction = job.repairJobSteps?.[0]?.stepMaster?.actionType;
+  if (firstStepAction === "SELF_REPAIR") return "ซ่อมเอง/ไม่ซื้ออะไหล่";
+  if (firstStepAction === "INTERNAL_STOCK") return "เบิกอะไหล่ภายใน";
+  if (firstStepAction === "EXTERNAL_STOCK") return "ซื้ออะไหล่ภายนอก";
+  if (firstStepAction === "OUTSOURCE") return "ส่งซ่อมศูนย์บริการ";
+
+  if (job.company || job.companyId) return "ส่งซ่อมศูนย์บริการ";
+  if (job.sparepartTxns && job.sparepartTxns.length > 0) {
+    return "เบิกอะไหล่ภายใน";
+  }
+  if (job.reportType === "MAINTENANCE") return "บำรุงรักษาตามรอบ";
+  return "ซ่อมทั่วไป";
+}
+
+function getJobHandler(job: ApiRepairJob): string {
+  if (job.company?.name) return job.company.name;
+  if (job.mechanicRepairs && job.mechanicRepairs.length > 0) {
+    const names = job.mechanicRepairs
+      .map((m) =>
+        m.user
+          ? `${m.user.firstname || ""} ${m.user.lastname || ""}`.trim()
+          : ""
+      )
+      .filter(Boolean);
+    if (names.length > 0) return names.join(", ");
+  }
+  if (job.reporter) {
+    return `${job.reporter.firstname || ""} ${job.reporter.lastname || ""}`.trim();
+  }
+  return "-";
 }
 
 function getStatusBadge(code?: string, name?: string) {
@@ -112,36 +268,6 @@ function getStatusBadge(code?: string, name?: string) {
   }
 }
 
-function getRepairStatusBadge(status?: { code?: string; name?: string }) {
-  const code = status?.code || "";
-  const name = status?.name || code;
-  switch (code) {
-    case "COMPLETED":
-      return {
-        label: name || "ซ่อมเสร็จสิ้น",
-        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      };
-    case "IN_PROGRESS":
-    case "WAITING_PARTS":
-    case "PARCEL_PROCESSING":
-      return {
-        label: name || "กำลังดำเนินการ",
-        className: "bg-amber-50 text-amber-700 border-amber-200",
-      };
-    case "UNREPAIRABLE":
-    case "CANCELLED":
-      return {
-        label: name || "ยกเลิก/ซ่อมไม่ได้",
-        className: "bg-rose-50 text-rose-700 border-rose-200",
-      };
-    default:
-      return {
-        label: name || "รอดำเนินการ",
-        className: "bg-sky-50 text-sky-700 border-sky-200",
-      };
-  }
-}
-
 export default function EquipmentDetailModal() {
   const { isOpen, selectedAsset: asset, closeModal } = useEquipmentDetailModalStore();
   const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
@@ -153,18 +279,38 @@ export default function EquipmentDetailModal() {
     setActiveTab("overview");
   }, [asset?.id]);
 
-  // Fetch repair history using friend's repair service
+  // Fetch detailed repair history from friend's service
   const { data: repairJobs = [], isLoading: isLoadingRepairs } = useQuery({
-    queryKey: ["equipment-repair-jobs", asset?.id],
-    queryFn: () =>
-      asset?.id ? fetchRepairJobSummaries({ assetId: asset.id }) : [],
+    queryKey: ["equipment-repair-jobs-detailed", asset?.id],
+    queryFn: async () => {
+      if (!asset?.id) return [];
+      const summaries = await fetchRepairJobSummaries({ assetId: asset.id });
+      if (summaries.length === 0) return [];
+      try {
+        const details = await fetchDetailedRepairJobs(summaries);
+        return details.length > 0 ? details : summaries;
+      } catch {
+        return summaries;
+      }
+    },
     enabled: Boolean(isOpen && asset?.id),
   });
+
+  // KPI Calculations
+  const totalCost = useMemo(() => {
+    return repairJobs.reduce((sum, job) => sum + calculateJobCost(job), 0);
+  }, [repairJobs]);
+
+  const totalDowntimeDays = useMemo(() => {
+    return repairJobs.reduce(
+      (sum, job) => sum + calculateJobDowntimeDays(job),
+      0
+    );
+  }, [repairJobs]);
 
   if (!isOpen || !asset) return null;
 
   const statusBadge = getStatusBadge(asset.status?.code, asset.status?.name);
-  const repairCount = repairJobs?.length ?? 0;
 
   return (
     <div
@@ -173,7 +319,7 @@ export default function EquipmentDetailModal() {
     >
       {/* Modal Card */}
       <div
-        className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 flex flex-col max-h-[92vh]"
+        className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header matching Figma mockup */}
@@ -227,9 +373,9 @@ export default function EquipmentDetailModal() {
           >
             <Clock className="h-4 w-4" />
             ประวัติ (History)
-            {repairCount > 0 && (
+            {repairJobs.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-700 font-bold">
-                {repairCount}
+                {repairJobs.length}
               </span>
             )}
           </button>
@@ -238,7 +384,7 @@ export default function EquipmentDetailModal() {
         {/* Body Content */}
         <div className="p-6 overflow-y-auto flex-1 min-h-0">
           {activeTab === "overview" ? (
-            /* TAB 1: ภาพรวม (ตามภาพตัวอย่างแรกเป๊ะๆ) */
+            /* TAB 1: ภาพรวม (เราทำเองตามภาพตัวอย่างแรกเป๊ะๆ) */
             <div className="grid grid-cols-12 gap-5">
               {/* Left Column: Image + Status + Location & Owner (4 cols) */}
               <div className="col-span-12 sm:col-span-4 flex flex-col space-y-3">
@@ -407,122 +553,185 @@ export default function EquipmentDetailModal() {
               </div>
             </div>
           ) : (
-            /* TAB 2: ประวัติ (History) - ดึงข้อมูลประวัติและโมดอลของเพื่อนมาใช้ */
-            <div className="space-y-4">
-              {/* Summary Header & Button to open friend's repair history modal */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-sky-50/70 border border-sky-100 rounded-2xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500 text-white shrink-0 shadow-xs">
-                    <Wrench className="h-5 w-5" />
-                  </div>
+            /* TAB 2: ประวัติ (History) - เอาหน้าเพื่อนขึ้นมาแสดงในแท็บนี้เลยทันที ไม่ต้องกดหลายที */
+            <div className="space-y-5">
+              {/* 3 KPI Summary Cards เหมือนหน้าเพื่อนเป๊ะๆ */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Card 1: ยอดรวมค่าซ่อมสะสมทั้งหมด */}
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4 sm:p-5 flex items-center justify-between shadow-2xs">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">
-                      ประวัติการซ่อมบำรุง ({repairCount} รายการ)
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      สรุปรายงานและบันทึกการส่งซ่อมบำรุงของเครื่องนี้
+                    <p className="text-xs font-semibold text-emerald-700 mb-1">
+                      ยอดรวมค่าซ่อมสะสมทั้งหมด
                     </p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-emerald-600">
+                      {totalCost.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                      <span className="text-sm font-semibold text-emerald-600 ml-1.5">
+                        บาท
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="h-11 w-11 rounded-full bg-emerald-100/80 flex items-center justify-center text-emerald-600 shrink-0">
+                    <Banknote className="h-6 w-6 stroke-[2]" />
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (asset) {
-                      useAssetRepairHistoryModalStore.getState().openModal(asset);
-                    }
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-500 text-white px-4 py-2 text-xs font-bold hover:bg-sky-600 transition-colors shadow-xs cursor-pointer active:scale-95 shrink-0"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  <span>เปิดดูไทม์ไลน์และสถิติแบบเต็ม</span>
-                </button>
+                {/* Card 2: จำนวนการซ่อมทั้งหมด */}
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/30 p-4 sm:p-5 flex items-center justify-between shadow-2xs">
+                  <div>
+                    <p className="text-xs font-semibold text-sky-700 mb-1">
+                      จำนวนการซ่อมทั้งหมด
+                    </p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-sky-600">
+                      {repairJobs.length}
+                      <span className="text-sm font-semibold text-sky-600 ml-1.5">
+                        ครั้ง
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="h-11 w-11 rounded-full bg-sky-100/80 flex items-center justify-center text-sky-600 shrink-0">
+                    <Clock className="h-6 w-6 stroke-[2]" />
+                  </div>
+                </div>
+
+                {/* Card 3: เวลาหยุดทำงานสะสม (Downtime) */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-4 sm:p-5 flex items-center justify-between shadow-2xs">
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700 mb-1">
+                      เวลาหยุดทำงานสะสม (Downtime)
+                    </p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-amber-600">
+                      {totalDowntimeDays}
+                      <span className="text-sm font-semibold text-amber-600 ml-1.5">
+                        วันทำการ
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="h-11 w-11 rounded-full bg-amber-100/80 flex items-center justify-center text-amber-600 shrink-0">
+                    <Clock className="h-6 w-6 stroke-[2]" />
+                  </div>
+                </div>
               </div>
 
-              {/* Repair Jobs List or Empty State */}
-              {isLoadingRepairs ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500 mb-2" />
-                  <span>กำลังโหลดประวัติการซ่อมบำรุง...</span>
-                </div>
-              ) : repairJobs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 px-4 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/40">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-xs border border-slate-100 mb-2">
-                    <Clock className="h-6 w-6 stroke-[1.5]" />
-                  </div>
-                  <h4 className="text-xs font-bold text-slate-700">
-                    ยังไม่มีประวัติการซ่อมบำรุง
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 max-w-sm">
-                    ครุภัณฑ์นี้ยังไม่มีประวัติการส่งซ่อมหรือแจ้งปัญหาในระบบ
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {repairJobs.map((job: ApiRepairJob, index: number) => {
-                    const st = getRepairStatusBadge(job.jobStatus);
-                    return (
-                      <div
-                        key={job.id || index}
-                        className="rounded-xl border border-slate-200/70 bg-white p-3.5 hover:border-sky-300 transition-all shadow-2xs space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-bold text-sky-700">
-                                {job.jobCode || `#${job.id}`}
-                              </span>
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${st.className}`}
-                              >
-                                {st.label}
-                              </span>
-                            </div>
-                            <p className="text-xs font-medium text-slate-800 leading-snug">
-                              {job.problemDescription || "ไม่ได้ระบุอาการเสีย"}
-                            </p>
-                          </div>
+              {/* Table: ประวัติรายการซ่อมบำรุงย้อนหลัง */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 flex flex-col shadow-2xs">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 mb-3">
+                  ประวัติรายการซ่อมบำรุงย้อนหลัง
+                </h3>
 
-                          <div className="text-right shrink-0">
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                              <Calendar className="h-3 w-3 text-slate-400" />
-                              <span>{formatThaiDate(job.requestedDate)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Footer details */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-                          <div className="flex items-center gap-1">
-                            <User className="h-3 w-3 text-slate-400" />
-                            <span>
-                              ผู้แจ้ง:{" "}
-                              <span className="text-slate-700 font-medium">
-                                {job.reporter
-                                  ? `${job.reporter.firstname || ""} ${job.reporter.lastname || ""}`.trim()
-                                  : "-"}
-                              </span>
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (asset) {
-                                useAssetRepairHistoryModalStore.getState().openModal(asset);
-                              }
-                            }}
-                            className="text-sky-600 hover:text-sky-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-semibold text-slate-500">
+                        <th className="py-2.5 px-3">เลขที่ใบงาน (JOB No.)</th>
+                        <th className="py-2.5 px-3">วันที่แจ้ง</th>
+                        <th className="py-2.5 px-3">อาการที่แจ้ง / สาเหตุ</th>
+                        <th className="py-2.5 px-3">ประเภทการซ่อม</th>
+                        <th className="py-2.5 px-3 text-right">ค่าซ่อม (บาท)</th>
+                        <th className="py-2.5 px-3 text-center">สถานะ</th>
+                        <th className="py-2.5 px-3">ผู้ดูแล</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {isLoadingRepairs ? (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="py-10 text-center text-slate-400 text-xs"
                           >
-                            <span>ดูรายละเอียด</span>
-                            <ExternalLink className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                            กำลังโหลดประวัติการซ่อม...
+                          </td>
+                        </tr>
+                      ) : repairJobs.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="py-10 text-center text-slate-400 text-xs"
+                          >
+                            ไม่พบประวัติการซ่อมบำรุงสำหรับครุภัณฑ์นี้
+                          </td>
+                        </tr>
+                      ) : (
+                        repairJobs.map((job) => {
+                          const cost = calculateJobCost(job);
+                          const statusCode = job.jobStatus?.code || "";
+                          const isCompleted = statusCode === "COMPLETED";
+                          const isCancelled = statusCode === "CANCELLED";
+
+                          const symptomDesc = job.symptom || "-";
+                          const causeDesc = job.cause?.name || job.diagnosis || "";
+                          const fullDesc = causeDesc
+                            ? `${symptomDesc} (${causeDesc})`
+                            : symptomDesc;
+
+                          return (
+                            <tr
+                              key={job.id}
+                              className="hover:bg-slate-50/50 transition-colors"
+                            >
+                              <td className="py-2.5 px-3 font-semibold text-sky-600 whitespace-nowrap">
+                                {job.jobNo}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                                {formatHistoryDate(job.createdAt)}
+                              </td>
+                              <td
+                                className="py-2.5 px-3 text-slate-800 font-medium max-w-xs truncate"
+                                title={fullDesc}
+                              >
+                                {fullDesc}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                                {getRepairTypeLabel(job)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-semibold text-slate-800 whitespace-nowrap">
+                                {cost.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </td>
+                              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                {isCompleted ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                    เสร็จสิ้น
+                                  </span>
+                                ) : isCancelled ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                    ยกเลิก
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-50 text-sky-600 border border-sky-200">
+                                    กำลังซ่อม
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                                {getJobHandler(job)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
+
+                {/* Table Footer Banner (Green summary row matching friend's design) */}
+                <div className="mt-3 p-3 rounded-xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs text-emerald-800">
+                    รวมยอดค่าซ่อมบำรุงสะสมทั้งหมด ({repairJobs.length} รายการ)
+                  </span>
+                  <span className="font-extrabold text-sm text-emerald-700">
+                    {totalCost.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    บาท
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
