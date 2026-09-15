@@ -7,6 +7,7 @@ import {
   LucideIcon,
   FilePlus2,
   Building2,
+  Banknote,
 } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
@@ -20,6 +21,7 @@ import PartStock from "../Pages/PartStock";
 import OrderSpareParts from "../Pages/OrderSpareParts";
 import AcquisitionTypePage from "../Pages/AcquisitionTypePage";
 import CompanySupplierPage from "../Pages/CompanySupplierPage";
+import BudgetTypePage from "../Pages/BudgetTypePage";
 import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
@@ -93,6 +95,14 @@ export const APP_ROUTE: AppRote[] = [
     title: "ผู้ผลิต/จำหน่าย",
     element: <CompanySupplierPage />,
     icon: Building2,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "budget-types",
+    title: "ประเภทเงิน",
+    element: <BudgetTypePage />,
+    icon: Banknote,
     roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: true,
   },
