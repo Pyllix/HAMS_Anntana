@@ -9,23 +9,12 @@ import {
   ShieldCheck,
   Phone,
   Image as ImageIcon,
+  Wrench,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
-
-const THAI_MONTHS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
+import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
+import { fetchRepairJobSummaries } from "../../services/repairApiService";
 
 const THAI_FULL_MONTHS = [
   "มกราคม",
@@ -127,6 +116,15 @@ export default function AssetDetailModal() {
     setImgError(false);
   }, [asset?.id]);
 
+  const { data: repairJobs } = useQuery({
+    queryKey: ["asset-repair-jobs", asset?.id],
+    queryFn: () =>
+      asset?.id ? fetchRepairJobSummaries({ assetId: asset.id }) : [],
+    enabled: Boolean(isOpen && asset?.id),
+  });
+
+  const repairCount = repairJobs?.length ?? 0;
+
   if (!isOpen || !asset) return null;
 
   const statusBadge = getStatusBadge(asset.status?.code, asset.status?.name);
@@ -189,6 +187,11 @@ export default function AssetDetailModal() {
           >
             <Clock className="h-4 w-4" />
             ประวัติ (History)
+            {repairCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-sky-100 text-sky-700 font-bold">
+                {repairCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -363,17 +366,31 @@ export default function AssetDetailModal() {
               </div>
             </div>
           ) : (
-            /* Tab: ประวัติ (History) - หน้าเปล่าตามที่ขอ */
-            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 mb-3">
-                <Clock className="h-7 w-7 stroke-[1.5]" />
+            /* Tab: ประวัติ (History) - เชื่อมต่อกับระบบประวัติการซ่อมของเพื่อน */
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center space-y-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-500 mb-1">
+                <Wrench className="h-7 w-7 stroke-[1.5]" />
               </div>
-              <h3 className="text-sm font-semibold text-slate-700">
-                ยังไม่มีข้อมูลประวัติ
-              </h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                ส่วนแสดงผลประวัติการใช้งานและประวัติการซ่อมบำรุง (อยู่ระหว่างการพัฒนา)
-              </p>
+              <div>
+                <h3 className="text-base font-bold text-slate-800">
+                  ประวัติการซ่อมบำรุง ({repairCount} รายการ)
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                  คลิกปุ่มด้านล่างเพื่อเปิดดูรายละเอียดและไทม์ไลน์ประวัติการซ่อมบำรุงของเครื่องนี้
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (asset) {
+                    useAssetRepairHistoryModalStore.getState().openModal(asset);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-xl border border-sky-400 bg-sky-500 text-white px-5 py-2.5 text-xs sm:text-sm font-bold hover:bg-sky-600 transition-colors cursor-pointer shadow-sm active:scale-95"
+              >
+                <Wrench className="h-4 w-4" />
+                เปิดดูประวัติการซ่อม ({repairCount})
+              </button>
             </div>
           )}
         </div>

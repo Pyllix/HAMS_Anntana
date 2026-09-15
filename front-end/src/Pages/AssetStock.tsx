@@ -10,6 +10,7 @@ import {
 } from "../services/assetService";
 import StockAssetsTable from "../components/asset-stock/StockAssetsTable";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
+import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistoryModal";
 import { useAuthStore } from "../stores/authStore";
 import { ROLES } from "../router/roles";
 
@@ -344,6 +345,9 @@ export default function AssetStock() {
 
       {/* Asset Detail Dialog */}
       <AssetDetailModal />
+
+      {/* Asset Repair History Dialog */}
+      <AssetRepairHistoryModal />
     </div>
   );
 }
