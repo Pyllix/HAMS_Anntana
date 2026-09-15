@@ -25,6 +25,7 @@ import BudgetTypePage from "../Pages/BudgetTypePage";
 import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
+import EquipmentStock from "../Pages/EquipmentStock";
 
 interface AppRote {
   path: string;
@@ -73,6 +74,21 @@ export const APP_ROUTE: AppRote[] = [
     icon: Wrench,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
+  },
+  {
+    path: "equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    icon: Archive,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "parcel-equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: false,
   },
   {
     path: "order-spare-parts",

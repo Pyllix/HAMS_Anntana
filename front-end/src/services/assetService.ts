@@ -190,3 +190,73 @@ export async function getAssetsBySection(sectionId: string): Promise<Asset[]> {
 
   return res.data.data;
 }
+
+export async function createAsset(data: any): Promise<Asset> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.post("https://hams-anntana.onrender.com/asset", data, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return res.data;
+}
+
+export async function updateAsset(id: string, data: any): Promise<Asset> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.patch(
+    `https://hams-anntana.onrender.com/asset/${id}`,
+    data,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  return res.data;
+}
+
+export async function getBudgetTypes(): Promise<any[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get("https://hams-anntana.onrender.com/budget-types", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const raw = res.data;
+  return Array.isArray(raw) ? raw : (raw?.data ?? []);
+}
+
+export async function getEquipmentTypes(): Promise<any[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get(
+    "https://hams-anntana.onrender.com/equipment-types",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const raw = res.data;
+  return Array.isArray(raw) ? raw : (raw?.data ?? []);
+}
+
+export async function getAllUsers(): Promise<any[]> {
+  const token = localStorage.getItem("token");
+
+  const res = await axios.get("https://hams-anntana.onrender.com/users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const raw = res.data;
+  return Array.isArray(raw) ? raw : (raw?.data ?? []);
+}
