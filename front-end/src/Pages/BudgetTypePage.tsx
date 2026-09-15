@@ -184,15 +184,9 @@ export default function BudgetTypePage() {
   }, [statusFilter]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-4 overflow-hidden">
-      {/* Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            ประเภทเงิน
-          </h1>
-        </div>
-
+    <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-3 overflow-hidden">
+      {/* Top Action Button */}
+      <div className="flex items-center justify-end shrink-0 pr-2">
         <button
           type="button"
           onClick={handleOpenCreate}
