@@ -1,4 +1,4 @@
-import type { RoleType } from "../Router/roles";
+import type { RoleType } from "../router/roles";
 
 export type NotificationKind = "WORKFLOW" | "APPROVAL" | "PARCEL" | "DELIVERY";
 

@@ -157,6 +157,8 @@ export interface Asset {
   company: {
     id: string;
     name: string;
+    phone?: string;
+    telephone?: string;
   };
   owner: {
     id: string;

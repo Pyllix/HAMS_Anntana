@@ -533,7 +533,7 @@ export default function EquipmentDetailModal() {
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-slate-500">
                         <Phone className="h-2.5 w-2.5 text-slate-400" />
-                        <span>{asset.company?.phone || "-"}</span>
+                        <span>{(asset.company as { id?: string; name?: string; phone?: string; telephone?: string })?.phone || (asset.company as { id?: string; name?: string; phone?: string; telephone?: string })?.telephone || "-"}</span>
                       </div>
                     </div>
 
