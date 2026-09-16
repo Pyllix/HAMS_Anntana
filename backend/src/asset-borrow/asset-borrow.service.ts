@@ -18,6 +18,44 @@ import {
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
 import { ReturnCondition, ReturnMethod, UserRole, RequestSource, BorrowExtensionType, BorrowExtensionStatus, Prisma } from '@prisma/client';
 
+/** Shared selection projection for Asset within BorrowTransaction */
+export const BORROW_ASSET_SELECT = {
+  id: true,
+  noid: true,
+  name: true,
+  model: true,
+  serialNo: true,
+  imageUrl: true,
+  riskLevel: true,
+  isSpecial: true,
+  isBackup: true,
+  status: { select: { id: true, code: true, name: true } },
+  availabilityStatus: { select: { id: true, code: true, name: true } },
+  section: { select: { id: true, code: true, name: true } },
+  equipmentType: { select: { id: true, name: true } },
+};
+
+/** Shared inclusion object for BorrowTransaction across all endpoints */
+export const BORROW_TRANSACTION_INCLUDE = {
+  asset: { select: BORROW_ASSET_SELECT },
+  borrower: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true },
+  },
+  borrowStatus: { select: { id: true, code: true, name: true } },
+  createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  extensions: {
+    orderBy: { roundNumber: 'desc' as const },
+    take: 3,
+    select: { id: true, status: true, roundNumber: true, requestedReturnDate: true, reason: true },
+  },
+};
+
 @Injectable()
 export class AssetBorrowService {
   constructor(private prisma: PrismaService) { }
@@ -68,6 +106,15 @@ export class AssetBorrowService {
       return dbUser?.section_id ?? null;
     }
     return null;
+  }
+
+  private async getBorrowTransactionWithIncludes(id: string, tx?: Prisma.TransactionClient) {
+    const client = tx || this.prisma;
+    const item = await client.borrowTransaction.findUnique({
+      where: { id },
+      include: BORROW_TRANSACTION_INCLUDE,
+    });
+    return this.enrichBorrowItem(item);
   }
 
   async createBorrow(dto: CreateAssetBorrowDto, user: any) {
@@ -203,7 +250,7 @@ export class AssetBorrowService {
         }
       });
 
-      return transaction;
+      return this.getBorrowTransactionWithIncludes(transaction.id, tx);
     });
   }
 
@@ -240,7 +287,7 @@ export class AssetBorrowService {
         throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -288,7 +335,7 @@ export class AssetBorrowService {
         throw new ConflictException(`Asset availability for ID ${transaction.asset_id} has already changed`);
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -339,7 +386,7 @@ export class AssetBorrowService {
         );
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -426,7 +473,7 @@ export class AssetBorrowService {
         );
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -471,7 +518,7 @@ export class AssetBorrowService {
         );
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -568,7 +615,7 @@ export class AssetBorrowService {
         }
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -698,7 +745,7 @@ export class AssetBorrowService {
         }
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -806,7 +853,7 @@ export class AssetBorrowService {
         );
       }
 
-      return tx.borrowTransaction.findUnique({ where: { id } });
+      return this.getBorrowTransactionWithIncludes(id, tx);
     });
   }
 
@@ -937,16 +984,7 @@ export class AssetBorrowService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          asset: { select: { id: true, name: true, model: true } },
-          borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
-          borrowStatus: { select: { id: true, code: true, name: true } },
-          extensions: {
-            orderBy: { roundNumber: 'desc' as const },
-            take: 3,
-            select: { id: true, status: true, roundNumber: true, requestedReturnDate: true, reason: true }
-          }
-        }
+        include: BORROW_TRANSACTION_INCLUDE,
       }),
       this.prisma.borrowTransaction.count({ where }),
     ]);
@@ -961,16 +999,7 @@ export class AssetBorrowService {
     const transaction = await this.prisma.borrowTransaction.findUnique({
       where: isUuid ? { id: idOrBorrowNo } : { borrowNo: idOrBorrowNo },
       include: {
-        asset: { select: { id: true, name: true, model: true } },
-        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
-        createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        borrowStatus: { select: { id: true, code: true, name: true } },
+        ...BORROW_TRANSACTION_INCLUDE,
         extensions: {
           orderBy: { roundNumber: 'asc' as const },
           include: {
@@ -1311,7 +1340,7 @@ export class AssetBorrowService {
               id: true,
               borrowNo: true,
               expectedReturnDate: true,
-              asset: { select: { id: true, name: true, model: true } },
+              asset: { select: BORROW_ASSET_SELECT },
               borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
             },
           },

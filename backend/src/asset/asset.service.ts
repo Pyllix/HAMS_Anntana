@@ -34,17 +34,23 @@ const ASSET_INCLUDE = {
   borrowTransactions: {
     where: {
       borrowStatus: {
-        code: { in: ['BORROWED', 'PENDING_APPROVE'] as string[] },
+        code: {
+          notIn: ['RETURNED', 'REJECTED', 'CANCELLED'] as string[],
+        },
       },
     },
     take: 1,
     orderBy: { createdAt: 'desc' as const },
     select: {
       id: true,
+      borrowNo: true,
       borrower_id: true,
       borrow_status_id: true,
       request_source: true,
       delivery_method: true,
+      expectedReturnDate: true,
+      approved_at: true,
+      handover_date: true,
       createdAt: true,
       borrower: {
         select: {

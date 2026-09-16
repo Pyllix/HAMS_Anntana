@@ -63,6 +63,20 @@ describe('AssetBorrowService', () => {
 
     prisma.asset.updateMany.mockResolvedValue({ count: 1 });
     prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+    prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => {
+      const created = { id: 'tx-1', ...data };
+      prisma.borrowTransaction.findUnique.mockResolvedValue(created);
+      return created;
+    });
+    prisma.borrowTransaction.findUnique.mockImplementation(async (args: any) => {
+      return {
+        id: args?.where?.id || 'tx-1',
+        borrowNo: args?.where?.borrowNo || 'BR-202609-0001',
+        asset: { id: 'asset-1', name: 'Asset', model: 'Model' },
+        borrower: { id: 'user-1' },
+        borrowStatus: { code: 'BORROWED' },
+      };
+    });
     prisma.asset.findUnique.mockResolvedValue({
       id: 'asset-1',
       asset_status_id: 1,
@@ -960,7 +974,11 @@ describe('AssetBorrowService', () => {
         section: { code: 'CENTER', name: 'Asset Center' },
       });
       prisma.borrowTransaction.findFirst.mockResolvedValue({ borrowNo: 'BR-202609-0005' });
-      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'tx-new', ...data }));
+      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => {
+        const created = { id: 'tx-new', ...data };
+        prisma.borrowTransaction.findUnique.mockResolvedValue(created);
+        return created;
+      });
 
       const res = await service.createBorrow({ assetId: 'asset-1', deliveryMethod: DeliveryMethod.PICKUP }, { id: 'user-1', role: UserRole.PARCEL_STAFF });
       expect(res.borrowNo).toMatch(/^BR-\d{6}-0006$/);
@@ -994,7 +1012,11 @@ describe('AssetBorrowService', () => {
         section: { code: 'CENTER', name: 'Asset Center' },
       });
       prisma.borrowTransaction.findFirst.mockResolvedValue(null);
-      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'tx-1', ...data }));
+      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => {
+        const created = { id: 'tx-1', ...data };
+        prisma.borrowTransaction.findUnique.mockResolvedValue(created);
+        return created;
+      });
 
       const res = await service.createBorrow(
         {
@@ -1217,6 +1239,43 @@ describe('AssetBorrowService', () => {
 
       const res = await service.cancelExtension('ext-1', deptUser);
       expect(res.status).toBe('CANCELLED');
+    });
+  });
+
+  describe('Asset Relations in Borrow Transactions (Enriched Fields)', () => {
+    it('should include full asset relations (noid, serialNo, status, availabilityStatus, section) in findAll', async () => {
+      const mockEnrichedBorrow = {
+        id: 'tx-1',
+        borrowNo: 'BR-202609-0001',
+        asset: {
+          id: 'asset-1',
+          noid: 'MED-67-0042',
+          name: 'Infusion Pump',
+          model: 'TE-LM700',
+          serialNo: 'SN-9988',
+          riskLevel: 'HIGH',
+          status: { id: 1, code: 'NORMAL', name: 'ปกติ' },
+          availabilityStatus: { id: 11, code: 'BORROWED', name: 'ถูกยืม' },
+          section: { id: 'sec-center', code: 'CENTER', name: 'Asset Center' },
+          equipmentType: { id: 5, name: 'Infusion System' },
+        },
+        borrower: { id: 'user-1', employeeId: 'EMP001', firstname: 'สมชาย', lastname: 'ใจดี' },
+        borrowStatus: { id: 23, code: 'BORROWED', name: 'กำลังยืม' },
+      };
+
+      prisma.$transaction.mockResolvedValue([[mockEnrichedBorrow], 1]);
+
+      const res = await service.findAll({ page: 1, limit: 10 }, { role: UserRole.ADMIN });
+
+      expect(res.data[0].asset).toEqual(
+        expect.objectContaining({
+          noid: 'MED-67-0042',
+          serialNo: 'SN-9988',
+          status: expect.objectContaining({ code: 'NORMAL' }),
+          availabilityStatus: expect.objectContaining({ code: 'BORROWED' }),
+          section: expect.objectContaining({ code: 'CENTER' }),
+        }),
+      );
     });
   });
 });
