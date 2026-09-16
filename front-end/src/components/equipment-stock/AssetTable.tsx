@@ -136,7 +136,7 @@ export default function AssetTable({
         {
           id: "image",
           header: "รูปภาพ",
-          size: 55,
+          size: 48,
           cell: (info) => {
             const imgUrl = info.row.original.imageUrl;
             return (
@@ -159,7 +159,7 @@ export default function AssetTable({
         {
           id: "noid",
           header: "รหัสครุภัณฑ์",
-          size: 125,
+          size: 95,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -172,7 +172,7 @@ export default function AssetTable({
         {
           id: "name_model",
           header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
-          size: 220,
+          size: 145,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -196,7 +196,7 @@ export default function AssetTable({
         {
           id: "serialNo",
           header: "หมายเลขเครื่อง",
-          size: 135,
+          size: 110,
           cell: (info) => (
             <span
               className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -227,7 +227,7 @@ export default function AssetTable({
         {
           id: "date",
           header: "วันที่ทำรายการ",
-          size: 100,
+          size: 90,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -240,7 +240,7 @@ export default function AssetTable({
         {
           id: "status",
           header: "สถานะสต็อก",
-          size: 105,
+          size: 95,
           cell: (info) => {
             const status = info.row.original.status;
             const badge = getStatusBadge(status?.code, status?.name);
@@ -257,7 +257,7 @@ export default function AssetTable({
         {
           id: "actions",
           header: "การดำเนินการ",
-          size: 125,
+          size: 175,
           cell: (info) => {
             const row = info.row.original;
             const isOpen = openActionDropdown === `wait-${row.id}`;
@@ -280,7 +280,7 @@ export default function AssetTable({
                     onClick={() =>
                       setOpenActionDropdown(isOpen ? null : `wait-${row.id}`)
                     }
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
                   >
                     <span>ดำเนินการ</span>
                     <ChevronDown className="h-3 w-3 text-slate-400" />
@@ -331,7 +331,7 @@ export default function AssetTable({
       {
         id: "image",
         header: "รูปภาพ",
-        size: 60,
+        size: 48,
         cell: (info) => {
           const imgUrl = info.row.original.imageUrl;
           return (
@@ -354,7 +354,7 @@ export default function AssetTable({
       {
         id: "noid",
         header: "รหัสครุภัณฑ์",
-        size: 135,
+        size: 95,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -367,7 +367,7 @@ export default function AssetTable({
       {
         id: "name_model",
         header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
-        size: 240,
+        size: 160,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -391,7 +391,7 @@ export default function AssetTable({
       {
         id: "serialNo",
         header: "หมายเลขเครื่อง",
-        size: 135,
+        size: 115,
         cell: (info) => (
           <span
             className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -421,7 +421,7 @@ export default function AssetTable({
       {
         id: "dates",
         header: "วันที่รับ / หมดประกัน",
-        size: 140,
+        size: 130,
         cell: (info) => {
           const row = info.row.original;
           const expired = isExpired(row.warrantyDate);
@@ -450,7 +450,7 @@ export default function AssetTable({
       {
         id: "status",
         header: "สถานะสต็อก",
-        size: 110,
+        size: 95,
         cell: (info) => {
           const status = info.row.original.status;
           const badge = getStatusBadge(status?.code, status?.name);
@@ -465,7 +465,7 @@ export default function AssetTable({
       {
         id: "actions",
         header: "การดำเนินการ",
-        size: 175,
+        size: 220,
         cell: (info) => {
           const row = info.row.original;
           const isOpen = openActionDropdown === row.id;
@@ -573,7 +573,13 @@ export default function AssetTable({
                         ? `${header.column.columnDef.size}px`
                         : undefined,
                     }}
-                    className="py-2.5 px-3 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap"
+                    className={`py-2.5 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap ${
+                      header.id === "image"
+                        ? "pl-4 pr-2"
+                        : header.id === "actions"
+                        ? "pl-2 pr-8"
+                        : "px-3"
+                    }`}
                   >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -609,7 +615,16 @@ export default function AssetTable({
                   className="hover:bg-slate-50/80 transition-colors"
                 >
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3 align-middle text-xs">
+                    <td
+                      key={cell.id}
+                      className={`py-2.5 align-middle text-xs ${
+                        cell.column.id === "image"
+                          ? "pl-4 pr-2"
+                          : cell.column.id === "actions"
+                          ? "pl-2 pr-8"
+                          : "px-3"
+                      }`}
+                    >
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
