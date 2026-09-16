@@ -315,9 +315,7 @@ export default function EquipmentStock() {
           {/* Wait Disposal Card */}
           <div
             onClick={() => handleTabChange("WAIT_DISPOSAL")}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              activeTab === "WAIT_DISPOSAL" ? "border-amber-400 ring-1 ring-amber-300" : "border-slate-100 hover:border-slate-300"
-            }`}
+            className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-slate-300 shadow-2xs cursor-pointer hover:shadow-xs transition-all"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 shrink-0">
               <Clock className="h-5 w-5" />

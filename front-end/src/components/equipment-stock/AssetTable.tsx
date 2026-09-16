@@ -126,7 +126,7 @@ export default function AssetTable({
     }
   };
 
-  const columns = useMemo<ColumnDef<Asset>[]>(() => {
+  const columns = useMemo<Array<ColumnDef<typeof features, Asset>>>(() => {
     const isWaitDisposalTab = activeTab === "WAIT_DISPOSAL";
 
     if (isWaitDisposalTab) {
@@ -512,7 +512,9 @@ export default function AssetTable({
                     key={header.id}
                     className="p-3 text-xs font-semibold text-slate-600 whitespace-nowrap bg-white"
                   >
-                    {header.column.columnDef.header as string}
+                    {header.isPlaceholder ? null : (
+                      <table.FlexRender header={header} />
+                    )}
                   </th>
                 ))}
               </tr>
@@ -543,13 +545,9 @@ export default function AssetTable({
                   key={row.id}
                   className="hover:bg-slate-50/80 transition-colors"
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getAllCells().map((cell) => (
                     <td key={cell.id} className="p-3">
-                      {cell.column.columnDef.cell
-                        ? (cell.column.columnDef.cell(
-                            cell.getContext()
-                          ) as React.ReactNode)
-                        : null}
+                      <table.FlexRender cell={cell} />
                     </td>
                   ))}
                 </tr>
