@@ -172,6 +172,7 @@ export default function AssetTable({
         {
           id: "name_model",
           header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
+          size: 220,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -195,7 +196,7 @@ export default function AssetTable({
         {
           id: "serialNo",
           header: "หมายเลขเครื่อง",
-          size: 120,
+          size: 135,
           cell: (info) => (
             <span
               className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -208,7 +209,6 @@ export default function AssetTable({
         {
           id: "reason",
           header: "เหตุผลการจำหน่าย",
-          size: 180,
           cell: (info) => {
             const row = info.row.original;
             const text = row.remark || "ซ่อมไม่คุ้มค่า / ผู้บริหารไม่อนุมัติ";
@@ -367,6 +367,7 @@ export default function AssetTable({
       {
         id: "name_model",
         header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
+        size: 240,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -390,7 +391,7 @@ export default function AssetTable({
       {
         id: "serialNo",
         header: "หมายเลขเครื่อง",
-        size: 130,
+        size: 135,
         cell: (info) => (
           <span
             className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -403,7 +404,6 @@ export default function AssetTable({
       {
         id: "department",
         header: "หน่วยงานที่รับผิดชอบ",
-        size: 160,
         cell: (info) => {
           const section = info.row.original.section;
           return (
