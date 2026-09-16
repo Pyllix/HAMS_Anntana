@@ -5,7 +5,7 @@ interface CalendarFilterDialogProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate: Date | null;
-  onSelectDate: (date: Date | null) => void;
+  onSelectDate: (date: Date | null, label?: string) => void;
 }
 
 const THAI_MONTHS_FULL = [
@@ -65,7 +65,13 @@ export default function CalendarFilterDialog({
   };
 
   const handleConfirm = () => {
-    onSelectDate(tempSelectedDate);
+    if (tempSelectedDate) {
+      const d = tempSelectedDate;
+      const label = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`;
+      onSelectDate(tempSelectedDate, label);
+    } else {
+      onSelectDate(null, "เดือนนี้");
+    }
     onClose();
   };
 
@@ -141,7 +147,7 @@ export default function CalendarFilterDialog({
                 }
                 className={`h-7 w-7 rounded-full flex items-center justify-center font-semibold text-xs transition-colors cursor-pointer mx-auto ${
                   isSelected
-                    ? "bg-emerald-600 text-white shadow-xs font-bold"
+                    ? "bg-orange-600 text-white shadow-xs font-bold"
                     : "text-slate-700 hover:bg-slate-100"
                 }`}
               >
@@ -152,18 +158,31 @@ export default function CalendarFilterDialog({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs gap-1">
           <button
             type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 font-medium cursor-pointer transition-colors"
+            onClick={() => {
+              onSelectDate(null, "เดือนนี้");
+              onClose();
+            }}
+            className="px-2 py-1 rounded-lg text-orange-600 hover:bg-orange-50 font-semibold cursor-pointer transition-colors"
           >
-            ยกเลิก
+            เดือนนี้
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onSelectDate(null, "ทั้งหมด");
+              onClose();
+            }}
+            className="px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100 font-medium cursor-pointer transition-colors"
+          >
+            ทั้งหมด
           </button>
           <button
             type="button"
             onClick={handleConfirm}
-            className="px-4 py-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 font-bold cursor-pointer transition-colors"
+            className="px-3.5 py-1 rounded-lg bg-orange-600 text-white hover:bg-orange-700 font-bold cursor-pointer transition-colors shadow-2xs"
           >
             ตกลง
           </button>

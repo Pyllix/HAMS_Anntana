@@ -30,7 +30,7 @@ export default function WaitDisposalModal() {
 
   useEffect(() => {
     if (isWaitDisposalOpen && asset) {
-      setReason("ผู้บริหารไม่อนุมัติการซื้ออะไหล่เนื่องจากไม่คุ้มค่า");
+      setReason("");
       setIsReceivedBack(true);
       setImagePreview(null);
       setErrorMsg("");
@@ -159,7 +159,7 @@ export default function WaitDisposalModal() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="(พิมพ์รายละเอียดเพิ่มเติม...)"
-              className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none"
             />
           </div>
 

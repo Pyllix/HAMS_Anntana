@@ -11,6 +11,7 @@ import {
   Package,
   FileText,
   Calendar as CalendarIcon,
+  X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -187,6 +188,50 @@ export default function EquipmentStock() {
   const disposalCount = disposalRes?.meta?.total ?? 0;
   const totalAssets = totalAllRes?.meta?.total ?? assetResponse?.meta?.total ?? 0;
 
+  // Filter assets on client for date filter when in WAIT_DISPOSAL tab
+  const displayedAssets = useMemo(() => {
+    let list = assetResponse?.data || [];
+
+    if (activeTab === "WAIT_DISPOSAL") {
+      if (selectedDate) {
+        list = list.filter((item) => {
+          const dateStr = item.updatedAt || item.receivedDate || item.createdAt;
+          if (!dateStr) return false;
+          const d = new Date(dateStr);
+          return (
+            d.getDate() === selectedDate.getDate() &&
+            d.getMonth() === selectedDate.getMonth() &&
+            d.getFullYear() === selectedDate.getFullYear()
+          );
+        });
+      } else if (dateFilterLabel === "เดือนนี้") {
+        const now = new Date();
+        list = list.filter((item) => {
+          const dateStr = item.updatedAt || item.receivedDate || item.createdAt;
+          if (!dateStr) return true;
+          const d = new Date(dateStr);
+          return (
+            d.getMonth() === now.getMonth() &&
+            d.getFullYear() === now.getFullYear()
+          );
+        });
+      }
+    }
+
+    return list;
+  }, [assetResponse?.data, activeTab, selectedDate, dateFilterLabel]);
+
+  const isClientFiltered =
+    activeTab === "WAIT_DISPOSAL" && Boolean(selectedDate || dateFilterLabel === "เดือนนี้");
+
+  const totalDisplayItems = isClientFiltered
+    ? displayedAssets.length
+    : (assetResponse?.meta?.total ?? 0);
+
+  const totalDisplayPages = isClientFiltered
+    ? Math.ceil(displayedAssets.length / pageSize) || 1
+    : (assetResponse?.meta?.totalPages ?? 1);
+
   return (
     <div className="flex flex-col h-[calc(100vh-6.8rem)] max-h-[calc(100vh-6.8rem)] space-y-2 overflow-hidden">
       {/* Header Tabs matching Figma */}
@@ -237,186 +282,168 @@ export default function EquipmentStock() {
         </button>
       </div>
 
-      {/* KPI Cards Row */}
-      {activeTab === "WAIT_DISPOSAL" ? (
-        /* When in รอจำหน่าย tab: show 2 cards matching Image 1 */
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Card 1: รายการทั้งหมด */}
-          <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-100 shadow-2xs min-w-[170px]">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
-              <FileText className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                รายการทั้งหมด
-              </p>
-              <h4 className="text-lg font-bold text-slate-800 mt-0.5">
-                {waitDisposalCount}
-              </h4>
-            </div>
+      {/* KPI Cards Row - All 7 Cards always displayed */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 shrink-0">
+        {/* Total Card */}
+        <div
+          onClick={() => handleTabChange("ALL")}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            activeTab === "ALL" && selectedStatus === "ALL"
+              ? "border-emerald-400 ring-1 ring-emerald-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
+            <Package className="h-5 w-5" />
           </div>
-
-          {/* Card 2: รอจำหน่าย */}
-          <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-orange-200 shadow-2xs min-w-[170px]">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-[#ea580c] shrink-0">
-              <Clock className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[11px] text-[#ea580c] font-medium leading-tight">
-                รอจำหน่าย
-              </p>
-              <h4 className="text-lg font-bold text-[#ea580c] mt-0.5">
-                {waitDisposalCount}
-              </h4>
-            </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              รายการทั้งหมด
+            </p>
+            <h4 className="text-lg font-bold text-slate-800 mt-0.5">
+              {totalAssets}
+            </h4>
           </div>
         </div>
-      ) : (
-        /* Standard 7 Cards Row for main tabs */
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 shrink-0">
-          {/* Total Card */}
-          <div
-            onClick={() => handleTabChange("ALL")}
-            className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-2xs cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
-              <Package className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                รายการทั้งหมด
-              </p>
-              <h4 className="text-lg font-bold text-slate-800 mt-0.5">
-                {totalAssets}
-              </h4>
-            </div>
-          </div>
 
-          {/* Lost Card */}
-          <div
-            onClick={() => handleTabChange("LOST")}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              activeTab === "LOST" ? "border-rose-400 ring-1 ring-rose-300" : "border-slate-100 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600 shrink-0">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                สูญหาย
-              </p>
-              <h4 className="text-lg font-bold text-rose-600 mt-0.5">
-                {lostCount}
-              </h4>
-            </div>
+        {/* Lost Card */}
+        <div
+          onClick={() => handleTabChange("LOST")}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            activeTab === "LOST"
+              ? "border-rose-400 ring-1 ring-rose-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600 shrink-0">
+            <AlertTriangle className="h-5 w-5" />
           </div>
-
-          {/* Wait Disposal Card */}
-          <div
-            onClick={() => handleTabChange("WAIT_DISPOSAL")}
-            className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 hover:border-slate-300 shadow-2xs cursor-pointer hover:shadow-xs transition-all"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 shrink-0">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                รอจำหน่าย
-              </p>
-              <h4 className="text-lg font-bold text-amber-600 mt-0.5">
-                {waitDisposalCount}
-              </h4>
-            </div>
-          </div>
-
-          {/* Under Repair Card */}
-          <div
-            onClick={() => {
-              if (underRepairId) handleStatusChange(String(underRepairId));
-            }}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              selectedStatus === String(underRepairId) ? "border-sky-400 ring-1 ring-sky-300" : "border-slate-100 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 shrink-0">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                รอดำเนินการ
-              </p>
-              <h4 className="text-lg font-bold text-sky-600 mt-0.5">
-                {underRepairCount}
-              </h4>
-            </div>
-          </div>
-
-          {/* Damaged Card */}
-          <div
-            onClick={() => {
-              if (damagedId) handleStatusChange(String(damagedId));
-            }}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              selectedStatus === String(damagedId) ? "border-orange-400 ring-1 ring-orange-300" : "border-slate-100 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600 shrink-0">
-              <Wrench className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                กำลังซ่อม
-              </p>
-              <h4 className="text-lg font-bold text-orange-600 mt-0.5">
-                {damagedCount}
-              </h4>
-            </div>
-          </div>
-
-          {/* Normal Ready Card */}
-          <div
-            onClick={() => {
-              if (normalId) handleStatusChange(String(normalId));
-            }}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              selectedStatus === String(normalId) ? "border-emerald-400 ring-1 ring-emerald-300" : "border-slate-100 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                พร้อมใช้งาน
-              </p>
-              <h4 className="text-lg font-bold text-emerald-600 mt-0.5">
-                {normalCount}
-              </h4>
-            </div>
-          </div>
-
-          {/* Disposal Done Card */}
-          <div
-            onClick={() => handleTabChange("DISPOSAL")}
-            className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-              activeTab === "DISPOSAL" ? "border-slate-400 ring-1 ring-slate-300" : "border-slate-100 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 shrink-0">
-              <XCircle className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                จำหน่ายแล้ว
-              </p>
-              <h4 className="text-lg font-bold text-slate-600 mt-0.5">
-                {disposalCount}
-              </h4>
-            </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              สูญหาย
+            </p>
+            <h4 className="text-lg font-bold text-rose-600 mt-0.5">
+              {lostCount}
+            </h4>
           </div>
         </div>
-      )}
+
+        {/* Wait Disposal Card */}
+        <div
+          onClick={() => handleTabChange("WAIT_DISPOSAL")}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            activeTab === "WAIT_DISPOSAL"
+              ? "border-amber-400 ring-1 ring-amber-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 shrink-0">
+            <Clock className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              รอจำหน่าย
+            </p>
+            <h4 className="text-lg font-bold text-amber-600 mt-0.5">
+              {waitDisposalCount}
+            </h4>
+          </div>
+        </div>
+
+        {/* Under Repair Card */}
+        <div
+          onClick={() => {
+            if (underRepairId) handleStatusChange(String(underRepairId));
+          }}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            selectedStatus === String(underRepairId)
+              ? "border-sky-400 ring-1 ring-sky-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 shrink-0">
+            <Clock className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              รอดำเนินการ
+            </p>
+            <h4 className="text-lg font-bold text-sky-600 mt-0.5">
+              {underRepairCount}
+            </h4>
+          </div>
+        </div>
+
+        {/* Damaged Card */}
+        <div
+          onClick={() => {
+            if (damagedId) handleStatusChange(String(damagedId));
+          }}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            selectedStatus === String(damagedId)
+              ? "border-orange-400 ring-1 ring-orange-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600 shrink-0">
+            <Wrench className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              กำลังซ่อม
+            </p>
+            <h4 className="text-lg font-bold text-orange-600 mt-0.5">
+              {damagedCount}
+            </h4>
+          </div>
+        </div>
+
+        {/* Normal Ready Card */}
+        <div
+          onClick={() => {
+            if (normalId) handleStatusChange(String(normalId));
+          }}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            selectedStatus === String(normalId)
+              ? "border-emerald-400 ring-1 ring-emerald-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              พร้อมใช้งาน
+            </p>
+            <h4 className="text-lg font-bold text-emerald-600 mt-0.5">
+              {normalCount}
+            </h4>
+          </div>
+        </div>
+
+        {/* Disposal Done Card */}
+        <div
+          onClick={() => handleTabChange("DISPOSAL")}
+          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
+            activeTab === "DISPOSAL"
+              ? "border-slate-400 ring-1 ring-slate-300"
+              : "border-slate-100 hover:border-slate-300"
+          }`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 shrink-0">
+            <XCircle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium leading-tight">
+              จำหน่ายแล้ว
+            </p>
+            <h4 className="text-lg font-bold text-slate-600 mt-0.5">
+              {disposalCount}
+            </h4>
+          </div>
+        </div>
+      </div>
 
       {/* Filter / Search Bar */}
       {activeTab === "WAIT_DISPOSAL" ? (
@@ -438,14 +465,30 @@ export default function EquipmentStock() {
             {/* Date Filter: วันที่ทำ: [เดือนนี้ 📅] */}
             <div className="flex items-center gap-1.5 text-xs text-slate-600">
               <span className="text-slate-500 font-medium">วันที่ทำ:</span>
-              <button
-                type="button"
-                onClick={() => setIsCalendarOpen(true)}
-                className="flex items-center gap-2 h-8 px-3 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors text-xs font-medium text-slate-700 cursor-pointer"
-              >
-                <span>{dateFilterLabel}</span>
-                <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
-              </button>
+              <div className="inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setIsCalendarOpen(true)}
+                  className="flex items-center gap-2 h-8 px-3 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors text-xs font-medium text-slate-700 cursor-pointer"
+                >
+                  <span>{dateFilterLabel}</span>
+                  <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
+                </button>
+                {(selectedDate || dateFilterLabel !== "เดือนนี้") && (
+                  <button
+                    type="button"
+                    title="รีเซ็ตตัวกรองวันที่"
+                    onClick={() => {
+                      setSelectedDate(null);
+                      setDateFilterLabel("เดือนนี้");
+                      setPage(1);
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Type Dropdown */}
@@ -558,11 +601,11 @@ export default function EquipmentStock() {
       {/* Main Table */}
       <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
         <AssetTable
-          assets={assetResponse?.data || []}
+          assets={displayedAssets}
           isLoading={isLoading}
           currentPage={page}
-          totalPages={assetResponse?.meta?.totalPages || 1}
-          totalItems={assetResponse?.meta?.total || 0}
+          totalPages={totalDisplayPages}
+          totalItems={totalDisplayItems}
           pageSize={pageSize}
           onPageChange={setPage}
           activeTab={activeTab}
@@ -582,15 +625,18 @@ export default function EquipmentStock() {
         isOpen={isCalendarOpen}
         onClose={() => setIsCalendarOpen(false)}
         selectedDate={selectedDate}
-        onSelectDate={(d) => {
+        onSelectDate={(d, label) => {
           setSelectedDate(d);
-          if (d) {
+          if (label) {
+            setDateFilterLabel(label);
+          } else if (d) {
             setDateFilterLabel(
               `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`
             );
           } else {
             setDateFilterLabel("เดือนนี้");
           }
+          setPage(1);
         }}
       />
     </div>

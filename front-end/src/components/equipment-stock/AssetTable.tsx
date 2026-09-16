@@ -135,6 +135,7 @@ export default function AssetTable({
         {
           id: "image",
           header: "รูปภาพ",
+          size: 60,
           cell: (info) => {
             const imgUrl = info.row.original.imageUrl;
             return (
@@ -143,11 +144,11 @@ export default function AssetTable({
                   <img
                     src={imgUrl}
                     alt="Equipment"
-                    className="h-10 w-10 rounded-xl object-cover border border-slate-200 bg-slate-50"
+                    className="h-9 w-9 rounded-xl object-cover border border-slate-200 bg-slate-50"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 border border-slate-200">
-                    <ImageIcon className="h-5 w-5" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-400 border border-slate-200">
+                    <ImageIcon className="h-4 w-4" />
                   </div>
                 )}
               </div>
@@ -157,10 +158,11 @@ export default function AssetTable({
         {
           id: "noid",
           header: "รหัสครุภัณฑ์",
+          size: 135,
           cell: (info) => {
             const row = info.row.original;
             return (
-              <span className="font-semibold text-slate-800 text-xs sm:text-sm font-mono">
+              <span className="font-semibold text-slate-800 text-xs font-mono truncate block">
                 {row.noid || row.id.slice(0, 8)}
               </span>
             );
@@ -172,15 +174,15 @@ export default function AssetTable({
           cell: (info) => {
             const row = info.row.original;
             return (
-              <div className="max-w-xs">
+              <div className="min-w-0 pr-2">
                 <div
-                  className="font-bold text-slate-800 text-xs sm:text-sm truncate"
+                  className="font-bold text-slate-800 text-xs truncate"
                   title={row.name}
                 >
                   {row.name}
                 </div>
                 <div
-                  className="text-xs text-slate-400 truncate mt-0.5"
+                  className="text-[11px] text-slate-400 truncate mt-0.5"
                   title={row.model || row.company?.name}
                 >
                   {row.model} {row.company?.name ? `/ ${row.company.name}` : ""}
@@ -192,8 +194,12 @@ export default function AssetTable({
         {
           id: "serialNo",
           header: "หมายเลขเครื่อง",
+          size: 130,
           cell: (info) => (
-            <span className="font-mono text-xs text-slate-600 font-medium">
+            <span
+              className="font-mono text-xs text-slate-600 font-medium truncate block"
+              title={info.row.original.serialNo || "-"}
+            >
               {info.row.original.serialNo || "-"}
             </span>
           ),
@@ -201,26 +207,30 @@ export default function AssetTable({
         {
           id: "reason",
           header: "เหตุผลการจำหน่าย",
+          size: 210,
           cell: (info) => {
             const row = info.row.original;
             const text = row.remark || "ซ่อมไม่คุ้มค่า / ผู้บริหารไม่อนุมัติ";
             return (
-              <span
-                className="text-xs text-slate-700 font-medium max-w-xs truncate block"
-                title={text}
-              >
-                {text}
-              </span>
+              <div className="min-w-0 pr-2">
+                <span
+                  className="text-xs text-slate-700 font-medium truncate block"
+                  title={text}
+                >
+                  {text}
+                </span>
+              </div>
             );
           },
         },
         {
           id: "date",
           header: "วันที่ทำรายการ",
+          size: 105,
           cell: (info) => {
             const row = info.row.original;
             return (
-              <span className="text-xs text-slate-600 font-medium">
+              <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
                 {formatThaiDate(row.updatedAt || row.receivedDate)}
               </span>
             );
@@ -229,12 +239,13 @@ export default function AssetTable({
         {
           id: "status",
           header: "สถานะสต็อก",
+          size: 110,
           cell: (info) => {
             const status = info.row.original.status;
             const badge = getStatusBadge(status?.code, status?.name);
             return (
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.bgColor}`}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge.bgColor}`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
                 <span className={badge.textColor}>{badge.text}</span>
@@ -245,29 +256,30 @@ export default function AssetTable({
         {
           id: "actions",
           header: "การดำเนินการ",
+          size: 175,
           cell: (info) => {
             const row = info.row.original;
             return (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <button
                   type="button"
                   title="ดูรายละเอียด"
                   onClick={() => openDetail(row)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
                 >
                   <Eye className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => openMarkLost(row)}
-                  className="px-2 py-1 text-[10px] font-semibold rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors cursor-pointer"
+                  className="px-2 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer shrink-0"
                 >
                   ปรับเป็นสูญหาย
                 </button>
                 <button
                   type="button"
                   onClick={() => openConfirmDisposal(row)}
-                  className="px-2.5 py-1 text-[10px] font-semibold rounded-md bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors cursor-pointer"
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
                 >
                   จำหน่าย
                 </button>
@@ -283,6 +295,7 @@ export default function AssetTable({
       {
         id: "image",
         header: "รูปภาพ",
+        size: 60,
         cell: (info) => {
           const imgUrl = info.row.original.imageUrl;
           return (
@@ -291,11 +304,11 @@ export default function AssetTable({
                 <img
                   src={imgUrl}
                   alt="Equipment"
-                  className="h-10 w-10 rounded-full object-cover border border-slate-200 bg-slate-50"
+                  className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-50"
                 />
               ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400 border border-slate-200">
-                  <ImageIcon className="h-5 w-5" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 border border-slate-200">
+                  <ImageIcon className="h-4 w-4" />
                 </div>
               )}
             </div>
@@ -305,10 +318,11 @@ export default function AssetTable({
       {
         id: "noid",
         header: "รหัสครุภัณฑ์",
+        size: 135,
         cell: (info) => {
           const row = info.row.original;
           return (
-            <span className="font-semibold text-slate-800 text-sm font-mono">
+            <span className="font-semibold text-slate-800 text-xs font-mono truncate block">
               {row.noid || row.id.slice(0, 8)}
             </span>
           );
@@ -320,15 +334,15 @@ export default function AssetTable({
         cell: (info) => {
           const row = info.row.original;
           return (
-            <div className="max-w-xs">
+            <div className="min-w-0 pr-2">
               <div
-                className="font-bold text-slate-800 text-sm truncate"
+                className="font-bold text-slate-800 text-xs truncate"
                 title={row.name}
               >
                 {row.name}
               </div>
               <div
-                className="text-xs text-slate-400 truncate mt-0.5"
+                className="text-[11px] text-slate-400 truncate mt-0.5"
                 title={row.model || row.company?.name}
               >
                 {row.model} {row.company?.name ? `/ ${row.company.name}` : ""}
@@ -340,8 +354,12 @@ export default function AssetTable({
       {
         id: "serialNo",
         header: "หมายเลขเครื่อง",
+        size: 130,
         cell: (info) => (
-          <span className="font-mono text-xs text-slate-600 font-medium">
+          <span
+            className="font-mono text-xs text-slate-600 font-medium truncate block"
+            title={info.row.original.serialNo || "-"}
+          >
             {info.row.original.serialNo || "-"}
           </span>
         ),
@@ -349,14 +367,15 @@ export default function AssetTable({
       {
         id: "department",
         header: "หน่วยงานที่รับผิดชอบ",
+        size: 160,
         cell: (info) => {
           const section = info.row.original.section;
           return (
-            <div>
-              <div className="text-xs font-semibold text-slate-800 truncate max-w-[180px]">
+            <div className="min-w-0 pr-2">
+              <div className="text-xs font-semibold text-slate-800 truncate" title={section?.name || "-"}>
                 {section?.name || "-"}
               </div>
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[11px] text-slate-400 truncate" title={section?.building || "-"}>
                 {section?.building || "-"}
               </div>
             </div>
@@ -366,6 +385,7 @@ export default function AssetTable({
       {
         id: "dates",
         header: "วันที่รับ / หมดประกัน",
+        size: 140,
         cell: (info) => {
           const row = info.row.original;
           const expired = isExpired(row.warrantyDate);
@@ -394,12 +414,13 @@ export default function AssetTable({
       {
         id: "status",
         header: "สถานะสต็อก",
+        size: 110,
         cell: (info) => {
           const status = info.row.original.status;
           const badge = getStatusBadge(status?.code, status?.name);
           return (
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold">
-              <span className={`h-2 w-2 rounded-full ${badge.dot}`} />
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold whitespace-nowrap">
+              <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
               <span className={badge.textColor}>{badge.text}</span>
             </div>
           );
@@ -408,17 +429,18 @@ export default function AssetTable({
       {
         id: "actions",
         header: "การดำเนินการ",
+        size: 175,
         cell: (info) => {
           const row = info.row.original;
           const isOpen = openActionDropdown === row.id;
 
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               <button
                 type="button"
                 title="แก้ไข"
                 onClick={() => openEdit(row)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -426,7 +448,7 @@ export default function AssetTable({
                 type="button"
                 title="ดูรายละเอียด"
                 onClick={() => openDetail(row)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
               >
                 <Eye className="h-3.5 w-3.5" />
               </button>
@@ -502,15 +524,20 @@ export default function AssetTable({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Scrollable Container with Fixed Header */}
-      <div className="flex-1 overflow-auto min-h-0">
-        <table className="w-full text-left border-collapse">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+        <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 z-10 bg-white border-b border-slate-200">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="p-3 text-xs font-semibold text-slate-600 whitespace-nowrap bg-white"
+                    style={{
+                      width: header.column.columnDef.size
+                        ? `${header.column.columnDef.size}px`
+                        : undefined,
+                    }}
+                    className="py-2.5 px-3 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap"
                   >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -546,7 +573,7 @@ export default function AssetTable({
                   className="hover:bg-slate-50/80 transition-colors"
                 >
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="p-3">
+                    <td key={cell.id} className="py-2.5 px-3 align-middle text-xs">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
