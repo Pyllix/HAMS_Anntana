@@ -201,7 +201,7 @@ export default function AssetStock() {
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">
-              ใช้งานได้ปกติ (รายการ)
+              ใช้งานปกติ (รายการ)
             </p>
             <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-0.5">
               {normalAssets.toLocaleString()}

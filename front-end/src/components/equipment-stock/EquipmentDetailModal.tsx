@@ -225,21 +225,21 @@ function getStatusBadge(code?: string, name?: string) {
   switch (code) {
     case "NORMAL":
       return {
-        text: name || "พร้อมใช้งาน",
+        text: name || "ใช้งานปกติ",
         bg: "bg-emerald-50 border-emerald-200 text-emerald-700",
         dot: "bg-emerald-500",
       };
     case "DAMAGED":
       return {
         text: name || "ชำรุด",
-        bg: "bg-rose-50 border-rose-200 text-rose-700",
-        dot: "bg-rose-500",
+        bg: "bg-orange-50 border-orange-200 text-orange-700",
+        dot: "bg-orange-500",
       };
     case "UNDER_REPAIR":
       return {
-        text: name || "กำลังซ่อม",
-        bg: "bg-blue-50 border-blue-200 text-blue-700",
-        dot: "bg-blue-500",
+        text: "อยู่ระหว่างซ่อม",
+        bg: "bg-sky-50 border-sky-200 text-sky-700",
+        dot: "bg-sky-500",
       };
     case "WAIT_DISPOSAL":
       return {
@@ -249,9 +249,9 @@ function getStatusBadge(code?: string, name?: string) {
       };
     case "DISPOSAL":
       return {
-        text: name || "จำหน่ายออกแล้ว",
-        bg: "bg-slate-100 border-slate-300 text-slate-700",
-        dot: "bg-slate-500",
+        text: name || "จำหน่ายแล้ว",
+        bg: "bg-rose-50 border-rose-200 text-rose-700",
+        dot: "bg-rose-500",
       };
     case "LOST":
       return {
