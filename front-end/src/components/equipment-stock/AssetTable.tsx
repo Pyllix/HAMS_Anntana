@@ -1,16 +1,20 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Eye,
   Pencil,
+  Clock,
+  AlertTriangle,
   Image as ImageIcon,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
 import { useEquipmentModalStore } from "../../stores/useEquipmentModalStore";
+import { useDisposalModalStore } from "../../stores/useDisposalModalStore";
 
 const features = tableFeatures({});
 
@@ -22,6 +26,7 @@ interface AssetTableProps {
   totalItems: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  activeTab?: string;
 }
 
 export default function AssetTable({
@@ -32,9 +37,16 @@ export default function AssetTable({
   totalItems = 0,
   pageSize = 10,
   onPageChange,
+  activeTab = "ALL",
 }: AssetTableProps) {
   const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
   const openEdit = useEquipmentModalStore((state) => state.openEdit);
+  const { openWaitDisposal, openConfirmDisposal, openMarkLost } =
+    useDisposalModalStore();
+
+  const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(
+    null
+  );
 
   const formatThaiDate = (dateStr?: string | null) => {
     if (!dateStr) return "-";
@@ -67,47 +79,206 @@ export default function AssetTable({
           text: name || "พร้อมใช้งาน",
           dot: "bg-emerald-500",
           textColor: "text-emerald-700",
+          bgColor: "bg-emerald-50 border border-emerald-200",
         };
       case "LOST":
         return {
           text: name || "สูญหาย",
           dot: "bg-rose-500",
           textColor: "text-rose-600",
-        };
-      case "WAIT_DISPOSAL":
-        return {
-          text: name || "รอจำหน่าย",
-          dot: "bg-amber-500",
-          textColor: "text-amber-600",
-        };
-      case "DISPOSAL":
-        return {
-          text: name || "จำหน่ายออกแล้ว",
-          dot: "bg-slate-400",
-          textColor: "text-slate-600",
-        };
-      case "UNDER_REPAIR":
-        return {
-          text: name || "กำลังซ่อม",
-          dot: "bg-blue-500",
-          textColor: "text-blue-600",
+          bgColor: "bg-rose-50 border border-rose-200",
         };
       case "DAMAGED":
         return {
           text: name || "ชำรุด",
           dot: "bg-orange-500",
           textColor: "text-orange-600",
+          bgColor: "bg-orange-50 border border-orange-200",
+        };
+      case "UNDER_REPAIR":
+        return {
+          text: name || "กำลังซ่อม",
+          dot: "bg-sky-500",
+          textColor: "text-sky-600",
+          bgColor: "bg-sky-50 border border-sky-200",
+        };
+      case "WAIT_DISPOSAL":
+        return {
+          text: name || "รอจำหน่าย",
+          dot: "bg-amber-500",
+          textColor: "text-amber-700",
+          bgColor: "bg-amber-50 border border-amber-200",
+        };
+      case "DISPOSAL":
+        return {
+          text: name || "จำหน่ายแล้ว",
+          dot: "bg-slate-500",
+          textColor: "text-slate-600",
+          bgColor: "bg-slate-100 border border-slate-200",
         };
       default:
         return {
-          text: name || "รอดำเนินการ",
-          dot: "bg-amber-500",
-          textColor: "text-amber-600",
+          text: name || "พร้อมใช้งาน",
+          dot: "bg-emerald-500",
+          textColor: "text-emerald-700",
+          bgColor: "bg-emerald-50 border border-emerald-200",
         };
     }
   };
 
-  const columns = useMemo<Array<ColumnDef<typeof features, Asset>>>(() => {
+  const columns = useMemo<ColumnDef<Asset>[]>(() => {
+    const isWaitDisposalTab = activeTab === "WAIT_DISPOSAL";
+
+    if (isWaitDisposalTab) {
+      // Columns specifically matching Image 1 for "รอจำหน่าย"
+      return [
+        {
+          id: "image",
+          header: "รูปภาพ",
+          cell: (info) => {
+            const imgUrl = info.row.original.imageUrl;
+            return (
+              <div className="flex items-center justify-center">
+                {imgUrl ? (
+                  <img
+                    src={imgUrl}
+                    alt="Equipment"
+                    className="h-10 w-10 rounded-xl object-cover border border-slate-200 bg-slate-50"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 border border-slate-200">
+                    <ImageIcon className="h-5 w-5" />
+                  </div>
+                )}
+              </div>
+            );
+          },
+        },
+        {
+          id: "noid",
+          header: "รหัสครุภัณฑ์",
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <span className="font-semibold text-slate-800 text-xs sm:text-sm font-mono">
+                {row.noid || row.id.slice(0, 8)}
+              </span>
+            );
+          },
+        },
+        {
+          id: "name_model",
+          header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <div className="max-w-xs">
+                <div
+                  className="font-bold text-slate-800 text-xs sm:text-sm truncate"
+                  title={row.name}
+                >
+                  {row.name}
+                </div>
+                <div
+                  className="text-xs text-slate-400 truncate mt-0.5"
+                  title={row.model || row.company?.name}
+                >
+                  {row.model} {row.company?.name ? `/ ${row.company.name}` : ""}
+                </div>
+              </div>
+            );
+          },
+        },
+        {
+          id: "serialNo",
+          header: "หมายเลขเครื่อง",
+          cell: (info) => (
+            <span className="font-mono text-xs text-slate-600 font-medium">
+              {info.row.original.serialNo || "-"}
+            </span>
+          ),
+        },
+        {
+          id: "reason",
+          header: "เหตุผลการจำหน่าย",
+          cell: (info) => {
+            const row = info.row.original;
+            const text = row.remark || "ซ่อมไม่คุ้มค่า / ผู้บริหารไม่อนุมัติ";
+            return (
+              <span
+                className="text-xs text-slate-700 font-medium max-w-xs truncate block"
+                title={text}
+              >
+                {text}
+              </span>
+            );
+          },
+        },
+        {
+          id: "date",
+          header: "วันที่ทำรายการ",
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <span className="text-xs text-slate-600 font-medium">
+                {formatThaiDate(row.updatedAt || row.receivedDate)}
+              </span>
+            );
+          },
+        },
+        {
+          id: "status",
+          header: "สถานะสต็อก",
+          cell: (info) => {
+            const status = info.row.original.status;
+            const badge = getStatusBadge(status?.code, status?.name);
+            return (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.bgColor}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
+                <span className={badge.textColor}>{badge.text}</span>
+              </span>
+            );
+          },
+        },
+        {
+          id: "actions",
+          header: "การดำเนินการ",
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  title="ดูรายละเอียด"
+                  onClick={() => openDetail(row)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMarkLost(row)}
+                  className="px-2 py-1 text-[10px] font-semibold rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors cursor-pointer"
+                >
+                  ปรับเป็นสูญหาย
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openConfirmDisposal(row)}
+                  className="px-2.5 py-1 text-[10px] font-semibold rounded-md bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors cursor-pointer"
+                >
+                  จำหน่าย
+                </button>
+              </div>
+            );
+          },
+        },
+      ];
+    }
+
+    // Default Main Stock Columns (Tab: ALL, DISPOSAL, LOST)
     return [
       {
         id: "image",
@@ -150,10 +321,16 @@ export default function AssetTable({
           const row = info.row.original;
           return (
             <div className="max-w-xs">
-              <div className="font-bold text-slate-800 text-sm truncate" title={row.name}>
+              <div
+                className="font-bold text-slate-800 text-sm truncate"
+                title={row.name}
+              >
                 {row.name}
               </div>
-              <div className="text-xs text-slate-400 truncate mt-0.5" title={row.model || row.company?.name}>
+              <div
+                className="text-xs text-slate-400 truncate mt-0.5"
+                title={row.model || row.company?.name}
+              >
                 {row.model} {row.company?.name ? `/ ${row.company.name}` : ""}
               </div>
             </div>
@@ -164,26 +341,24 @@ export default function AssetTable({
         id: "serialNo",
         header: "หมายเลขเครื่อง",
         cell: (info) => (
-          <span className="text-xs text-slate-600 font-mono">
+          <span className="font-mono text-xs text-slate-600 font-medium">
             {info.row.original.serialNo || "-"}
           </span>
         ),
       },
       {
-        id: "section",
+        id: "department",
         header: "หน่วยงานที่รับผิดชอบ",
         cell: (info) => {
-          const row = info.row.original;
+          const section = info.row.original.section;
           return (
             <div>
-              <div className="text-xs font-semibold text-slate-800">
-                {row.section?.name || "-"}
+              <div className="text-xs font-semibold text-slate-800 truncate max-w-[180px]">
+                {section?.name || "-"}
               </div>
-              {row.section?.building && (
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  {row.section.building}
-                </div>
-              )}
+              <div className="text-[11px] text-slate-400">
+                {section?.building || "-"}
+              </div>
             </div>
           );
         },
@@ -196,7 +371,7 @@ export default function AssetTable({
           const expired = isExpired(row.warrantyDate);
           return (
             <div>
-              <div className="text-xs font-medium text-slate-700">
+              <div className="text-xs font-medium text-slate-800">
                 {formatThaiDate(row.receivedDate)}
               </div>
               {row.warrantyDate ? (
@@ -205,7 +380,9 @@ export default function AssetTable({
                     expired ? "text-rose-500 font-medium" : "text-slate-400"
                   }`}
                 >
-                  {expired ? "หมดประกันแล้ว" : `ว/ด/ป หมด: ${formatThaiDate(row.warrantyDate)}`}
+                  {expired
+                    ? "หมดประกันแล้ว"
+                    : `ว/ด/ป หมด: ${formatThaiDate(row.warrantyDate)}`}
                 </div>
               ) : (
                 <div className="text-[11px] text-slate-400 mt-0.5">-</div>
@@ -233,6 +410,8 @@ export default function AssetTable({
         header: "การดำเนินการ",
         cell: (info) => {
           const row = info.row.original;
+          const isOpen = openActionDropdown === row.id;
+
           return (
             <div className="flex items-center gap-2">
               <button
@@ -251,18 +430,67 @@ export default function AssetTable({
               >
                 <Eye className="h-3.5 w-3.5" />
               </button>
-              <button
-                type="button"
-                className="px-2 py-1 text-[11px] font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                ดำเนินการต่อ
-              </button>
+
+              {/* Action Dropdown for ดำเนินการต่อ with 2 options */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenActionDropdown(isOpen ? null : row.id)
+                  }
+                  className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <span>ดำเนินการต่อ</span>
+                  <ChevronDown className="h-3 w-3 text-slate-400" />
+                </button>
+
+                {isOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setOpenActionDropdown(null)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenActionDropdown(null);
+                          openWaitDisposal(row);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-orange-50 hover:text-[#ea580c] transition-colors text-left cursor-pointer"
+                      >
+                        <Clock className="h-3.5 w-3.5 text-orange-500" />
+                        <span className="font-semibold">รอจำหน่าย</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenActionDropdown(null);
+                          openMarkLost(row);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left cursor-pointer"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="font-semibold">ปรับเป็นสูญหาย</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           );
         },
       },
     ];
-  }, [openDetail, openEdit]);
+  }, [
+    activeTab,
+    openDetail,
+    openEdit,
+    openActionDropdown,
+    openWaitDisposal,
+    openConfirmDisposal,
+    openMarkLost,
+  ]);
 
   const table = useTable({
     key: "equipment-table",
@@ -271,67 +499,57 @@ export default function AssetTable({
     data: assets,
   });
 
-  const visiblePages = useMemo(() => {
-    if (totalPages <= 3) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (currentPage <= 2) {
-      return [1, 2, 3];
-    }
-    if (currentPage >= totalPages - 1) {
-      return [totalPages - 2, totalPages - 1, totalPages];
-    }
-    return [currentPage - 1, currentPage, currentPage + 1];
-  }, [currentPage, totalPages]);
-
   return (
-    <div className="w-full flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Scrollable Container with Fixed Header */}
       <div className="flex-1 overflow-auto min-h-0">
-        <table className="w-full text-left">
-          <thead className="font-bold text-md border-b border-slate-200 bg-white sticky top-0 z-10">
+        <table className="w-full text-left border-collapse">
+          <thead className="sticky top-0 z-10 bg-white border-b border-slate-200">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="py-2.5 px-4 font-bold text-slate-800 text-sm"
+                    className="p-3 text-xs font-semibold text-slate-600 whitespace-nowrap bg-white"
                   >
-                    {header.isPlaceholder ? null : (
-                      <table.FlexRender header={header} />
-                    )}
+                    {header.column.columnDef.header as string}
                   </th>
                 ))}
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 bg-white">
             {isLoading ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="text-center py-10 text-xs text-slate-400"
                 >
-                  กำลังโหลดข้อมูลครุภัณฑ์...
+                  กำลังโหลดข้อมูล...
                 </td>
               </tr>
             ) : assets.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="text-center py-10 text-xs text-slate-400"
                 >
-                  ไม่พบข้อมูลรายการครุภัณฑ์
+                  ไม่พบข้อมูลครุภัณฑ์
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-slate-50/50 transition-colors"
+                  className="hover:bg-slate-50/80 transition-colors"
                 >
-                  {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-4 align-middle text-sm">
-                      <table.FlexRender cell={cell} />
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="p-3">
+                      {cell.column.columnDef.cell
+                        ? (cell.column.columnDef.cell(
+                            cell.getContext()
+                          ) as React.ReactNode)
+                        : null}
                     </td>
                   ))}
                 </tr>
@@ -341,47 +559,53 @@ export default function AssetTable({
         </table>
       </div>
 
-      {/* Pagination & Summary footer matching StockAssetsTable */}
-      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
+      {/* Pagination Footer */}
+      <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 bg-white shrink-0 text-xs text-slate-500">
         <div>
-          แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(currentPage * pageSize, totalItems)} จาก{" "}
-          {totalItems.toLocaleString()} รายการ
+          แสดง {(currentPage - 1) * pageSize + 1} ถึง{" "}
+          {Math.min(currentPage * pageSize, totalItems)} จาก {totalItems} รายการ
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={currentPage <= 1 || isLoading}
-            onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            className="p-1 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
           </button>
-
-          {visiblePages.map((pageNum) => (
-            <button
-              key={pageNum}
-              type="button"
-              disabled={isLoading}
-              onClick={() => onPageChange(pageNum)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
-                currentPage === pageNum
-                  ? "border-emerald-600 bg-emerald-600 text-white shadow-xs"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {pageNum}
-            </button>
-          ))}
-
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((p) => {
+              if (totalPages <= 5) return true;
+              return Math.abs(p - currentPage) <= 1 || p === 1 || p === totalPages;
+            })
+            .map((p, idx, arr) => (
+              <React.Fragment key={p}>
+                {idx > 0 && p - arr[idx - 1] > 1 && (
+                  <span className="px-1 text-slate-400">...</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onPageChange(p)}
+                  className={`h-6 w-6 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
+                    currentPage === p
+                      ? activeTab === "WAIT_DISPOSAL"
+                        ? "bg-[#ea580c] text-white"
+                        : "bg-emerald-600 text-white"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {p}
+                </button>
+              </React.Fragment>
+            ))}
           <button
             type="button"
-            disabled={currentPage >= totalPages || isLoading}
-            onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            className="p-1 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
