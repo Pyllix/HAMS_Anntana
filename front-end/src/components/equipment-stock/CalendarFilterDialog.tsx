@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 
 interface CalendarFilterDialogProps {
@@ -38,8 +38,20 @@ export default function CalendarFilterDialog({
     selectedDate ? selectedDate.getFullYear() : new Date().getFullYear()
   );
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | null>(
-    selectedDate || new Date()
+    selectedDate
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentMonth(
+        selectedDate ? selectedDate.getMonth() : new Date().getMonth()
+      );
+      setCurrentYear(
+        selectedDate ? selectedDate.getFullYear() : new Date().getFullYear()
+      );
+      setTempSelectedDate(selectedDate);
+    }
+  }, [isOpen, selectedDate]);
 
   if (!isOpen) return null;
 
@@ -70,7 +82,7 @@ export default function CalendarFilterDialog({
       const label = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`;
       onSelectDate(tempSelectedDate, label);
     } else {
-      onSelectDate(null, "เดือนนี้");
+      onSelectDate(null, "ทั้งหมด");
     }
     onClose();
   };

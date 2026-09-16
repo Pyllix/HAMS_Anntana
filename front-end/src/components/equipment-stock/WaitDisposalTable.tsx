@@ -6,20 +6,18 @@ import {
   ChevronRight,
   ChevronDown,
   Eye,
-  Pencil,
   Clock,
   AlertTriangle,
-  Image as ImageIcon,
   XCircle,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
-import { useEquipmentModalStore } from "../../stores/useEquipmentModalStore";
 import { useDisposalModalStore } from "../../stores/useDisposalModalStore";
 
 const features = tableFeatures({});
 
-interface AssetTableProps {
+interface WaitDisposalTableProps {
   assets?: Asset[];
   isLoading?: boolean;
   currentPage: number;
@@ -27,10 +25,19 @@ interface AssetTableProps {
   totalItems: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  activeTab?: string;
 }
 
-export default function AssetTable({
+const formatThaiDate = (dateStr?: string | null) => {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "-";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear() + 543;
+  return `${day}/${month}/${year}`;
+};
+
+export default function WaitDisposalTable({
   assets = [],
   isLoading = false,
   currentPage = 1,
@@ -38,94 +45,10 @@ export default function AssetTable({
   totalItems = 0,
   pageSize = 10,
   onPageChange,
-  activeTab = "ALL",
-}: AssetTableProps) {
+}: WaitDisposalTableProps) {
   const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
-  const openEdit = useEquipmentModalStore((state) => state.openEdit);
-  const { openWaitDisposal, openConfirmDisposal, openMarkLost } =
-    useDisposalModalStore();
-
-  const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(
-    null
-  );
-
-  const formatThaiDate = (dateStr?: string | null) => {
-    if (!dateStr) return "-";
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return "-";
-      const day = String(d.getDate()).padStart(2, "0");
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const year = d.getFullYear() + 543;
-      return `${day}/${month}/${year}`;
-    } catch {
-      return "-";
-    }
-  };
-
-  const isExpired = (warrantyDateStr?: string | null) => {
-    if (!warrantyDateStr) return false;
-    try {
-      const d = new Date(warrantyDateStr);
-      return d.getTime() < new Date().getTime();
-    } catch {
-      return false;
-    }
-  };
-
-  const getStatusBadge = (code?: string, name?: string) => {
-    switch (code) {
-      case "NORMAL":
-        return {
-          text: name || "ใช้งานปกติ",
-          dot: "bg-emerald-500",
-          textColor: "text-emerald-700",
-          bgColor: "bg-emerald-50 border border-emerald-200",
-        };
-      case "LOST":
-        return {
-          text: name || "สูญหาย",
-          dot: "bg-rose-500",
-          textColor: "text-rose-600",
-          bgColor: "bg-rose-50 border border-rose-200",
-        };
-      case "DAMAGED":
-        return {
-          text: name || "ชำรุด",
-          dot: "bg-orange-500",
-          textColor: "text-orange-600",
-          bgColor: "bg-orange-50 border border-orange-200",
-        };
-      case "UNDER_REPAIR":
-        return {
-          text: name || "อยู่ระหว่างซ่อม",
-          dot: "bg-sky-500",
-          textColor: "text-sky-600",
-          bgColor: "bg-sky-50 border border-sky-200",
-        };
-      case "WAIT_DISPOSAL":
-        return {
-          text: name || "รอจำหน่าย",
-          dot: "bg-amber-500",
-          textColor: "text-amber-700",
-          bgColor: "bg-amber-50 border border-amber-200",
-        };
-      case "DISPOSAL":
-        return {
-          text: name || "จำหน่ายแล้ว",
-          dot: "bg-rose-500",
-          textColor: "text-rose-700",
-          bgColor: "bg-rose-50 border border-rose-200",
-        };
-      default:
-        return {
-          text: name || "พร้อมใช้งาน",
-          dot: "bg-emerald-500",
-          textColor: "text-emerald-700",
-          bgColor: "bg-emerald-50 border border-emerald-200",
-        };
-    }
-  };
+  const { openConfirmDisposal, openMarkLost } = useDisposalModalStore();
+  const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(null);
 
   const columns = useMemo<Array<ColumnDef<typeof features, Asset>>>(() => {
     return [
@@ -163,7 +86,7 @@ export default function AssetTable({
       {
         id: "noid",
         header: "รหัสครุภัณฑ์",
-        size: 95,
+        size: 120,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -176,7 +99,7 @@ export default function AssetTable({
       {
         id: "name_model",
         header: "ชื่อครุภัณฑ์ / ยี่ห้อและรุ่น",
-        size: 160,
+        size: 200,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -200,7 +123,7 @@ export default function AssetTable({
       {
         id: "serialNo",
         header: "หมายเลขเครื่อง",
-        size: 115,
+        size: 130,
         cell: (info) => (
           <span
             className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -211,107 +134,57 @@ export default function AssetTable({
         ),
       },
       {
-        id: "department",
-        header: "หน่วยงานที่รับผิดชอบ",
+        id: "reason",
+        header: "เหตุผลการจำหน่าย",
         cell: (info) => {
-          const section = info.row.original.section;
+          const row = info.row.original;
+          const text = row.remark || "ซ่อมไม่คุ้มค่า / ผู้บริหารไม่อนุมัติ";
           return (
             <div className="min-w-0 pr-2">
-              <div className="text-xs font-semibold text-slate-800 truncate" title={section?.name || "-"}>
-                {section?.name || "-"}
-              </div>
-              <div className="text-[11px] text-slate-400 truncate" title={section?.building || "-"}>
-                {section?.building || "-"}
-              </div>
+              <span
+                className="text-xs text-slate-700 font-medium truncate block"
+                title={text}
+              >
+                {text}
+              </span>
             </div>
           );
         },
       },
       {
-        id: "dates",
-        header: "วันที่รับ / หมดประกัน",
-        size: 130,
+        id: "date",
+        header: "วันที่ทำรายการ",
+        size: 110,
         cell: (info) => {
           const row = info.row.original;
-          const expired = isExpired(row.warrantyDate);
           return (
-            <div>
-              <div className="text-xs font-medium text-slate-800">
-                {formatThaiDate(row.receivedDate)}
-              </div>
-              {row.warrantyDate ? (
-                <div
-                  className={`text-[11px] mt-0.5 ${
-                    expired ? "text-rose-500 font-medium" : "text-slate-400"
-                  }`}
-                >
-                  {expired
-                    ? "หมดประกันแล้ว"
-                    : `ว/ด/ป หมด: ${formatThaiDate(row.warrantyDate)}`}
-                </div>
-              ) : (
-                <div className="text-[11px] text-slate-400 mt-0.5">-</div>
-              )}
-            </div>
+            <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+              {formatThaiDate(row.updatedAt || row.receivedDate)}
+            </span>
           );
         },
       },
       {
         id: "status",
         header: "สถานะสต็อก",
-        size: 130,
-        cell: (info) => {
-          const status = info.row.original.status;
-          const badge = getStatusBadge(status?.code, status?.name);
-          return (
-            <div
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${badge.bgColor}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
-              <span className={badge.textColor}>{badge.text}</span>
-            </div>
-          );
-        },
+        size: 125,
+        cell: () => (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+            <span>รอจำหน่าย</span>
+          </span>
+        ),
       },
       {
         id: "actions",
         header: "การดำเนินการ",
-        size: 190,
+        size: 160,
         cell: (info) => {
           const row = info.row.original;
-          const isReadOnly =
-            row.status?.code === "DISPOSAL" ||
-            row.status?.code === "LOST" ||
-            row.status?.code === "UNDER_REPAIR" ||
-            row.status?.code === "DAMAGED";
-
-          if (isReadOnly) {
-            return (
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <button
-                  type="button"
-                  title="ดูรายละเอียด"
-                  onClick={() => openDetail(row)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            );
-          }
-
-          const isOpen = openActionDropdown === row.id;
+          const isOpen = openActionDropdown === `wait-${row.id}`;
 
           return (
-            <div className="flex items-center gap-2 whitespace-nowrap">
-              <button
-                type="button"
-                title="แก้ไข"
-                onClick={() => openEdit(row)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
               <button
                 type="button"
                 title="ดูรายละเอียด"
@@ -321,12 +194,11 @@ export default function AssetTable({
                 <Eye className="h-3.5 w-3.5" />
               </button>
 
-              {/* Action Dropdown for ดำเนินการ with 2 options */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() =>
-                    setOpenActionDropdown(isOpen ? null : row.id)
+                    setOpenActionDropdown(isOpen ? null : `wait-${row.id}`)
                   }
                   className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
                 >
@@ -345,12 +217,12 @@ export default function AssetTable({
                         type="button"
                         onClick={() => {
                           setOpenActionDropdown(null);
-                          openWaitDisposal(row);
+                          openConfirmDisposal(row);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-orange-50 hover:text-[#ea580c] transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
                       >
-                        <Clock className="h-3.5 w-3.5 text-orange-500" />
-                        <span className="font-semibold">รอจำหน่าย</span>
+                        <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                        <span className="font-semibold">จำหน่าย</span>
                       </button>
                       <button
                         type="button"
@@ -358,7 +230,7 @@ export default function AssetTable({
                           setOpenActionDropdown(null);
                           openMarkLost(row);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
                       >
                         <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
                         <span className="font-semibold">ปรับเป็นสูญหาย</span>
@@ -372,18 +244,10 @@ export default function AssetTable({
         },
       },
     ];
-  }, [
-    activeTab,
-    openDetail,
-    openEdit,
-    openActionDropdown,
-    openWaitDisposal,
-    openConfirmDisposal,
-    openMarkLost,
-  ]);
+  }, [openDetail, openActionDropdown, openConfirmDisposal, openMarkLost]);
 
   const table = useTable({
-    key: "equipment-table",
+    key: "wait-disposal-table",
     features,
     columns,
     data: assets,
@@ -407,20 +271,20 @@ export default function AssetTable({
                       style={{
                         width: colSize ? `${colSize}px` : undefined,
                       }}
-                    className={`py-2.5 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap ${
-                      header.id === "image"
-                        ? "pl-4 pr-2"
-                        : header.id === "actions"
-                        ? "pl-6 pr-4"
-                        : "px-3"
-                    }`}
-                  >
-                    {header.isPlaceholder ? null : (
-                      <table.FlexRender header={header} />
-                    )}
-                  </th>
-                );
-              })}
+                      className={`py-2.5 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap ${
+                        header.id === "image"
+                          ? "pl-4 pr-2"
+                          : header.id === "actions"
+                          ? "px-3"
+                          : "px-3"
+                      }`}
+                    >
+                      {header.isPlaceholder ? null : (
+                        <table.FlexRender header={header} />
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
@@ -440,7 +304,7 @@ export default function AssetTable({
                   colSpan={columns.length}
                   className="text-center py-10 text-xs text-slate-400"
                 >
-                  ไม่พบข้อมูลครุภัณฑ์
+                  ไม่พบข้อมูลครุภัณฑ์รอจำหน่าย
                 </td>
               </tr>
             ) : (
@@ -456,7 +320,7 @@ export default function AssetTable({
                         cell.column.id === "image"
                           ? "pl-4 pr-2"
                           : cell.column.id === "actions"
-                          ? "pl-6 pr-4"
+                          ? "px-3"
                           : "px-3"
                       }`}
                     >
@@ -498,11 +362,9 @@ export default function AssetTable({
                 <button
                   type="button"
                   onClick={() => onPageChange(p)}
-                  className={`h-6 w-6 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                    currentPage === p
-                      ? activeTab === "WAIT_DISPOSAL"
-                        ? "bg-[#ea580c] text-white"
-                        : "bg-emerald-600 text-white"
+                  className={`min-w-6 h-6 px-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${
+                    p === currentPage
+                      ? "bg-emerald-600 text-white"
                       : "text-slate-600 hover:bg-slate-100"
                   }`}
                 >
