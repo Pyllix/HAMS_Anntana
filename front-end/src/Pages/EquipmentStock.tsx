@@ -57,7 +57,7 @@ export default function EquipmentStock() {
   });
 
   // Synchronize Tab and Status Filter
-  const handleTabChange = (tab: TabType) => {
+  const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab);
     setPage(1);
     if (tab === "WAIT_DISPOSAL") {

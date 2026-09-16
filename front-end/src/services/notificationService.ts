@@ -1,5 +1,5 @@
 import { getNextWorkflowStage } from "../config/repairWorkflow";
-import type { RoleType } from "../Router/roles";
+import type { RoleType } from "../router/roles";
 import {
   RepairJob,
   RepairWorkflowActor,
