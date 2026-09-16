@@ -565,14 +565,16 @@ export default function AssetTable({
           <thead className="sticky top-0 z-10 bg-white border-b border-slate-200">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    style={{
-                      width: header.column.columnDef.size
-                        ? `${header.column.columnDef.size}px`
-                        : undefined,
-                    }}
+                {headerGroup.headers.map((header) => {
+                  const colSize = (
+                    header.column.columnDef as { size?: number }
+                  ).size;
+                  return (
+                    <th
+                      key={header.id}
+                      style={{
+                        width: colSize ? `${colSize}px` : undefined,
+                      }}
                     className={`py-2.5 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap ${
                       header.id === "image"
                         ? "pl-4 pr-2"
@@ -585,7 +587,8 @@ export default function AssetTable({
                       <table.FlexRender header={header} />
                     )}
                   </th>
-                ))}
+                );
+              })}
               </tr>
             ))}
           </thead>
