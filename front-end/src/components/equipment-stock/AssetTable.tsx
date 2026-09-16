@@ -10,6 +10,7 @@ import {
   Clock,
   AlertTriangle,
   Image as ImageIcon,
+  XCircle,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
@@ -135,7 +136,7 @@ export default function AssetTable({
         {
           id: "image",
           header: "รูปภาพ",
-          size: 60,
+          size: 55,
           cell: (info) => {
             const imgUrl = info.row.original.imageUrl;
             return (
@@ -158,7 +159,7 @@ export default function AssetTable({
         {
           id: "noid",
           header: "รหัสครุภัณฑ์",
-          size: 135,
+          size: 125,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -194,7 +195,7 @@ export default function AssetTable({
         {
           id: "serialNo",
           header: "หมายเลขเครื่อง",
-          size: 130,
+          size: 120,
           cell: (info) => (
             <span
               className="font-mono text-xs text-slate-600 font-medium truncate block"
@@ -207,7 +208,7 @@ export default function AssetTable({
         {
           id: "reason",
           header: "เหตุผลการจำหน่าย",
-          size: 210,
+          size: 180,
           cell: (info) => {
             const row = info.row.original;
             const text = row.remark || "ซ่อมไม่คุ้มค่า / ผู้บริหารไม่อนุมัติ";
@@ -226,7 +227,7 @@ export default function AssetTable({
         {
           id: "date",
           header: "วันที่ทำรายการ",
-          size: 105,
+          size: 100,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -239,7 +240,7 @@ export default function AssetTable({
         {
           id: "status",
           header: "สถานะสต็อก",
-          size: 110,
+          size: 105,
           cell: (info) => {
             const status = info.row.original.status;
             const badge = getStatusBadge(status?.code, status?.name);
@@ -256,9 +257,11 @@ export default function AssetTable({
         {
           id: "actions",
           header: "การดำเนินการ",
-          size: 175,
+          size: 125,
           cell: (info) => {
             const row = info.row.original;
+            const isOpen = openActionDropdown === `wait-${row.id}`;
+
             return (
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <button
@@ -269,20 +272,53 @@ export default function AssetTable({
                 >
                   <Eye className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openMarkLost(row)}
-                  className="px-2 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer shrink-0"
-                >
-                  ปรับเป็นสูญหาย
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openConfirmDisposal(row)}
-                  className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
-                >
-                  จำหน่าย
-                </button>
+
+                {/* Dropdown ดำเนินการ with จำหน่าย & ปรับเป็นสูญหาย */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenActionDropdown(isOpen ? null : `wait-${row.id}`)
+                    }
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span>ดำเนินการ</span>
+                    <ChevronDown className="h-3 w-3 text-slate-400" />
+                  </button>
+
+                  {isOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-20"
+                        onClick={() => setOpenActionDropdown(null)}
+                      />
+                      <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenActionDropdown(null);
+                            openConfirmDisposal(row);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
+                        >
+                          <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                          <span className="font-semibold">จำหน่าย</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenActionDropdown(null);
+                            openMarkLost(row);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="font-semibold">ปรับเป็นสูญหาย</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             );
           },
