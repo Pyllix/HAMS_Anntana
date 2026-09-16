@@ -281,4 +281,47 @@ describe('AssetService', () => {
       });
     });
   });
+
+  describe('currentBorrowing Transformation', () => {
+    it('should map active borrow transaction (e.g. APPROVED status) to currentBorrowing', async () => {
+      const mockAssetWithApprovedBorrow = {
+        id: 'asset-1',
+        name: 'Infusion Pump',
+        borrowTransactions: [
+          {
+            id: 'tx-1',
+            borrowNo: 'BR-202609-0001',
+            borrowStatus: { code: 'APPROVED', name: 'อนุมัติแล้ว' },
+          },
+        ],
+      };
+      mockPrismaService.$transaction.mockResolvedValue([[mockAssetWithApprovedBorrow], 1]);
+
+      const result = await service.findAll({ page: 1, limit: 10 });
+
+      expect(result.data[0]).toHaveProperty('currentBorrowing');
+      expect((result.data[0] as any).currentBorrowing).toEqual(
+        expect.objectContaining({
+          id: 'tx-1',
+          borrowNo: 'BR-202609-0001',
+          borrowStatus: { code: 'APPROVED', name: 'อนุมัติแล้ว' },
+        }),
+      );
+      expect((result.data[0] as any).borrowTransactions).toBeUndefined();
+    });
+
+    it('should set currentBorrowing to null when there are no active borrow transactions', async () => {
+      const mockAssetWithoutBorrow = {
+        id: 'asset-2',
+        name: 'Defibrillator',
+        borrowTransactions: [],
+      };
+      mockPrismaService.$transaction.mockResolvedValue([[mockAssetWithoutBorrow], 1]);
+
+      const result = await service.findAll({ page: 1, limit: 10 });
+
+      expect((result.data[0] as any).currentBorrowing).toBeNull();
+      expect((result.data[0] as any).borrowTransactions).toBeUndefined();
+    });
+  });
 });
