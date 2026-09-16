@@ -536,28 +536,6 @@ export default function EquipmentStock() {
               />
             </div>
 
-            {/* Status Dropdown */}
-            <div className="relative inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-slate-300 transition-colors w-40 justify-between bg-white">
-              <span className="truncate">
-                สถานะ:{" "}
-                {selectedStatus === "ALL"
-                  ? "ทั้งหมด"
-                  : assetStatuses.find((s) => String(s.id) === selectedStatus)?.name}
-              </span>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0 pointer-events-none" />
-              <select
-                value={selectedStatus}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              >
-                <option value="ALL">ทั้งหมด</option>
-                {assetStatuses.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Type Dropdown */}
             <div className="relative inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-slate-300 transition-colors w-48 justify-between bg-white">

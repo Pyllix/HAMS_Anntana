@@ -136,7 +136,7 @@ export default function AssetTable({
         {
           id: "image",
           header: "รูปภาพ",
-          size: 48,
+          size: 60,
           cell: (info) => {
             const imgUrl = info.row.original.imageUrl;
             return (
@@ -144,14 +144,22 @@ export default function AssetTable({
                 {imgUrl ? (
                   <img
                     src={imgUrl}
-                    alt="Equipment"
-                    className="h-9 w-9 rounded-xl object-cover border border-slate-200 bg-slate-50"
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fallback = e.currentTarget
+                        .nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = "flex";
+                    }}
+                    className="h-10 w-10 rounded-md object-cover border border-gray-200 bg-gray-100"
                   />
-                ) : (
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-400 border border-slate-200">
-                    <ImageIcon className="h-4 w-4" />
-                  </div>
-                )}
+                ) : null}
+                <div
+                  style={{ display: imgUrl ? "none" : "flex" }}
+                  className="h-10 w-10 items-center justify-center rounded-md bg-gray-100 text-gray-400 border border-gray-200"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </div>
               </div>
             );
           },
@@ -331,7 +339,7 @@ export default function AssetTable({
       {
         id: "image",
         header: "รูปภาพ",
-        size: 48,
+        size: 60,
         cell: (info) => {
           const imgUrl = info.row.original.imageUrl;
           return (
@@ -339,14 +347,22 @@ export default function AssetTable({
               {imgUrl ? (
                 <img
                   src={imgUrl}
-                  alt="Equipment"
-                  className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-50"
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const fallback = e.currentTarget
+                      .nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = "flex";
+                  }}
+                  className="h-10 w-10 rounded-md object-cover border border-gray-200 bg-gray-100"
                 />
-              ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 border border-slate-200">
-                  <ImageIcon className="h-4 w-4" />
-                </div>
-              )}
+              ) : null}
+              <div
+                style={{ display: imgUrl ? "none" : "flex" }}
+                className="h-10 w-10 items-center justify-center rounded-md bg-gray-100 text-gray-400 border border-gray-200"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </div>
             </div>
           );
         },
