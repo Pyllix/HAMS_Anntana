@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from "react";
-import { Undo2, Banknote, Clock, Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { ArrowLeft, Banknote, Clock, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
+import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import {
   fetchRepairJobSummaries,
   fetchDetailedRepairJobs,
@@ -217,6 +218,94 @@ export default function AssetRepairHistoryModal() {
     return 0;
   }, [totalPages, paginatedJobs.length, pageSize]);
 
+  // Custom Horizontal Scrollbar logic (No browser native scrollbar)
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0); // 0 to 1
+  const [thumbWidthPercent, setThumbWidthPercent] = useState(25);
+  const [canScroll, setCanScroll] = useState(false);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartScrollLeftRef = useRef(0);
+
+  // Sync scroll position from table to custom thumb
+  const handleTableScroll = useCallback(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll > 0) {
+      setScrollProgress(el.scrollLeft / maxScroll);
+    } else {
+      setScrollProgress(0);
+    }
+  }, []);
+
+  // Update track/thumb sizes whenever content or container resizes
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll > 2) {
+        setCanScroll(true);
+        const ratio = el.clientWidth / el.scrollWidth;
+        setThumbWidthPercent(Math.max(15, Math.min(85, ratio * 100)));
+        setScrollProgress(el.scrollLeft / maxScroll);
+      } else {
+        setCanScroll(false);
+        setScrollProgress(0);
+      }
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [paginatedJobs, currentPage, isOpen]);
+
+  // Handle clicking anywhere on the custom track
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!trackRef.current || !tableContainerRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickRatio = Math.max(0, Math.min(1, clickX / rect.width));
+    const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
+    tableContainerRef.current.scrollTo({
+      left: clickRatio * maxScroll,
+      behavior: "smooth",
+    });
+  };
+
+  // Handle dragging the custom thumb
+  const handleThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartScrollLeftRef.current = tableContainerRef.current?.scrollLeft || 0;
+
+    const handlePointerMove = (ev: PointerEvent) => {
+      if (!isDraggingRef.current || !tableContainerRef.current || !trackRef.current) return;
+      const deltaX = ev.clientX - dragStartXRef.current;
+      const trackWidth = trackRef.current.clientWidth;
+      const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
+      const scrollableTrackWidth = trackWidth * (1 - thumbWidthPercent / 100);
+      if (scrollableTrackWidth <= 0) return;
+      const scrollDelta = (deltaX / scrollableTrackWidth) * maxScroll;
+      tableContainerRef.current.scrollLeft = dragStartScrollLeftRef.current + scrollDelta;
+    };
+
+    const handlePointerUp = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   // Calculate summary metrics
   const totalCost = useMemo(() => {
     return repairJobs.reduce((sum, job) => sum + calculateJobCost(job), 0);
@@ -228,6 +317,15 @@ export default function AssetRepairHistoryModal() {
       0
     );
   }, [repairJobs]);
+
+  const handleBack = () => {
+    closeModal();
+  };
+
+  const handleCloseAll = () => {
+    closeModal();
+    useAssetDetailModalStore.getState().closeModal();
+  };
 
   if (!isOpen || !asset) return null;
 
@@ -244,31 +342,21 @@ export default function AssetRepairHistoryModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto"
-      onClick={closeModal}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-5 lg:p-6 overflow-y-auto"
+      onClick={handleCloseAll}
     >
       <div
-        className="w-full max-w-5xl lg:max-w-[66rem] bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-6.5 space-y-3.5 relative my-auto transition-all"
+        className="w-full max-w-6xl xl:max-w-[76rem] bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-6.5 space-y-3.5 relative my-auto transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-          <div>
-            <h2 className="text-xl sm:text-[22px] font-bold text-slate-800">
-              ประวัติการซ่อมบำรุงครุภัณฑ์
-            </h2>
-            <p className="text-xs sm:text-[13px] text-slate-400 mt-0.5">
-              สรุปสถิติการซ่อมบำรุงและประวัติค่าใช้จ่ายทั้งหมดของเครื่อง
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={closeModal}
-            title="ย้อนกลับ"
-            className="flex h-8.5 w-8.5 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
-          >
-            <Undo2 className="h-4.5 w-4.5" />
-          </button>
+        <div className="border-b border-slate-100 pb-3">
+          <h2 className="text-xl sm:text-[22px] font-bold text-slate-800">
+            ประวัติการซ่อมบำรุงครุภัณฑ์
+          </h2>
+          <p className="text-xs sm:text-[13px] text-slate-400 mt-0.5">
+            สรุปสถิติการซ่อมบำรุงและประวัติค่าใช้จ่ายทั้งหมดของเครื่อง
+          </p>
         </div>
 
         {/* Asset Info Card */}
@@ -373,17 +461,21 @@ export default function AssetRepairHistoryModal() {
             ประวัติรายการซ่อมบำรุงย้อนหลัง
           </h3>
 
-          <div className="w-full overflow-hidden">
-            <table className="w-full text-left table-fixed text-xs sm:text-[13px]">
+          <div
+            ref={tableContainerRef}
+            onScroll={handleTableScroll}
+            className="w-full overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <table className="w-full min-w-[1060px] text-left table-fixed text-xs sm:text-[13px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50 text-[11.5px] sm:text-xs font-semibold text-slate-500">
-                  <th className="w-[16%] py-2.5 px-3">เลขที่ใบงาน (JOB No.)</th>
-                  <th className="w-[12%] py-2.5 px-3">วันที่แจ้ง</th>
-                  <th className="w-[25%] py-2.5 px-3">อาการที่แจ้ง / สาเหตุ</th>
-                  <th className="w-[15%] py-2.5 px-3">ประเภทการซ่อม</th>
-                  <th className="w-[10%] py-2.5 px-3 text-right">ค่าซ่อม (บาท)</th>
-                  <th className="w-[11%] py-2.5 px-2 text-center">สถานะ</th>
-                  <th className="w-[11%] py-2.5 px-3">ผู้ดูแล</th>
+                  <th className="w-[14%] min-w-[140px] py-2.5 px-3">เลขที่ใบงาน (JOB No.)</th>
+                  <th className="w-[10%] min-w-[105px] py-2.5 px-3">วันที่แจ้ง</th>
+                  <th className="w-[26%] min-w-[240px] py-2.5 px-3">อาการที่แจ้ง / สาเหตุ</th>
+                  <th className="w-[15%] min-w-[145px] py-2.5 px-3">ประเภทการซ่อม</th>
+                  <th className="w-[10%] min-w-[100px] py-2.5 px-3 text-right">ค่าซ่อม (บาท)</th>
+                  <th className="w-[9%] min-w-[95px] py-2.5 px-2 text-center">สถานะ</th>
+                  <th className="w-[16%] min-w-[215px] py-2.5 px-3">ผู้ดูแล</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs sm:text-[13px]">
@@ -460,7 +552,7 @@ export default function AssetRepairHistoryModal() {
                           )}
                         </td>
                         <td
-                          className="py-2.5 px-3 text-slate-600 truncate"
+                          className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap"
                           title={getJobHandler(job)}
                         >
                           {getJobHandler(job)}
@@ -492,6 +584,27 @@ export default function AssetRepairHistoryModal() {
               </tbody>
             </table>
           </div>
+
+          {/* Custom Horizontal Scrollbar (Custom styled, no browser scrollbar) */}
+          {canScroll && (
+            <div className="pt-2 pb-0.5 px-0.5 select-none">
+              <div
+                ref={trackRef}
+                onClick={handleTrackClick}
+                className="group relative h-2 w-full rounded-full bg-slate-100 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                title="คลิกหรือลากเพื่อเลื่อนดูตารางแนวนอน"
+              >
+                <div
+                  onPointerDown={handleThumbPointerDown}
+                  style={{
+                    width: `${thumbWidthPercent}%`,
+                    left: `${scrollProgress * (100 - thumbWidthPercent)}%`,
+                  }}
+                  className="absolute top-0 bottom-0 rounded-full bg-slate-300 group-hover:bg-slate-400 hover:!bg-emerald-500 active:!bg-emerald-600 cursor-grab active:cursor-grabbing transition-colors shadow-2xs"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Table Footer Banner (Green summary row matching mockup) */}
           <div className="mt-2.5 p-2.5 sm:p-3 rounded-lg bg-emerald-50/70 border border-emerald-100 flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2">
@@ -559,13 +672,23 @@ export default function AssetRepairHistoryModal() {
               ข้อมูลสรุปค่าใช้จ่ายคำนวณจากใบงานซ่อมบำรุงที่บันทึกสำเร็จในระบบ
             </span>
           </div>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm transition-colors shadow-xs cursor-pointer"
-          >
-            ปิดหน้าต่าง
-          </button>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs sm:text-sm transition-colors shadow-2xs cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4 text-slate-500" />
+              ย้อนกลับ
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseAll}
+              className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm transition-colors shadow-xs cursor-pointer"
+            >
+              ปิดหน้าต่าง
+            </button>
+          </div>
         </div>
       </div>
     </div>
