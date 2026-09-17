@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, Pencil } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import AssetInfoCard from "./AssetInfoCard";
 import CommonEvaluationFields from "./CommonEvaluationFields";
+import TechnicianConfirmDialog from "../unrepairable-technician/TechnicianConfirmDialog";
 import InternalSpareFields from "./InternalSpareFields";
 import type { SelectedSpareItem } from "./InternalSpareFields";
 import ExternalVendorFields from "./ExternalVendorFields";
@@ -17,25 +18,28 @@ import type {
 } from "../../Types/TypeAssessment";
 import {
   createEvaluation,
+  getRepairJobById,
   getMechanics,
   getRepairMetaLookups,
 } from "../../services/assessmentService";
 
 export type ActionTypeUI =
   | "ซ่อมเองได้"
-  | "ขอเบิกอะไหล่ภายใน"
-  | "ขอเบิกอะไหล่ภายนอก"
+  | "ขอเบิกอะไหล่"
   | "ส่งซ่อมภายนอก"
-  | "ขอซื้อทดแทน";
+  | "ไม่สามารถซ่อมได้";
 
 export interface AssessmentFormState {
   symptomCause: string;
   diagnosis?: string;
   solution: string;
   causeId: string | number;
+  jobTypeId: string | number;
+  techCategoryId: string | number;
   isRepeatRepair?: boolean;
   dueDate: string | number;
   technicalDiagnosisDetail: string;
+  unrepairableReason: string;
 }
 
 const INITIAL_FORM_STATE: AssessmentFormState = {
@@ -43,25 +47,28 @@ const INITIAL_FORM_STATE: AssessmentFormState = {
   diagnosis: "",
   solution: "",
   causeId: "",
+  jobTypeId: "",
+  techCategoryId: "",
   isRepeatRepair: false,
   dueDate: "",
   technicalDiagnosisDetail: "",
+  unrepairableReason: "",
 };
 
 const ACTION_TYPE_MAP: Record<ActionTypeUI, StepActionType> = {
   ซ่อมเองได้: "SELF_REPAIR",
-  ขอเบิกอะไหล่ภายใน: "INTERNAL_STOCK",
-  ขอเบิกอะไหล่ภายนอก: "EXTERNAL_STOCK",
+  ขอเบิกอะไหล่: "WITH_PARTS",
   ส่งซ่อมภายนอก: "OUTSOURCE",
-  ขอซื้อทดแทน: "PURCHASE_REPLACEMENT",
+  ไม่สามารถซ่อมได้: "UNREPAIRABLE",
 };
 
 const REVERSE_ACTION_TYPE_MAP: Record<StepActionType, ActionTypeUI> = {
   SELF_REPAIR: "ซ่อมเองได้",
-  INTERNAL_STOCK: "ขอเบิกอะไหล่ภายใน",
-  EXTERNAL_STOCK: "ขอเบิกอะไหล่ภายนอก",
+  WITH_PARTS: "ขอเบิกอะไหล่",
+  INTERNAL_STOCK: "ขอเบิกอะไหล่",
+  EXTERNAL_STOCK: "ขอเบิกอะไหล่",
   OUTSOURCE: "ส่งซ่อมภายนอก",
-  PURCHASE_REPLACEMENT: "ขอซื้อทดแทน",
+  UNREPAIRABLE: "ไม่สามารถซ่อมได้",
 };
 
 const normalizeMechanicIds = (ids: (string | number)[]): string[] => {
@@ -71,6 +78,17 @@ const normalizeMechanicIds = (ids: (string | number)[]): string[] => {
       (id) => id !== "" && id !== "null" && id !== "undefined" && id !== "NaN",
     );
 };
+
+function requestErrorMessage(error: unknown): string {
+  const errorObj = error as {
+    response?: { data?: { message?: string | string[] } };
+    message?: string;
+  };
+  const raw = errorObj?.response?.data?.message || errorObj?.message;
+  return Array.isArray(raw)
+    ? raw.join(" / ")
+    : raw || "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+}
 
 export default function AssessmentForm() {
   const queryClient = useQueryClient();
@@ -86,6 +104,7 @@ export default function AssessmentForm() {
   >([]);
   const [selectedSpares, setSelectedSpares] = useState<SelectedSpareItem[]>([]);
   const [vendorId, setVendorId] = useState<string>("");
+  const [showUnrepairableReview, setShowUnrepairableReview] = useState(false);
 
   const currentJobId = selectedJob?.id;
   const displayJobNo = selectedJob?.jobNo || `JOB-${currentJobId || ""}`;
@@ -102,6 +121,16 @@ export default function AssessmentForm() {
     queryFn: getMechanics,
   });
 
+  const {
+    data: jobDetail,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+  } = useQuery<RepairDetail>({
+    queryKey: ["assessmentJobDetail", currentJobId],
+    queryFn: () => getRepairJobById(String(currentJobId)),
+    enabled: Boolean(currentJobId),
+  });
+
   useEffect(() => {
     if (!currentJobId) return;
 
@@ -109,10 +138,22 @@ export default function AssessmentForm() {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        setActionStatus(parsed.actionStatus || "ซ่อมเองได้");
+        setActionStatus(
+          parsed.actionStatus === "ขอซื้อทดแทน"
+            ? "ไม่สามารถซ่อมได้"
+            : parsed.actionStatus === "ขอเบิกอะไหล่ภายใน" ||
+                parsed.actionStatus === "ขอเบิกอะไหล่ภายนอก"
+              ? "ขอเบิกอะไหล่"
+            : parsed.actionStatus || "ซ่อมเองได้",
+        );
         setFormState(parsed.formState || INITIAL_FORM_STATE);
         setSelectedMechanicIds(parsed.selectedMechanicIds || []);
-        setSelectedSpares(parsed.selectedSpares || []);
+        setSelectedSpares(
+          (parsed.selectedSpares || []).map((item: SelectedSpareItem) => ({
+            ...item,
+            stockType: item.stockType || "INTERNAL",
+          })),
+        );
         setVendorId(parsed.vendorId || "");
         return;
       } catch (error) {
@@ -127,6 +168,25 @@ export default function AssessmentForm() {
     setVendorId("");
   }, [currentJobId, draftStorageKey]);
 
+  useEffect(() => {
+    if (!jobDetail) return;
+    setFormState((previous) => ({
+      ...previous,
+      jobTypeId: previous.jobTypeId || jobDetail.jobTypeId || "",
+      techCategoryId:
+        previous.techCategoryId || jobDetail.techCategoryId || "",
+      causeId: previous.causeId || jobDetail.causeId || "",
+      isRepeatRepair: jobDetail.isRepeatRepair ?? previous.isRepeatRepair,
+    }));
+    setSelectedMechanicIds((previous) =>
+      previous.length
+        ? previous
+        : normalizeMechanicIds(
+            (jobDetail.mechanicRepairs || []).map((item) => item.userId),
+          ),
+    );
+  }, [jobDetail, draftStorageKey]);
+
   // Mutation บันทึกการประเมิน
   const mutation = useMutation({
     mutationFn: async (dto: RepairDetailDto) => {
@@ -134,24 +194,20 @@ export default function AssessmentForm() {
       return await createEvaluation(String(currentJobId), dto);
     },
     onSuccess: () => {
+      setShowUnrepairableReview(false);
       alert("บันทึกผลการประเมินสำเร็จ");
       if (draftStorageKey) {
         localStorage.removeItem(draftStorageKey);
       }
       queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
       queryClient.invalidateQueries({ queryKey: ["repairList"] });
+      queryClient.invalidateQueries({ queryKey: ["repairHistory"] });
       closeForm();
     },
     onError: (err: unknown) => {
-      const errorObj = err as {
-        response?: { data?: { message?: string | string[] } };
-        message?: string;
-      };
-      const rawMsg = errorObj?.response?.data?.message || errorObj?.message;
-      const errorMsg = Array.isArray(rawMsg) ? rawMsg.join(", ") : rawMsg;
-      alert(
-        `ไม่สามารถทำรายการได้: ${errorMsg || "เกิดข้อผิดพลาดในการบันทึกข้อมูล"}`,
-      );
+      if (actionStatus !== "ไม่สามารถซ่อมได้") {
+        alert(`ไม่สามารถทำรายการได้: ${requestErrorMessage(err)}`);
+      }
     },
   });
 
@@ -161,15 +217,18 @@ export default function AssessmentForm() {
       Boolean(formState.symptomCause?.trim() || formState.diagnosis?.trim()) &&
       Boolean(formState.solution?.trim()) &&
       Boolean(formState.causeId) &&
+      Boolean(formState.jobTypeId) &&
+      Boolean(formState.techCategoryId) &&
       formState.isRepeatRepair !== undefined &&
-      Boolean(String(formState.dueDate ?? "").trim()) &&
+      Boolean(formState.technicalDiagnosisDetail?.trim()) &&
+      (actionStatus === "ไม่สามารถซ่อมได้" ||
+        Boolean(String(formState.dueDate ?? "").trim())) &&
       selectedMechanicIds.length > 0;
 
     if (!hasCommonFields) return false;
 
     if (
-      actionStatus === "ขอเบิกอะไหล่ภายใน" ||
-      actionStatus === "ขอเบิกอะไหล่ภายนอก"
+      actionStatus === "ขอเบิกอะไหล่"
     ) {
       return selectedSpares.length > 0;
     }
@@ -178,13 +237,22 @@ export default function AssessmentForm() {
       return Boolean(vendorId && vendorId.trim() !== "");
     }
 
+    if (actionStatus === "ไม่สามารถซ่อมได้") {
+      return Boolean(formState.unrepairableReason?.trim());
+    }
+
     return true;
-  }, [formState, actionStatus, selectedMechanicIds, selectedSpares, vendorId]);
+  }, [
+    formState,
+    actionStatus,
+    selectedMechanicIds,
+    selectedSpares,
+    vendorId,
+  ]);
 
   // Handlers
   const handleActionStatusChange = (newStatus: ActionTypeUI) => {
     setActionStatus(newStatus);
-    setSelectedMechanicIds([]);
     setSelectedSpares([]);
     setVendorId("");
   };
@@ -218,56 +286,81 @@ export default function AssessmentForm() {
     closeForm();
   };
 
-  const handleSubmit = () => {
+  const submitAssessment = () => {
     if (!selectedJob || !isFormValid || !currentJobId) return;
 
     const stepActionType = ACTION_TYPE_MAP[actionStatus];
-    const selectedDetail = selectedJob as unknown as RepairDetail;
+    const selectedDetail = jobDetail;
+    if (!selectedDetail) return;
 
     // คำนวณ DueDate
-    let formattedDueDate = new Date().toISOString();
-    if (formState.dueDate) {
+    let formattedDueDate: string | undefined;
+    // The deployed backend currently applies conflicting date validation:
+    // DTO validation expects ISO 8601 while the service accepts only YYYY-MM-DD.
+    // dueDate is optional, so omit it for tracks that can continue without it.
+    if (
+      stepActionType !== "UNREPAIRABLE" &&
+      stepActionType !== "WITH_PARTS" &&
+      formState.dueDate
+    ) {
       const days = Number(formState.dueDate);
       if (!isNaN(days) && days > 0) {
         const d = new Date();
         d.setDate(d.getDate() + days);
-        formattedDueDate = d.toISOString();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        formattedDueDate = `${year}-${month}-${day}`;
       } else {
         const parsedDate = new Date(formState.dueDate);
         if (!isNaN(parsedDate.getTime())) {
-          formattedDueDate = parsedDate.toISOString();
+          formattedDueDate = String(formState.dueDate).slice(0, 10);
         }
       }
     }
 
     // สร้าง DTO Object
     const dto: RepairDetailDto = {
-      stepActionType: stepActionType,
+      stepActionType,
       actionType: selectedDetail?.actionType || "REPAIR",
-      techCategoryId: Number(
-        selectedDetail?.techCategoryId || selectedDetail?.asset?.type?.id || 1,
-      ),
-      jobTypeId: Number(selectedDetail?.jobTypeId || 1),
+      techCategoryId: Number(formState.techCategoryId),
+      jobTypeId: Number(formState.jobTypeId),
       diagnosis:
-        formState.diagnosis?.trim() || formState.symptomCause?.trim() || "-",
+        actionStatus === "ไม่สามารถซ่อมได้"
+          ? formState.technicalDiagnosisDetail.trim()
+          : formState.diagnosis?.trim() || formState.symptomCause?.trim() || "-",
       solution: formState.solution?.trim() || "-",
       causeId: Number(formState.causeId) || 0,
       isRepeatRepair: Boolean(formState.isRepeatRepair),
       dueDate: formattedDueDate,
-      mechanicIds: normalizeMechanicIds(selectedMechanicIds),
+      unrepairableReason:
+        stepActionType === "UNREPAIRABLE"
+          ? formState.unrepairableReason.trim()
+          : undefined,
       companyId: stepActionType === "OUTSOURCE" ? vendorId || null : undefined,
       spareParts:
-        stepActionType === "INTERNAL_STOCK" ||
-        stepActionType === "EXTERNAL_STOCK"
+        stepActionType === "WITH_PARTS"
           ? selectedSpares.map((sp) => ({
               sparepartId: Number(sp.id),
               qty: Number(sp.quantity) || 1,
+              stockType: sp.stockType,
             }))
           : undefined,
     };
 
     // ยิง Mutation
     mutation.mutate(dto);
+  };
+
+  const handleSubmit = () => {
+    if (!isFormValid || mutation.isPending || isDetailLoading || isDetailError)
+      return;
+    if (actionStatus === "ไม่สามารถซ่อมได้") {
+      mutation.reset();
+      setShowUnrepairableReview(true);
+      return;
+    }
+    submitAssessment();
   };
 
   if (!selectedJob) return null;
@@ -329,6 +422,8 @@ export default function AssessmentForm() {
             formState={formState as any}
             setFormState={setFormState as any}
             causes={metaLookups?.causes || []}
+            jobTypes={metaLookups?.jobTypes || []}
+            techCategories={metaLookups?.techCategories || []}
           />
 
           <MechanicSelector
@@ -337,8 +432,7 @@ export default function AssessmentForm() {
             onToggleMechanic={handleToggleMechanic}
           />
 
-          {(actionStatus === "ขอเบิกอะไหล่ภายใน" ||
-            actionStatus === "ขอเบิกอะไหล่ภายนอก") && (
+          {actionStatus === "ขอเบิกอะไหล่" && (
             <InternalSpareFields
               key={actionStatus}
               selectedSpares={selectedSpares}
@@ -355,6 +449,11 @@ export default function AssessmentForm() {
           )}
 
           {/* Action Buttons */}
+          {isDetailError && (
+            <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+              ไม่สามารถโหลดรายละเอียดใบงานล่าสุดได้ กรุณากลับไปเลือกรายการใหม่
+            </p>
+          )}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
@@ -367,10 +466,18 @@ export default function AssessmentForm() {
 
             <button
               type="button"
-              disabled={!isFormValid || mutation.isPending}
+              disabled={
+                !isFormValid ||
+                mutation.isPending ||
+                isDetailLoading ||
+                isDetailError
+              }
               onClick={handleSubmit}
               className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold shadow-2xs transition-colors ${
-                isFormValid && !mutation.isPending
+                isFormValid &&
+                !mutation.isPending &&
+                !isDetailLoading &&
+                !isDetailError
                   ? "bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
               }`}
@@ -383,6 +490,59 @@ export default function AssessmentForm() {
           </div>
         </div>
       </div>
+      {showUnrepairableReview && (
+        <TechnicianConfirmDialog
+          title="ยืนยันผลการประเมิน — ไม่สามารถซ่อมได้"
+          busy={mutation.isPending}
+          error={
+            mutation.isError
+              ? requestErrorMessage(mutation.error)
+              : undefined
+          }
+          confirmLabel="ยืนยันบันทึกผล"
+          onClose={() => {
+            if (!mutation.isPending) {
+              mutation.reset();
+              setShowUnrepairableReview(false);
+            }
+          }}
+          onConfirm={submitAssessment}
+        >
+          <div className="rounded-xl bg-slate-50 p-4 text-sm">
+            <p className="font-semibold text-emerald-700">{displayJobNo}</p>
+            <p className="mt-1 font-bold text-slate-800">
+              {jobDetail?.asset?.noid} · {jobDetail?.asset?.name}
+            </p>
+          </div>
+          <dl className="space-y-3 text-sm">
+            <div>
+              <dt className="text-xs text-slate-500">ผลการวินิจฉัยทางเทคนิค</dt>
+              <dd className="mt-1 whitespace-pre-wrap break-words">
+                {formState.technicalDiagnosisDetail}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">แนวทางดำเนินการ</dt>
+              <dd className="mt-1 whitespace-pre-wrap break-words">
+                {formState.solution}
+              </dd>
+            </div>
+          </dl>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="flex items-center gap-2 font-semibold">
+              <AlertTriangle size={17} />
+              เหตุผลที่ไม่สามารถซ่อมได้
+            </p>
+            <p className="mt-2 whitespace-pre-wrap break-words">
+              {formState.unrepairableReason}
+            </p>
+          </div>
+          <p className="rounded-lg bg-blue-50 p-3 text-xs leading-relaxed text-blue-700">
+            การยืนยันนี้เป็นการบันทึกผลประเมินเท่านั้น ยังไม่ถือว่าส่งคืนครุภัณฑ์ให้พัสดุ
+            หลังบันทึกให้ไปที่ “รายการงานซ่อม” และยืนยันส่งคืนเมื่อนำเครื่องไปห้องพัสดุจริง
+          </p>
+        </TechnicianConfirmDialog>
+      )}
     </div>
   );
 }
