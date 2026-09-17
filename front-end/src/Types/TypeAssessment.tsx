@@ -3,10 +3,11 @@ export type AssessmentTab = "PENDING" | "REPAIR_LIST" | "CONFIRM_REPAIR";
 
 export type StepActionType =
   | "SELF_REPAIR" // ซ่อมเองได้
-  | "INTERNAL_STOCK" // ขอเบิกอะไหล่ภายใน
-  | "EXTERNAL_STOCK" // ขอเบิกอะไหล่ภายนอก
+  | "WITH_PARTS" // ขอเบิกอะไหล่ (ในคลัง/ภายนอกผสมกันได้)
+  | "INTERNAL_STOCK" // รองรับข้อมูลเก่า
+  | "EXTERNAL_STOCK" // รองรับข้อมูลเก่า
   | "OUTSOURCE" // ส่งซ่อมภายนอก
-  | "PURCHASE_REPLACEMENT"; // ขอซื้อทดแทน
+  | "UNREPAIRABLE"; // ไม่สามารถซ่อมได้ / ส่งคืนพัสดุ
 
 export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 
@@ -48,9 +49,10 @@ export interface Mechanic {
 }
 
 export interface RepairMetaLookups {
-  jobStatuses: BaseLookup[];
+  jobStatuses?: BaseLookup[];
   jobTypes: BaseLookup[];
   causes: BaseLookup[];
+  techCategories: BaseLookup[];
 }
 
 export interface RepairListItem {
@@ -146,6 +148,9 @@ export interface RepairDetail {
     sparepartId: number;
     qty: number;
     unitPrice: string;
+    txnType?: string;
+    stockType?: "INTERNAL" | "EXTERNAL";
+    createdAt?: string;
     sparepart?: {
       id: number;
       code: string;
@@ -169,12 +174,14 @@ export interface RepairDetailDto {
   solution: string;
   causeId: number;
   isRepeatRepair: boolean;
-  dueDate: string;
+  dueDate?: string;
   technicalDiagnosisDetail?: string;
-  mechanicIds: string[];
+  unrepairableReason?: string;
+  mechanicIds?: string[];
   companyId?: string | null;
   spareParts?: Array<{
     sparepartId: number;
     qty: number;
+    stockType: "INTERNAL" | "EXTERNAL";
   }>;
 }

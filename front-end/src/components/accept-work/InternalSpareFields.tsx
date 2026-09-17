@@ -6,6 +6,7 @@ import { getSpareParts } from "../../services/assessmentService";
 
 export interface SelectedSpareItem extends SparePart {
   quantity: number;
+  stockType: "INTERNAL" | "EXTERNAL";
 }
 
 export interface SpareItem {
@@ -47,7 +48,10 @@ export default function InternalSpareFields({
   const handleAddSpare = (item: SparePart) => {
     const exists = selectedSpares.some((s) => String(s.id) === String(item.id));
     if (!exists) {
-      setSelectedSpares((prev) => [...prev, { ...item, quantity: 1 }]);
+      setSelectedSpares((prev) => [
+        ...prev,
+        { ...item, quantity: 1, stockType: "INTERNAL" },
+      ]);
     }
   };
   // ฟังก์ชันลบรายการอะไหล่
@@ -66,6 +70,17 @@ export default function InternalSpareFields({
     );
   };
 
+  const handleStockTypeChange = (
+    id: string,
+    stockType: "INTERNAL" | "EXTERNAL",
+  ) => {
+    setSelectedSpares((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(id) ? { ...item, stockType } : item,
+      ),
+    );
+  };
+
   // กรองอะไหล่ตามคำค้นหา
   const filteredStock = availableSpares.filter((item) => {
     const search = searchTerm.toLowerCase();
@@ -79,7 +94,7 @@ export default function InternalSpareFields({
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
           <Package className="w-4 h-4 text-emerald-600" />
-          รายการอะไหล่ภายในคลังที่ขอเบิก{" "}
+          รายการอะไหล่ที่ขอเบิก{" "}
           <span className="text-rose-500">*</span>
         </label>
         <span className="text-[11px] text-slate-400">
@@ -95,10 +110,10 @@ export default function InternalSpareFields({
           className="w-full bg-white border border-slate-200 hover:border-emerald-500 rounded-lg px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer"
         >
           <span className="text-slate-500 font-medium">
-            + คลิกเพื่อเลือกเบิกอะไหล่จากคลัง...
+            + คลิกเพื่อเลือกอะไหล่...
           </span>
           <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-md">
-            คลังอะไหล่
+            ในคลัง / ภายนอก
           </span>
         </button>
 
@@ -195,6 +210,7 @@ export default function InternalSpareFields({
                 <th className="p-2.5">รายการอะไหล่</th>
                 <th className="p-2.5 text-center w-24">คงเหลือ</th>
                 <th className="p-2.5 text-center w-28">จำนวนที่เบิก</th>
+                <th className="p-2.5 text-center w-32">แหล่งอะไหล่</th>
                 <th className="p-2.5 text-right w-24">ราคา/หน่วย</th>
                 <th className="p-2.5 text-center w-12"></th>
               </tr>
@@ -238,7 +254,7 @@ export default function InternalSpareFields({
                       <input
                         type="number"
                         min={1}
-                        max={stock || undefined}
+                        max={item.stockType === "INTERNAL" ? stock || undefined : undefined}
                         value={qty}
                         onChange={(e) =>
                           handleQuantityChange(
@@ -248,6 +264,21 @@ export default function InternalSpareFields({
                         }
                         className="w-16 border border-slate-200 rounded-md py-1 px-2 text-center text-xs focus:outline-none focus:border-emerald-500"
                       />
+                    </td>
+                    <td className="p-2.5 text-center">
+                      <select
+                        value={item.stockType || "INTERNAL"}
+                        onChange={(event) =>
+                          handleStockTypeChange(
+                            item.id,
+                            event.target.value as "INTERNAL" | "EXTERNAL",
+                          )
+                        }
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="INTERNAL">ในคลัง</option>
+                        <option value="EXTERNAL">จัดหาภายนอก</option>
+                      </select>
                     </td>
                     <td className="p-2.5 text-right font-mono text-slate-600">
                       {priceNum.toFixed(2)} ฿

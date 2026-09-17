@@ -6,10 +6,11 @@ export type RepairReportType = "REPAIR" | "MAINTENANCE";
 
 export type RepairActionType =
   | "SELF_REPAIR"
+  | "WITH_PARTS"
   | "INTERNAL_STOCK"
   | "EXTERNAL_STOCK"
   | "OUTSOURCE"
-  | "PURCHASE_REPLACEMENT";
+  | "UNREPAIRABLE";
 
 export type RepairJobStatusCode =
   | "WAITING_HANDOVER"
@@ -81,7 +82,8 @@ export interface RepairSparePartTransaction {
   sparePartId: number;
   sparePartCode: string;
   sparePartName: string;
-  transactionType: "WITHDRAW" | "RETURN";
+  transactionType: "PENDING_WITHDRAW" | "WITHDRAW" | "RETURN";
+  stockType?: "INTERNAL" | "EXTERNAL";
   quantity: number;
   unitPrice: number;
   transactionDate: string;
@@ -94,6 +96,8 @@ export interface RepairJobStep {
   stepMasterId: number;
   stepName: string;
   completedAt?: string | null;
+  note?: string | null;
+  completedBy?: string | null;
 }
 
 export interface RepairMechanic {
@@ -129,6 +133,7 @@ export interface RepairJob {
   symptom: string;
   diagnosis?: string | null;
   solution?: string | null;
+  unrepairableReason?: string | null;
   causeId?: number | null;
   actionType?: RepairActionType | null;
   urgencyStatus: Exclude<PriorityFilter, "ALL">;

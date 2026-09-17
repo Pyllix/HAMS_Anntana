@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
   AppNotification,
   CreateNotificationInput,
@@ -59,7 +60,7 @@ interface NotificationState {
   markAllAsRead: (recipientRole: AppNotification["recipientRole"]) => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set) => ({
+export const useNotificationStore = create<NotificationState>()(persist((set) => ({
   notifications: initialNotifications,
   addNotification: (notification) =>
     set((state) => ({
@@ -90,4 +91,4 @@ export const useNotificationStore = create<NotificationState>((set) => ({
           : notification,
       ),
     })),
-}));
+}), { name: "hams-repair-notifications" }));
