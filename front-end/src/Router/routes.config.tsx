@@ -8,6 +8,7 @@ import {
   FilePlus2,
   Building2,
   Banknote,
+  ClipboardCheck,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
@@ -26,6 +27,8 @@ import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
 import EquipmentStock from "../Pages/EquipmentStock";
+import UnrepairableReceipts from "../Pages/UnrepairableReceipts";
+import SparePartApprovals from "../Pages/SparePartApprovals";
 
 interface AppRote {
   path: string;
@@ -89,6 +92,22 @@ export const APP_ROUTE: AppRote[] = [
     element: <EquipmentStock />,
     roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: false,
+  },
+  {
+    path: "unrepairable-receipts",
+    title: "อนุมัติรับคืนครุภัณฑ์",
+    element: <UnrepairableReceipts />,
+    icon: Wrench,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "spare-part-approvals",
+    title: "อนุมัติการเบิกอะไหล่",
+    element: <SparePartApprovals />,
+    icon: ClipboardCheck,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
   },
   {
     path: "order-spare-parts",
