@@ -83,7 +83,7 @@ const statusMap: Record<RepairJobStatusCode, RepairStatus> = {
   UNREPAIRABLE: {
     jobStatusId: 7,
     statusCode: "UNREPAIRABLE",
-    statusName: "ชำรุด / เสนอซื้อทดแทน",
+    statusName: "ไม่สามารถซ่อมได้ / รอส่งคืน",
   },
   WAITING_DELIVERY: {
     jobStatusId: 8,
@@ -361,9 +361,9 @@ export const repairJobsMock: RepairJob[] = [
     jobStatusId: 7,
     symptom: "แรงดันตกและระบบตัดการทำงานระหว่างใช้งาน",
     diagnosis: "ชุดกำเนิดแรงดันเสื่อมและเลิกผลิตอะไหล่",
-    solution: "เสนอซื้อทดแทนเนื่องจากไม่คุ้มค่าซ่อม",
+    solution: "ส่งคืนพัสดุเพื่อพักรอจำหน่ายเนื่องจากไม่คุ้มค่าซ่อม",
     causeId: 1,
-    actionType: "PURCHASE_REPLACEMENT",
+    actionType: "UNREPAIRABLE",
     urgencyStatus: "EMERGENCY",
     dueDate: null,
     isRepeatRepair: true,
