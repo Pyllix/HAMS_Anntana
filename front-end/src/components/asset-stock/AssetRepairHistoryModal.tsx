@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Undo2, Banknote, Clock, Info } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Undo2, Banknote, Clock, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
 import {
@@ -193,6 +193,22 @@ export default function AssetRepairHistoryModal() {
     enabled: Boolean(isOpen && asset?.id),
   });
 
+  // Pagination State (5 items per page ensures clean fit without vertical scroll)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 5;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [isOpen, asset?.id]);
+
+  const totalItems = repairJobs.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  const paginatedJobs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return repairJobs.slice(start, start + pageSize);
+  }, [repairJobs, currentPage, pageSize]);
+
   // Calculate summary metrics
   const totalCost = useMemo(() => {
     return repairJobs.reduce((sum, job) => sum + calculateJobCost(job), 0);
@@ -220,20 +236,20 @@ export default function AssetRepairHistoryModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 sm:p-6"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto"
       onClick={closeModal}
     >
       <div
-        className="w-full max-w-5xl bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative max-h-[92vh] overflow-y-auto"
+        className="w-full max-w-4xl lg:max-w-5xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 space-y-3 relative my-auto transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+        <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-800">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">
               ประวัติการซ่อมบำรุงครุภัณฑ์
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
               สรุปสถิติการซ่อมบำรุงและประวัติค่าใช้จ่ายทั้งหมดของเครื่อง
             </p>
           </div>
@@ -241,148 +257,148 @@ export default function AssetRepairHistoryModal() {
             type="button"
             onClick={closeModal}
             title="ย้อนกลับ"
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
           >
             <Undo2 className="h-4 w-4" />
           </button>
         </div>
 
         {/* Asset Info Card */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 sm:p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 items-center">
           <div>
-            <span className="block text-slate-400 text-xs mb-1 font-medium">
+            <span className="block text-slate-400 text-[11px] font-medium">
               รหัสครุภัณฑ์
             </span>
-            <span className="text-sky-600 font-bold text-sm sm:text-base">
+            <span className="text-sky-600 font-bold text-xs sm:text-sm truncate block">
               {asset.noid || "-"}
             </span>
           </div>
           <div>
-            <span className="block text-slate-400 text-xs mb-1 font-medium">
+            <span className="block text-slate-400 text-[11px] font-medium">
               ชื่อครุภัณฑ์ / รุ่น / ยี่ห้อ
             </span>
-            <span className="text-slate-900 font-bold text-sm sm:text-base leading-snug line-clamp-2">
+            <span className="text-slate-900 font-bold text-xs sm:text-sm leading-snug truncate block" title={`${asset.name} ${asset.model ? `(${asset.model})` : ""}`}>
               {asset.name} {asset.model ? `(${asset.model})` : ""}
             </span>
           </div>
           <div>
-            <span className="block text-slate-400 text-xs mb-1 font-medium">
+            <span className="block text-slate-400 text-[11px] font-medium">
               หมายเลขเครื่อง (S/N)
             </span>
-            <span className="text-slate-800 font-semibold text-sm sm:text-base font-mono">
+            <span className="text-slate-800 font-semibold text-xs sm:text-sm font-mono truncate block">
               {asset.serialNo || "-"}
             </span>
           </div>
           <div>
-            <span className="block text-slate-400 text-xs mb-1 font-medium">
+            <span className="block text-slate-400 text-[11px] font-medium">
               สถานที่ตั้ง
             </span>
-            <span className="text-slate-800 font-medium text-sm sm:text-base">
+            <span className="text-slate-800 font-medium text-xs sm:text-sm truncate block" title={locationText}>
               {locationText}
             </span>
           </div>
         </div>
 
         {/* 3 KPI Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
           {/* Card 1: ยอดรวมค่าซ่อมสะสมทั้งหมด */}
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/20 p-5 flex items-center justify-between">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/20 p-3 sm:p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-emerald-700 mb-1.5">
+              <p className="text-[11px] font-semibold text-emerald-700 mb-0.5">
                 ยอดรวมค่าซ่อมสะสมทั้งหมด
               </p>
-              <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-600">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-emerald-600">
                 {totalCost.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
-                <span className="text-sm font-semibold text-emerald-600 ml-1.5">
+                <span className="text-xs font-semibold text-emerald-600 ml-1">
                   บาท
                 </span>
               </h3>
             </div>
-            <div className="h-11 w-11 rounded-full bg-emerald-100/70 flex items-center justify-center text-emerald-600 shrink-0">
-              <Banknote className="h-6 w-6 stroke-[2]" />
+            <div className="h-9 w-9 rounded-full bg-emerald-100/70 flex items-center justify-center text-emerald-600 shrink-0">
+              <Banknote className="h-5 w-5 stroke-[2]" />
             </div>
           </div>
 
           {/* Card 2: จำนวนการซ่อมทั้งหมด */}
-          <div className="rounded-2xl border border-sky-200 bg-sky-50/20 p-5 flex items-center justify-between">
+          <div className="rounded-xl border border-sky-200 bg-sky-50/20 p-3 sm:p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-sky-700 mb-1.5">
+              <p className="text-[11px] font-semibold text-sky-700 mb-0.5">
                 จำนวนการซ่อมทั้งหมด
               </p>
-              <h3 className="text-2xl sm:text-3xl font-extrabold text-sky-600">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-sky-600">
                 {repairJobs.length}
-                <span className="text-sm font-semibold text-sky-600 ml-1.5">
+                <span className="text-xs font-semibold text-sky-600 ml-1">
                   ครั้ง
                 </span>
               </h3>
             </div>
-            <div className="h-11 w-11 rounded-full bg-sky-100/70 flex items-center justify-center text-sky-600 shrink-0">
-              <Clock className="h-6 w-6 stroke-[2]" />
+            <div className="h-9 w-9 rounded-full bg-sky-100/70 flex items-center justify-center text-sky-600 shrink-0">
+              <Clock className="h-5 w-5 stroke-[2]" />
             </div>
           </div>
 
           {/* Card 3: เวลาหยุดทำงานสะสม (Downtime) */}
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/20 p-5 flex items-center justify-between">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/20 p-3 sm:p-3.5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-amber-700 mb-1.5">
+              <p className="text-[11px] font-semibold text-amber-700 mb-0.5">
                 เวลาหยุดทำงานสะสม (Downtime)
               </p>
-              <h3 className="text-2xl sm:text-3xl font-extrabold text-amber-600">
+              <h3 className="text-xl sm:text-2xl font-extrabold text-amber-600">
                 {totalDowntimeDays}
-                <span className="text-sm font-semibold text-amber-600 ml-1.5">
+                <span className="text-xs font-semibold text-amber-600 ml-1">
                   วันทำการ
                 </span>
               </h3>
             </div>
-            <div className="h-11 w-11 rounded-full bg-amber-100/70 flex items-center justify-center text-amber-600 shrink-0">
-              <Clock className="h-6 w-6 stroke-[2]" />
+            <div className="h-9 w-9 rounded-full bg-amber-100/70 flex items-center justify-center text-amber-600 shrink-0">
+              <Clock className="h-5 w-5 stroke-[2]" />
             </div>
           </div>
         </div>
 
         {/* Table: ประวัติรายการซ่อมบำรุงย้อนหลัง */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-5 flex flex-col">
-          <h3 className="text-sm sm:text-base font-bold text-slate-800 mb-3">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-3.5 flex flex-col">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-800 mb-2">
             ประวัติรายการซ่อมบำรุงย้อนหลัง
           </h3>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
+          <div className="w-full overflow-hidden">
+            <table className="w-full text-left table-fixed text-xs">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500">
-                  <th className="py-3 px-3">เลขที่ใบงาน (JOB No.)</th>
-                  <th className="py-3 px-3">วันที่แจ้ง</th>
-                  <th className="py-3 px-3">อาการที่แจ้ง / สาเหตุ</th>
-                  <th className="py-3 px-3">ประเภทการซ่อม</th>
-                  <th className="py-3 px-3 text-right">ค่าซ่อม (บาท)</th>
-                  <th className="py-3 px-3 text-center">สถานะ</th>
-                  <th className="py-3 px-3">ผู้ดูแล</th>
+                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-semibold text-slate-500">
+                  <th className="w-[17%] py-2 px-2.5">เลขที่ใบงาน (JOB No.)</th>
+                  <th className="w-[12%] py-2 px-2.5">วันที่แจ้ง</th>
+                  <th className="w-[26%] py-2 px-2.5">อาการที่แจ้ง / สาเหตุ</th>
+                  <th className="w-[16%] py-2 px-2.5">ประเภทการซ่อม</th>
+                  <th className="w-[11%] py-2 px-2.5 text-right">ค่าซ่อม (บาท)</th>
+                  <th className="w-[9%] py-2 px-2.5 text-center">สถานะ</th>
+                  <th className="w-[9%] py-2 px-2.5">ผู้ดูแล</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+              <tbody className="divide-y divide-slate-100 text-xs">
                 {isLoading ? (
                   <tr>
                     <td
                       colSpan={7}
-                      className="py-8 text-center text-slate-400 text-xs"
+                      className="py-6 text-center text-slate-400 text-xs"
                     >
                       กำลังโหลดประวัติการซ่อม...
                     </td>
                   </tr>
-                ) : repairJobs.length === 0 ? (
+                ) : totalItems === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
-                      className="py-8 text-center text-slate-400 text-xs"
+                      className="py-6 text-center text-slate-400 text-xs"
                     >
                       ไม่พบประวัติการซ่อมบำรุงสำหรับครุภัณฑ์นี้
                     </td>
                   </tr>
                 ) : (
-                  repairJobs.map((job) => {
+                  paginatedJobs.map((job) => {
                     const cost = calculateJobCost(job);
                     const statusCode = job.jobStatus?.code || "";
                     const isCompleted = statusCode === "COMPLETED";
@@ -399,40 +415,46 @@ export default function AssetRepairHistoryModal() {
                         key={job.id}
                         className="hover:bg-slate-50/50 transition-colors"
                       >
-                        <td className="py-3 px-3 font-semibold text-sky-600 whitespace-nowrap">
+                        <td className="py-2 px-2.5 font-semibold text-sky-600 truncate">
                           {job.jobNo}
                         </td>
-                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                        <td className="py-2 px-2.5 text-slate-600 truncate">
                           {formatThaiDate(job.createdAt)}
                         </td>
-                        <td className="py-3 px-3 text-slate-800 font-medium max-w-xs truncate" title={fullDesc}>
+                        <td
+                          className="py-2 px-2.5 text-slate-800 font-medium truncate"
+                          title={fullDesc}
+                        >
                           {fullDesc}
                         </td>
-                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                        <td className="py-2 px-2.5 text-slate-600 truncate" title={getRepairTypeLabel(job)}>
                           {getRepairTypeLabel(job)}
                         </td>
-                        <td className="py-3 px-3 text-right font-semibold text-slate-800 whitespace-nowrap">
+                        <td className="py-2 px-2.5 text-right font-semibold text-slate-800 whitespace-nowrap">
                           {cost.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}
                         </td>
-                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <td className="py-2 px-2.5 text-center">
                           {isCompleted ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">
                               เสร็จสิ้น
                             </span>
                           ) : isCancelled ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
                               ยกเลิก
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-600 border border-sky-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium bg-sky-50 text-sky-600 border border-sky-200">
                               กำลังซ่อม
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                        <td
+                          className="py-2 px-2.5 text-slate-600 truncate"
+                          title={getJobHandler(job)}
+                        >
                           {getJobHandler(job)}
                         </td>
                       </tr>
@@ -444,11 +466,11 @@ export default function AssetRepairHistoryModal() {
           </div>
 
           {/* Table Footer Banner (Green summary row matching mockup) */}
-          <div className="mt-3 p-3 sm:p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="font-bold text-xs sm:text-sm text-emerald-800">
-              รวมยอดค่าซ่อมบำรุงสะสมทั้งหมด ({repairJobs.length} รายการ)
+          <div className="mt-2 p-2 sm:p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-100 flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2">
+            <span className="font-bold text-xs text-emerald-800">
+              รวมยอดค่าซ่อมบำรุงสะสมทั้งหมด ({totalItems} รายการ)
             </span>
-            <span className="font-extrabold text-sm sm:text-base text-emerald-700">
+            <span className="font-extrabold text-xs sm:text-sm text-emerald-700">
               {totalCost.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -456,12 +478,54 @@ export default function AssetRepairHistoryModal() {
               บาท
             </span>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 px-1 text-[11px] text-slate-500">
+              <span>
+                แสดง {(currentPage - 1) * pageSize + 1} ถึง{" "}
+                {Math.min(currentPage * pageSize, totalItems)} จาก {totalItems} รายการ
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCurrentPage(p)}
+                    className={`flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
+                      currentPage === p
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Dialog Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-slate-100">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Info className="h-4 w-4 shrink-0 text-slate-400" />
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1.5 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <Info className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             <span>
               ข้อมูลสรุปค่าใช้จ่ายคำนวณจากใบงานซ่อมบำรุงที่บันทึกสำเร็จในระบบ
             </span>
@@ -469,7 +533,7 @@ export default function AssetRepairHistoryModal() {
           <button
             type="button"
             onClick={closeModal}
-            className="w-full sm:w-auto px-7 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-colors shadow-xs cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm transition-colors shadow-xs cursor-pointer"
           >
             ปิดหน้าต่าง
           </button>
