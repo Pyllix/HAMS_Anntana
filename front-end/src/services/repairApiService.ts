@@ -47,6 +47,7 @@ interface ApiAsset {
   name?: string | null;
   model?: string | null;
   serialNo?: string | null;
+  imageUrl?: string | null;
   section_id?: string | null;
   status?: ApiAssetState | null;
   availabilityStatus?: ApiAssetState | null;
@@ -78,7 +79,7 @@ interface ApiStepMaster {
   label: string;
 }
 
-interface ApiRepairStep {
+export interface ApiRepairStep {
   id: number;
   jobId: string;
   stepMasterId: number;
@@ -101,12 +102,16 @@ interface ApiSparePart {
   id: number;
   code?: string | number | null;
   name?: string | null;
+  unit?: string | null;
+  price?: number | string | null;
+  qtyInStock?: number | null;
 }
 
-interface ApiSparePartTransaction {
+export interface ApiSparePartTransaction {
   id: number;
   sparepartId: number;
   txnType: string;
+  stockType?: "INTERNAL" | "EXTERNAL" | null;
   qty: number;
   unitPrice: number | string;
   txnDate?: string | null;
@@ -130,6 +135,7 @@ export interface ApiRepairJob {
   symptom?: string | null;
   diagnosis?: string | null;
   solution?: string | null;
+  unrepairableReason?: string | null;
   causeId?: number | null;
   urgencyStatus?: string | null;
   dueDate?: string | null;
@@ -156,10 +162,11 @@ export interface ApiRepairJob {
 
 const repairActionTypes: RepairActionType[] = [
   "SELF_REPAIR",
+  "WITH_PARTS",
   "INTERNAL_STOCK",
   "EXTERNAL_STOCK",
   "OUTSOURCE",
-  "PURCHASE_REPLACEMENT",
+  "UNREPAIRABLE",
 ];
 
 const repairStatusCodes: RepairJobStatusCode[] = [
@@ -302,6 +309,7 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
     symptom: job.symptom || "",
     diagnosis: job.diagnosis,
     solution: job.solution,
+    unrepairableReason: job.unrepairableReason,
     causeId: job.causeId,
     actionType,
     urgencyStatus:
@@ -380,10 +388,13 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
       stepMasterId: step.stepMasterId,
       stepName: step.stepMaster.label,
       completedAt: step.completeAt,
+      note: step.note,
+      completedBy: step.completedBy,
     })),
     sparePartTransactions: (job.sparepartTxns || [])
       .filter(
         (transaction) =>
+          transaction.txnType === "PENDING_WITHDRAW" ||
           transaction.txnType === "WITHDRAW" ||
           transaction.txnType === "RETURN",
       )
@@ -392,7 +403,15 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
         sparePartId: transaction.sparepartId,
         sparePartCode: String(transaction.sparepart?.code || "-"),
         sparePartName: transaction.sparepart?.name || "-",
-        transactionType: transaction.txnType as "WITHDRAW" | "RETURN",
+        transactionType: transaction.txnType as
+          | "PENDING_WITHDRAW"
+          | "WITHDRAW"
+          | "RETURN",
+        stockType:
+          transaction.stockType === "INTERNAL" ||
+          transaction.stockType === "EXTERNAL"
+            ? transaction.stockType
+            : undefined,
         quantity: transaction.qty,
         unitPrice: Number(transaction.unitPrice) || 0,
         transactionDate:
