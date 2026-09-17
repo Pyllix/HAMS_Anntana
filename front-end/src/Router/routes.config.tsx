@@ -5,11 +5,30 @@ import {
   History,
   ShoppingCart,
   LucideIcon,
+  FilePlus2,
+  Building2,
+  Banknote,
+  ClipboardCheck,
 } from "lucide-react";
-import { ROLES, RoleType } from "./roles";
+import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import BorrowHistory from "../Pages/BorrowHistort";
 import React from "react";
+import AssetStock from "../Pages/AssetStock";
+import ConfirmRepair from "../Pages/ConfirmRepair";
+import RepairRequestPage from "../Pages/RepairRequestPage";
+import RepairHistory from "../Pages/RepairHistory";
+import PartStock from "../Pages/PartStock";
+import OrderSpareParts from "../Pages/OrderSpareParts";
+import AcquisitionTypePage from "../Pages/AcquisitionTypePage";
+import CompanySupplierPage from "../Pages/CompanySupplierPage";
+import BudgetTypePage from "../Pages/BudgetTypePage";
+import { ToolCase } from "lucide-react";
+import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
+import PendingEvaluations from "../Pages/PendingEvaluations";
+import EquipmentStock from "../Pages/EquipmentStock";
+import UnrepairableReceipts from "../Pages/UnrepairableReceipts";
+import SparePartApprovals from "../Pages/SparePartApprovals";
 
 interface AppRote {
   path: string;
@@ -24,7 +43,7 @@ export const APP_ROUTE: AppRote[] = [
   // -------- สำหรับ Assets Cente ------------
   {
     path: "borrow-return-assets_center",
-    title: "ยืม-คืนครุภัณฑ์ (ศูนย์)",
+    title: "ยืม-คืนครุภัณฑ์",
     element: <AssetCenterBorrowReturn />,
     icon: Repeat,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
@@ -40,8 +59,8 @@ export const APP_ROUTE: AppRote[] = [
   },
   {
     path: "asset-stock",
-    title: "จัดการสต็อกครุภัณฑ์",
-    element: <div>asset-stock</div>,
+    title: "รายการสต็อกครุภัณฑ์",
+    element: <AssetStock />,
     icon: Archive,
     roles: [
       ROLES.ADMIN,
@@ -54,15 +73,78 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "part-stock",
     title: "จัดการสต็อกอะไหล่",
-    element: <div>part-stock</div>,
+    element: <PartStock />,
     icon: Wrench,
-    roles: [ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    icon: Archive,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "parcel-equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: false,
+  },
+  {
+    path: "unrepairable-receipts",
+    title: "อนุมัติรับคืนครุภัณฑ์",
+    element: <UnrepairableReceipts />,
+    icon: Wrench,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "spare-part-approvals",
+    title: "อนุมัติการเบิกอะไหล่",
+    element: <SparePartApprovals />,
+    icon: ClipboardCheck,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "order-spare-parts",
+    title: "สั่งซื้ออะไหล่",
+    element: <OrderSpareParts />,
+    icon: ToolCase,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "acquisition-types",
+    title: "วิธีการได้มา",
+    element: <AcquisitionTypePage />,
+    icon: FilePlus2,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "companies",
+    title: "ผู้ผลิต/จำหน่าย",
+    element: <CompanySupplierPage />,
+    icon: Building2,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "budget-types",
+    title: "ประเภทเงิน",
+    element: <BudgetTypePage />,
+    icon: Banknote,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
     showInNav: true,
   },
   {
     path: "help-desk",
     title: "แจ้งซ่อมครุภัณฑ์",
-    element: <div>help-desk</div>,
+    element: <RepairRequestPage />,
     icon: Wrench,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
@@ -70,10 +152,66 @@ export const APP_ROUTE: AppRote[] = [
   {
     path: "track-status",
     title: "ติดตามสถานะ",
-    element: <div>track-status</div>,
+    element: <TrackingAssetCenter />,
     icon: History,
     roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
-  // -------- สำหรับ Department ------------
+  // -------- สำหรับ ช่าง ------------
+  {
+    path: "accept-work",
+    title: "งานซ่อม",
+    element: <PendingEvaluations />,
+    icon: History,
+    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF],
+    showInNav: true,
+  },
+  // {
+  //   path: "test-1",
+  //   title: "AssetStock",
+  //   element: <AssetStock />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
+  // {
+  //   path: "test-2",
+  //   title: "ConfirmRepair",
+  //   element: <ConfirmRepair />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
+  // {
+  //   path: "test-3",
+  //   title: "OrderSpareParts",
+  //   element: <OrderSpareParts />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
+  // {
+  //   path: "test-4",
+  //   title: "PartStock",
+  //   element: <PartStock />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
+  // {
+  //   path: "test-5",
+  //   title: "PendingEvaluationsPage",
+  //   element: <PendingEvaluationsPage />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
+  // {
+  //   path: "test-6",
+  //   title: "RepairHistory",
+  //   element: <RepairHistory />,
+  //   icon: History,
+  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+  //   showInNav: true,
+  // },
 ];

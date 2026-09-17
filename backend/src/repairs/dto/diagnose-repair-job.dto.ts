@@ -7,10 +7,12 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   IsUUID,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { ActionType, StepActionType } from '@prisma/client';
@@ -27,6 +29,17 @@ export class SparePartRequisitionItemDto {
   @IsPositive()
   @IsNotEmpty()
   qty: number;
+
+  @ApiProperty({
+    description: 'Source of the spare part: INTERNAL (in-warehouse) or EXTERNAL (procure from outside)',
+    enum: ['INTERNAL', 'EXTERNAL'],
+    example: 'INTERNAL',
+  })
+  @IsEnum(['INTERNAL', 'EXTERNAL'], {
+    message: 'stockType must be either INTERNAL or EXTERNAL',
+  })
+  @IsNotEmpty()
+  stockType: 'INTERNAL' | 'EXTERNAL';
 }
 
 export class DiagnoseRepairJobDto {
@@ -45,10 +58,10 @@ export class DiagnoseRepairJobDto {
   @IsNotEmpty()
   causeId: number;
 
-  @ApiProperty({ description: 'Tech Category ID from TECH_CATEGORY table', example: 1 })
+  @ApiPropertyOptional({ description: 'Tech Category ID from TECH_CATEGORY table', example: 1 })
   @IsInt()
-  @IsNotEmpty()
-  techCategoryId: number;
+  @IsOptional()
+  techCategoryId?: number;
 
   @ApiProperty({ description: 'Job Type ID from JOB_TYPE table', example: 1 })
   @IsInt()
@@ -67,7 +80,7 @@ export class DiagnoseRepairJobDto {
   @ApiProperty({
     enum: StepActionType,
     description:
-      'ประเภทขั้นตอนการจัดหา/ดำเนินการ (Step Master): SELF_REPAIR, INTERNAL_STOCK, EXTERNAL_STOCK, OUTSOURCE, PURCHASE_REPLACEMENT',
+      'ประเภทขั้นตอนการจัดหา/ดำเนินการ (Step Master): SELF_REPAIR, WITH_PARTS, OUTSOURCE, UNREPAIRABLE',
   })
   @IsEnum(StepActionType)
   @IsNotEmpty()
@@ -83,27 +96,13 @@ export class DiagnoseRepairJobDto {
   @IsOptional()
   isRepeatRepair?: boolean;
 
-  @ApiPropertyOptional({ description: 'Company ID (required for OUTSOURCE)', example: 'uuid' })
-  @IsUUID()
-  @IsOptional()
-  companyId?: string;
-
-  @ApiPropertyOptional({ description: 'Invoice / Bill number (for OUTSOURCE)' })
+  @ApiPropertyOptional({ description: 'Reason equipment is unrepairable (required for UNREPAIRABLE)' })
   @IsString()
   @IsOptional()
-  billNo?: string;
+  unrepairableReason?: string;
 
   @ApiPropertyOptional({
-    description: 'Array of mechanic User IDs assigned to this job',
-    type: [String],
-  })
-  @IsArray()
-  @IsUUID('all', { each: true })
-  @IsOptional()
-  mechanicIds?: string[];
-
-  @ApiPropertyOptional({
-    description: 'List of spare parts required (for INTERNAL_STOCK or EXTERNAL_STOCK)',
+    description: 'List of spare parts required (for WITH_PARTS with mixed internal/external requisition)',
     type: [SparePartRequisitionItemDto],
   })
   @IsArray()

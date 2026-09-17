@@ -99,8 +99,8 @@
 | **2** | ธุรการรับ Job / จ่ายงาน | ช่วงที่ 2 (ฟอร์มวินิจฉัย) | ช่าง (`MAINTENANCE_STAFF`) | `PARCEL_PROCESSING` | `UNDER_REPAIR` |
 | **3** | ช่างรับ Job / วินิจฉัย | ช่วงที่ 2 (ฟอร์มวินิจฉัย) | ช่าง (`MAINTENANCE_STAFF`) | `PARCEL_PROCESSING` | `UNDER_REPAIR` |
 | **4** | ขอส่งซ่อมบริษัทภายนอก | ช่วงที่ 2 (ฟอร์มวินิจฉัย) | ช่าง (`MAINTENANCE_STAFF`) | **`PARCEL_PROCESSING`** 📦 | `UNDER_REPAIR` |
-| **5** | อนุมัติส่งซ่อมบริษัทภายนอก | ช่วงที่ 3 | **`PARCEL_STAFF`** | **`OUTSOURCED`** 🚚 | `UNDER_REPAIR` |
-| **6** | พัสดุรับเครื่องกลับจากบริษัท | ช่วงที่ 3 | **`PARCEL_STAFF`** | **`PARCEL_PROCESSING`** 📦 | `UNDER_REPAIR` |
+| **5** | อนุมัติส่งซ่อมบริษัทภายนอก (ระบุ company_id) | ช่วงที่ 3 | **`PARCEL_STAFF`** | **`OUTSOURCED`** 🚚 | `UNDER_REPAIR` |
+| **6** | ช่างรับเครื่องคืนและทดสอบ (บันทึก bill_no & repair_cost) | ช่วงที่ 3 | **`MAINTENANCE_STAFF`** | **`IN_PROGRESS`** 🔧 | `UNDER_REPAIR` |
 | **7** | ช่างรับเครื่องและทดสอบ | ช่วงที่ 3 | `MAINTENANCE_STAFF` | **`IN_PROGRESS`** 🔧 | `UNDER_REPAIR` |
 | **8** | แล้วเสร็จ / รอตรวจรับงาน | ช่วงที่ 3 | `MAINTENANCE_STAFF` | **`WAITING_DELIVERY`** 🔔 | `UNDER_REPAIR` |
 | **9** | ตรวจรับงานและสรุป Job (ส่งมอบคืน) | ช่วงที่ 3 | `MAINTENANCE_STAFF` (ระบุชื่อผู้มารับมอบ) | **`COMPLETED`** ✅ | `NORMAL` / `AVAILABLE` |

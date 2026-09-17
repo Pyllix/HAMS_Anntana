@@ -23,6 +23,7 @@ interface CommonFieldsProps {
   techCategories?: BaseLookup[];
   readOnly?: boolean;
   isTechCategoryDisabled?: boolean;
+
 }
 
 export default function CommonEvaluationFields({
@@ -226,6 +227,40 @@ export default function CommonEvaluationFields({
         </div>
 
         <div>
+          <label htmlFor="evaluation-job-type" className="text-xs font-semibold text-slate-700 block mb-1.5">
+            ประเภทงาน <span className="text-rose-500">*</span>
+          </label>
+          <select
+            id="evaluation-job-type"
+            value={formState.jobTypeId || ""}
+            onChange={(e) => handleChange("jobTypeId", Number(e.target.value))}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+          >
+            <option value="" disabled>-- เลือกประเภทงาน --</option>
+            {jobTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="evaluation-tech-category" className="text-xs font-semibold text-slate-700 block mb-1.5">
+            หมวดงานช่าง <span className="text-rose-500">*</span>
+          </label>
+          <select
+            id="evaluation-tech-category"
+            value={formState.techCategoryId || ""}
+            onChange={(e) => handleChange("techCategoryId", Number(e.target.value))}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+          >
+            <option value="" disabled>-- เลือกหมวดงานช่าง --</option>
+            {techCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.code ? `${category.code} - ` : ""}{category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1.5">
             การซ่อมซ้ำ <span className="text-rose-500">*</span>
           </label>
@@ -292,6 +327,22 @@ export default function CommonEvaluationFields({
             onChange={(e) => handleChange("unrepairableReason", e.target.value)}
             placeholder="เช่น อะไหล่เลิกผลิต ความเสียหายรุนแรง หรือค่าซ่อมไม่คุ้มค่า..."
             className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+          />
+        </div>
+      )}
+
+      {actionStatus === "UNREPAIRABLE" && (
+        <div>
+          <label htmlFor="evaluation-unrepairable-reason" className="text-xs font-semibold text-slate-700 block mb-1.5">
+            เหตุผลที่ไม่สามารถซ่อมได้ <span className="text-rose-500">*</span>
+          </label>
+          <textarea
+            id="evaluation-unrepairable-reason"
+            rows={3}
+            value={formState.unrepairableReason || ""}
+            onChange={(e) => handleChange("unrepairableReason", e.target.value)}
+            placeholder="เช่น อะไหล่เลิกผลิต ความเสียหายรุนแรง หรือค่าซ่อมไม่คุ้มค่า..."
+            className="w-full rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
           />
         </div>
       )}

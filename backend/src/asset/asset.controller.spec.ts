@@ -15,6 +15,9 @@ describe('AssetController', () => {
     findAllDisposalRecords: jest.fn(),
     createDisposal: jest.fn(),
     findDisposalRecords: jest.fn(),
+    findAllTransferRecords: jest.fn(),
+    createTransfer: jest.fn(),
+    findTransferRecords: jest.fn(),
     findBySection: jest.fn(),
     findMySectionAssets: jest.fn(),
   };
@@ -67,6 +70,39 @@ describe('AssetController', () => {
 
       const result = await controller.findMySectionAssets(query, session);
       expect(mockAssetService.findMySectionAssets).toHaveBeenCalledWith('user-123', query);
+      expect(result).toEqual({ data: [], total: 0 });
+    });
+  });
+
+  describe('Transfer', () => {
+    it('should call assetService.createTransfer with session user id', async () => {
+      const dto = {
+        to_section_id: 'sec-2',
+        transferDocNo: 'TF-001',
+        transferDate: '2026-09-15',
+      } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.createTransfer.mockResolvedValue({ id: 'tf-1' });
+
+      const result = await controller.createTransfer('asset-1', dto, session);
+      expect(mockAssetService.createTransfer).toHaveBeenCalledWith('asset-1', dto, 'user-1');
+      expect(result).toEqual({ id: 'tf-1' });
+    });
+
+    it('should call assetService.findTransferRecords', async () => {
+      mockAssetService.findTransferRecords.mockResolvedValue([{ id: 'tf-1' }]);
+
+      const result = await controller.findTransferRecords('asset-1');
+      expect(mockAssetService.findTransferRecords).toHaveBeenCalledWith('asset-1');
+      expect(result).toEqual([{ id: 'tf-1' }]);
+    });
+
+    it('should call assetService.findAllTransferRecords', async () => {
+      const query = { page: 1, limit: 10 };
+      mockAssetService.findAllTransferRecords.mockResolvedValue({ data: [], total: 0 });
+
+      const result = await controller.findAllTransferRecords(query);
+      expect(mockAssetService.findAllTransferRecords).toHaveBeenCalledWith(query);
       expect(result).toEqual({ data: [], total: 0 });
     });
   });

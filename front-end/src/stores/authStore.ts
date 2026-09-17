@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { User, UserRole } from "../types/TypeUser";
-import { RoleType } from "../Router/roles";
+import { RoleType } from "../router/roles";
 
 interface AuthState {
   user: User | null;

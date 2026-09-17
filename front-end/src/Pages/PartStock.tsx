@@ -13,7 +13,7 @@ import { useAuthStore } from "../stores/authStore";
 
 export default function PartStock() {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF";
+  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
 
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -41,16 +41,9 @@ export default function PartStock() {
   ];
 
   return (
-    <div className="space-y-4">
-      {/* Title */}
-      <div className="pt-2">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-          รายการสต็อกอะไหล่ทั้งหมดในระบบ
-        </h1>
-      </div>
-
+    <div className="flex flex-col h-[calc(100vh-6.8rem)] max-h-[calc(100vh-6.8rem)] space-y-2 overflow-hidden">
       {/* Filter / Search Bar */}
-      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4">
+      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4 shrink-0">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -128,7 +121,7 @@ export default function PartStock() {
       </div>
 
       {/* Table Container */}
-      <div className="bg-white border border-slate-100 shadow-2xs rounded-xl overflow-hidden">
+      <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
         <SparePartTable
           search={inputSearch}
           category={category}

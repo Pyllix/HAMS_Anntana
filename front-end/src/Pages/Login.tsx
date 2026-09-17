@@ -3,6 +3,7 @@ import { useState } from "react";
 import { authLogin } from "../services/authService";
 import { useAuthStore } from "../stores/authStore";
 import { useNavigate } from "react-router-dom";
+import Spinner from "../components/loader/Spinner";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -22,16 +23,6 @@ export default function Login() {
       [name]: value,
     }));
   }
-
-  // function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-  //   e.preventDefault();
-  //   const userLogin = authLogin(formData.email, formData.password);
-  //   if (userLogin) {
-  //     login(userLogin);
-  //     console.log("authStore:", user);
-  //     navigate("/", { replace: true });
-  //   }
-  // }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,7 +48,7 @@ export default function Login() {
 
   return (
     /* container หลัก */
-    <div className="min-h-screen w-full flex justify-center items-center bg-bg-app antialiased">
+    <div className="min-h-screen w-full flex flex-col justify-center items-center bg-bg-app antialiased">
       {/* ตัวเเบ่งซ้ายขวา */}
       <div className="relative overflow-hidden flex justify-between max-w-3xl w-full h-125 bg-bg-component rounded-3xl shadow-xl">
         {/* ซ้าย */}
@@ -120,10 +111,11 @@ export default function Login() {
                 </div>
                 <input
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="****************"
                   onChange={handleInputChange}
                   name="password"
                   value={formData.password}
+                  autoComplete="new-password"
                   className="w-full pl-10 pr-12 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -132,11 +124,85 @@ export default function Login() {
             <button
               disabled={isLoading}
               type="submit"
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all mt-4 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all mt-4 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+              {isLoading ? (
+                <>
+                  <Spinner className="w-5 h-5 text-white" />
+                  กำลังเข้าสู่ระบบ...
+                </>
+              ) : (
+                "เข้าสู่ระบบ"
+              )}
             </button>
           </form>
+        </div>
+      </div>
+      {/* ข้อมูลทดสอบระบบ */}
+      <div className="max-w-3xl w-full mt-6 bg-slate-100/80 border border-slate-200 rounded-xl p-4 shadow-sm backdrop-blur-sm">
+        <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          ข้อมูลทดสอบระบบ (Dev Only)
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600">
+          {/* กลุ่มที่ 1 */}
+          <div className="space-y-2">
+            <div className="bg-white p-2 rounded border border-slate-200">
+              <p className="font-semibold text-slate-800">ช่าง</p>
+              <p>
+                Email:{" "}
+                <span className="font-mono text-emerald-600">
+                  maintenance@hospital.go.th
+                </span>
+              </p>
+              <p>
+                Pass: <span className="font-mono">Maintenance@1234</span>
+              </p>
+            </div>
+
+            <div className="bg-white p-2 rounded border border-slate-200">
+              <p className="font-semibold text-slate-800">เจ้าหน้าที่เเผนก</p>
+              <p>
+                Email:{" "}
+                <span className="font-mono text-emerald-600">
+                  deptstaff@hospital.go.th
+                </span>
+              </p>
+              <p>
+                Pass: <span className="font-mono">DeptStaff@1234</span>
+              </p>
+            </div>
+          </div>
+
+          {/* กลุ่มที่ 2 */}
+          <div className="space-y-2">
+            <div className="bg-white p-2 rounded border border-slate-200">
+              <p className="font-semibold text-slate-800">เจ้าหน้าที่ศูนย์</p>
+              <p>
+                Email:{" "}
+                <span className="font-mono text-emerald-600">
+                  assetcenter@hospital.go.th
+                </span>
+              </p>
+              <p>
+                Pass: <span className="font-mono">AssetCenter@1234</span>
+              </p>
+            </div>
+
+            <div className="bg-white p-2 rounded border border-slate-200">
+              <p className="font-semibold text-slate-800">พัสดุ</p>
+              <p>
+                Email:{" "}
+                <span className="font-mono text-emerald-600">
+                  parcel@hospital.go.th
+                </span>
+              </p>
+              <p>
+                Pass: <span className="font-mono">Parcel@1234</span>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -20,10 +20,11 @@ import { getRepairHistory } from "../services/repairHistoryService";
 const actionOptions: Array<{ value: RepairActionFilter; label: string }> = [
   { value: "ALL", label: "ทั้งหมด" },
   { value: "SELF_REPAIR", label: "ซ่อมเอง" },
+  { value: "WITH_PARTS", label: "ขอเบิกอะไหล่" },
   { value: "INTERNAL_STOCK", label: "เบิกอะไหล่ภายใน" },
   { value: "EXTERNAL_STOCK", label: "จัดหาอะไหล่ภายนอก" },
   { value: "OUTSOURCE", label: "ส่งซ่อมภายนอก" },
-  { value: "PURCHASE_REPLACEMENT", label: "เสนอซื้อทดแทน" },
+  { value: "UNREPAIRABLE", label: "ไม่สามารถซ่อมได้" },
 ];
 
 const statusOptions: Array<{ value: RepairStatusFilter; label: string }> = [
@@ -34,7 +35,7 @@ const statusOptions: Array<{ value: RepairStatusFilter; label: string }> = [
   { value: "WAITING_PARTS", label: "สั่งซื้อ / รออะไหล่" },
   { value: "PARCEL_PROCESSING", label: "พัสดุกำลังดำเนินการ" },
   { value: "OUTSOURCED", label: "ส่งซ่อมบริษัทภายนอก" },
-  { value: "UNREPAIRABLE", label: "ชำรุด / เสนอซื้อทดแทน" },
+  { value: "UNREPAIRABLE", label: "ไม่สามารถซ่อมได้ / รอส่งคืน" },
   { value: "WAITING_DELIVERY", label: "เสร็จแล้วรอรับคืน" },
   { value: "COMPLETED", label: "ปิดงานแล้ว" },
   { value: "CANCELLED", label: "ยกเลิก" },
@@ -92,7 +93,7 @@ export default function RepairHistory() {
           color="amber"
         />
         <SummaryCard
-          label="ส่งซ่อมภายนอก / ซื้อทดแทน"
+          label="ส่งซ่อมภายนอก / ไม่สามารถซ่อมได้"
           value={summary.external}
           icon={Truck}
           color="violet"

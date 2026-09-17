@@ -7,8 +7,6 @@ import {
   Eye,
   Pencil,
   Trash2,
-  BatteryCharging,
-  Wrench,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpareParts } from "../../services/sparepartService";
@@ -58,7 +56,7 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
 
 function ActionsCell({ row }: { row: Sparepart }) {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF";
+  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
 
   return (
     <div className="flex items-center gap-2">
@@ -98,28 +96,6 @@ function ActionsCell({ row }: { row: Sparepart }) {
 
 const columns: Array<ColumnDef<typeof features, Sparepart>> = [
   {
-    id: "image",
-    header: "รูปภาพ",
-    cell: (info) => {
-      const item = info.row.original;
-      return (
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 border border-gray-200 overflow-hidden text-gray-400">
-          {item.imageUrl ? (
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="h-full w-full object-cover"
-            />
-          ) : item.category === "ไฟฟ้า" || item.group?.name === "ไฟฟ้า" ? (
-            <BatteryCharging className="h-5 w-5 text-gray-500" />
-          ) : (
-            <Wrench className="h-5 w-5 text-gray-500" />
-          )}
-        </div>
-      );
-    },
-  },
-  {
     id: "code",
     header: "รหัสอะไหล่",
     cell: (info) => {
@@ -151,18 +127,6 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
       return (
         <span className="text-sm text-gray-600 whitespace-nowrap">
           {row.group?.name || row.category || "-"}
-        </span>
-      );
-    },
-  },
-  {
-    id: "brand",
-    header: "ยี่ห้อ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <span className="text-sm text-gray-600 whitespace-nowrap">
-          {row.brand || "-"}
         </span>
       );
     },
@@ -246,7 +210,7 @@ export default function SparePartTable({
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6;
+  const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -259,8 +223,7 @@ export default function SparePartTable({
       const matchesSearch =
         search === "" ||
         item.name?.toLowerCase().includes(sl) ||
-        item.code?.toLowerCase().includes(sl) ||
-        item.brand?.toLowerCase().includes(sl);
+        item.code?.toLowerCase().includes(sl);
       const matchesCategory =
         category === "ALL" ||
         item.category === category ||
@@ -290,16 +253,16 @@ export default function SparePartTable({
   });
 
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
+    <div className="w-full flex-1 flex flex-col min-h-0">
+      <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-left border-collapse">
-          <thead className="font-bold text-md">
+          <thead className="border-b border-slate-200 bg-white sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-slate-200">
+              <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="py-3.5 px-3.5 font-bold text-slate-900 whitespace-nowrap text-base"
+                    className="py-2.5 px-3.5 font-bold text-slate-800 whitespace-nowrap text-sm"
                   >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -332,7 +295,7 @@ export default function SparePartTable({
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3">
+                    <td key={cell.id} className="py-2.5 px-3 align-middle text-sm">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -344,20 +307,20 @@ export default function SparePartTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3 border-t border-slate-100 text-sm text-slate-500">
+      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
         <div>
           แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
           {Math.min(currentPage * pageSize, totalItems)} จาก{" "}
           {totalItems.toLocaleString()} รายการ
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .slice(Math.max(0, currentPage - 3), currentPage + 2)
@@ -366,10 +329,10 @@ export default function SparePartTable({
                 key={page}
                 type="button"
                 onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
                   currentPage === page
-                    ? "bg-emerald-600 font-semibold text-white shadow-sm"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 {page}
@@ -379,9 +342,9 @@ export default function SparePartTable({
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>

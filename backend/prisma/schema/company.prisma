@@ -4,10 +4,10 @@ model Company {
   id      String @id @default(uuid()) @map("company_id")
   code    String @unique @default("") @map("company_code") @db.VarChar(20)
   name    String @default("") @map("name") @db.VarChar(255)
-  tel     String @default("") @map("tel") @db.VarChar(20)
+  tel     String @default("") @map("tel") @db.VarChar(100)
   email   String @default("") @map("email") @db.VarChar(255)
   address String @default("") @map("address") @db.VarChar(255)
-  fax     String @default("") @map("fax") @db.VarChar(20)
+  fax     String @default("") @map("fax") @db.VarChar(255)
   group   String @default("") @map("group") @db.VarChar(20)
   remark  String @default("") @map("remark") @db.Text
 

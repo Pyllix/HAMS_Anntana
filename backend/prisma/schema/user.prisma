@@ -24,9 +24,7 @@ model User {
   ownedAssets   Asset[]   @relation("AssetOwner")
 
   //Transfer relations
-  requestedTransfers Transfer[] @relation("TransferRequestedBy")
-  approvedTransfers  Transfer[] @relation("TransferApprovedBy")
-  receivedTransfers  Transfer[] @relation("TransferReceivedBy")
+  transfers Transfer[] @relation("TransferTransferredBy")
 
   //Borrow relations
   borrowedTransactions        BorrowTransaction[] @relation("BorrowerUser")
@@ -37,6 +35,8 @@ model User {
   receivedTransactions        BorrowTransaction[] @relation("ReceivedByUser")
   rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
   cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
+  requestedBorrowExtensions   BorrowExtension[]   @relation("ExtensionRequestedBy")
+  reviewedBorrowExtensions    BorrowExtension[]   @relation("ExtensionReviewedBy")
 
   //Spare parts relations
   sparepartAdds               SparepartAdd[]
@@ -50,6 +50,8 @@ model User {
   mechanicRepairs             MechanicRepair[]
   completedRepairSteps        RepairJobStep[]
 
+  @@index([section_id])
+  @@index([role])
   @@map("users")
 }
 

@@ -21,6 +21,7 @@ import { EquipmentTypeModule } from './equipment-type/equipment-type.module';
 import { TechCategoryModule } from './tech-category/tech-category.module';
 import { CauseModule } from './cause/cause.module';
 import { JobTypeModule } from './job-type/job-type.module';
+import { AssetViabilityModule } from './asset-viability/asset-viability.module';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
@@ -44,6 +45,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     TechCategoryModule,
     CauseModule,
     JobTypeModule,
+    AssetViabilityModule,
   ],
   controllers: [],
   providers: [

@@ -5,9 +5,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Eye,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getPartOrders } from "../../services/partOrderService";
+import { getSpareParts } from "../../services/sparepartService";
 import type { PartOrder } from "../../Types/TypePartOrder";
 import { usePartOrderModalStore } from "../../stores/usePartOrderModalStore";
 
@@ -34,13 +36,13 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div className="space-y-1 py-0.5 min-w-[200px] max-w-xs">
+        <div className="space-y-0.5 py-0.5 min-w-[180px] max-w-xs">
           <div className="font-bold text-slate-900 text-sm leading-snug break-words">
             {row.partName}
           </div>
           <div>
             <span className="inline-flex items-center text-3xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/50">
-              ประเภท: {row.category}
+              หมวดหมู่: {row.category}
             </span>
           </div>
         </div>
@@ -48,53 +50,48 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
     },
   },
   {
-    id: "requester",
-    header: "ผู้ขอเบิก/หน่วยงาน",
+    id: "quantity",
+    header: "จำนวน",
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div className="text-xs space-y-0.5 whitespace-nowrap">
-          <p className="font-semibold text-slate-900">{row.requesterName}</p>
-          <p className="text-slate-500 text-2xs">หน่วยงาน : {row.department}</p>
-        </div>
+        <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
+          {row.quantity} {row.unit || "ชิ้น"}
+        </span>
       );
     },
   },
   {
-    id: "purchasingInfo",
-    header: "ข้อมูลจัดซื้อ",
+    id: "unitPrice",
+    header: "ราคา/หน่วย",
     cell: (info) => {
       const row = info.row.original;
-      if (!row.supplier && !row.brandModel && !row.unitPrice) {
-        return (
-          <span className="text-xs text-slate-400 italic">
-            - ยังไม่ระบุข้อมูลจัดซื้อ -
-          </span>
-        );
-      }
       return (
-        <div className="text-2xs text-slate-600 space-y-1 max-w-xs leading-relaxed">
-          {row.brandModel && (
-            <p>
-              <span className="font-semibold text-slate-800">ยี่ห้อและรุ่น:</span>{" "}
-              <span className="text-slate-700">{row.brandModel}</span>
-            </p>
-          )}
-          {row.supplier && (
-            <p>
-              <span className="font-semibold text-slate-800">สั่งซื้อจากร้านค้า/บริษัท:</span>{" "}
-              <span className="text-slate-700">{row.supplier}</span>
-            </p>
-          )}
-          {row.unitPrice !== undefined && (
-            <p>
-              <span className="font-semibold text-slate-800">ราคาต่อหน่วย(บาท):</span>{" "}
-              <span className="font-mono text-slate-900 font-medium">
-                {row.unitPrice.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-              </span>
-            </p>
-          )}
-        </div>
+        <span className="text-sm text-slate-700 font-mono whitespace-nowrap">
+          {row.unitPrice !== undefined
+            ? Number(row.unitPrice).toLocaleString("th-TH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : "-"}
+        </span>
+      );
+    },
+  },
+  {
+    id: "totalPrice",
+    header: "ราคารวม (บาท)",
+    cell: (info) => {
+      const row = info.row.original;
+      return (
+        <span className="text-sm font-bold text-emerald-700 font-mono whitespace-nowrap">
+          {row.totalPrice !== undefined
+            ? Number(row.totalPrice).toLocaleString("th-TH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            : "-"}
+        </span>
       );
     },
   },
@@ -130,17 +127,18 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
     header: "การดำเนินการ",
     cell: (info) => {
       const row = info.row.original;
-      const { openPurchasingModal } = usePartOrderModalStore.getState();
+      const { openDetailModal } = usePartOrderModalStore.getState();
 
       return (
-        <div className="flex items-center gap-2 whitespace-nowrap">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
           <button
             type="button"
-            onClick={() => openPurchasingModal(row)}
-            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-all shadow-2xs cursor-pointer active:scale-95"
+            onClick={() => openDetailModal(row)}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+            title="ดูรายละเอียด"
           >
-            <Plus className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600" />
-            เพิ่ม
+            <Eye className="h-3.5 w-3.5 text-slate-400" />
+            ดู
           </button>
         </div>
       );
@@ -153,34 +151,59 @@ const columns: Array<ColumnDef<typeof features, PartOrder>> = [
 interface PartOrderTableProps {
   search?: string;
   dateFilter?: string;
+  categoryFilter?: string;
 }
 
 export default function PartOrderTable({
   search = "",
   dateFilter = "ALL",
+  categoryFilter = "ALL",
 }: PartOrderTableProps) {
-  const { data: orders, isLoading } = useQuery({
+  const { data: spareParts = [], isLoading: isPartsLoading } = useQuery({
+    queryKey: ["spareParts"],
+    queryFn: getSpareParts,
+  });
+
+  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
     queryKey: ["partOrders"],
     queryFn: getPartOrders,
   });
 
+  const isLoading = isPartsLoading || isOrdersLoading;
+
+  // รายการคำสั่งซื้ออะไหล่ทั้งหมด (เรียงรายการใหม่ล่าสุดไว้บนสุด และ map หมวดหมู่จาก spareParts)
+  const realOrders: PartOrder[] = useMemo(() => {
+    const partsMap = new Map(spareParts.map((p) => [p.id, p]));
+    return orders.map((o) => {
+      const part = o.sparepart_id ? partsMap.get(o.sparepart_id) : undefined;
+      const realCategory =
+        part?.group?.name ||
+        part?.category ||
+        (o.category && o.category !== "ทั่วไป" ? o.category : undefined) ||
+        "ทั่วไป";
+
+      return {
+        ...o,
+        category: realCategory,
+      };
+    });
+  }, [orders, spareParts]);
+
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 5;
+  const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, dateFilter]);
+  }, [search, dateFilter, categoryFilter]);
 
   const filteredData = useMemo(() => {
-    if (!orders) return [];
-    return orders.filter((item) => {
+    return realOrders.filter((item) => {
       const sl = search.toLowerCase();
       const matchesSearch =
         search === "" ||
         item.orderNo?.toLowerCase().includes(sl) ||
         item.partName?.toLowerCase().includes(sl) ||
-        item.requesterName?.toLowerCase().includes(sl) ||
-        item.supplier?.toLowerCase().includes(sl);
+        item.category?.toLowerCase().includes(sl);
 
       const matchesDate =
         !dateFilter ||
@@ -188,9 +211,14 @@ export default function PartOrderTable({
         item.orderDate === dateFilter ||
         (item.orderDate && item.orderDate.startsWith(dateFilter));
 
-      return matchesSearch && matchesDate;
+      const matchesCategory =
+        !categoryFilter ||
+        categoryFilter === "ALL" ||
+        item.category === categoryFilter;
+
+      return matchesSearch && matchesDate && matchesCategory;
     });
-  }, [orders, search, dateFilter]);
+  }, [realOrders, search, dateFilter, categoryFilter]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -212,16 +240,16 @@ export default function PartOrderTable({
   });
 
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
+    <div className="w-full flex-1 flex flex-col min-h-0">
+      <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50/70 border-b border-slate-200/80">
+          <thead className="border-b border-slate-200 bg-white sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap text-sm"
+                    className="py-2.5 px-4 font-bold text-slate-800 whitespace-nowrap text-sm"
                   >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -254,10 +282,10 @@ export default function PartOrderTable({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-slate-50/80 transition-colors group"
+                  className="hover:bg-slate-50/50 transition-colors group"
                 >
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-3 px-4 align-middle">
+                    <td key={cell.id} className="py-2.5 px-4 align-middle text-sm">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -269,20 +297,20 @@ export default function PartOrderTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-3 border-t border-slate-100 text-sm text-slate-500">
+      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
         <div>
           แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
           {Math.min(currentPage * pageSize, totalItems)} จาก{" "}
           {totalItems.toLocaleString()} รายการ
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .slice(Math.max(0, currentPage - 3), currentPage + 2)
@@ -291,10 +319,10 @@ export default function PartOrderTable({
                 key={page}
                 type="button"
                 onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
                   currentPage === page
-                    ? "bg-emerald-600 font-semibold text-white shadow-sm"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 {page}
@@ -304,9 +332,9 @@ export default function PartOrderTable({
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>

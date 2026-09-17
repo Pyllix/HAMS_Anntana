@@ -22,6 +22,7 @@ import { UpdateSparepartDto } from './dto/update-spare-part.dto';
 import { QuerySparepartDto } from './dto/query-spare-part.dto';
 import { StockInSparepartDto } from './dto/stock-in-spare-part.dto';
 import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
+import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 
 @ApiTags('Spare Parts')
 @ApiBearerAuth()
@@ -79,6 +80,19 @@ export class SparePartsController {
   @ApiOperation({ summary: 'Find all Spare Part Transactions (paginated)', description: 'ดึงสมุดรายการเบิก-จ่าย-คืนอะไหล่ทั้งหมด' })
   findAllTransactions(@Query() query: QuerySparepartTxnDto) {
     return this.sparePartsService.findAllTransactions(query);
+  }
+
+  @Get('stock-in-history')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.PARCEL_STAFF,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+  )
+  @ApiOperation({ summary: 'Find Stock-In History (paginated)', description: 'ดึงประวัติการรับเข้าอะไหล่/เติมสต็อก พร้อมฟิลเตอร์ค้นหาและแบ่งหน้า' })
+  findStockInHistory(@Query() query: QueryStockInHistoryDto) {
+    return this.sparePartsService.findStockInHistory(query);
   }
 
   @Post('stock-in')

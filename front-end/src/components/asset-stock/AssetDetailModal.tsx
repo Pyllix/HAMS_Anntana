@@ -1,8 +1,10 @@
 import { useMemo } from "react";
-import { X, Wrench, BarChart2, Package } from "lucide-react";
+import { X, Wrench, Package } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
+import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
 import { getAssetTypes } from "../../services/assetService";
+import { fetchRepairJobSummaries } from "../../services/repairApiService";
 
 const THAI_MONTHS = [
   "ม.ค.",
@@ -71,6 +73,15 @@ function isWarrantyActive(warrantyDateString?: string | null): boolean {
 
 export default function AssetDetailModal() {
   const { isOpen, selectedAsset: asset, closeModal } = useAssetDetailModalStore();
+
+  const { data: repairJobs } = useQuery({
+    queryKey: ["asset-repair-jobs", asset?.id],
+    queryFn: () =>
+      asset?.id ? fetchRepairJobSummaries({ assetId: asset.id }) : [],
+    enabled: Boolean(isOpen && asset?.id),
+  });
+
+  const repairCount = repairJobs?.length ?? 0;
 
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
@@ -294,24 +305,22 @@ export default function AssetDetailModal() {
           <div>
             <h4 className="font-bold text-slate-900 text-sm">ประวัติเครื่อง</h4>
             <p className="text-xs text-slate-400 mt-0.5">
-              คลิกเพื่อดูรายละเอียดประวัติการซ่อมบำรุงและการสอบเทียบของเครื่องนี้
+              คลิกเพื่อดูรายละเอียดประวัติการซ่อมบำรุงของเครื่องนี้
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className="flex items-center gap-2 rounded-xl border border-sky-400 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-sky-600 hover:bg-sky-50 transition-colors"
+              onClick={() => {
+                if (asset) {
+                  useAssetRepairHistoryModalStore.getState().openModal(asset);
+                }
+              }}
+              className="flex items-center gap-2 rounded-xl border border-sky-400 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
             >
               <Wrench className="h-4 w-4" />
-              ประวัติการซ่อม (0)
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-xl border border-purple-400 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-purple-600 hover:bg-purple-50 transition-colors"
-            >
-              <BarChart2 className="h-4 w-4" />
-              ประวัติการสอบเทียบ (0)
+              ประวัติการซ่อม ({repairCount})
             </button>
           </div>
         </div>

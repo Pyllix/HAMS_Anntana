@@ -3,12 +3,6 @@ import { Type } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateSparepartDto {
-  @ApiProperty({ example: 'SP-ELE-001', description: 'รหัสอะไหล่' })
-  @IsNotEmpty()
-  @IsString()
-  @MaxLength(100)
-  code: string;
-
   @ApiProperty({ example: 'ฟิวส์เซรามิก 10A 250V', description: 'ชื่อรายการอะไหล่' })
   @IsNotEmpty()
   @IsString()

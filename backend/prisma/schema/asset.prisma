@@ -51,5 +51,11 @@ model Asset {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([section_id])
+  @@index([asset_status_id])
+  @@index([availability_status_id])
+  @@index([type_id])
+  @@index([createdAt])
+  @@index([noid])
   @@map("asset")
 }

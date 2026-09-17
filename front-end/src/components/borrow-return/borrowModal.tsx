@@ -80,7 +80,6 @@ export default function BorrowModal() {
     });
   };
 
-
   return (
     <div
       className="fixed inset-0 bg-gray-800/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 transition-opacity duration-300 animate-fadeIn"

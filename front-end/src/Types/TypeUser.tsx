@@ -1,4 +1,4 @@
-import { RoleType } from "../Router/roles";
+import { RoleType } from "../router/roles";
 
 export type UserRole =
   | "ADMIN"

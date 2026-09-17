@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HAMS - Smart Asset Borrow Recommendation Sandbox</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    @keyframes pulseSoft {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.92; transform: scale(1.01); }
+    }
+    .animate-pulse-soft {
+      animation: pulseSoft 2.5s ease-in-out infinite;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- ========================================== -->
+  <!-- TOP NAVIGATION / HEADER                    -->
+  <!-- ========================================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold text-slate-900 tracking-tight">HAMS Hospital Equipment</h1>
+            <span class="text-[11px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Usage Rotation Engine
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">ระบบจำลองการแนะนำครุภัณฑ์ในการยืมเพื่อกระจายภาระการใช้งาน (Single-File Sandbox)</p>
+        </div>
+      </div>
+
+      <!-- Mode Selector & API Controls -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        <!-- Mode Switcher -->
+        <div class="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200 text-xs">
+          <button id="btnMockMode" onclick="setMode('mock')" class="px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-white text-slate-900">
+            ⚡ Mock Data (จำลอง)
+          </button>
+          <button id="btnLiveMode" onclick="setMode('live')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900">
+            🌐 Live API (Localhost)
+          </button>
+        </div>
+
+        <!-- Token Drawer Toggle (For Live Mode) -->
+        <button onclick="toggleConfigModal()" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors" title="ตั้งค่าการเชื่อมต่อ API">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- LIVE API CONFIG MODAL                      -->
+  <!-- ========================================== -->
+  <div id="configModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <span>⚙️</span> ตั้งค่าการเชื่อมต่อ Live Backend API
+        </h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="space-y-4 py-4 text-xs">
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Backend Base URL</label>
+          <input id="cfgBaseUrl" type="text" value="http://localhost:3000" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 font-mono text-xs" />
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Bearer Auth Token (ถ้ามี)</label>
+          <input id="cfgToken" type="password" placeholder="eyJh..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 font-mono text-xs" />
+          <p class="text-[11px] text-slate-500 mt-1">Token สำหรับเรียกใช้งาน Endpoint ที่มี Role Guard</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveConfig()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium text-xs">
+          บันทึกการตั้งค่า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MAIN CONTENT CONTAINER                     -->
+  <!-- ========================================== -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- 1. Selection & Filter Toolbar -->
+    <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <label for="modelSelect" class="text-xs font-semibold text-slate-700 uppercase tracking-wider shrink-0">
+          รุ่นครุภัณฑ์ที่ต้องการยืม:
+        </label>
+        <div class="relative min-w-[260px]">
+          <select id="modelSelect" onchange="onModelChange()" class="w-full appearance-none bg-slate-50 border border-slate-300 hover:border-slate-400 text-slate-800 text-sm rounded-xl px-4 py-2.5 pr-8 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all cursor-pointer">
+            <option value="Puritan Bennett 840">Puritan Bennett 840 (เครื่องช่วยหายใจ)</option>
+            <option value="Mindray SV300">Mindray SV300 (เครื่องช่วยหายใจชนิดพกพา)</option>
+            <option value="Terumo TE-112">Terumo TE-112 (เครื่องให้สารละลายทางหลอดเลือด)</option>
+          </select>
+          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Explanation Pill -->
+      <div class="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+        <span class="text-brand-600 font-bold">สูตร Balanced Rotation:</span>
+        <span>ใช้งาน 90 วันน้อยสุด ➔ จอดพักนานสุด ➔ ถูกยืมน้อยสุด</span>
+      </div>
+    </div>
+
+    <!-- 2. SMART SWAP NUDGE ALERT BANNER (Conditionally Shown) -->
+    <div id="swapAlert" class="hidden transition-all duration-300">
+      <div class="bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-2 border-amber-400/80 rounded-2xl p-4 sm:p-5 shadow-lg shadow-amber-500/10 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-soft">
+        <div class="flex items-start gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30">
+            <span class="text-xl">💡</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-amber-950 text-sm sm:text-base tracking-tight">
+                คำแนะนำเพื่อกระจายการใช้งาน (Balanced Rotation Nudge)
+              </h3>
+              <span class="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full uppercase">
+                แนะนำสลับ
+              </span>
+            </div>
+            <p id="swapReasonText" class="text-xs sm:text-sm text-amber-900/90 mt-1 leading-relaxed">
+              💡 กำลังประเมินทางเลือกที่ดีกว่า...
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5 shrink-0 self-end md:self-center">
+          <button onclick="dismissSwapAlert()" class="px-3.5 py-2 text-amber-800 hover:bg-amber-100/60 rounded-xl text-xs font-semibold transition-colors">
+            คงเครื่องเดิมไว้
+          </button>
+          <button id="btnAcceptSwap" onclick="acceptSwapRecommendation()" class="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-xl text-xs font-semibold shadow-md shadow-amber-600/30 transition-all transform active:scale-95 flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            <span>สลับใช้เครื่องที่แนะนำ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Asset Cards Grid -->
+    <div>
+      <div class="flex items-center justify-between mb-3 px-1">
+        <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <span>เครื่องรุ่นเดียวกันที่พร้อมใช้งาน</span>
+          <span id="badgeAvailableCount" class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">3 เครื่อง</span>
+        </h2>
+        <span class="text-xs text-slate-500">คลิกที่การ์ดเพื่อทดสอบเลือกลองยืม</span>
+      </div>
+
+      <div id="cardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Cards dynamically injected via JavaScript -->
+      </div>
+    </div>
+
+    <!-- 4. Selected Asset Summary Drawer / Floating Bar -->
+    <div id="selectionSummary" class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5 w-full sm:w-auto">
+        <div class="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+        <div>
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">เครื่องที่กำลังเลือกยืม</span>
+          <div class="flex items-center gap-2">
+            <h4 id="summaryNoid" class="text-base font-bold text-slate-900">-</h4>
+            <span id="summaryBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">ยังไม่ได้เลือก</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <button onclick="resetSelection()" class="px-4 py-2.5 text-xs text-slate-600 hover:text-slate-900 font-medium rounded-xl hover:bg-slate-100 transition-colors">
+          ล้างการเลือก
+        </button>
+        <button id="btnConfirmBorrow" onclick="confirmBorrowMock()" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-brand-500/20 transition-all flex items-center gap-2">
+          <span>ดำเนินการสร้างใบขอยืม</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. DEVELOPER TOOLS & JSON PAYLOAD INSPECTOR -->
+    <div class="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 text-slate-200">
+      <div class="px-5 py-3.5 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between cursor-pointer" onclick="toggleInspector()">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">API INSPECTOR</span>
+          <span class="text-xs text-slate-300 font-medium">ดู JSON Request / Response จริงสำหรับนักพัฒนา</span>
+        </div>
+        <button id="btnToggleInspector" class="text-slate-400 hover:text-white text-xs flex items-center gap-1">
+          <span>พับเก็บ/เปิดดู</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+      
+      <div id="inspectorContent" class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 1. Recommendations Query JSON -->
+          <div>
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-mono">
+              <span>GET /borrowings/recommendations</span>
+              <span id="recStatus" class="text-emerald-400">200 OK</span>
+            </div>
+            <pre id="recJsonView" class="bg-slate-950 p-3.5 rounded-xl text-[11px] font-mono text-sky-300 overflow-x-auto custom-scrollbar border border-slate-800 max-h-60 leading-relaxed"></pre>
+          </div>
+
+          <!-- 2. Swap Check Query JSON -->
+          <div>
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-mono">
+              <span>GET /borrowings/recommendations/swap-check</span>
+              <span id="swapStatus" class="text-amber-400">-</span>
+            </div>
+            <pre id="swapJsonView" class="bg-slate-950 p-3.5 rounded-xl text-[11px] font-mono text-amber-200 overflow-x-auto custom-scrollbar border border-slate-800 max-h-60 leading-relaxed">// ยังไม่มีการตรวจสอบ Swap (คลิกเลือกเครื่องที่มีการใช้งานหนักเพื่อทดสอบ)</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- FOOTER                                     -->
+  <!-- ========================================== -->
+  <footer class="mt-auto py-4 bg-white border-t border-slate-200 text-center text-xs text-slate-500">
+    <p>HAMS Medical Asset Management System • Smart Borrow Recommendation Engine Demo</p>
+  </footer>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    // App State
+    let currentMode = 'mock'; // 'mock' | 'live'
+    let selectedModel = 'Puritan Bennett 840';
+    let selectedAssetId = null;
+    let cachedRecommendations = null;
+    let pendingSwapAsset = null;
+    let inspectorOpen = true;
+
+    // Local Storage for Config
+    let config = {
+      baseUrl: localStorage.getItem('hams_api_base') || 'http://localhost:3000',
+      token: localStorage.getItem('hams_api_token') || '',
+    };
+
+    // MOCK DATA REPOSITORY
+    const MOCK_DATA = {
+      'Puritan Bennett 840': {
+        model: 'Puritan Bennett 840',
+        equipmentTypeId: 1,
+        totalAvailable: 3,
+        recommendedAssetId: 'uuid-pb840-003',
+        candidates: [
+          {
+            assetId: 'uuid-pb840-003',
+            noid: 'MD-67-003',
+            name: 'เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน',
+            model: 'Puritan Bennett 840',
+            serialNo: 'SN-PB840-003',
+            sectionName: 'ศูนย์เครื่องมือแพทย์ (Medical Center)',
+            imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 0.0,
+            idleDays: 45.2,
+            borrowCount90d: 0,
+            isRecommended: true,
+            recommendationReason: '🌟 แนะนำเครื่องนี้: ครุภัณฑ์ใหม่พร้อมใช้งาน ยังไม่มีประวัติการยืมในรอบ 90 วัน',
+          },
+          {
+            assetId: 'uuid-pb840-002',
+            noid: 'MD-67-002',
+            name: 'เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน',
+            model: 'Puritan Bennett 840',
+            serialNo: 'SN-PB840-002',
+            sectionName: 'ศูนย์เครื่องมือแพทย์ (Medical Center)',
+            imageUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 12.5,
+            idleDays: 14.0,
+            borrowCount90d: 2,
+            isRecommended: false,
+            recommendationReason: '',
+          },
+          {
+            assetId: 'uuid-pb840-001',
+            noid: 'MD-67-001',
+            name: 'เครื่องช่วยหายใจชนิดควบคุมด้วยปริมาตรและความดัน',
+            model: 'Puritan Bennett 840',
+            serialNo: 'SN-PB840-001',
+            sectionName: 'ศูนย์เครื่องมือแพทย์ (Medical Center)',
+            imageUrl: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 38.0,
+            idleDays: 2.5,
+            borrowCount90d: 6,
+            isRecommended: false,
+            recommendationReason: '',
+          },
+        ],
+      },
+      'Mindray SV300': {
+        model: 'Mindray SV300',
+        equipmentTypeId: 1,
+        totalAvailable: 2,
+        recommendedAssetId: 'uuid-sv300-002',
+        candidates: [
+          {
+            assetId: 'uuid-sv300-002',
+            noid: 'MD-68-012',
+            name: 'เครื่องช่วยหายใจชนิดพกพา (Transport Ventilator)',
+            model: 'Mindray SV300',
+            serialNo: 'SN-SV300-88',
+            sectionName: 'ศูนย์เครื่องมือแพทย์',
+            imageUrl: 'https://images.unsplash.com/photo-1584515933487-779824d29309?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 3.0,
+            idleDays: 20.0,
+            borrowCount90d: 1,
+            isRecommended: true,
+            recommendationReason: '🌟 แนะนำเครื่องนี้: ผ่านการใช้งานเพียง 3.0 วันในรอบ 90 วัน และจอดพักมาแล้ว 20 วัน เหมาะสำหรับการหมุนเวียนใช้งาน',
+          },
+          {
+            assetId: 'uuid-sv300-001',
+            noid: 'MD-68-011',
+            name: 'เครื่องช่วยหายใจชนิดพกพา (Transport Ventilator)',
+            model: 'Mindray SV300',
+            serialNo: 'SN-SV300-12',
+            sectionName: 'ศูนย์เครื่องมือแพทย์',
+            imageUrl: 'https://images.unsplash.com/photo-1584515933487-779824d29309?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 28.0,
+            idleDays: 1.0,
+            borrowCount90d: 5,
+            isRecommended: false,
+            recommendationReason: '',
+          },
+        ],
+      },
+      'Terumo TE-112': {
+        model: 'Terumo TE-112',
+        equipmentTypeId: 2,
+        totalAvailable: 1,
+        recommendedAssetId: 'uuid-te112-001',
+        candidates: [
+          {
+            assetId: 'uuid-te112-001',
+            noid: 'MD-66-050',
+            name: 'เครื่องให้สารละลายทางหลอดเลือดดำ (Infusion Pump)',
+            model: 'Terumo TE-112',
+            serialNo: 'SN-TE112-09',
+            sectionName: 'งานคลังครุภัณฑ์',
+            imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80',
+            usageDays90d: 15.0,
+            idleDays: 10.0,
+            borrowCount90d: 3,
+            isRecommended: true,
+            recommendationReason: '🌟 แนะนำเครื่องนี้: ผ่านการใช้งานเพียง 15.0 วันในรอบ 90 วัน เหมาะสำหรับการใช้งาน',
+          },
+        ],
+      },
+    };
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('cfgBaseUrl').value = config.baseUrl;
+      document.getElementById('cfgToken').value = config.token;
+      loadRecommendations();
+    });
+
+    // Toggle Mock vs Live Mode
+    function setMode(mode) {
+      currentMode = mode;
+      const btnMock = document.getElementById('btnMockMode');
+      const btnLive = document.getElementById('btnLiveMode');
+
+      if (mode === 'mock') {
+        btnMock.className = 'px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-white text-slate-900';
+        btnLive.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
+      } else {
+        btnLive.className = 'px-3 py-1.5 rounded-lg font-medium transition-all shadow-sm bg-brand-600 text-white';
+        btnMock.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
+      }
+
+      resetSelection();
+      loadRecommendations();
+    }
+
+    function onModelChange() {
+      selectedModel = document.getElementById('modelSelect').value;
+      resetSelection();
+      loadRecommendations();
+    }
+
+    // Load recommendations
+    async function loadRecommendations() {
+      const grid = document.getElementById('cardsGrid');
+      grid.innerHTML = `
+        <div class="col-span-full py-12 text-center text-slate-400 flex flex-col items-center">
+          <svg class="animate-spin w-8 h-8 text-brand-600 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <span class="text-xs">กำลังคำนวณ Balanced Usage Rotation...</span>
+        </div>
+      `;
+
+      if (currentMode === 'mock') {
+        // Use Mock Data
+        setTimeout(() => {
+          const data = MOCK_DATA[selectedModel] || { candidates: [], totalAvailable: 0 };
+          cachedRecommendations = data;
+          renderCards(data);
+          updateJsonView('recJsonView', data);
+          document.getElementById('recStatus').innerText = '200 OK (MOCK)';
+          document.getElementById('recStatus').className = 'text-emerald-400';
+        }, 150);
+      } else {
+        // Fetch from Live Backend
+        try {
+          const headers = {};
+          if (config.token) headers['Authorization'] = `Bearer ${config.token}`;
+
+          const url = `${config.baseUrl}/borrowings/recommendations?model=${encodeURIComponent(selectedModel)}&limit=10`;
+          const res = await fetch(url, { headers });
+          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+          const data = await res.json();
+          cachedRecommendations = data;
+          renderCards(data);
+          updateJsonView('recJsonView', data);
+          document.getElementById('recStatus').innerText = `${res.status} OK (LIVE)`;
+          document.getElementById('recStatus').className = 'text-emerald-400';
+        } catch (err) {
+          grid.innerHTML = `
+            <div class="col-span-full py-8 text-center text-rose-500 bg-rose-50 rounded-2xl border border-rose-200 p-6">
+              <span class="text-2xl mb-2 block">⚠️</span>
+              <p class="font-bold text-sm">ไม่สามารถเชื่อมต่อ Live Backend API ได้</p>
+              <p class="text-xs text-rose-600 mt-1">${err.message}</p>
+              <p class="text-[11px] text-slate-500 mt-3">ตรวจสอบว่า NestJS กำลังรันอยู่ที่ ${config.baseUrl} หรือกดสลับกลับเป็นโหมด Mock Data</p>
+              <button onclick="setMode('mock')" class="mt-3 px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-700">
+                สลับกลับเป็น Mock Data
+              </button>
+            </div>
+          `;
+          updateJsonView('recJsonView', { error: err.message, url: `${config.baseUrl}/borrowings/recommendations` });
+          document.getElementById('recStatus').innerText = 'ERROR';
+          document.getElementById('recStatus').className = 'text-rose-400';
+        }
+      }
+    }
+
+    // Render Cards in Grid
+    function renderCards(data) {
+      const grid = document.getElementById('cardsGrid');
+      document.getElementById('badgeAvailableCount').innerText = `${data.totalAvailable} เครื่อง`;
+
+      if (!data.candidates || data.candidates.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+            <span class="text-3xl block mb-2">📦</span>
+            <p class="text-sm font-semibold text-slate-700">ไม่มีเครื่องรุ่นนี้ที่พร้อมใช้งานในขณะนี้</p>
+            <p class="text-xs text-slate-400 mt-1">เครื่องทั้งหมดอาจอยู่ในสถานะถูกยืม หรืออยู่ระหว่างการซ่อมบำรุง</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = data.candidates
+        .map((asset, index) => {
+          const isSelected = selectedAssetId === asset.assetId;
+          const isRec = asset.isRecommended;
+
+          // Usage meter color coding
+          let usageMeterClass = 'bg-emerald-500';
+          if (asset.usageDays90d > 25) usageMeterClass = 'bg-rose-500';
+          else if (asset.usageDays90d > 10) usageMeterClass = 'bg-amber-500';
+
+          return `
+            <div 
+              onclick="selectAsset('${asset.assetId}')"
+              class="relative bg-white rounded-2xl border-2 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col justify-between group hover:shadow-lg ${
+                isSelected
+                  ? 'border-brand-600 ring-2 ring-brand-500/30 shadow-md'
+                  : isRec
+                  ? 'border-emerald-400/90 hover:border-emerald-500 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300'
+              }"
+            >
+              ${
+                isRec
+                  ? `
+                <div class="absolute top-3 left-3 z-10">
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-md shadow-emerald-600/30">
+                    <span>🌟</span>
+                    <span>แนะนำอันดับ 1</span>
+                  </span>
+                </div>
+              `
+                  : ''
+              }
+
+              <!-- Image & Basic Header -->
+              <div class="p-5 pb-3">
+                <div class="h-36 rounded-xl bg-slate-100 overflow-hidden mb-3 relative flex items-center justify-center">
+                  <img src="${asset.imageUrl || 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=600&q=80'}" 
+                       alt="${asset.model}" 
+                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                       onerror="this.src='https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80'" />
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+                  <span class="absolute bottom-2 left-2 text-white text-xs font-bold px-2 py-0.5 rounded bg-black/60 backdrop-blur-sm">
+                    ${asset.noid || 'ไม่มีเลขทะเบียน'}
+                  </span>
+                </div>
+
+                <div class="space-y-1">
+                  <h3 class="font-bold text-slate-900 text-sm tracking-tight group-hover:text-brand-600 transition-colors">
+                    ${asset.name}
+                  </h3>
+                  <p class="text-xs text-slate-500 flex items-center gap-1">
+                    <span>📍 ${asset.sectionName || 'ไม่ระบุแผนก'}</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Recommendation Reason Tag (If Applicable) -->
+              ${
+                isRec && asset.recommendationReason
+                  ? `
+                <div class="mx-5 mb-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-snug">
+                  ${asset.recommendationReason}
+                </div>
+              `
+                  : ''
+              }
+
+              <!-- METRICS GAUGES -->
+              <div class="px-5 py-3 bg-slate-50/80 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <span class="text-[10px] font-semibold text-slate-500 uppercase block">ใช้งานใน 90 วัน</span>
+                  <span class="font-bold text-slate-900 text-sm">${asset.usageDays90d}</span>
+                  <span class="text-[10px] text-slate-400">วัน</span>
+                </div>
+                <div class="border-x border-slate-200">
+                  <span class="text-[10px] font-semibold text-slate-500 uppercase block">จอดพักในคลัง</span>
+                  <span class="font-bold text-slate-900 text-sm">${Math.floor(asset.idleDays)}</span>
+                  <span class="text-[10px] text-slate-400">วัน</span>
+                </div>
+                <div>
+                  <span class="text-[10px] font-semibold text-slate-500 uppercase block">ถูกยืม</span>
+                  <span class="font-bold text-slate-900 text-sm">${asset.borrowCount90d}</span>
+                  <span class="text-[10px] text-slate-400">ครั้ง</span>
+                </div>
+              </div>
+
+              <!-- Action Radio Bar -->
+              <div class="p-3 bg-white border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs text-slate-500">
+                  ${isSelected ? '✓ กำลังเลือกเครื่องนี้' : 'คลิกเพื่อเลือก'}
+                </span>
+                <button type="button" class="w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                  isSelected ? 'bg-brand-600 text-white' : 'border border-slate-300 text-transparent hover:border-brand-500'
+                }">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    // Select Asset & Trigger Smart Swap Check
+    async function selectAsset(assetId) {
+      selectedAssetId = assetId;
+      if (!cachedRecommendations) return;
+
+      const selectedObj = cachedRecommendations.candidates.find((c) => c.assetId === assetId);
+      updateSelectionDrawer(selectedObj);
+      renderCards(cachedRecommendations);
+
+      // Perform Swap Check
+      await checkSwapAlternative(assetId);
+    }
+
+    // Check Swap Alternative
+    async function checkSwapAlternative(assetId) {
+      const alertBox = document.getElementById('swapAlert');
+
+      if (currentMode === 'mock') {
+        // Mock Evaluation Rules:
+        // If selected asset is MD-67-001 (heavily used, 38 days) or MD-68-011 (28 days) -> Suggest alternative!
+        const selected = cachedRecommendations.candidates.find((c) => c.assetId === assetId);
+        const bestAlt = cachedRecommendations.candidates.find((c) => c.assetId !== assetId && c.isRecommended);
+
+        if (bestAlt && selected && selected.usageDays90d - bestAlt.usageDays90d >= 3) {
+          const diff = (selected.usageDays90d - bestAlt.usageDays90d).toFixed(1);
+          const mockSwapResponse = {
+            selectedAsset: { id: selected.assetId, noid: selected.noid, usageDays90d: selected.usageDays90d, idleDays: selected.idleDays },
+            hasBetterAlternative: true,
+            recommendedAsset: {
+              id: bestAlt.assetId,
+              noid: bestAlt.noid,
+              name: bestAlt.name,
+              model: bestAlt.model,
+              usageDays90d: bestAlt.usageDays90d,
+              idleDays: bestAlt.idleDays,
+              daysUsageDifference: Number(diff),
+              nudgeReason: `💡 พบเครื่องรุ่นเดียวกัน (หมายเลข ${bestAlt.noid}) จอดพักมาแล้ว ${Math.floor(bestAlt.idleDays)} วัน (ผ่านการใช้งานน้อยกว่าเครื่องนี้ ${diff} วัน) คุณต้องการสลับใช้เครื่องที่แนะนำเพื่อกระจายการใช้งานหรือไม่?`,
+            },
+          };
+
+          handleSwapResult(mockSwapResponse);
+          updateJsonView('swapJsonView', mockSwapResponse);
+          document.getElementById('swapStatus').innerText = '200 OK (MOCK)';
+          document.getElementById('swapStatus').className = 'text-amber-400';
+        } else {
+          // No better alternative
+          const negativeResponse = {
+            selectedAsset: { id: selected?.assetId, noid: selected?.noid, usageDays90d: selected?.usageDays90d, idleDays: selected?.idleDays },
+            hasBetterAlternative: false,
+            recommendedAsset: null,
+          };
+          alertBox.classList.add('hidden');
+          updateJsonView('swapJsonView', negativeResponse);
+          document.getElementById('swapStatus').innerText = '200 OK (No Swap Needed)';
+          document.getElementById('swapStatus').className = 'text-slate-400';
+        }
+      } else {
+        // LIVE API CALL
+        try {
+          const headers = {};
+          if (config.token) headers['Authorization'] = `Bearer ${config.token}`;
+
+          const res = await fetch(`${config.baseUrl}/borrowings/recommendations/swap-check?assetId=${assetId}`, { headers });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+          const data = await res.json();
+          handleSwapResult(data);
+          updateJsonView('swapJsonView', data);
+          document.getElementById('swapStatus').innerText = `${res.status} OK (LIVE)`;
+          document.getElementById('swapStatus').className = data.hasBetterAlternative ? 'text-amber-400' : 'text-slate-400';
+        } catch (err) {
+          alertBox.classList.add('hidden');
+          updateJsonView('swapJsonView', { error: err.message });
+          document.getElementById('swapStatus').innerText = 'ERROR';
+          document.getElementById('swapStatus').className = 'text-rose-400';
+        }
+      }
+    }
+
+    function handleSwapResult(data) {
+      const alertBox = document.getElementById('swapAlert');
+      if (data.hasBetterAlternative && data.recommendedAsset) {
+        pendingSwapAsset = data.recommendedAsset;
+        document.getElementById('swapReasonText').innerText = data.recommendedAsset.nudgeReason;
+        alertBox.classList.remove('hidden');
+      } else {
+        pendingSwapAsset = null;
+        alertBox.classList.add('hidden');
+      }
+    }
+
+    // User accepts the swap recommendation!
+    function acceptSwapRecommendation() {
+      if (pendingSwapAsset) {
+        selectAsset(pendingSwapAsset.id);
+        dismissSwapAlert();
+      }
+    }
+
+    function dismissSwapAlert() {
+      document.getElementById('swapAlert').classList.add('hidden');
+    }
+
+    function updateSelectionDrawer(asset) {
+      const noidEl = document.getElementById('summaryNoid');
+      const badgeEl = document.getElementById('summaryBadge');
+
+      if (asset) {
+        noidEl.innerText = `${asset.noid || asset.model} (${asset.name})`;
+        if (asset.isRecommended) {
+          badgeEl.innerText = '🌟 เครื่องแนะนำอันดับ 1';
+          badgeEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+        } else {
+          badgeEl.innerText = `ใช้งานแล้ว ${asset.usageDays90d} วัน`;
+          badgeEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700';
+        }
+      } else {
+        noidEl.innerText = '-';
+        badgeEl.innerText = 'ยังไม่ได้เลือก';
+        badgeEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600';
+      }
+    }
+
+    function resetSelection() {
+      selectedAssetId = null;
+      pendingSwapAsset = null;
+      dismissSwapAlert();
+      updateSelectionDrawer(null);
+      if (cachedRecommendations) renderCards(cachedRecommendations);
+    }
+
+    function confirmBorrowMock() {
+      if (!selectedAssetId) {
+        alert('กรุณาคลิกเลือกเครื่องที่ต้องการยืมก่อนครับ');
+        return;
+      }
+      const asset = cachedRecommendations.candidates.find((c) => c.assetId === selectedAssetId);
+      alert(`🎉 บันทึกการเลือกเครื่อง: ${asset.noid || asset.model}\n\nในระบบจริง หน้านี้จะส่งต่อไปยังฟอร์ม Create Borrow Transaction เพื่อขออนุมัติต่อไปครับ`);
+    }
+
+    // Config Modal Helpers
+    function toggleConfigModal() {
+      const modal = document.getElementById('configModal');
+      modal.classList.toggle('hidden');
+    }
+
+    function saveConfig() {
+      config.baseUrl = document.getElementById('cfgBaseUrl').value.trim();
+      config.token = document.getElementById('cfgToken').value.trim();
+      localStorage.setItem('hams_api_base', config.baseUrl);
+      localStorage.setItem('hams_api_token', config.token);
+      toggleConfigModal();
+      if (currentMode === 'live') loadRecommendations();
+    }
+
+    // Inspector Helpers
+    function toggleInspector() {
+      const content = document.getElementById('inspectorContent');
+      content.classList.toggle('hidden');
+    }
+
+    function updateJsonView(elementId, data) {
+      document.getElementById(elementId).innerText = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

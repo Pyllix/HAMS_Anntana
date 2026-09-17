@@ -10,6 +10,7 @@ import {
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import AssetInfoCard from "./AssetInfoCard";
 import CommonEvaluationFields from "./CommonEvaluationFields";
+import TechnicianConfirmDialog from "../unrepairable-technician/TechnicianConfirmDialog";
 import InternalSpareFields from "./InternalSpareFields";
 import type { SelectedSpareItem } from "./InternalSpareFields";
 import MechanicSelector from "./MechanicSelector";
@@ -170,9 +171,18 @@ export default function AssessmentForm() {
     queryFn: isAssignMode ? getMechanicWorkloads : getMechanics,
   });
 
+  const {
+    data: jobDetail,
+    isLoading: isDetailLoading,
+    isError: isDetailError,
+  } = useQuery<RepairDetail>({
+    queryKey: ["assessmentJobDetail", currentJobId],
+    queryFn: () => getRepairJobById(String(currentJobId)),
+    enabled: Boolean(currentJobId),
+  });
+
   useEffect(() => {
     if (!currentJobId) return;
-
     if (!isAssignMode) {
       const savedDraft = localStorage.getItem(draftStorageKey);
       if (savedDraft) {
@@ -193,6 +203,7 @@ export default function AssessmentForm() {
         } catch (error) {
           console.error("Failed to parse draft:", error);
         }
+
       }
     }
 
@@ -206,7 +217,6 @@ export default function AssessmentForm() {
     if (!jobDetail) return;
     setFormState((previous) => ({
       ...previous,
-      // ตั้งใจให้ jobTypeId คงค่าเดิมของ previous ไว้ (ค่าว่างจาก INITIAL_FORM_STATE) เพื่อให้ผู้ใช้เป็นคนเลือกเอง
       jobTypeId: previous.jobTypeId || "",
       techCategoryId: previous.techCategoryId || jobDetail.techCategoryId || "",
       causeId: previous.causeId || jobDetail.causeId || "",
@@ -345,6 +355,9 @@ export default function AssessmentForm() {
     if (actionStatus === "ส่งซ่อมภายนอก") return true;
     if (actionStatus === "ไม่สามารถซ่อมได้")
       return Boolean(formState.unrepairableReason?.trim());
+    if (actionStatus === "ไม่สามารถซ่อมได้") {
+      return Boolean(formState.unrepairableReason?.trim());
+    }
 
     return true;
   }, [
@@ -378,12 +391,11 @@ export default function AssessmentForm() {
       });
       return;
     }
-
+    
     // Process Diagnose DTO for Technicians
     const stepActionType = ACTION_TYPE_MAP[actionStatus];
     const selectedDetail = jobDetail;
     if (!selectedDetail) return;
-
     let formattedDueDate = "";
     if (
       stepActionType !== "UNREPAIRABLE" &&
@@ -406,7 +418,9 @@ export default function AssessmentForm() {
       techCategoryId: Number(formState.techCategoryId),
       jobTypeId: Number(formState.jobTypeId),
       diagnosis:
-        formState.diagnosis?.trim() || formState.symptomCause?.trim() || "-",
+        actionStatus === "ไม่สามารถซ่อมได้"
+          ? formState.technicalDiagnosisDetail.trim()
+          : formState.diagnosis?.trim() || formState.symptomCause?.trim() || "-",
       solution: formState.solution?.trim() || "-",
       causeId: Number(formState.causeId) || 0,
       isRepeatRepair: Boolean(formState.isRepeatRepair),
@@ -426,6 +440,17 @@ export default function AssessmentForm() {
     };
 
     diagnoseMutation.mutate(dto);
+  };
+
+  const handleSubmit = () => {
+    if (!isFormValid || mutation.isPending || isDetailLoading || isDetailError)
+      return;
+    if (actionStatus === "ไม่สามารถซ่อมได้") {
+      mutation.reset();
+      setShowUnrepairableReview(true);
+      return;
+    }
+    submitAssessment();
   };
 
   if (!selectedJob) return null;

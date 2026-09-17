@@ -34,6 +34,32 @@ export const repairWorkflowByAction: Record<
       nextStatus: "WAITING_DELIVERY",
     },
   ],
+  WITH_PARTS: [
+    {
+      stepNumber: 5,
+      stepLabel: "เจ้าหน้าที่พัสดุอนุมัติการเบิกอะไหล่",
+      actionLabel: "อนุมัติการเบิกอะไหล่",
+      description: "ตรวจสอบรายการอะไหล่ทั้งในคลังและจัดหาภายนอกก่อนอนุมัติ",
+      actor: "PARCEL",
+      nextStatus: "PARCEL_PROCESSING",
+    },
+    {
+      stepNumber: 6,
+      stepLabel: "ช่างรับอะไหล่และเริ่มดำเนินการซ่อม",
+      actionLabel: "ยืนยันรับอะไหล่",
+      description: "ยืนยันว่าช่างได้รับอะไหล่ครบถ้วนและเริ่มดำเนินการซ่อม",
+      actor: "MAINTENANCE",
+      nextStatus: "IN_PROGRESS",
+    },
+    {
+      stepNumber: 7,
+      stepLabel: "แล้วเสร็จ / รอตรวจรับงาน",
+      actionLabel: "แจ้งซ่อมเสร็จ",
+      description: "แจ้งหน่วยงานเจ้าของครุภัณฑ์ให้มาตรวจรับและรับเครื่องคืน",
+      actor: "MAINTENANCE",
+      nextStatus: "WAITING_DELIVERY",
+    },
+  ],
   INTERNAL_STOCK: [
     {
       stepNumber: 5,
@@ -137,47 +163,15 @@ export const repairWorkflowByAction: Record<
       nextStatus: "WAITING_DELIVERY",
     },
   ],
-  PURCHASE_REPLACEMENT: [
+  UNREPAIRABLE: [
     {
       stepNumber: 5,
-      stepLabel: "พัสดุตรวจสอบและเสนอความเห็น",
-      actionLabel: "บันทึกผลตรวจสอบ",
+      stepLabel: "ช่างนำส่งครุภัณฑ์ให้พัสดุ",
+      actionLabel: "ยืนยันส่งคืนให้พัสดุ",
       description:
-        "พัสดุตรวจสอบรายละเอียดแทงชำรุดและเสนอความเห็นก่อนส่งผู้บริหาร",
-      actor: "PARCEL",
-      nextStatus: "PARCEL_PROCESSING",
-    },
-    {
-      stepNumber: 6,
-      stepLabel: "ผู้บริหารอนุมัติการจัดซื้อเครื่องทดแทน",
-      actionLabel: "อนุมัติซื้อทดแทน",
-      description: "ผู้บริหารพิจารณาและอนุมัติการจัดซื้อเครื่องใหม่ทดแทน",
-      actor: "SUPERVISOR",
-      nextStatus: "PARCEL_PROCESSING",
-    },
-    {
-      stepNumber: 7,
-      stepLabel: "พัสดุรับเครื่องใหม่เข้าคลัง",
-      actionLabel: "บันทึกรับเครื่องใหม่",
-      description: "บันทึกการตรวจรับและขึ้นทะเบียนเครื่องทดแทนเข้าระบบ",
-      actor: "PARCEL",
-      nextStatus: "PARCEL_PROCESSING",
-    },
-    {
-      stepNumber: 8,
-      stepLabel: "ช่างรับเครื่องใหม่และเตรียมส่งมอบ",
-      actionLabel: "ตั้งค่าและทดสอบเครื่องใหม่",
-      description: "บันทึกผลการตั้งค่า ทดสอบ และเตรียมครุภัณฑ์ใหม่ก่อนส่งมอบ",
+        "ยืนยันหลังนำครุภัณฑ์ที่ไม่สามารถซ่อมได้ส่งถึงห้องพัสดุจริงแล้ว",
       actor: "MAINTENANCE",
-      nextStatus: "IN_PROGRESS",
-    },
-    {
-      stepNumber: 9,
-      stepLabel: "แล้วเสร็จ / รอตรวจรับงาน",
-      actionLabel: "แจ้งพร้อมส่งมอบ",
-      description: "แจ้งหน่วยงานเจ้าของครุภัณฑ์ให้ตรวจรับเครื่องทดแทน",
-      actor: "MAINTENANCE",
-      nextStatus: "WAITING_DELIVERY",
+      nextStatus: "UNREPAIRABLE",
     },
   ],
 };
@@ -208,12 +202,7 @@ export function getWorkflowProgress(job: RepairJob): {
   total: number;
 } {
   if (!job.actionType) return { completed: 0, total: 0 };
-  const lastStep =
-    job.actionType === "SELF_REPAIR"
-      ? 6
-      : job.actionType === "PURCHASE_REPLACEMENT"
-        ? 10
-        : 9;
+  const lastStep = job.actionType === "SELF_REPAIR" ? 6 : 8;
   return {
     completed: Math.min(job.workflowStep ?? 1, lastStep),
     total: lastStep,

@@ -1,4 +1,4 @@
-import { IsUUID, IsOptional, IsEnum, IsString } from 'class-validator';
+import { IsUUID, IsOptional, IsEnum, IsString, IsDateString } from 'class-validator';
 import { DeliveryMethod } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -15,5 +15,14 @@ export class CreateAssetBorrowDto {
   @ApiProperty({ enum: DeliveryMethod, description: 'How the asset will be received (Pickup or Delivery)' })
   @IsEnum(DeliveryMethod)
   deliveryMethod: DeliveryMethod;
+
+  @ApiPropertyOptional({
+    description: 'Expected return date/time (ISO 8601 string), e.g. 2026-09-30T17:00:00.000Z',
+    example: '2026-09-30T17:00:00.000Z'
+  })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  expectedReturnDate?: string;
 }
+
 

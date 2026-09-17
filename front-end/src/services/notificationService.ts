@@ -1,5 +1,5 @@
 import { getNextWorkflowStage } from "../config/repairWorkflow";
-import type { RoleType } from "../Router/roles";
+import type { RoleType } from "../router/roles";
 import {
   RepairJob,
   RepairWorkflowActor,
@@ -36,6 +36,29 @@ export function publishWorkflowNotification(
     jobNo: job.jobNo,
     recipientRole,
     sourceRole: roleByActor[completedStage.actor],
+  });
+}
+
+export function publishSpareApprovalNotificationOnce(job: RepairJob): void {
+  if (job.actionType !== "WITH_PARTS" || (job.workflowStep || 0) < 5) return;
+  const title = "เจ้าหน้าที่พัสดุอนุมัติการเบิกอะไหล่แล้ว";
+  const store = useNotificationStore.getState();
+  if (
+    store.notifications.some(
+      (notification) =>
+        notification.jobNo === job.jobNo && notification.title === title,
+    )
+  ) {
+    return;
+  }
+  store.addNotification({
+    kind: "PARCEL",
+    title,
+    message: `${job.asset?.assetName || "ครุภัณฑ์"} ได้รับอนุมัติการเบิกอะไหล่แล้ว กรุณาตรวจสอบและดำเนินการขั้นตอนถัดไป`,
+    jobNo: job.jobNo,
+    recipientRole: "MAINTENANCE_STAFF",
+    sourceRole: "PARCEL_STAFF",
+    createdAt: job.updatedAt || new Date().toISOString(),
   });
 }
 
