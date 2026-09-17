@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Search, Plus, Trash2, Package, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { SparePart } from "../../Types/TypeAssessment";
@@ -10,7 +10,7 @@ export interface SelectedSpareItem extends SparePart {
 }
 
 export interface SpareItem {
-  id: string;
+  id: string | number;
   quantity: number;
   price?: number;
 }
@@ -54,6 +54,7 @@ export default function InternalSpareFields({
       ]);
     }
   };
+
   // ฟังก์ชันลบรายการอะไหล่
   const handleRemoveSpare = (id: string | number) => {
     setSelectedSpares((prev) =>
@@ -62,7 +63,7 @@ export default function InternalSpareFields({
   };
 
   // ฟังก์ชันเปลี่ยนจำนวนที่เบิก
-  const handleQuantityChange = (id: string, qty: number) => {
+  const handleQuantityChange = (id: string | number, qty: number) => {
     setSelectedSpares((prev) =>
       prev.map((s) =>
         String(s.id) === String(id) ? { ...s, quantity: qty } : s,
@@ -71,7 +72,7 @@ export default function InternalSpareFields({
   };
 
   const handleStockTypeChange = (
-    id: string,
+    id: string | number,
     stockType: "INTERNAL" | "EXTERNAL",
   ) => {
     setSelectedSpares((prev) =>
@@ -145,7 +146,7 @@ export default function InternalSpareFields({
                   const isAdded = selectedSpares.some(
                     (s) => String(s.id) === String(item.id),
                   );
-                  const itemPrice = Number(item.price ?? item.price ?? 0);
+                  const itemPrice = Number(item.price ?? 0);
 
                   return (
                     <div
@@ -161,7 +162,7 @@ export default function InternalSpareFields({
                         </div>
                         <div className="text-[11px] font-medium flex items-center gap-3 pt-0.5">
                           <span className="text-emerald-600">
-                            คลัง: {item.qtyInStock} {item.unit || "ชิ้น"}
+                            คลัง: {item.qtyInStock ?? 0} {item.unit || "ชิ้น"}
                           </span>
                           <span className="text-slate-600 font-mono">
                             {itemPrice.toFixed(2)} ฿
@@ -171,7 +172,7 @@ export default function InternalSpareFields({
 
                       <button
                         type="button"
-                    onClick={() => handleAddSpare(item)}
+                        onClick={() => handleAddSpare(item)}
                         disabled={isAdded}
                         className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer shrink-0 ${
                           isAdded
@@ -227,11 +228,7 @@ export default function InternalSpareFields({
                 const stock =
                   item.qtyInStock ?? matchedStockItem?.qtyInStock ?? 0;
                 const priceNum = Number(
-                  item.price ??
-                    item.price ??
-                    matchedStockItem?.price ??
-                    matchedStockItem?.price ??
-                    0,
+                  item.price ?? matchedStockItem?.price ?? 0,
                 );
 
                 const unit = item.unit || matchedStockItem?.unit || "ชิ้น";

@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, UserPlus, ClipboardEdit } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { RepairListItem, UrgencyStatus } from "../../Types/TypeAssessment";
 import { getPendingEvaluations } from "../../services/assessmentService";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
+import { useAuthStore } from "../../stores/authStore";
 
 const features = tableFeatures({});
 
@@ -73,6 +74,9 @@ export default function PendingEvaluationTable({
   search = "",
   urgencyStatus = "ALL",
 }: PendingEvaluationTableProps) {
+  const { user } = useAuthStore();
+  const isHead = user?.role === "MAINTENANCE_HEAD";
+
   const openAssessmentForm = useAssessmentStore(
     (state) => state.openAssessmentForm,
   );
@@ -90,12 +94,12 @@ export default function PendingEvaluationTable({
     setCurrentPage(1);
   }, [search, urgencyStatus]);
 
-  const columns = useMemo<Array<ColumnDef<typeof features, RepairListItem>>>(
+  const columns = useMemo<ColumnDef<typeof features, RepairListItem>[]>(
     () => [
       {
         id: "jobNo",
         header: "รหัสงาน",
-        cell: (info) => {
+        cell: (info: any) => {
           const row = info.row.original;
           return (
             <span className="font-semibold text-gray-900 font-mono text-sm">
@@ -107,7 +111,7 @@ export default function PendingEvaluationTable({
       {
         id: "assetInfo",
         header: "รายการครุภัณฑ์",
-        cell: (info) => {
+        cell: (info: any) => {
           const row = info.row.original;
           return (
             <div>
@@ -124,7 +128,7 @@ export default function PendingEvaluationTable({
       {
         id: "symptom",
         header: "อาการเสียที่แจ้ง",
-        cell: (info) => (
+        cell: (info: any) => (
           <span className="text-sm text-gray-600 line-clamp-2 max-w-xs">
             {info.row.original.symptom || "-"}
           </span>
@@ -133,14 +137,14 @@ export default function PendingEvaluationTable({
       {
         id: "urgencyStatus",
         header: "ระดับความเร่งด่วน",
-        cell: (info) => (
+        cell: (info: any) => (
           <UrgencyBadge urgencyStatus={info.row.original.urgencyStatus} />
         ),
       },
       {
         id: "createdAt",
         header: "วันที่แจ้งซ่อม",
-        cell: (info) => {
+        cell: (info: any) => {
           const date = info.row.original.createdAt;
           return (
             <span className="text-sm text-gray-600 whitespace-nowrap">
@@ -151,24 +155,59 @@ export default function PendingEvaluationTable({
       },
       {
         id: "actions",
-        header: "รายละเอียด",
-        cell: (info) => {
+        header: "จัดการงาน",
+        cell: (info: any) => {
           const row = info.row.original;
+
+          const assignedMechanics =
+            row.mechanicRepairs || row.mechanics || row.assignedMechanics || [];
+
+          const currentUserId = String(user?.id ?? "");
+          const currentMechanicId = String(
+            (user as any)?.mechanicId ?? user?.id ?? "",
+          );
+
+          const isMyJob = assignedMechanics.some((m: any) => {
+            const mUserId = String(m.userId ?? m.user?.id ?? m.id ?? "");
+            const mMechanicId = String(m.mechanicId ?? m.id ?? "");
+
+            return (
+              (mUserId && mUserId === currentUserId) ||
+              (mMechanicId && mMechanicId === currentMechanicId) ||
+              (mUserId && mUserId === currentMechanicId) ||
+              (mMechanicId && mMechanicId === currentUserId)
+            );
+          });
+
+          const shouldShowAssessBtn = !isHead || isMyJob;
+
           return (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => openAssessmentForm(row)}
-                className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
-              >
-                ประเมิน
-              </button>
+              {shouldShowAssessBtn ? (
+                <button
+                  type="button"
+                  onClick={() => openAssessmentForm(row)}
+                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+                >
+                  <ClipboardEdit className="h-4 w-4" />
+                  ประเมิน
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openAssessmentForm(row)}
+                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  จ่ายงาน
+                </button>
+              )}
             </div>
           );
         },
       },
     ],
-    [openAssessmentForm],
+    [openAssessmentForm, isHead, user],
   );
 
   const filteredData = useMemo(() => {
@@ -179,17 +218,98 @@ export default function PendingEvaluationTable({
         : [];
 
     return list.filter((item: any) => {
-      //กรองรายการที่ประเมินแล้วออก
-      const isEvaluated =
-        item.jobStatusId === 3 ||
-        item.jobStatus?.code === "IN_PROGRESS" ||
-        Boolean(item.diagnosis);
+      // 1. ดึงค่า status ออกมาจากทุกรูปแบบออบเจกต์/ฟิลด์ที่เป็นไปได้ (รวม jobStatus และ jobStatusId)
+      const rawJobStatus =
+        typeof item.jobStatus === "object"
+          ? item.jobStatus?.code || item.jobStatus?.name || ""
+          : item.jobStatus || "";
 
+      const rawStatus =
+        typeof item.status === "object"
+          ? item.status?.code || item.status?.name || item.status?.status || ""
+          : item.status || "";
+
+      const rawStepStatus =
+        typeof item.stepStatus === "object"
+          ? item.stepStatus?.code || item.stepStatus?.name || ""
+          : item.stepStatus || "";
+
+      const rawRepairStatus =
+        typeof item.repairStatus === "object"
+          ? item.repairStatus?.code || item.repairStatus?.name || ""
+          : item.repairStatus || "";
+
+      const rawWorkStatus =
+        typeof item.workStatus === "object"
+          ? item.workStatus?.code || item.workStatus?.name || ""
+          : item.workStatus || "";
+
+      const jobStatusStr = String(rawJobStatus).toUpperCase();
+      const statusStr = String(rawStatus).toUpperCase();
+      const stepStatusStr = String(rawStepStatus).toUpperCase();
+      const repairStatusStr = String(rawRepairStatus).toUpperCase();
+      const workStatusStr = String(rawWorkStatus).toUpperCase();
+      const solutionStr = String(item.solution || "").toUpperCase();
+
+      // เช็คคำสำคัญการยกเลิก/ปฏิเสธ รวมถึง jobStatusId = 10
+      const isCancelled =
+        item.jobStatusId === 10 ||
+        jobStatusStr.includes("CANCEL") ||
+        statusStr.includes("CANCEL") ||
+        stepStatusStr.includes("CANCEL") ||
+        repairStatusStr.includes("CANCEL") ||
+        workStatusStr.includes("CANCEL") ||
+        jobStatusStr.includes("REJECT") ||
+        statusStr.includes("REJECT") ||
+        stepStatusStr.includes("REJECT") ||
+        repairStatusStr.includes("REJECT") ||
+        workStatusStr.includes("REJECT") ||
+        solutionStr.includes("ยกเลิก") ||
+        jobStatusStr === "CANCELLED" ||
+        statusStr === "CANCELLED" ||
+        Boolean(item.isCancelled) ||
+        Boolean(item.canceledAt) ||
+        Boolean(item.cancelledAt);
+
+      if (isCancelled) {
+        return false;
+      }
+
+      // 2. เช็คการจ่ายงาน/ช่าง
+      const assignedMechanics =
+        item.mechanicRepairs || item.mechanics || item.assignedMechanics || [];
+
+      const currentUserId = String(user?.id ?? "");
+      const currentMechanicId = String(
+        (user as any)?.mechanicId ?? user?.id ?? "",
+      );
+
+      const isMyJob = assignedMechanics.some((m: any) => {
+        const mUserId = String(m.userId ?? m.user?.id ?? m.id ?? "");
+        const mMechanicId = String(m.mechanicId ?? m.id ?? "");
+
+        return (
+          (mUserId && mUserId === currentUserId) ||
+          (mMechanicId && mMechanicId === currentMechanicId) ||
+          (mUserId && mUserId === currentMechanicId) ||
+          (mMechanicId && mMechanicId === currentUserId)
+        );
+      });
+
+      if (isHead) {
+        const isUnassigned = assignedMechanics.length === 0;
+        if (!isUnassigned && !isMyJob) return false;
+      } else {
+        if (!isMyJob) return false;
+      }
+
+      // 3. กรองงานที่ประเมินแล้วออก
+      const isEvaluated = Boolean(item.diagnosis);
       if (isEvaluated) {
         return false;
       }
 
-      //กรองข้อมูลจากกล่องค้นหา (Search Text)
+      // 4. การค้นหาและระดับความเร่งด่วน
       const sl = search.toLowerCase();
       const matchesSearch =
         search === "" ||
@@ -197,14 +317,13 @@ export default function PendingEvaluationTable({
         item.asset?.name?.toLowerCase().includes(sl) ||
         item.asset?.noid?.toLowerCase().includes(sl);
 
-      //กรองตามระดับความเร่งด่วน (Urgency)
       const matchesUrgency =
         urgencyStatus === "ALL" ||
         (item.urgencyStatus || "NORMAL") === urgencyStatus;
 
       return matchesSearch && matchesUrgency;
     });
-  }, [jobsData, search, urgencyStatus]);
+  }, [jobsData, search, urgencyStatus, isHead, user]);
 
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -226,9 +345,9 @@ export default function PendingEvaluationTable({
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead className="font-bold text-md">
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup: any) => (
               <tr key={headerGroup.id} className="border-b border-slate-200">
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header: any) => (
                   <th key={header.id} className="py-3 px-4">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -258,12 +377,12 @@ export default function PendingEvaluationTable({
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row: any) => (
                 <tr
                   key={row.id}
                   className="hover:bg-slate-50/50 transition-colors"
                 >
-                  {row.getAllCells().map((cell) => (
+                  {row.getAllCells().map((cell: any) => (
                     <td key={cell.id} className="py-3 px-4">
                       <table.FlexRender cell={cell} />
                     </td>
@@ -275,7 +394,6 @@ export default function PendingEvaluationTable({
         </table>
       </div>
 
-      {/* Pagination Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 text-sm text-slate-500">
         <div>
           แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
