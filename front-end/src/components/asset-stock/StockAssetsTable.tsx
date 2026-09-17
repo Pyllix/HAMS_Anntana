@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { Asset } from "../../types/TypeAsset";
+import type { Asset } from "../../Types/TypeAsset";
 
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -373,11 +373,10 @@ export default function StockAssetsTable({
               type="button"
               disabled={isLoading}
               onClick={() => onPageChange(page)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
-                currentPage === page
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${currentPage === page
                   ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
                   : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
+                }`}
             >
               {page}
             </button>
