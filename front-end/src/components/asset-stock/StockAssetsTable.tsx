@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -193,15 +193,107 @@ export default function StockAssetsTable({
     return [currentPage - 1, currentPage, currentPage + 1];
   }, [currentPage, totalPages]);
 
+  // Custom Horizontal Scrollbar logic
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [thumbWidthPercent, setThumbWidthPercent] = useState(25);
+  const [canScroll, setCanScroll] = useState(false);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartScrollLeftRef = useRef(0);
+
+  // Sync scroll position from table to custom thumb
+  const handleTableScroll = useCallback(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll > 0) {
+      setScrollProgress(el.scrollLeft / maxScroll);
+    } else {
+      setScrollProgress(0);
+    }
+  }, []);
+
+  // Update track/thumb sizes whenever content or container resizes
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll > 2) {
+        setCanScroll(true);
+        const ratio = el.clientWidth / el.scrollWidth;
+        setThumbWidthPercent(Math.max(15, Math.min(85, ratio * 100)));
+        setScrollProgress(el.scrollLeft / maxScroll);
+      } else {
+        setCanScroll(false);
+        setScrollProgress(0);
+      }
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [assets, currentPage, isAssetCenter]);
+
+  // Handle clicking anywhere on the custom track
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!trackRef.current || !tableContainerRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickRatio = Math.max(0, Math.min(1, clickX / rect.width));
+    const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
+    tableContainerRef.current.scrollTo({
+      left: clickRatio * maxScroll,
+      behavior: "smooth",
+    });
+  };
+
+  // Handle dragging the custom thumb
+  const handleThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartScrollLeftRef.current = tableContainerRef.current?.scrollLeft || 0;
+
+    const handlePointerMove = (ev: PointerEvent) => {
+      if (!isDraggingRef.current || !tableContainerRef.current || !trackRef.current) return;
+      const deltaX = ev.clientX - dragStartXRef.current;
+      const trackWidth = trackRef.current.clientWidth;
+      const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
+      const scrollableTrackWidth = trackWidth * (1 - thumbWidthPercent / 100);
+      if (scrollableTrackWidth <= 0) return;
+      const scrollDelta = (deltaX / scrollableTrackWidth) * maxScroll;
+      tableContainerRef.current.scrollLeft = dragStartScrollLeftRef.current + scrollDelta;
+    };
+
+    const handlePointerUp = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   return (
     <div className="w-full flex-1 flex flex-col min-h-0">
-      <div className="flex-1 overflow-auto min-h-0">
-        <table className="w-full text-left">
+      <div
+        ref={tableContainerRef}
+        onScroll={handleTableScroll}
+        className="flex-1 overflow-auto min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <table className="w-full text-left min-w-[950px]">
           <thead className="font-bold text-md border-b border-slate-200 bg-white sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="py-2 px-4 font-bold text-slate-800 text-sm">
+                  <th key={header.id} className="py-2 px-4 font-bold text-slate-800 text-sm whitespace-nowrap">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -237,6 +329,27 @@ export default function StockAssetsTable({
           </tbody>
         </table>
       </div>
+
+      {/* Custom Horizontal Scrollbar for Main Table */}
+      {canScroll && (
+        <div className="shrink-0 px-6 pt-2 pb-2 bg-white select-none">
+          <div
+            ref={trackRef}
+            onClick={handleTrackClick}
+            className="group relative h-2 w-full rounded-full bg-slate-100 hover:bg-slate-200/70 transition-colors cursor-pointer"
+            title="คลิกหรือลากเพื่อเลื่อนดูตารางแนวนอน"
+          >
+            <div
+              onPointerDown={handleThumbPointerDown}
+              style={{
+                width: `${thumbWidthPercent}%`,
+                left: `${scrollProgress * (100 - thumbWidthPercent)}%`,
+              }}
+              className="absolute top-0 bottom-0 rounded-full bg-slate-300 group-hover:bg-slate-400 hover:!bg-emerald-500 active:!bg-emerald-600 cursor-grab active:cursor-grabbing transition-colors shadow-2xs"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Pagination & Summary footer */}
       <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
