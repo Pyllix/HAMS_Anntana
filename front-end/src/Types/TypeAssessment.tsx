@@ -7,12 +7,13 @@ export type AssessmentTab = "PENDING" | "REPAIR_LIST" | "CONFIRM_REPAIR";
 export type StepActionType =
   | "SELF_REPAIR"   
   | "WITH_PARTS"    
-  | "OUTSOURCE"    
+  | "OUTSOURCE"     
   | "UNREPAIRABLE"; 
 
 export type StockType = "INTERNAL" | "EXTERNAL";
 
 export type ReportType = "Repair" | "Maintenance";
+
 
 // REQUEST DTOs
 export interface AssignMechanicDto {
@@ -139,6 +140,7 @@ export interface SparePart {
   minStock?: number;
   groupId?: number;
 }
+
 
 // REPAIR MODELS & RESPONSES
 export interface RepairListItem {

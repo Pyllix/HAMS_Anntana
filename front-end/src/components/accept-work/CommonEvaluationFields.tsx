@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
-import type {
-  StepActionType,
-  BaseLookup,
-} from "../../Types/TypeAssessment";
+import type { StepActionType, BaseLookup } from "../../Types/TypeAssessment";
 import type { AssessmentFormState } from "./AssessmentForm";
 
 const ACTION_TYPE_LABELS: Record<StepActionType, string> = {
@@ -23,7 +20,6 @@ interface CommonFieldsProps {
   techCategories?: BaseLookup[];
   readOnly?: boolean;
   isTechCategoryDisabled?: boolean;
-
 }
 
 export default function CommonEvaluationFields({
@@ -109,7 +105,10 @@ export default function CommonEvaluationFields({
 
       {/* 2. อาการ / สาเหตุ */}
       <div>
-        <label htmlFor="evaluation-symptom" className="text-xs font-semibold text-slate-700 block mb-1.5">
+        <label
+          htmlFor="evaluation-symptom"
+          className="text-xs font-semibold text-slate-700 block mb-1.5"
+        >
           อาการ / สาเหตุ <span className="text-rose-500">*</span>
         </label>
         <input
@@ -131,8 +130,12 @@ export default function CommonEvaluationFields({
 
       {/* 3. วิธีแก้ไข */}
       <div>
-        <label htmlFor="evaluation-solution" className="text-xs font-semibold text-slate-700 block mb-1.5">
-          {actionStatus === "UNREPAIRABLE" ? "แนวทางดำเนินการ" : "วิธีแก้ไข"} <span className="text-rose-500">*</span>
+        <label
+          htmlFor="evaluation-solution"
+          className="text-xs font-semibold text-slate-700 block mb-1.5"
+        >
+          {actionStatus === "UNREPAIRABLE" ? "แนวทางดำเนินการ" : "วิธีแก้ไข"}{" "}
+          <span className="text-rose-500">*</span>
         </label>
         <input
           id="evaluation-solution"
@@ -140,7 +143,11 @@ export default function CommonEvaluationFields({
           disabled={readOnly}
           value={formState.solution || ""}
           onChange={(e) => handleChange("solution", e.target.value)}
-          placeholder={actionStatus === "UNREPAIRABLE" ? "เช่น ส่งคืนพัสดุเพื่อพักรอจำหน่าย..." : "ระบุวิธีแก้ไข..."}
+          placeholder={
+            actionStatus === "UNREPAIRABLE"
+              ? "เช่น ส่งคืนพัสดุเพื่อพักรอจำหน่าย..."
+              : "ระบุวิธีแก้ไข..."
+          }
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
         />
       </div>
@@ -149,7 +156,10 @@ export default function CommonEvaluationFields({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* วิเคราะห์สาเหตุ (Custom Dropdown แสดงสูงสุด 6 รายการ) */}
         <div className="relative" ref={causeDropdownRef}>
-          <label htmlFor="evaluation-cause" className="text-xs font-semibold text-slate-700 block mb-1.5">
+          <label
+            htmlFor="evaluation-cause"
+            className="text-xs font-semibold text-slate-700 block mb-1.5"
+          >
             วิเคราะห์สาเหตุ <span className="text-rose-500">*</span>
           </label>
           <button
@@ -181,7 +191,8 @@ export default function CommonEvaluationFields({
                 -- เลือกวิเคราะห์สาเหตุ --
               </div>
               {causes.map((cause) => {
-                const isSelected = String(cause.id) === String(formState.causeId);
+                const isSelected =
+                  String(cause.id) === String(formState.causeId);
                 return (
                   <div
                     key={cause.id}
@@ -205,7 +216,10 @@ export default function CommonEvaluationFields({
         </div>
 
         <div>
-          <label htmlFor="evaluation-job-type" className="text-xs font-semibold text-slate-700 block mb-1.5">
+          <label
+            htmlFor="evaluation-job-type"
+            className="text-xs font-semibold text-slate-700 block mb-1.5"
+          >
             ประเภทงาน <span className="text-rose-500">*</span>
           </label>
           <select
@@ -227,45 +241,13 @@ export default function CommonEvaluationFields({
         </div>
 
         <div>
-          <label htmlFor="evaluation-job-type" className="text-xs font-semibold text-slate-700 block mb-1.5">
-            ประเภทงาน <span className="text-rose-500">*</span>
-          </label>
-          <select
-            id="evaluation-job-type"
-            value={formState.jobTypeId || ""}
-            onChange={(e) => handleChange("jobTypeId", Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
-          >
-            <option value="" disabled>-- เลือกประเภทงาน --</option>
-            {jobTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="evaluation-tech-category" className="text-xs font-semibold text-slate-700 block mb-1.5">
-            หมวดงานช่าง <span className="text-rose-500">*</span>
-          </label>
-          <select
-            id="evaluation-tech-category"
-            value={formState.techCategoryId || ""}
-            onChange={(e) => handleChange("techCategoryId", Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
-          >
-            <option value="" disabled>-- เลือกหมวดงานช่าง --</option>
-            {techCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.code ? `${category.code} - ` : ""}{category.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1.5">
             การซ่อมซ้ำ <span className="text-rose-500">*</span>
           </label>
           <div className="flex items-center gap-4 h-9">
-            <label className={`flex items-center gap-1.5 text-xs text-slate-600 ${readOnly ? "cursor-not-allowed" : "cursor-pointer"}`}>
+            <label
+              className={`flex items-center gap-1.5 text-xs text-slate-600 ${readOnly ? "cursor-not-allowed" : "cursor-pointer"}`}
+            >
               <input
                 type="radio"
                 name="isRepeatRepair"
@@ -276,7 +258,9 @@ export default function CommonEvaluationFields({
               />
               ใช่
             </label>
-            <label className={`flex items-center gap-1.5 text-xs text-slate-600 ${readOnly ? "cursor-not-allowed" : "cursor-pointer"}`}>
+            <label
+              className={`flex items-center gap-1.5 text-xs text-slate-600 ${readOnly ? "cursor-not-allowed" : "cursor-pointer"}`}
+            >
               <input
                 type="radio"
                 name="isRepeatRepair"
@@ -292,7 +276,10 @@ export default function CommonEvaluationFields({
 
         {actionStatus !== "UNREPAIRABLE" && (
           <div>
-            <label htmlFor="evaluation-due-date" className="text-xs font-semibold text-slate-700 block mb-1.5">
+            <label
+              htmlFor="evaluation-due-date"
+              className="text-xs font-semibold text-slate-700 block mb-1.5"
+            >
               ระยะเวลาซ่อมโดยประมาณ <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
@@ -316,7 +303,10 @@ export default function CommonEvaluationFields({
 
       {actionStatus === "UNREPAIRABLE" && (
         <div>
-          <label htmlFor="evaluation-unrepairable-reason" className="text-xs font-semibold text-slate-700 block mb-1.5">
+          <label
+            htmlFor="evaluation-unrepairable-reason"
+            className="text-xs font-semibold text-slate-700 block mb-1.5"
+          >
             เหตุผลที่ไม่สามารถซ่อมได้ <span className="text-rose-500">*</span>
           </label>
           <textarea
@@ -331,25 +321,12 @@ export default function CommonEvaluationFields({
         </div>
       )}
 
-      {actionStatus === "UNREPAIRABLE" && (
-        <div>
-          <label htmlFor="evaluation-unrepairable-reason" className="text-xs font-semibold text-slate-700 block mb-1.5">
-            เหตุผลที่ไม่สามารถซ่อมได้ <span className="text-rose-500">*</span>
-          </label>
-          <textarea
-            id="evaluation-unrepairable-reason"
-            rows={3}
-            value={formState.unrepairableReason || ""}
-            onChange={(e) => handleChange("unrepairableReason", e.target.value)}
-            placeholder="เช่น อะไหล่เลิกผลิต ความเสียหายรุนแรง หรือค่าซ่อมไม่คุ้มค่า..."
-            className="w-full rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
-          />
-        </div>
-      )}
-
       {/* 5. รายละเอียดผลการวินิจฉัยทางเทคนิค */}
       <div>
-        <label htmlFor="evaluation-technical-diagnosis" className="text-xs font-semibold text-slate-700 block mb-1.5">
+        <label
+          htmlFor="evaluation-technical-diagnosis"
+          className="text-xs font-semibold text-slate-700 block mb-1.5"
+        >
           รายละเอียดผลการวินิจฉัยทางเทคนิค
           <span className="text-rose-500">*</span>
         </label>
