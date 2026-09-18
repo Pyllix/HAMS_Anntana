@@ -163,7 +163,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "งานซ่อม",
     element: <PendingEvaluations />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF],
+    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF, ROLES.MAINTENANCE_HEAD],
     showInNav: true,
   },
   // {

@@ -1,12 +1,6 @@
 import { RoleType } from "../router/roles";
 
-export type UserRole =
-  | "ADMIN"
-  | "ASSET_CENTER_STAFF"
-  | "user"
-  | "technician"
-  | "manager"
-  | null;
+export type UserRole = RoleType | null;
 
 export interface User {
   id: string;
@@ -17,7 +11,7 @@ export interface User {
   emailVerified: boolean;
   imageUrl: string | null;
   section_id: string;
-  role: RoleType
+  role: RoleType;
   createdAt: string;
   updatedAt: string;
 }
