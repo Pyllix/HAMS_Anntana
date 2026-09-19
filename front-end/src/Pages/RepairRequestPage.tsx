@@ -1,9 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Stethoscope,
   Wrench,
-  Monitor,
   Loader2,
   Search,
   ShieldCheck,
@@ -12,9 +10,11 @@ import {
 import { useRepairStore } from "../stores/useRepairModalStore";
 import { getAssetByCode } from "../services/repairService";
 import ConfirmRepairModal from "../components/help-desk/ConfirmRepairModal";
-import type { ReportType, UrgencyStatus } from "../Types/TypeRepair";
+import type { UrgencyStatus } from "../Types/TypeRepair";
 
 export default function RepairRequestPage() {
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const {
     reportType,
     assetSearchInput,
@@ -43,33 +43,31 @@ export default function RepairRequestPage() {
     enabled: false,
   });
 
-  const handleSearchAsset = () => {
+  const handleSearchAsset = async () => {
     if (!assetSearchInput.trim()) {
-      alert("กรุณากรอกรหัสครุภัณฑ์ก่อนค้นหา");
+      setSearchError("กรุณากรอกรหัสครุภัณฑ์ก่อนค้นหา");
       return;
     }
-    fetchAsset();
+    setSearchError(null);
+    try {
+      const result = await fetchAsset();
+      if (result.isError) {
+        setSearchError(
+          (result.error as Error)?.message || "ไม่พบข้อมูลครุภัณฑ์",
+        );
+      }
+    } catch (err: any) {
+      setSearchError(err.message || "เกิดข้อผิดพลาดในการค้นหา");
+    }
   };
 
-  // ตรวจสอบความถูกต้องของข้อมูลเบื้องต้น แล้วเปิด Modal ยืนยัน
   const handleOpenConfirmModal = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const targetAssetId = assetInfo?.assetId || assetSearchInput;
-
-    if (!targetAssetId.trim() || !symptom.trim()) {
-      alert("กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน");
-      return;
-    }
-
     openConfirmModal();
   };
 
-  // เช็คว่ากรอกข้อมูลครบตามต้องการหรือยัง
   const isFormInvalid =
-    !reportType ||
-    !(assetInfo?.assetId || assetSearchInput).trim() ||
-    !symptom.trim();
+    !reportType || !assetInfo || !symptom.trim() || isSearching;
 
   return (
     <div className="space-y-4">
@@ -182,8 +180,22 @@ export default function RepairRequestPage() {
                     type="text"
                     placeholder="เช่น EQ-2567-0008"
                     value={assetSearchInput}
-                    onChange={(e) => setAssetSearchInput(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
+                    onChange={(e) => {
+                      setAssetSearchInput(e.target.value);
+                      if (searchError) setSearchError(null);
+                      if (assetInfo) setAssetInfo(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleSearchAsset();
+                      }
+                    }}
+                    className={`h-9 w-full rounded-lg border bg-white px-3.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
+                      searchError
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-500"
+                        : "border-slate-200 focus:border-slate-500 focus:ring-slate-500"
+                    }`}
                   />
                 </div>
                 <button
@@ -202,6 +214,9 @@ export default function RepairRequestPage() {
                   )}
                 </button>
               </div>
+              {searchError && (
+                <p className="text-[11px] text-red-500 mt-1">{searchError}</p>
+              )}
             </div>
 
             <div>
@@ -288,14 +303,18 @@ export default function RepairRequestPage() {
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200/60">
             <button
               type="button"
-              onClick={resetForm}
-              className="h-9 px-5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              onClick={() => {
+                setSearchError(null);
+                resetForm();
+              }}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              className="h-9 flex items-center gap-2 px-6 rounded-lg bg-[#00A96E] text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
+              disabled={isFormInvalid}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#00A96E] hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-50"
             >
               ส่งแจ้งซ่อม
             </button>

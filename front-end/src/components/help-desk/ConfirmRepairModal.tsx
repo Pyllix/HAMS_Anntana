@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Check,
   X,
   ClipboardList,
   Calendar,
   Clock,
-  Loader2,
   AlertCircle,
   Wrench,
   ShieldCheck,
@@ -75,15 +74,20 @@ export default function ConfirmRepairModal() {
 
   const handleFinalSubmit = () => {
     setErrorMessage(null);
-    const targetAssetId = assetInfo?.assetId || assetSearchInput;
+    if (!assetInfo?.assetId) {
+      setErrorMessage(
+        "กรุณาค้นหาและเลือกข้อมูลครุภัณฑ์ที่ถูกต้องก่อนส่งแจ้งซ่อม",
+      );
+      return;
+    }
 
-    if (!targetAssetId) {
-      setErrorMessage("ไม่พบข้อมูลรหัสครุภัณฑ์");
+    if (!reportType) {
+      setErrorMessage("กรุณาเลือกประเภทการแจ้งซ่อม");
       return;
     }
 
     const payload: CreateRepairDto = {
-      assetId: targetAssetId.trim(),
+      assetId: assetInfo.assetId,
       symptom: symptom.trim(),
       urgencyStatus,
       reportType,
@@ -92,7 +96,7 @@ export default function ConfirmRepairModal() {
     mutation.mutate(payload);
   };
 
-  const getReportTypeBadge = (type: ReportType) => {
+  const getReportTypeBadge = (type: ReportType | null) => {
     if (type === "Repair") {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-[#00A96E] border border-emerald-200/80 font-bold text-xs">
@@ -101,10 +105,18 @@ export default function ConfirmRepairModal() {
         </span>
       );
     }
+
+    if (type === "Maintenance") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/80 font-bold text-xs">
+          <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+          บำรุงรักษาตามรอบ (Maintenance)
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/80 font-bold text-xs">
-        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-        บำรุงรักษาตามรอบ (Maintenance)
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 font-medium text-xs">
+        ไม่ระบุประเภท
       </span>
     );
   };
@@ -153,7 +165,7 @@ export default function ConfirmRepairModal() {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
       <div
         className={`bg-white rounded-3xl shadow-2xl border border-slate-100 w-full overflow-hidden transition-all duration-300 animate-in fade-in zoom-in-95 ${
           isSuccess ? "max-w-sm" : "max-w-3xl"
@@ -166,7 +178,7 @@ export default function ConfirmRepairModal() {
             <div className="flex items-center justify-between px-7 py-6 border-b border-slate-100">
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#00A96E]">
-                  <Check className="w-5 h-5 stroke-[3]" />
+                  <Check className="w-5 h-5 stroke-3" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 leading-tight">
@@ -258,7 +270,7 @@ export default function ConfirmRepairModal() {
                   <span className="text-slate-500 font-medium pt-2">
                     อาการเสีย
                   </span>
-                  <div className="col-span-2 min-h-[80px] p-3.5 bg-white border border-slate-200/80 rounded-xl text-slate-800 font-medium leading-relaxed whitespace-pre-wrap shadow-2xs">
+                  <div className="col-span-2 min-h-20 p-3.5 bg-white border border-slate-200/80 rounded-xl text-slate-800 font-medium leading-relaxed whitespace-pre-wrap shadow-2xs">
                     {symptom || "-"}
                   </div>
                 </div>
@@ -336,7 +348,7 @@ export default function ConfirmRepairModal() {
                 type="button"
                 onClick={handleClose}
                 disabled={mutation.isPending}
-                className="h-9 px-5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {errorMessage ? "ปิดหน้าต่าง" : "แก้ไขข้อมูล"}
               </button>
@@ -345,14 +357,9 @@ export default function ConfirmRepairModal() {
                   type="button"
                   onClick={handleFinalSubmit}
                   disabled={mutation.isPending}
-                  className="h-9 flex items-center gap-2 px-6 rounded-lg bg-[#00A96E] text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#00A96E] hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
                 >
-                  {mutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Check className="w-4 h-4 stroke-[2.5]" />
-                  )}
-                  ยืนยันการแจ้ง
+                  {mutation.isPending ? "กำลังบันทึก..." : "ยืนยันการแจ้ง"}
                 </button>
               )}
             </div>
@@ -371,19 +378,21 @@ export default function ConfirmRepairModal() {
 
             {/* Title & Description */}
             <div className="space-y-1.5 mb-6 relative z-10">
-              <h3 className="text-lg font-bold text-slate-800 tracking-tight">
+              <h3 className="text-lg font-semibold text-slate-800 tracking-tight">
                 ส่งข้อมูลแจ้งซ่อมเรียบร้อยแล้ว
               </h3>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-[260px] mx-auto">
+              <p className="text-xs font-semibold text-slate-500 leading-relaxed max-w-[260px] mx-auto">
                 ระบบบันทึกรายการเข้าสู่ระบบแล้ว <br />
                 เจ้าหน้าที่จะดำเนินการตรวจสอบโดยเร็วที่สุด
               </p>
             </div>
 
             {/* Mini Summary Badge */}
-            <div className="mb-6 mx-auto max-w-[280px] p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-left text-xs">
-              <span className="text-slate-400 font-medium">รหัสครุภัณฑ์:</span>
-              <span className="font-bold text-slate-700 font-mono">
+            <div className="mb-6 mx-auto max-w-70 p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-left text-xs">
+              <span className="text-slate-400 font-semibold">
+                รหัสครุภัณฑ์:
+              </span>
+              <span className="font-semibold text-slate-700 ">
                 {assetInfo?.assetCode || assetSearchInput || "-"}
               </span>
             </div>
