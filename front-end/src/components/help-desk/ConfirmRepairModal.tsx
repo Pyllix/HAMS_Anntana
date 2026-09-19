@@ -366,7 +366,7 @@ export default function ConfirmRepairModal() {
           </>
         ) : (
           /* หน้าส่งข้อมูลสำเร็จ*/
-          <div className="relative overflow-hidden p-8 text-center bg-gradient-to-b from-emerald-50/60 via-white to-white">
+          <div className="relative overflow-hidden p-8 text-center bg-linear-to-b from-emerald-50/60 via-white to-white">
             {/* Soft Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-emerald-200/40 rounded-full blur-2xl pointer-events-none" />
 
@@ -381,7 +381,7 @@ export default function ConfirmRepairModal() {
               <h3 className="text-lg font-semibold text-slate-800 tracking-tight">
                 ส่งข้อมูลแจ้งซ่อมเรียบร้อยแล้ว
               </h3>
-              <p className="text-xs font-semibold text-slate-500 leading-relaxed max-w-[260px] mx-auto">
+              <p className="text-xs font-semibold text-slate-500 leading-relaxed max-w-65 mx-auto">
                 ระบบบันทึกรายการเข้าสู่ระบบแล้ว <br />
                 เจ้าหน้าที่จะดำเนินการตรวจสอบโดยเร็วที่สุด
               </p>

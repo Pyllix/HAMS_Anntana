@@ -81,7 +81,15 @@ export const APP_ROUTE: AppRote[] = [
     title: "แจ้งซ่อมครุภัณฑ์",
     element: <RepairRequestPage />,
     icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [
+      ROLES.ADMIN,
+      ROLES.ASSET_CENTER_STAFF,
+      ROLES.DEPARTMENT_STAFF,
+      ROLES.MANAGER,
+      ROLES.MAINTENANCE_STAFF,
+      ROLES.MAINTENANCE_HEAD,
+      ROLES.PARCEL_STAFF,
+    ],
     showInNav: true,
   },
   {
