@@ -37,7 +37,7 @@ const mapAssetApiToInfo = (data: AssetApiResponse): AssetInfo => {
 export async function getAssetByCode(assetCode: string): Promise<AssetInfo> {
   try {
     const res = await axios.get(
-      `${BASE_URL}/asset?search=${encodeURIComponent(assetCode)}&limit=1`,
+      `${BASE_URL}/asset?search=${encodeURIComponent(assetCode.trim())}&limit=10`,
       getHeaders(),
     );
 
@@ -47,7 +47,15 @@ export async function getAssetByCode(assetCode: string): Promise<AssetInfo> {
       throw new Error("ไม่พบข้อมูลครุภัณฑ์นี้ในระบบ");
     }
 
-    return mapAssetApiToInfo(assetList[0]);
+    const matchedAsset = assetList.find(
+      (item) => item.noid?.toLowerCase() === assetCode.trim().toLowerCase(),
+    );
+
+    if (!matchedAsset) {
+      throw new Error(`ไม่พบรหัสครุภัณฑ์ "${assetCode}" ในระบบ`);
+    }
+
+    return mapAssetApiToInfo(matchedAsset);
   } catch (error: any) {
     if (error.response?.data?.message) {
       throw new Error(error.response.data.message);
@@ -56,9 +64,10 @@ export async function getAssetByCode(assetCode: string): Promise<AssetInfo> {
   }
 }
 
-export async function createRepairTicket(dto: CreateRepairDto): Promise<void> {
+export async function createRepairTicket(dto: CreateRepairDto): Promise<any> {
   try {
-    await axios.post(`${BASE_URL}/repairs`, dto, getHeaders());
+    const res = await axios.post(`${BASE_URL}/repairs`, dto, getHeaders());
+    return res.data;
   } catch (error: any) {
     if (error.response?.data?.message) {
       throw new Error(error.response.data.message);

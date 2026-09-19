@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ReportType, UrgencyStatus, AssetInfo } from "../Types/TypeRepair";
 
 interface RepairStoreState {
-  reportType: ReportType;
+  reportType: ReportType| null;
   assetSearchInput: string;
   assetInfo: AssetInfo | null;
   location: string;
