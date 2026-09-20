@@ -20,6 +20,15 @@ const mockPrismaService = {
     findMany: jest.fn(),
     count: jest.fn(),
   },
+  borrowExtension: {
+    create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  },
   availabilityStatus: {
     findUnique: jest.fn(),
   },
@@ -34,6 +43,7 @@ const mockPrismaService = {
     findUnique: jest.fn(),
   }
 };
+
 
 describe('AssetBorrowService', () => {
   let service: AssetBorrowService;
@@ -879,7 +889,7 @@ describe('AssetBorrowService', () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue(mockTx);
 
       const result = await service.findOne('tx-1', deptUser);
-      expect(result).toEqual(mockTx);
+      expect(result).toMatchObject(mockTx);
     });
 
     it('should throw NotFoundException if DEPARTMENT_STAFF views a transaction from another department in findOne', async () => {
@@ -922,7 +932,7 @@ describe('AssetBorrowService', () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue(mockTx);
 
       const result = await service.findOne('tx-1', adminUser);
-      expect(result).toEqual(mockTx);
+      expect(result).toMatchObject(mockTx);
     });
 
     it('should allow finding by human-readable borrowNo in findOne', async () => {
@@ -930,7 +940,7 @@ describe('AssetBorrowService', () => {
       prisma.borrowTransaction.findUnique.mockResolvedValue(mockTx);
 
       const result = await service.findOne('BR-202609-0001', adminUser);
-      expect(result).toEqual(mockTx);
+      expect(result).toMatchObject(mockTx);
       expect(prisma.borrowTransaction.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { borrowNo: 'BR-202609-0001' },
@@ -956,4 +966,258 @@ describe('AssetBorrowService', () => {
       expect(res.borrowNo).toMatch(/^BR-\d{6}-0006$/);
     });
   });
+
+  describe('Borrow Duration & Expected Return Date', () => {
+    it('should throw BadRequestException if expectedReturnDate is in the past', async () => {
+      await expect(
+        service.createBorrow(
+          {
+            assetId: 'asset-1',
+            deliveryMethod: DeliveryMethod.PICKUP,
+            expectedReturnDate: '2020-01-01T00:00:00.000Z',
+          },
+          { id: 'user-1', role: UserRole.DEPARTMENT_STAFF },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should save expectedReturnDate and extensionCount=0 when expectedReturnDate is valid', async () => {
+      const futureDate = new Date(Date.now() + 86400000 * 7).toISOString();
+      prisma.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      prisma.borrowStatus.findUnique.mockResolvedValue({ id: 21, code: 'PENDING_APPROVE' });
+      prisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+      prisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-1',
+        asset_status_id: 1,
+        availability_status_id: 10,
+        section: { code: 'CENTER', name: 'Asset Center' },
+      });
+      prisma.borrowTransaction.findFirst.mockResolvedValue(null);
+      prisma.borrowTransaction.create.mockImplementation(async ({ data }: any) => ({ id: 'tx-1', ...data }));
+
+      const res = await service.createBorrow(
+        {
+          assetId: 'asset-1',
+          deliveryMethod: DeliveryMethod.PICKUP,
+          expectedReturnDate: futureDate,
+        },
+        { id: 'user-1', role: UserRole.DEPARTMENT_STAFF },
+      );
+
+      expect(res.expectedReturnDate).toEqual(new Date(futureDate));
+      expect(res.extensionCount).toBe(0);
+    });
+  });
+
+  describe('Borrow Extensions (Desk & Online)', () => {
+    const acStaff = { id: 'ac-staff-1', role: UserRole.ASSET_CENTER_STAFF };
+    const deptUser = { id: 'dept-user-1', role: UserRole.DEPARTMENT_STAFF, section_id: 'sec-opd' };
+
+    beforeEach(() => {
+      prisma.borrowStatus.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.code === 'BORROWED') return { id: 23, code: 'BORROWED' };
+        return { id: 1, code: where.code };
+      });
+      prisma.$transaction.mockImplementation(async (cb: any) => cb(prisma));
+    });
+
+    it('should automatically perform DESK direct extension with APPROVED status when called by ASSET_CENTER_STAFF', async () => {
+      const initialDate = new Date(Date.now() + 86400000 * 3);
+      const newRequestedDate = new Date(Date.now() + 86400000 * 10);
+
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        borrow_status_id: 23, // BORROWED
+        expectedReturnDate: initialDate,
+        extensionCount: 1, // previous extension done once
+        extensions: [],
+      });
+
+      prisma.borrowExtension.create.mockImplementation(async ({ data }: any) => ({
+        id: 'ext-1',
+        ...data,
+      }));
+      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+
+      const res = await service.createExtension(
+        'tx-1',
+        {
+          requestedReturnDate: newRequestedDate.toISOString(),
+          reason: 'ขยายเวลาตรวจเพิ่มตามคำสั่งแพทย์',
+        },
+        acStaff,
+      );
+
+      expect(res.extensionType).toBe('DESK');
+      expect(res.status).toBe('APPROVED');
+      expect(res.roundNumber).toBe(2); // (1 + 1)
+      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'tx-1' },
+          data: {
+            expectedReturnDate: newRequestedDate,
+            extensionCount: 2,
+          },
+        }),
+      );
+    });
+
+    it('should throw BadRequestException if DEPARTMENT_STAFF attempts extension on transaction not belonging to their department', async () => {
+      const newRequestedDate = new Date(Date.now() + 86400000 * 5);
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        borrower_id: 'other-user',
+        borrow_status_id: 23,
+        expectedReturnDate: new Date(),
+        extensionCount: 0,
+        extensions: [],
+        borrower: { section_id: 'sec-surgery' },
+      });
+
+      // deptUser is in sec-opd
+      prisma.user.findUnique.mockResolvedValue({ id: 'dept-user-1', section_id: 'sec-opd' });
+
+      await expect(
+        service.createExtension(
+          'tx-1',
+          {
+            requestedReturnDate: newRequestedDate.toISOString(),
+            reason: 'ทดสอบการต่อเวลาโดยแผนกอื่น',
+          },
+          deptUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should automatically submit ONLINE extension request in PENDING status when called by DEPARTMENT_STAFF', async () => {
+      const initialDate = new Date(Date.now() + 86400000 * 3);
+      const newRequestedDate = new Date(Date.now() + 86400000 * 10);
+
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        borrower_id: 'dept-user-1',
+        borrow_status_id: 23, // BORROWED
+        expectedReturnDate: initialDate,
+        extensionCount: 0,
+        extensions: [],
+        borrower: { section_id: 'sec-opd' },
+      });
+
+      prisma.borrowExtension.create.mockImplementation(async ({ data }: any) => ({
+        id: 'ext-online-1',
+        ...data,
+      }));
+
+      const res = await service.createExtension(
+        'tx-1',
+        {
+          requestedReturnDate: newRequestedDate.toISOString(),
+          reason: 'ขอใช้งานต่อสำหรับงานฉุกเฉิน',
+        },
+        deptUser,
+      );
+
+      expect(res.extensionType).toBe('ONLINE');
+      expect(res.status).toBe('PENDING');
+      expect(res.roundNumber).toBe(1);
+    });
+
+    it('should throw ConflictException if there is already a pending extension request', async () => {
+      const newRequestedDate = new Date(Date.now() + 86400000 * 10);
+      prisma.borrowTransaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        borrow_status_id: 23,
+        expectedReturnDate: new Date(),
+        extensionCount: 0,
+        extensions: [{ id: 'ext-pending-1' }], // already has pending
+      });
+
+      await expect(
+        service.createExtension(
+          'tx-1',
+          {
+            requestedReturnDate: newRequestedDate.toISOString(),
+            reason: 'ขอต่อเวลาซ้ำซ้อน',
+          },
+          deptUser,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should allow ASSET_CENTER_STAFF to review and APPROVE an extension', async () => {
+      const requestedDate = new Date(Date.now() + 86400000 * 15);
+      prisma.borrowExtension.findUnique.mockResolvedValue({
+        id: 'ext-1',
+        borrowTransactionId: 'tx-1',
+        status: 'PENDING',
+        requestedReturnDate: requestedDate,
+      });
+
+
+      prisma.borrowExtension.update.mockResolvedValue({
+        id: 'ext-1',
+        status: 'APPROVED',
+      });
+      prisma.borrowTransaction.update.mockResolvedValue({ id: 'tx-1' });
+
+      const res = await service.reviewExtension(
+        'ext-1',
+        { status: 'APPROVED' as any },
+        acStaff,
+      );
+
+      expect(res.status).toBe('APPROVED');
+      expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'tx-1' },
+          data: {
+            expectedReturnDate: requestedDate,
+            extensionCount: { increment: 1 },
+          },
+        }),
+      );
+    });
+
+    it('should allow ASSET_CENTER_STAFF to review and REJECT an extension with reason', async () => {
+      prisma.borrowExtension.findUnique.mockResolvedValue({
+        id: 'ext-1',
+        borrowTransactionId: 'tx-1',
+        status: 'PENDING',
+      });
+
+      prisma.borrowExtension.update.mockResolvedValue({
+        id: 'ext-1',
+        status: 'REJECTED',
+        rejectReason: 'มีคิวจองต่อ',
+      });
+
+      const res = await service.reviewExtension(
+        'ext-1',
+        { status: 'REJECTED' as any, rejectReason: 'มีคิวจองต่อ' },
+        acStaff,
+      );
+
+      expect(res.status).toBe('REJECTED');
+      expect(prisma.borrowTransaction.update).not.toHaveBeenCalled();
+    });
+
+    it('should allow user to cancel their own PENDING extension request', async () => {
+      prisma.borrowExtension.findUnique.mockResolvedValue({
+        id: 'ext-1',
+        status: 'PENDING',
+        requestedByUserId: 'dept-user-1',
+        borrowTransaction: { borrower_id: 'dept-user-1' },
+      });
+
+      prisma.borrowExtension.update.mockResolvedValue({
+        id: 'ext-1',
+        status: 'CANCELLED',
+      });
+
+      const res = await service.cancelExtension('ext-1', deptUser);
+      expect(res.status).toBe('CANCELLED');
+    });
+  });
 });
+

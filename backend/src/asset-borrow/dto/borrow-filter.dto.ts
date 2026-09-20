@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsUUID, IsInt, IsDateString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsString, IsUUID, IsInt, IsDateString, IsBoolean } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
@@ -39,5 +39,35 @@ export class BorrowFilterDto extends PaginationDto {
   @IsOptional()
   @IsDateString({ strict: true })
   endDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter borrowings where return date is overdue (true/false)' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true || value === '1' || value === 1)
+  @IsBoolean()
+  isOverdue?: boolean;
+
+  @ApiPropertyOptional({ description: 'Filter borrowings that have a pending extension request (true/false)' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true || value === '1' || value === 1)
+  @IsBoolean()
+  hasPendingExtension?: boolean;
+
+
+  @ApiPropertyOptional({ description: 'Filter borrowings that have been extended at least N times (e.g. 1, 2, 3)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  minExtensionCount?: number;
+
+  @ApiPropertyOptional({ description: 'Filter expected return date from (YYYY-MM-DD)', example: '2026-09-01' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  expectedReturnStartDate?: string;
+
+  @ApiPropertyOptional({ description: 'Filter expected return date to (YYYY-MM-DD)', example: '2026-09-30' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  expectedReturnEndDate?: string;
 }
+
 

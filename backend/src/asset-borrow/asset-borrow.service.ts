@@ -6,8 +6,11 @@ import { RequestReturnBorrowDto } from './dto/request-return-borrow.dto';
 import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
+import { CreateBorrowExtensionDto } from './dto/create-borrow-extension.dto';
+import { ReviewBorrowExtensionDto } from './dto/review-borrow-extension.dto';
+import { BorrowExtensionFilterDto } from './dto/borrow-extension-filter.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
-import { ReturnCondition, ReturnMethod, UserRole, RequestSource, Prisma } from '@prisma/client';
+import { ReturnCondition, ReturnMethod, UserRole, RequestSource, BorrowExtensionType, BorrowExtensionStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AssetBorrowService {
@@ -72,6 +75,20 @@ export class AssetBorrowService {
       throw new BadRequestException('Only Parcel/Department Staff or Asset Center Staff can create a borrow transaction');
     }
 
+    const now = new Date();
+
+    // Validate expectedReturnDate if supplied
+    let parsedExpectedReturnDate: Date | null = null;
+    if (dto.expectedReturnDate) {
+      parsedExpectedReturnDate = new Date(dto.expectedReturnDate);
+      if (isNaN(parsedExpectedReturnDate.getTime())) {
+        throw new BadRequestException('Invalid expected return date format');
+      }
+      if (parsedExpectedReturnDate <= now) {
+        throw new BadRequestException('Expected return date must be in the future');
+      }
+    }
+
     // Determine borrower
     let borrowerId: string;
     if (requestSource === RequestSource.SELF_SERVICE) {
@@ -114,8 +131,6 @@ export class AssetBorrowService {
       requestSource === RequestSource.SELF_SERVICE
         ? pendingTxStatusId
         : borrowedTxStatusId;
-
-    const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Verify Asset exists, belongs to Asset Center, and is eligible
@@ -173,6 +188,8 @@ export class AssetBorrowService {
           borrow_status_id: targetTxStatusId,
           request_source: requestSource,
           delivery_method: dto.deliveryMethod,
+          expectedReturnDate: parsedExpectedReturnDate,
+          extensionCount: 0,
           approved_at: requestSource === RequestSource.CENTER_SERVICE ? now : null,
           approved_by_user_id: requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
           handover_date: requestSource === RequestSource.CENTER_SERVICE ? now : null,
@@ -183,6 +200,7 @@ export class AssetBorrowService {
       return transaction;
     });
   }
+
 
   async approveBorrow(id: string, user: any) {
     const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
@@ -786,6 +804,40 @@ export class AssetBorrowService {
     });
   }
 
+  private enrichBorrowItem(item: any) {
+    if (!item) return item;
+    const now = new Date();
+    const isBorrowed = item.borrowStatus?.code === 'BORROWED';
+    const hasExpectedDate = !!item.expectedReturnDate;
+    const isOverdue = isBorrowed && hasExpectedDate && now > new Date(item.expectedReturnDate);
+
+    let remainingDays: number | null = null;
+    let overdueDays: number | null = null;
+
+    if (hasExpectedDate) {
+      const diffMs = new Date(item.expectedReturnDate).getTime() - now.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0) {
+        remainingDays = diffDays;
+        overdueDays = 0;
+      } else {
+        remainingDays = 0;
+        overdueDays = Math.abs(diffDays);
+      }
+    }
+
+    const pendingExtension = item.extensions?.find?.((e: any) => e.status === BorrowExtensionStatus.PENDING) || null;
+
+    return {
+      ...item,
+      isOverdue,
+      remainingDays,
+      overdueDays,
+      hasPendingExtension: !!pendingExtension,
+      activePendingExtension: pendingExtension,
+    };
+  }
+
   async findAll(query: BorrowFilterDto, user?: any): Promise<PaginatedResult<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -843,6 +895,36 @@ export class AssetBorrowService {
       };
     }
 
+    if (query.expectedReturnStartDate || query.expectedReturnEndDate) {
+      where.expectedReturnDate = {
+        ...(query.expectedReturnStartDate ? { gte: new Date(`${query.expectedReturnStartDate}T00:00:00.000Z`) } : {}),
+        ...(query.expectedReturnEndDate ? { lte: new Date(`${query.expectedReturnEndDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
+    if (query.minExtensionCount !== undefined && query.minExtensionCount !== null) {
+      where.extensionCount = { gte: query.minExtensionCount };
+    }
+
+    if (query.hasPendingExtension !== undefined && query.hasPendingExtension !== null) {
+      if (query.hasPendingExtension) {
+        where.extensions = { some: { status: BorrowExtensionStatus.PENDING } };
+      } else {
+        where.extensions = { none: { status: BorrowExtensionStatus.PENDING } };
+      }
+    }
+
+    if (query.isOverdue !== undefined && query.isOverdue !== null) {
+      const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+      where.borrow_status_id = borrowedTxStatusId;
+      if (query.isOverdue) {
+        where.expectedReturnDate = { lt: new Date() };
+      } else {
+        where.expectedReturnDate = { gte: new Date() };
+      }
+    }
+
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.borrowTransaction.findMany({
         where,
@@ -852,33 +934,45 @@ export class AssetBorrowService {
         include: {
           asset: { select: { id: true, name: true, model: true } },
           borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
-          borrowStatus: { select: { id: true, code: true, name: true } }
+          borrowStatus: { select: { id: true, code: true, name: true } },
+          extensions: {
+            orderBy: { roundNumber: 'desc' as const },
+            take: 3,
+            select: { id: true, status: true, roundNumber: true, requestedReturnDate: true, reason: true }
+          }
         }
       }),
       this.prisma.borrowTransaction.count({ where }),
     ]);
 
-    return paginate(data, total, page, limit);
+    const enrichedData = data.map((item) => this.enrichBorrowItem(item));
+    return paginate(enrichedData, total, page, limit);
   }
 
   async findOne(idOrBorrowNo: string, user?: any) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrBorrowNo);
-    const include = {
-      asset: { select: { id: true, name: true, model: true } },
-      borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
-      createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-      borrowStatus: { select: { id: true, code: true, name: true } }
-    };
 
     const transaction = await this.prisma.borrowTransaction.findUnique({
       where: isUuid ? { id: idOrBorrowNo } : { borrowNo: idOrBorrowNo },
-      include,
+      include: {
+        asset: { select: { id: true, name: true, model: true } },
+        borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
+        createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        borrowStatus: { select: { id: true, code: true, name: true } },
+        extensions: {
+          orderBy: { roundNumber: 'asc' as const },
+          include: {
+            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          }
+        }
+      },
     });
 
     if (!transaction) {
@@ -898,6 +992,329 @@ export class AssetBorrowService {
       }
     }
 
-    return transaction;
+
+    return this.enrichBorrowItem(transaction);
+  }
+
+  async createExtension(borrowTransactionId: string, dto: CreateBorrowExtensionDto, user: any) {
+    const { requestedReturnDate, reason } = dto;
+    const newReturnDate = new Date(requestedReturnDate);
+    if (isNaN(newReturnDate.getTime())) {
+      throw new BadRequestException('Invalid requested return date format');
+    }
+    if (newReturnDate <= new Date()) {
+      throw new BadRequestException('Requested return date must be in the future');
+    }
+
+    const isDesk = user.role === UserRole.ASSET_CENTER_STAFF;
+    const extensionType = isDesk ? BorrowExtensionType.DESK : BorrowExtensionType.ONLINE;
+
+    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.borrowTransaction.findUnique({
+        where: { id: borrowTransactionId },
+        include: {
+          borrower: { select: { id: true, section_id: true } },
+          extensions: {
+            where: { status: BorrowExtensionStatus.PENDING },
+            select: { id: true },
+          },
+        },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(`Borrow transaction with ID ${borrowTransactionId} not found`);
+      }
+
+      if (transaction.borrow_status_id !== borrowedTxStatusId) {
+        throw new BadRequestException('Cannot request extension: Transaction must be in BORROWED status');
+      }
+
+      if (transaction.extensions.length > 0) {
+        throw new ConflictException('There is already a pending extension request for this borrowing');
+      }
+
+      // Current return date benchmark
+      const currentReturnDate = transaction.expectedReturnDate || transaction.handover_date || transaction.createdAt;
+      if (newReturnDate <= currentReturnDate) {
+        throw new BadRequestException(
+          `Requested return date (${newReturnDate.toISOString()}) must be after current return date (${currentReturnDate.toISOString()})`,
+        );
+      }
+
+      const nextRoundNumber = (transaction.extensionCount || 0) + 1;
+
+      if (extensionType === BorrowExtensionType.DESK) {
+        // Direct desk extension by ASSET_CENTER_STAFF
+        const extension = await tx.borrowExtension.create({
+          data: {
+            borrowTransactionId,
+            extensionType: BorrowExtensionType.DESK,
+            status: BorrowExtensionStatus.APPROVED,
+            roundNumber: nextRoundNumber,
+            currentReturnDate,
+            requestedReturnDate: newReturnDate,
+            reason,
+            requestedByUserId: user.id,
+            reviewedByUserId: user.id,
+            reviewedAt: new Date(),
+          },
+          include: {
+            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          },
+        });
+
+        await tx.borrowTransaction.update({
+          where: { id: borrowTransactionId },
+          data: {
+            expectedReturnDate: newReturnDate,
+            extensionCount: nextRoundNumber,
+          },
+        });
+
+        return extension;
+      } else {
+        // Online extension: requester must be borrower or from same section, or staff
+        if (user.role === UserRole.DEPARTMENT_STAFF) {
+          const callerSectionId = await this.getCallerSectionId(user, tx);
+          const isOwner = transaction.borrower_id === user.id;
+          const isSameDept =
+            callerSectionId &&
+            transaction.borrower?.section_id &&
+            callerSectionId === transaction.borrower.section_id;
+
+          if (!isOwner && !isSameDept) {
+            throw new BadRequestException('You do not have permission to request an extension for this borrowing');
+          }
+        }
+
+        const extension = await tx.borrowExtension.create({
+          data: {
+            borrowTransactionId,
+            extensionType: BorrowExtensionType.ONLINE,
+            status: BorrowExtensionStatus.PENDING,
+            roundNumber: nextRoundNumber,
+            currentReturnDate,
+            requestedReturnDate: newReturnDate,
+            reason,
+            requestedByUserId: user.id,
+          },
+          include: {
+            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          },
+        });
+
+        return extension;
+      }
+    });
+  }
+
+  async reviewExtension(extensionId: string, dto: ReviewBorrowExtensionDto, user: any) {
+    const allowedRoles = [UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER];
+    if (!allowedRoles.includes(user.role)) {
+      throw new BadRequestException('Only Asset Center Staff, Admin, or Manager can review extension requests');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const extension = await tx.borrowExtension.findUnique({
+        where: { id: extensionId },
+        include: { borrowTransaction: true },
+      });
+
+      if (!extension) {
+        throw new NotFoundException(`Borrow extension with ID ${extensionId} not found`);
+      }
+
+      if (extension.status !== BorrowExtensionStatus.PENDING) {
+        throw new BadRequestException(
+          `Cannot review extension: Current status is '${extension.status}', expected 'PENDING'`,
+        );
+      }
+
+      const now = new Date();
+
+      if (dto.status === BorrowExtensionStatus.APPROVED) {
+        const updatedExtension = await tx.borrowExtension.update({
+          where: { id: extensionId },
+          data: {
+            status: BorrowExtensionStatus.APPROVED,
+            reviewedByUserId: user.id,
+            reviewedAt: now,
+          },
+          include: {
+            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          },
+        });
+
+        await tx.borrowTransaction.update({
+          where: { id: extension.borrowTransactionId },
+          data: {
+            expectedReturnDate: extension.requestedReturnDate,
+            extensionCount: { increment: 1 },
+          },
+        });
+
+        return updatedExtension;
+      } else {
+        if (!dto.rejectReason) {
+          throw new BadRequestException('Rejection reason is required when rejecting an extension request');
+        }
+
+        const updatedExtension = await tx.borrowExtension.update({
+          where: { id: extensionId },
+          data: {
+            status: BorrowExtensionStatus.REJECTED,
+            rejectReason: dto.rejectReason,
+            reviewedByUserId: user.id,
+            reviewedAt: now,
+          },
+          include: {
+            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          },
+        });
+
+        return updatedExtension;
+      }
+    });
+  }
+
+  async cancelExtension(extensionId: string, user: any) {
+    return this.prisma.$transaction(async (tx) => {
+      const extension = await tx.borrowExtension.findUnique({
+        where: { id: extensionId },
+        include: {
+          borrowTransaction: { select: { borrower_id: true } },
+        },
+      });
+
+      if (!extension) {
+        throw new NotFoundException(`Borrow extension with ID ${extensionId} not found`);
+      }
+
+      if (extension.status !== BorrowExtensionStatus.PENDING) {
+        throw new BadRequestException(
+          `Cannot cancel extension: Current status is '${extension.status}', expected 'PENDING'`,
+        );
+      }
+
+      if (user.role === UserRole.DEPARTMENT_STAFF || user.role === UserRole.PARCEL_STAFF) {
+        const isOwner = extension.requestedByUserId === user.id || extension.borrowTransaction?.borrower_id === user.id;
+        if (!isOwner) {
+          throw new BadRequestException('You do not have permission to cancel this extension request');
+        }
+      }
+
+      return tx.borrowExtension.update({
+        where: { id: extensionId },
+        data: { status: BorrowExtensionStatus.CANCELLED },
+      });
+    });
+  }
+
+  async findExtensionsByBorrowId(borrowTransactionId: string, user?: any) {
+    await this.findOne(borrowTransactionId, user); // check existence and permission
+
+    return this.prisma.borrowExtension.findMany({
+      where: { borrowTransactionId },
+      orderBy: { roundNumber: 'asc' },
+      include: {
+        requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+      },
+    });
+  }
+
+  async findAllExtensions(query: BorrowExtensionFilterDto, user?: any): Promise<PaginatedResult<any>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (query.status) where.status = query.status;
+    if (query.extensionType) where.extensionType = query.extensionType;
+    if (query.borrowTransactionId) where.borrowTransactionId = query.borrowTransactionId;
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {
+        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
+        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
+    if (user?.role === UserRole.DEPARTMENT_STAFF) {
+      const callerSectionId = await this.getCallerSectionId(user);
+      if (callerSectionId) {
+        where.borrowTransaction = {
+          borrower: { section_id: callerSectionId },
+        };
+      } else {
+        where.requestedByUserId = user.id;
+      }
+    } else {
+      if (query.sectionId) {
+        where.borrowTransaction = {
+          ...(where.borrowTransaction || {}),
+          borrower: { section_id: query.sectionId },
+        };
+      }
+      if (query.borrowerId) {
+        const targetUser = await this.prisma.user.findFirst({
+          where: {
+            deletedAt: null,
+            OR: [
+              { id: query.borrowerId },
+              { employeeId: query.borrowerId },
+            ],
+          },
+        });
+        where.borrowTransaction = {
+          ...(where.borrowTransaction || {}),
+          borrower_id: targetUser ? targetUser.id : query.borrowerId,
+        };
+      }
+    }
+
+    if (query.search) {
+      const search = query.search.trim();
+      where.OR = [
+        { reason: { contains: search, mode: 'insensitive' } },
+        { requestedByUser: { firstname: { contains: search, mode: 'insensitive' } } },
+        { requestedByUser: { lastname: { contains: search, mode: 'insensitive' } } },
+        { requestedByUser: { employeeId: { contains: search, mode: 'insensitive' } } },
+        { borrowTransaction: { borrowNo: { contains: search, mode: 'insensitive' } } },
+        { borrowTransaction: { asset: { name: { contains: search, mode: 'insensitive' } } } },
+      ];
+    }
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.borrowExtension.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          borrowTransaction: {
+            select: {
+              id: true,
+              borrowNo: true,
+              expectedReturnDate: true,
+              asset: { select: { id: true, name: true, model: true } },
+              borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.borrowExtension.count({ where }),
+    ]);
+
+    return paginate(data, total, page, limit);
   }
 }
+

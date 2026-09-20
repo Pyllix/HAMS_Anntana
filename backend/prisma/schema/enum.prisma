@@ -72,3 +72,16 @@ enum StepActionType {
   PURCHASE_REPLACEMENT
   SELF_REPAIR
 }
+
+enum BorrowExtensionType {
+  DESK
+  ONLINE
+}
+
+enum BorrowExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+

@@ -25,16 +25,18 @@ model BorrowTransaction {
   cancelled_by_user_id String? @map("cancelled_by_user_id")
   borrow_status_id     Int     @map("borrow_status_id")
 
-  approved_at      DateTime?        @map("approved_at")
-  handover_date    DateTime?        @map("handover_date")
-  return_date      DateTime?        @map("return_date")
-  cancelled_at     DateTime?        @map("cancelled_at")
-  rejected_at      DateTime?        @map("rejected_at")
-  cancel_reason    String?          @map("cancel_reason") @db.Text
-  return_condition ReturnCondition? @map("return_condition")
-  return_method    ReturnMethod?    @map("return_method")
-  return_remark    String?          @map("return_remark") @db.Text
-  reject_remark    String?          @map("reject_remark") @db.Text
+  expectedReturnDate DateTime?        @map("expected_return_date")
+  extensionCount     Int              @default(0) @map("extension_count")
+  approved_at        DateTime?        @map("approved_at")
+  handover_date      DateTime?        @map("handover_date")
+  return_date        DateTime?        @map("return_date")
+  cancelled_at       DateTime?        @map("cancelled_at")
+  rejected_at        DateTime?        @map("rejected_at")
+  cancel_reason      String?          @map("cancel_reason") @db.Text
+  return_condition   ReturnCondition? @map("return_condition")
+  return_method      ReturnMethod?    @map("return_method")
+  return_remark      String?          @map("return_remark") @db.Text
+  reject_remark      String?          @map("reject_remark") @db.Text
 
   request_source  RequestSource  @default(SELF_SERVICE) @map("request_source")
   delivery_method DeliveryMethod @default(PICKUP) @map("delivery_method")
@@ -42,20 +44,50 @@ model BorrowTransaction {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
-  asset           Asset        @relation(fields: [asset_id], references: [id])
-  borrower        User         @relation("BorrowerUser", fields: [borrower_id], references: [id])
-  createdByUser   User?        @relation("BorrowCreatedBy", fields: [created_by_user_id], references: [id])
-  approvedByUser  User?        @relation("BorrowApprovedBy", fields: [approved_by_user_id], references: [id])
-  handoverByUser  User?        @relation("BorrowHandoverBy", fields: [handover_by_user_id], references: [id])
-  returnedByUser  User?        @relation("ReturnedByUser", fields: [returned_by_user_id], references: [id])
-  receivedByUser  User?        @relation("ReceivedByUser", fields: [received_by_user_id], references: [id])
-  rejectedByUser  User?        @relation("BorrowRejectedBy", fields: [rejected_by_user_id], references: [id])
-  cancelledByUser User?        @relation("BorrowCancelledBy", fields: [cancelled_by_user_id], references: [id])
-  borrowStatus    BorrowStatus @relation(fields: [borrow_status_id], references: [id])
+  asset           Asset             @relation(fields: [asset_id], references: [id])
+  borrower        User              @relation("BorrowerUser", fields: [borrower_id], references: [id])
+  createdByUser   User?             @relation("BorrowCreatedBy", fields: [created_by_user_id], references: [id])
+  approvedByUser  User?             @relation("BorrowApprovedBy", fields: [approved_by_user_id], references: [id])
+  handoverByUser  User?             @relation("BorrowHandoverBy", fields: [handover_by_user_id], references: [id])
+  returnedByUser  User?             @relation("ReturnedByUser", fields: [returned_by_user_id], references: [id])
+  receivedByUser  User?             @relation("ReceivedByUser", fields: [received_by_user_id], references: [id])
+  rejectedByUser  User?             @relation("BorrowRejectedBy", fields: [rejected_by_user_id], references: [id])
+  cancelledByUser User?             @relation("BorrowCancelledBy", fields: [cancelled_by_user_id], references: [id])
+  borrowStatus    BorrowStatus      @relation(fields: [borrow_status_id], references: [id])
+  extensions      BorrowExtension[]
 
   @@index([asset_id])
   @@index([borrower_id])
   @@index([borrow_status_id])
+  @@index([expectedReturnDate])
   @@index([createdAt])
   @@map("borrow_transaction")
 }
+
+model BorrowExtension {
+  id                  String                @id @default(uuid()) @map("borrow_extension_id")
+  borrowTransactionId String                @map("borrow_transaction_id")
+  extensionType       BorrowExtensionType   @map("extension_type")
+  status              BorrowExtensionStatus @default(PENDING) @map("status")
+  roundNumber         Int                   @default(1) @map("round_number")
+  currentReturnDate   DateTime              @map("current_return_date")
+  requestedReturnDate DateTime              @map("requested_return_date")
+  reason              String                @map("reason") @db.Text
+  rejectReason        String?               @map("reject_reason") @db.Text
+  requestedByUserId   String                @map("requested_by_user_id")
+  reviewedByUserId    String?               @map("reviewed_by_user_id")
+  reviewedAt          DateTime?             @map("reviewed_at")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  borrowTransaction BorrowTransaction @relation(fields: [borrowTransactionId], references: [id], onDelete: Cascade)
+  requestedByUser   User              @relation("ExtensionRequestedBy", fields: [requestedByUserId], references: [id])
+  reviewedByUser    User?             @relation("ExtensionReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([borrowTransactionId])
+  @@index([status])
+  @@index([requestedByUserId])
+  @@index([createdAt])
+  @@map("borrow_extension")
+}
+

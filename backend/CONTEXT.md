@@ -514,13 +514,21 @@ UNAVAILABLE ──► AVAILABLE
 | Column | Type | Required | FK | Description |
 |---|---|---|---|---|
 | `borrow_transaction_id` | UUID | ✅ PK | | ID ของรายการยืม-คืน |
+| `borrow_no` | VARCHAR(50) | ✅ | | รหัสรายการยืม-คืน (เช่น BR-202609-0001) |
 | `asset_id` | UUID | ✅ | ASSET | ครุภัณฑ์ที่ยืม |
 | `borrower_id` | UUID | ✅ | USER | ผู้ยืม |
+| `created_by_user_id` | UUID | | USER | ผู้สร้างรายการ |
+| `approved_by_user_id` | UUID | | USER | เจ้าหน้าที่ผู้อนุมัติคำขอ |
+| `handover_by_user_id` | UUID | | USER | เจ้าหน้าที่ผู้ส่งมอบของจริง |
 | `returned_by_user_id` | UUID | | USER | ผู้คืน (อาจไม่ใช่ผู้ยืม) |
 | `received_by_user_id` | UUID | | USER | เจ้าหน้าที่ผู้รับคืน (เฉพาะ AC Staff) |
+| `rejected_by_user_id` | UUID | | USER | เจ้าหน้าที่ผู้ปฏิเสธคำขอ |
+| `cancelled_by_user_id` | UUID | | USER | ผู้กดยกเลิกรายการ |
 | `borrow_status_id` | INTEGER | ✅ | BORROW_STATUS | สถานะรายการยืม-คืน |
 | `request_source` | ENUM | ✅ | | `SELF_SERVICE` / `CENTER_SERVICE` |
 | `delivery_method` | ENUM | ✅ | | `PICKUP` / `DELIVERY` |
+| `expected_return_date` | TIMESTAMPTZ | | | กำหนดวันเวลาที่ต้องส่งคืน |
+| `extension_count` | INT | ✅ | | จำนวนรอบที่ต่อเวลาสำเร็จ (default: 0) |
 | `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้างรายการ (= วันที่ยื่นคำขอ) |
 | `approved_at` | TIMESTAMPTZ | | | วันเวลาที่เจ้าหน้าที่กดอนุมัติคำขอ |
 | `handover_date` | TIMESTAMPTZ | | | วันเวลาที่ส่งมอบครุภัณฑ์จริง (เริ่มยืมจริง) |
@@ -533,6 +541,25 @@ UNAVAILABLE ──► AVAILABLE
 | `return_remark` | TEXT | | | หมายเหตุการคืน |
 | `reject_remark` | TEXT | | | หมายเหตุการไม่อนุมัติการยืม (เฉพาะกรณี REJECTED) |
 
+## Data Model: BORROW_EXTENSION (ประวัติและการขอต่อเวลาการยืม)
+
+| Column | Type | Required | FK | Description |
+|---|---|---|---|---|
+| `borrow_extension_id` | UUID | ✅ PK | | ID ของคำขอต่อเวลา |
+| `borrow_transaction_id` | UUID | ✅ | BORROW_TRANSACTION | รายการยืมที่ขอต่อเวลา |
+| `extension_type` | ENUM | ✅ | | รูปแบบการต่อเวลา (`DESK` หน้าเคาน์เตอร์, `ONLINE` ออนไลน์) |
+| `status` | ENUM | ✅ | | สถานะคำขอ (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) |
+| `round_number` | INT | ✅ | | ลำดับรอบการต่อเวลา (เช่น 1, 2, 3) |
+| `current_return_date` | TIMESTAMPTZ | ✅ | | กำหนดส่งคืนเดิมก่อนขยาย |
+| `requested_return_date`| TIMESTAMPTZ | ✅ | | กำหนดส่งคืนใหม่ที่ต้องการขยาย |
+| `reason` | TEXT | ✅ | | เหตุผลความจำเป็นในการขอต่อเวลา |
+| `reject_reason` | TEXT | | | เหตุผลการไม่อนุมัติคำขอ (กรณี REJECTED) |
+| `requested_by_user_id` | UUID | ✅ | USER | ผู้ยื่นคำขอต่อเวลา |
+| `reviewed_by_user_id` | UUID | | USER | เจ้าหน้าที่ศูนย์ครุภัณฑ์ผู้พิจารณาคำขอ |
+| `reviewed_at` | TIMESTAMPTZ | | | วันเวลาที่พิจารณาคำขอ |
+| `createdAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่สร้างคำขอ |
+| `updatedAt` | TIMESTAMPTZ | ✅ | | วันเวลาที่อัปเดตล่าสุด |
+
 ## Data Model: BORROW_STATUS (Lookup Table)
 
 | Column | Type | Required | Description |
@@ -543,6 +570,7 @@ UNAVAILABLE ──► AVAILABLE
 | `createdAt` | TIMESTAMPTZ | ✅ | |
 | `updatedAt` | TIMESTAMPTZ | ✅ | |
 | `deletedAt` | TIMESTAMPTZ | | Soft delete |
+
 
 ---
 

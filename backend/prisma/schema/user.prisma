@@ -37,6 +37,8 @@ model User {
   receivedTransactions        BorrowTransaction[] @relation("ReceivedByUser")
   rejectedBorrowTransactions  BorrowTransaction[] @relation("BorrowRejectedBy")
   cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
+  requestedBorrowExtensions   BorrowExtension[]   @relation("ExtensionRequestedBy")
+  reviewedBorrowExtensions    BorrowExtension[]   @relation("ExtensionReviewedBy")
 
   //Spare parts relations
   sparepartAdds               SparepartAdd[]
