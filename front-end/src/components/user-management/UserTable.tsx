@@ -1,204 +1,133 @@
 import {
+  ColumnDef,
+  createPaginatedRowModel,
+  rowPaginationFeature,
   tableFeatures,
   useTable,
-  rowPaginationFeature,
-  createPaginatedRowModel,
 } from "@tanstack/react-table";
-import type { ColumnDef } from "@tanstack/react-table";
-import type { Asset } from "../../types/TypeAsset";
+import type { User } from "../../types/TypeUser";
 import { useQuery } from "@tanstack/react-query";
-import { getAssets } from "../../services/assetService";
-import { useMemo } from "react";
-import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
-import { useReturnModalStore } from "../../stores/useReturnModalStore";
-import { useAuthStore } from "../../stores/authStore";
-import ApproveBtn from "./ApproveBtn";
+import { getAllUser } from "../../services/userService";
+
+import UserInfo from "./table-compnent/UserInfo";
+import Actions from "./table-compnent/Actions";
+import Section from "./table-compnent/section";
+import { ROLES } from "../../router/roles";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
 
-const columns: Array<ColumnDef<typeof features, Asset>> = [
+const columns: Array<ColumnDef<typeof features, User>> = [
+  // 1. รหัสพนักงาน
   {
-    accessorKey: "imageUrl",
-    header: "รูปภาพ",
+    accessorKey: "employeeId",
+    header: "รหัสผู้ใช้",
     cell: (info) => (
-      <img
-        src={(info.getValue() as string) || "/placeholder.png"}
-        alt="Asset"
-        // เพิ่ม object-center เผื่อรูปมาสัดส่วนแปลกๆ
-        className="h-10 w-10 rounded-md object-cover object-center bg-slate-100 border border-slate-200"
-      />
+      <span className="font-mono text-sm font-medium text-slate-800">
+        {(info.getValue() as string) || "-"}
+      </span>
     ),
   },
+
+  // 2. รูปโปรไฟล์ + ชื่อ-นามสกุล / ชื่อผู้ใช้
   {
-    id: "item_info",
-    header: "รายการ / รหัส",
+    id: "userInfo",
+    header: "ชื่อ-นามสกุล / อีเมล",
     cell: (info) => {
       const row = info.row.original;
+      const fullName =
+        `${row.firstname || ""} ${row.lastname || ""}`.trim() || "-";
+
+      return <UserInfo row={row} fullName={fullName} />;
+    },
+  },
+
+  // 3. หน่วยงาน / สังกัด
+  {
+    id: "section",
+    header: "หน่วยงาน",
+    cell: (info) => {
+      const row = info.row.original;
+      const sectionId = row.section_id;
+      return <Section sectionId={sectionId} />;
+    },
+  },
+  {
+    accessorKey: "role",
+    header: "บทบาท",
+    cell: (info) => {
+      const role = (info.getValue() as string) || "";
+
+      // แมปชื่อบทบาทภาษาไทย
+      const roleLabels: Record<string, string> = {
+        [ROLES.ADMIN]: "ผู้ดูแลระบบ",
+        [ROLES.MANAGER]: "ผู้จัดการ / หัวหน้างาน",
+        [ROLES.MAINTENANCE_STAFF]: "ช่างซ่อมบำรุง",
+        [ROLES.ASSET_CENTER_STAFF]: "เจ้าหน้าที่ศูนย์สินทรัพย์",
+        [ROLES.PARCEL_STAFF]: "เจ้าหน้าที่พัสดุ",
+        [ROLES.DEPARTMENT_STAFF]: "เจ้าหน้าที่ประจำแผนก",
+      };
+
+      const label = roleLabels[role] || role || "ผู้ใช้งานทั่วไป";
+
       return (
-        // 🌟 เพิ่ม max-w-[300px] หรือขนาดตามต้องการ และใส่ whitespace-normal
-        <div className="flex flex-col justify-center min-w-[200px] max-w-[300px] lg:max-w-[400px] whitespace-normal">
-          <span className="font-semibold text-slate-800 leading-snug line-clamp-2">
-            {row.name || "-"}
-          </span>
-          <span className="text-xs text-slate-500 font-mono mt-1">
-            {row.serialNo || row.model || "ไม่ระบุรหัส"}
+        <span className="inline-flex items-center justify-center px-3.5 py-1 text-xs font-medium rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm">
+          {label}
+        </span>
+      );
+    },
+  },
+  // 6. สถานะการใช้งาน (จุดสี + ข้อความสถานะ)
+  {
+    id: "status",
+    header: "สถานะ",
+    cell: (info) => {
+      const isBanned = info.row.original.banned;
+
+      return (
+        <div className="inline-flex items-center gap-2">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              isBanned ? "bg-slate-400" : "bg-emerald-500"
+            }`}
+          />
+          <span
+            className={`text-sm font-medium ${
+              isBanned ? "text-slate-500" : "text-emerald-600"
+            }`}
+          >
+            {isBanned ? "ระงับการใช้งาน" : "ใช้งานปกติ"}
           </span>
         </div>
       );
     },
   },
-  {
-    id: "typeName",
-    header: "ประเภท",
-    accessorFn: (row) => row.type?.name,
-    cell: (info) => (
-      <span className="text-sm text-slate-600">
-        {(info.getValue() as string) ?? "-"}
-      </span>
-    ),
-  },
-  {
-    id: "borrower_section",
-    header: "สถานที่เก็บ",
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <span className="text-sm text-slate-600">
-          {row.section?.name ?? "-"}
-        </span>
-      );
-    },
-  },
-  {
-    id: "statusName",
-    header: "สถานะ",
-    cell: (info) => {
-      const status = info.row.original.availabilityStatus;
-      const code = status?.code;
-      const name =
-        code === "RESERVED"
-          ? (status?.name ?? "รออนุมัติ")
-          : (status?.name ?? "-");
 
-      const getStatusStyle = (statusCode?: string) => {
-        switch (statusCode) {
-          case "AVAILABLE":
-            return "bg-emerald-100 text-emerald-700 border-emerald-200";
-          case "RESERVED":
-            return "bg-cyan-100 text-cyan-700 border-cyan-200";
-          case "BORROWED":
-            return "bg-rose-100 text-rose-700 border-rose-200";
-          default:
-            return "bg-slate-100 text-slate-600 border-slate-200";
-        }
-      };
-
-      return (
-        <span
-          className={`inline-flex items-center justify-center min-w-[90px] px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(code)}`}
-        >
-          {name}
-        </span>
-      );
-    },
-  },
+  // 7. จัดการ (Icon Actions: ดู, แก้ไข, ลบ)
   {
     id: "actions",
     header: "จัดการ",
     cell: (info) => {
       const row = info.row.original;
-      const isAvailable = info.row.original.availabilityStatus?.code;
 
-      const handleOpenBorrowModal = () =>
-        useBorrowModalStore.getState().openForm(row);
-      const handleOpenReturnModal = () =>
-        useReturnModalStore.getState().openForm(row);
-
-      if (isAvailable === "AVAILABLE") {
-        return (
-          <button
-            type="button"
-            onClick={handleOpenBorrowModal}
-            className="w-24 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
-          >
-            ยืมของ
-          </button>
-        );
-      }
-
-      if (isAvailable === "RESERVED") {
-        return <ApproveBtn transactionId={row.currentBorrowing?.id} />;
-      }
-
-      if (isAvailable === "BORROWED") {
-        return (
-          <button
-            type="button"
-            onClick={handleOpenReturnModal}
-            className="w-24 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50"
-          >
-            รับคืน
-          </button>
-        );
-      }
-
-      return (
-        <button
-          disabled
-          type="button"
-          className="w-24 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-400"
-        >
-          ไม่พร้อม
-        </button>
-      );
+      return <Actions row={row} />;
     },
   },
 ];
 
-interface Props {
-  search: string;
-  category: string;
-  type: string;
-}
-
-export default function AssetsTable({ search, category, type }: Props) {
-  const user = useAuthStore((state) => state.user);
-  const sectionId = user?.section_id;
-
-  const { data: assets } = useQuery({
-    queryKey: ["assets", sectionId],
-    queryFn: () => getAssets(sectionId),
+export default function UserTable() {
+  const { data: users } = useQuery({
+    queryKey: ["assets"],
+    queryFn: () => getAllUser(),
   });
-
-  const filteredAssets = useMemo(() => {
-    if (!assets) {
-      console.log("assets is undefined at AssetsTable.tsx");
-      return [];
-    }
-
-    return assets.filter((item) => {
-      const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(search.toLowerCase()) ||
-        item.serialNo?.toLowerCase().includes(search.toLowerCase());
-
-      const matchesStatus =
-        category === "ALL" || item.availabilityStatus?.name === category;
-
-      const matchesType = type === "ALL" || item.type?.name === type;
-
-      return matchesSearch && matchesStatus && matchesType;
-    });
-  }, [assets, search, category, type]);
 
   const table = useTable({
     key: "assets-table",
     features,
     columns,
-    data: filteredAssets ?? [],
+    data: users ?? [],
     initialState: {
       pagination: {
         pageIndex: 0,

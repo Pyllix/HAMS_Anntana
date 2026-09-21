@@ -19,6 +19,7 @@ import OrderSpareParts from "../Pages/OrderSpareParts";
 import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
+import UserManagement from "../pages/UserManagement";
 
 interface AppRote {
   path: string;
@@ -101,52 +102,13 @@ export const APP_ROUTE: AppRote[] = [
     roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF],
     showInNav: true,
   },
-  // {
-  //   path: "test-1",
-  //   title: "AssetStock",
-  //   element: <AssetStock />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
-  // {
-  //   path: "test-2",
-  //   title: "ConfirmRepair",
-  //   element: <ConfirmRepair />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
-  // {
-  //   path: "test-3",
-  //   title: "OrderSpareParts",
-  //   element: <OrderSpareParts />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
-  // {
-  //   path: "test-4",
-  //   title: "PartStock",
-  //   element: <PartStock />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
-  // {
-  //   path: "test-5",
-  //   title: "PendingEvaluationsPage",
-  //   element: <PendingEvaluationsPage />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
-  // {
-  //   path: "test-6",
-  //   title: "RepairHistory",
-  //   element: <RepairHistory />,
-  //   icon: History,
-  //   roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
-  //   showInNav: true,
-  // },
+  // -------- Admin ------------
+  {
+    path: "user-management",
+    title: "จัดการผู้ใช้งาน",
+    element: <UserManagement />,
+    icon: History,
+    roles: [ROLES.ADMIN],
+    showInNav: true,
+  },
 ];

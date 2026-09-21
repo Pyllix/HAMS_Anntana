@@ -11,7 +11,7 @@ import {
 import StockAssetsTable from "../components/asset-stock/StockAssetsTable";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
 import { useAuthStore } from "../stores/authStore";
-import { ROLES } from "../Router/roles";
+import { ROLES } from "../router/roles";
 
 export default function AssetStock() {
   const [inputSearch, setInputSearch] = useState("");

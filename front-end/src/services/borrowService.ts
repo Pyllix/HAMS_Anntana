@@ -99,6 +99,47 @@ export interface BorrowHistory {
   };
 }
 
+export interface ApproveBorrow {
+  id: string;
+  borrowNo: string;
+  asset_id: string;
+  borrower_id: string;
+  created_by_user_id: string;
+  approved_by_user_id: string | null;
+  handover_by_user_id: string | null;
+  returned_by_user_id: string | null;
+  received_by_user_id: string | null;
+  rejected_by_user_id: string | null;
+  cancelled_by_user_id: string | null;
+  borrow_status_id: number;
+  expectedReturnDate: string; // ISO 8601 Date String
+  extensionCount: number;
+  approved_at: string | null; // ISO 8601 Date String
+  handover_date: string | null; // ISO 8601 Date String
+  return_date: string | null; // ISO 8601 Date String
+  cancelled_at: string | null; // ISO 8601 Date String
+  rejected_at: string | null; // ISO 8601 Date String
+  cancel_reason: string | null;
+  return_condition: string | null;
+  return_method: string | null;
+  return_remark: string | null;
+  reject_remark: string | null;
+  request_source: "SELF_SERVICE" | string;
+  delivery_method: "PICKUP" | string;
+  createdAt: string;
+}
+
+// ใข้ในการอนุมัติการยืม
+export async function approveBorrow(id: string): Promise<ApproveBorrow> {
+  const token = localStorage.getItem("token");
+  const res = await axios.patch(
+    `https://hams-anntana.onrender.com/borrowings/${id}/approve`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return res.data;
+}
+
 export async function postBorrow(borrow: BorrowReq): Promise<BorrowRes> {
   const token = localStorage.getItem("token");
 

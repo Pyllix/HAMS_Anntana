@@ -1,15 +1,8 @@
 import { RoleType } from "../router/roles";
 
-export type UserRole =
-  | "ADMIN"
-  | "ASSET_CENTER_STAFF"
-  | "user"
-  | "technician"
-  | "manager"
-  | null;
-
 export interface User {
   id: string;
+  employeeId: string;
   userName: string;
   firstname: string;
   lastname: string;
@@ -17,7 +10,10 @@ export interface User {
   emailVerified: boolean;
   imageUrl: string | null;
   section_id: string;
-  role: RoleType
+  role: RoleType;
+  banned: boolean;
+  banReason: string | null;
+  banExpires: string | null;
   createdAt: string;
   updatedAt: string;
 }
