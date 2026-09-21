@@ -17,3 +17,13 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface UserDto {
+  userName: string | "";
+  firstname: string;
+  lastname: string;
+  email: string;
+  password?: string;
+  role: RoleType;
+  sectionId: string;
+}

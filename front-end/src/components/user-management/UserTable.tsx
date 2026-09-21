@@ -5,6 +5,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
+import { useEffect, useMemo } from "react";
 import type { User } from "../../types/TypeUser";
 import { useQuery } from "@tanstack/react-query";
 import { getAllUser } from "../../services/userService";
@@ -12,7 +13,8 @@ import { getAllUser } from "../../services/userService";
 import UserInfo from "./table-compnent/UserInfo";
 import Actions from "./table-compnent/Actions";
 import Section from "./table-compnent/section";
-import { ROLES } from "../../router/roles";
+import { ROLES, RoleType } from "../../router/roles";
+import type { StatusFilterValue } from "./StatusFilter";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -117,17 +119,43 @@ const columns: Array<ColumnDef<typeof features, User>> = [
   },
 ];
 
-export default function UserTable() {
+interface UserTableProps {
+  search: string;
+  role: RoleType | "";
+  status: StatusFilterValue;
+}
+
+export default function UserTable({ search, role, status }: UserTableProps) {
   const { data: users } = useQuery({
     queryKey: ["assets"],
     queryFn: () => getAllUser(),
   });
 
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    return (users ?? []).filter((user) => {
+      if (role && user.role !== role) return false;
+      if (status === "active" && user.banned) return false;
+      if (status === "banned" && !user.banned) return false;
+
+      if (!term) return true;
+
+      return [
+        user.employeeId,
+        user.userName,
+        user.firstname,
+        user.lastname,
+        user.email,
+      ].some((field) => field?.toLowerCase().includes(term));
+    });
+  }, [users, search, role, status]);
+
   const table = useTable({
     key: "assets-table",
     features,
     columns,
-    data: users ?? [],
+    data: filteredUsers,
     initialState: {
       pagination: {
         pageIndex: 0,
@@ -135,6 +163,11 @@ export default function UserTable() {
       },
     },
   });
+
+  // กลับไปหน้าแรกทุกครั้งที่ผลลัพธ์การค้นหา/กรองเปลี่ยน
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [search, role, status]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">

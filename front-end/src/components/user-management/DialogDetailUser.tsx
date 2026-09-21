@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 interface DialogDetailUserProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User;
+  user: User | null;
 }
 
 // แมปชื่อบทบาทภาษาไทย
