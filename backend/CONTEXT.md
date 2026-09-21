@@ -20,6 +20,7 @@ The Hospital Asset & Maintenance System (HAMS) is a centralized web application 
 - **Balanced Usage Rotation Algorithm (อัลกอริทึมหมุนเวียนการใช้งาน)**: ตรรกะจัดลำดับเครื่องรุ่นเดียวกันที่พร้อมใช้งาน (`AVAILABLE` และ `NORMAL`) โดยพิจารณาจากวันใช้งานในรอบ 90 วันล่าสุด ร่วมกับระยะเวลาจอดพักเครื่อง (`idleDays` นับจาก `return_date` ล่าสุด)
 - **Smart Swap Nudge (คำแนะนำสลับเครื่องอัตโนมัติ)**: กลไกแจ้งเตือนหน้าจอเมื่อผู้ใช้เลือกเครื่องที่มีการใช้งานสูง เพื่อเสนอแนะสลับไปยังเครื่องรุ่นเดียวกันที่ผ่านการใช้งานน้อยกว่าและพักเครื่องนานกว่า
 - **Audit (การตรวจนับครุภัณฑ์)**: The process of verifying physical asset counts against system records.
+- **Employee ID (รหัสพนักงาน)**: รหัสประจำตัวบุคลากรในระบบ จัดการในรูปแบบทางการขึ้นต้นด้วย `GOV-` ตามด้วยปี พ.ศ. สองหลักและเลขรันลำดับ 4 หลัก รีเซ็ตใหม่ทุกปี พ.ศ. (เช่น `GOV-670001`) รองรับได้ถึง 9,999 คนต่อปี ระบบเป็นผู้ออกรหัสให้อัตโนมัติและไม่สามารถแก้ไขได้ (Immutable) เพื่อใช้ระบุตัวตนในการยืม-คืน, เบิกอะไหล่ และงานซ่อมบำรุง
 - **User Roles**: Categorized accesses including Parcel Staff, Asset Center Staff, Department Staff, Maintenance Staff, Managers, and Admins.
 
 ---
