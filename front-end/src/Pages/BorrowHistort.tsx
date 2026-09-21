@@ -61,7 +61,7 @@ export default function BorrowHistory() {
 
       {/* Table */}
       {/* 4. ให้ตารางยืดจนสุดพื้นที่ (flex-1) และเกิด Scroll ภายในตัวเอง (overflow-hidden) */}
-      <div className="flex-1 overflow-hidden bg-bg-component rounded-lg shadow-sm border border-slate-100">
+      <div className="flex-1 overflow-hidden border-none">
         <AssetsHistoryTable inputSearch={inputSearch} status={status} />
       </div>
     </div>

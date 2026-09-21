@@ -71,7 +71,7 @@ export default function TrackingAssetCenter({}) {
 
       {/* Table */}
       {/* 3. ดันตารางให้กินพื้นที่ที่เหลือทั้งหมด (flex-1) พร้อมกับบังคับให้ Scroll เกิดเฉพาะในกล่องนี้ (overflow-hidden) */}
-      <div className="flex-1 overflow-hidden bg-bg-component rounded-lg shadow-sm border border-slate-100">
+      <div className="flex-1 overflow-hidden border-none">
         <TrackTable inputSearch={inputSearch} status={status} />
       </div>
     </div>
