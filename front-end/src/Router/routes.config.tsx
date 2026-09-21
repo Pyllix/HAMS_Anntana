@@ -39,7 +39,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ยืม-คืนครุภัณฑ์",
     element: <AssetCenterBorrowReturn />,
     icon: Repeat,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
@@ -47,7 +47,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ประวัติการยืม",
     element: <BorrowHistory />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
@@ -56,7 +56,6 @@ export const APP_ROUTE: AppRote[] = [
     element: <AssetStock />,
     icon: Archive,
     roles: [
-      ROLES.ADMIN,
       ROLES.ASSET_CENTER_STAFF,
       ROLES.DEPARTMENT_STAFF,
       ROLES.MANAGER,
@@ -68,7 +67,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการสต็อกอะไหล่",
     element: <PartStock />,
     icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
@@ -76,7 +75,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "สั่งซื้ออะไหล่",
     element: <OrderSpareParts />,
     icon: ToolCase,
-    roles: [ROLES.ADMIN, ROLES.PARCEL_STAFF],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
@@ -84,7 +83,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "แจ้งซ่อมครุภัณฑ์",
     element: <RepairRequestPage />,
     icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   {
@@ -92,7 +91,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ติดตามสถานะ",
     element: <TrackingAssetCenter />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF],
     showInNav: true,
   },
   // -------- สำหรับ ช่าง ------------
@@ -101,7 +100,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "งานซ่อม",
     element: <PendingEvaluations />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF],
+    roles: [ROLES.MAINTENANCE_STAFF],
     showInNav: true,
   },
   // -------- Admin ------------
