@@ -4,7 +4,9 @@ import {
   Clock,
   FileCheck,
   Plus,
+  Repeat,
   Search,
+  Undo2,
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -13,6 +15,7 @@ import {
   getAssetTypes,
   getAvailabilities,
 } from "../services/assetService";
+import { getAllBorrowHistory } from "../services/borrowService";
 import AssetsTable from "../components/borrow-return/assetsTable";
 import { useMemo, useState } from "react";
 import BorrowModal from "../components/borrow-return/BorrowModal";
@@ -22,6 +25,17 @@ import ReturnModal from "../components/borrow-return/ReturnModal";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
 import { useAuthStore } from "../stores/authStore";
+import PendingApprovalTable from "../components/borrow-return/PendingApprovalTable";
+import PendingHandoverTable from "../components/borrow-return/PendingHandoverTable";
+import PendingPickupTable from "../components/borrow-return/PendingPickupTable";
+import PendingCompleteReturnTable from "../components/borrow-return/PendingCompleteReturnTable";
+import RejectBorrowModal from "../components/borrow-return/RejectBorrowModal";
+import CompleteReturnModal from "../components/borrow-return/CompleteReturnModal";
+import { useRejectModalStore } from "../stores/useRejectModalStore";
+import { useCompleteReturnModalStore } from "../stores/useCompleteReturnModalStore";
+
+type TabId = "borrow" | "approve" | "return";
+
 export default function AssetCenterBorrowReturn() {
   const user = useAuthStore((state) => state.user);
   const sectionId = user?.section_id;
@@ -41,11 +55,74 @@ export default function AssetCenterBorrowReturn() {
     queryFn: getAvailabilities,
   });
 
+  // ดึงข้อมูลเดียวกับที่ PendingApprovalTable / PendingHandoverTable ใช้ (query key ตรงกัน
+  // จึงแชร์ cache กัน ไม่ยิงซ้ำ) เพื่อเอามาโชว์จำนวนค้างดำเนินการเป็น badge บนแท็บ
+  const { data: pendingApprovalData } = useQuery({
+    queryKey: ["borrowHistory", "pendingApproval"],
+    queryFn: () => getAllBorrowHistory({ limit: 100 }),
+  });
+  const { data: pendingHandoverData } = useQuery({
+    queryKey: ["borrowHistory", "pendingHandover"],
+    queryFn: () => getAllBorrowHistory({ limit: 100 }),
+  });
+  const { data: pendingPickupData } = useQuery({
+    queryKey: ["borrowHistory", "pendingPickup"],
+    queryFn: () => getAllBorrowHistory({ limit: 100 }),
+  });
+  const { data: pendingCompleteReturnData } = useQuery({
+    queryKey: ["borrowHistory", "pendingCompleteReturn"],
+    queryFn: () => getAllBorrowHistory({ limit: 100 }),
+  });
+
+  const pendingApproveCount = useMemo(() => {
+    const approvalCount = (pendingApprovalData ?? []).filter(
+      (item) => item.borrowStatus?.code === "PENDING_APPROVE",
+    ).length;
+    const handoverCount = (pendingHandoverData ?? []).filter(
+      (item) => item.borrowStatus?.code === "APPROVED",
+    ).length;
+    return approvalCount + handoverCount;
+  }, [pendingApprovalData, pendingHandoverData]);
+
+  const pendingReturnCount = useMemo(() => {
+    const pickupCount = (pendingPickupData ?? []).filter(
+      (item) => item.borrowStatus?.code === "PENDING_RETURN",
+    ).length;
+    const completeCount = (pendingCompleteReturnData ?? []).filter(
+      (item) => item.borrowStatus?.code === "IN_PICKUP",
+    ).length;
+    return pickupCount + completeCount;
+  }, [pendingPickupData, pendingCompleteReturnData]);
+
+  const [activeTab, setActiveTab] = useState<TabId>("borrow");
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useBorrowModalStore();
   const { isFormOpen: isFormOpenReturn } = useReturnModalStore();
+  const { isFormOpen: isFormOpenReject } = useRejectModalStore();
+  const { isFormOpen: isFormOpenCompleteReturn } = useCompleteReturnModalStore();
+
+  const tabs: Array<{
+    id: TabId;
+    label: string;
+    icon: typeof Repeat;
+    badge?: number;
+  }> = [
+    { id: "borrow", label: "ยืม-คืนครุภัณฑ์", icon: Repeat },
+    {
+      id: "approve",
+      label: "อนุมัติคำขอยืม",
+      icon: FileCheck,
+      badge: pendingApproveCount,
+    },
+    {
+      id: "return",
+      label: "รับคืนครุภัณฑ์",
+      icon: Undo2,
+      badge: pendingReturnCount,
+    },
+  ];
 
   // useMemo คำนวณนับจำนวน assets และจัด Format การ์ด
   const statsSummary: StatCardData[] = useMemo(() => {
@@ -124,85 +201,139 @@ export default function AssetCenterBorrowReturn() {
   return (
     // 1. เพิ่ม flex flex-col และ h-full เพื่อเตรียมให้ Table ขยายเต็มพื้นที่ที่เหลือ
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
-      {/* Stat Cards */}
-      <div className="shrink-0">
-        <StatCards stats={statsSummary} />
+      {/* Tab Navigation แยกหน้า ยืม-คืน / อนุมัติ */}
+      <div className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+              {!!tab.badge && (
+                <span
+                  className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search & Filter Bar */}
-      {/* 2. เพิ่ม flex-wrap, md:flex-row และจัด items-center */}
-      <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
-        {/* กรอกคำค้นหา */}
-        <div className="relative flex-1 w-full md:max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="ค้นหา ..."
-            onChange={(e) => setInputSearch(e.target.value)}
-            value={inputSearch}
-            className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
-          />
-        </div>
-
-        {/* กลุ่มของ Dropdown (จับมัดรวมกันเพื่อให้ไม่แยกกันเวลาจอเล็ก) */}
-        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-          {/* Dropdown สถานะ */}
-          <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
-            <span className="text-slate-600 mr-1.5 whitespace-nowrap">
-              สถานะ:
-            </span>
-            <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]">
-              {category === "ALL" ? "ทั้งหมด" : category}
-            </span>
-            <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
-            <select
-              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              <option value="ALL">ทั้งหมด</option>
-              {availabilities?.map((item) => (
-                <option key={item.id} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+      {activeTab === "borrow" && (
+        <>
+          {/* Stat Cards */}
+          <div className="shrink-0">
+            <StatCards stats={statsSummary} />
           </div>
 
-          {/* Dropdown ประเภท */}
-          <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
-            <span className="text-slate-600 mr-1.5 whitespace-nowrap">
-              ประเภท:
-            </span>
-            <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]">
-              {type === "ALL" ? "ทั้งหมด" : type}
-            </span>
-            <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
-            <select
-              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="ALL">ทั้งหมด</option>
-              {assetTypes?.map((type) => (
-                <option key={type.id} value={type.name}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
+          {/* Search & Filter Bar */}
+          {/* 2. เพิ่ม flex-wrap, md:flex-row และจัด items-center */}
+          <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
+            {/* กรอกคำค้นหา */}
+            <div className="relative flex-1 w-full md:max-w-md">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="ค้นหา ..."
+                onChange={(e) => setInputSearch(e.target.value)}
+                value={inputSearch}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
+              />
+            </div>
 
-      {/* Table */}
-      {/* 3. ให้กล่องนี้ยืดจนสุด (flex-1) และซ่อนส่วนเกิน (overflow-hidden) เพื่อให้ Table Scroll ภายในตัวเองได้ */}
-      <div className="flex-1 overflow-hidden border-none">
-        <AssetsTable search={inputSearch} category={category} type={type} />
-      </div>
+            {/* กลุ่มของ Dropdown (จับมัดรวมกันเพื่อให้ไม่แยกกันเวลาจอเล็ก) */}
+            <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+              {/* Dropdown สถานะ */}
+              <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+                <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+                  สถานะ:
+                </span>
+                <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]">
+                  {category === "ALL" ? "ทั้งหมด" : category}
+                </span>
+                <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
+                <select
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="ALL">ทั้งหมด</option>
+                  {availabilities?.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dropdown ประเภท */}
+              <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+                <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+                  ประเภท:
+                </span>
+                <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]">
+                  {type === "ALL" ? "ทั้งหมด" : type}
+                </span>
+                <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
+                <select
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                >
+                  <option value="ALL">ทั้งหมด</option>
+                  {assetTypes?.map((type) => (
+                    <option key={type.id} value={type.name}>
+                      {type.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {/* 3. ให้กล่องนี้ยืดจนสุด (flex-1) และซ่อนส่วนเกิน (overflow-hidden) เพื่อให้ Table Scroll ภายในตัวเองได้ */}
+          <div className="flex-1 overflow-hidden border-none">
+            <AssetsTable search={inputSearch} category={category} type={type} />
+          </div>
+        </>
+      )}
+
+      {activeTab === "approve" && (
+        <div className="flex-1 overflow-auto flex flex-col gap-4 md:gap-6">
+          <PendingApprovalTable />
+          <PendingHandoverTable />
+        </div>
+      )}
+
+      {activeTab === "return" && (
+        <div className="flex-1 overflow-auto flex flex-col gap-4 md:gap-6">
+          <PendingPickupTable />
+          <PendingCompleteReturnTable />
+        </div>
+      )}
 
       {/* Modals */}
       {isFormOpen && <BorrowModal />}
       {isFormOpenReturn && <ReturnModal />}
+      {isFormOpenReject && <RejectBorrowModal />}
+      {isFormOpenCompleteReturn && <CompleteReturnModal />}
     </div>
   );
 }

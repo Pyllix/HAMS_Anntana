@@ -3,7 +3,7 @@ import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
 import { getUserById } from "../../services/userService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { postBorrow } from "../../services/borrowService";
+import { postBorrow, getBorrowErrorMessage } from "../../services/borrowService";
 
 export default function BorrowModal() {
   const queryClient = useQueryClient();
@@ -34,11 +34,7 @@ export default function BorrowModal() {
       closeForm();
     },
     onError: (err: any) => {
-      const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "เกิดข้อผิดพลาดในการบันทึก";
-      alert(`ไม่สามารถทำรายการได้: ${errorMsg}`);
+      alert(getBorrowErrorMessage(err));
     },
   });
 

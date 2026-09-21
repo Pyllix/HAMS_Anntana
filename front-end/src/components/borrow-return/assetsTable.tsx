@@ -12,7 +12,6 @@ import { useMemo } from "react";
 import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
 import { useAuthStore } from "../../stores/authStore";
-import ApproveBtn from "./ApproveBtn";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -130,7 +129,16 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       }
 
       if (isAvailable === "RESERVED") {
-        return <ApproveBtn transactionId={row.currentBorrowing?.id} />;
+        return (
+          <button
+            disabled
+            type="button"
+            title='ดำเนินการได้ที่แท็บ "อนุมัติคำขอยืม"'
+            className="w-24 cursor-not-allowed rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-500"
+          >
+            รอดำเนินการ
+          </button>
+        );
       }
 
       if (isAvailable === "BORROWED") {

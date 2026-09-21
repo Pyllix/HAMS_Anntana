@@ -11,7 +11,11 @@ import { useReturnModalStore } from "../../stores/useReturnModalStore";
 import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUserById } from "../../services/userService";
-import { returnAsset, ReturnReq } from "../../services/borrowService";
+import {
+  returnAsset,
+  ReturnReq,
+  getBorrowErrorMessage,
+} from "../../services/borrowService";
 
 export default function ReturnModal() {
   // ปิด Modal กับ รับ Asset
@@ -65,11 +69,7 @@ export default function ReturnModal() {
       closeForm();
     },
     onError: (err: any) => {
-      const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "เกิดข้อผิดพลาดในการบันทึก";
-      alert(`ไม่สามารถทำรายการได้: ${errorMsg}`);
+      alert(getBorrowErrorMessage(err));
     },
   });
 
