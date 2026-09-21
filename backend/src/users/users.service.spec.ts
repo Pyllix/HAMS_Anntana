@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma.service';
 import { UserRole } from '@prisma/client';
@@ -15,7 +19,6 @@ jest.mock('../auth/auth', () => ({
   },
 }));
 
-
 import { auth } from '../auth/auth';
 
 // ─── Mock PrismaService ───────────────────────────────────────────────────────
@@ -27,6 +30,13 @@ const mockPrismaService = {
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
+  },
+  section: {
+    findUnique: jest.fn(),
+  },
+  account: {
+    deleteMany: jest.fn(),
   },
   session: {
     deleteMany: jest.fn(),
@@ -71,6 +81,27 @@ describe('UsersService', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // generateEmployeeId()
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('generateEmployeeId()', () => {
+    it('should generate first sequence code GOV-YY0001 when no previous record exists for year', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
+      const id = await service.generateEmployeeId();
+      expect(id).toMatch(/^GOV-\d{2}0001$/);
+    });
+
+    it('should increment next sequence code when previous codes exist in current year', async () => {
+      const now = new Date();
+      const thaiYear = String((now.getFullYear() + 543) % 100).padStart(2, '0');
+      mockPrismaService.user.findFirst.mockResolvedValue({
+        employeeId: `GOV-${thaiYear}0042`,
+      });
+      const id = await service.generateEmployeeId();
+      expect(id).toBe(`GOV-${thaiYear}0043`);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // create()
   // ───────────────────────────────────────────────────────────────────────────
   describe('create()', () => {
@@ -85,8 +116,9 @@ describe('UsersService', () => {
       sectionId: undefined,
     };
 
-    it('should create a user and return the updated record', async () => {
+    it('should create a user and return the updated record with auto-generated employeeId', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue({
         user: { id: 'user-uuid-1' },
       } as any);
@@ -96,6 +128,9 @@ describe('UsersService', () => {
 
       expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
         where: { email: createDto.email },
+      });
+      expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
+        where: { userName: createDto.userName },
       });
       expect(auth.api.signUpEmail).toHaveBeenCalledWith({
         body: {
@@ -107,11 +142,13 @@ describe('UsersService', () => {
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
         data: {
+          employeeId: expect.stringMatching(/^GOV-\d{6}$/),
           userName: createDto.userName,
           firstname: createDto.firstname,
           lastname: createDto.lastname,
           role: createDto.role,
           imageUrl: createDto.imageUrl,
+          section_id: createDto.sectionId,
         },
         omit: { deletedAt: true },
       });
@@ -121,6 +158,7 @@ describe('UsersService', () => {
     it('should use default role DEPARTMENT_STAFF when role is not provided', async () => {
       const dtoWithoutRole = { ...createDto, role: undefined };
       mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue({
         user: { id: 'user-uuid-1' },
       } as any);
@@ -145,8 +183,34 @@ describe('UsersService', () => {
       expect(auth.api.signUpEmail).not.toHaveBeenCalled();
     });
 
+    it('should throw ConflictException if userName already exists', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue({ id: 'existing-id' });
+
+      await expect(service.create(createDto as any)).rejects.toThrow(
+        new ConflictException(`Username ${createDto.userName} is already in use`),
+      );
+
+      expect(auth.api.signUpEmail).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if sectionId does not exist', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
+      mockPrismaService.section.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create({ ...createDto, sectionId: 'nonexistent-sec' } as any),
+      ).rejects.toThrow(
+        new BadRequestException('Section not found with ID: nonexistent-sec'),
+      );
+
+      expect(auth.api.signUpEmail).not.toHaveBeenCalled();
+    });
+
     it('should throw ConflictException if better-auth returns no user id', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue({ user: {} } as any);
 
       await expect(service.create(createDto as any)).rejects.toThrow(
@@ -158,11 +222,30 @@ describe('UsersService', () => {
 
     it('should throw ConflictException if better-auth returns null', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue(null as any);
 
       await expect(service.create(createDto as any)).rejects.toThrow(
         ConflictException,
       );
+    });
+
+    it('should perform compensating rollback (delete account and user) if user.update fails', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
+      jest.mocked(auth.api.signUpEmail).mockResolvedValue({
+        user: { id: 'user-uuid-1' },
+      } as any);
+      mockPrismaService.user.update.mockRejectedValue(new Error('DB Update Error'));
+
+      await expect(service.create(createDto as any)).rejects.toThrow('DB Update Error');
+
+      expect(mockPrismaService.account.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-1' },
+      });
+      expect(mockPrismaService.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-uuid-1' },
+      });
     });
   });
 
@@ -320,6 +403,23 @@ describe('UsersService', () => {
       expect(result).toEqual(updatedUser);
     });
 
+    it('should ignore employeeId in update payload to enforce immutability', async () => {
+      const updatedUser = { ...mockUser, firstname: 'Jane' };
+      mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
+      mockPrismaService.user.update.mockResolvedValue(updatedUser);
+
+      await service.update('user-uuid-1', {
+        firstname: 'Jane',
+        employeeId: 'GOV-679999',
+      } as any);
+
+      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-uuid-1' },
+        data: { firstname: 'Jane' },
+        omit: { deletedAt: true },
+      });
+    });
+
     it('should throw ConflictException if new email is already in use by another user', async () => {
       mockPrismaService.user.findFirst
         .mockResolvedValueOnce(mockUser) // findOne
@@ -328,6 +428,29 @@ describe('UsersService', () => {
       await expect(
         service.update('user-uuid-1', { email: 'taken@hospital.go.th' } as any),
       ).rejects.toThrow(new ConflictException('Email taken@hospital.go.th is already in use'));
+
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if new userName is already in use by another user', async () => {
+      mockPrismaService.user.findFirst
+        .mockResolvedValueOnce(mockUser) // findOne
+        .mockResolvedValueOnce({ id: 'other-uuid', userName: 'takenuser' }); // findFirst userName check
+
+      await expect(
+        service.update('user-uuid-1', { userName: 'takenuser' } as any),
+      ).rejects.toThrow(new ConflictException('Username takenuser is already in use'));
+
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if sectionId does not exist on update', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
+      mockPrismaService.section.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.update('user-uuid-1', { sectionId: 'invalid-sec' } as any),
+      ).rejects.toThrow(new BadRequestException('Section not found with ID: invalid-sec'));
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });

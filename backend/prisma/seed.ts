@@ -115,7 +115,7 @@ const sections = [
 
 const systemUsers = [
   {
-    employeeId: 'GOV-67001',
+    employeeId: 'GOV-670001',
     userName: 'admin',
     firstname: 'สมชาย',
     lastname: 'แอดมินระบบ',
@@ -125,7 +125,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
-    employeeId: 'GOV-67002',
+    employeeId: 'GOV-670002',
     userName: 'manager',
     firstname: 'ดร.วิชัย',
     lastname: 'ผู้อำนวยการฝ่ายบริหาร',
@@ -135,7 +135,7 @@ const systemUsers = [
     sectionCode: 'CENTER',
   },
   {
-    employeeId: 'GOV-67003',
+    employeeId: 'GOV-670003',
     userName: 'parcel',
     firstname: 'กรรณิการ์',
     lastname: 'พัสดุการเงิน',
@@ -145,7 +145,7 @@ const systemUsers = [
     sectionCode: 'PARCEL',
   },
   {
-    employeeId: 'GOV-67004',
+    employeeId: 'GOV-670004',
     userName: 'assetcenter',
     firstname: 'ธนากร',
     lastname: 'เจ้าหน้าที่ศูนย์ครุภัณฑ์',
@@ -155,7 +155,7 @@ const systemUsers = [
     sectionCode: 'CENTER',
   },
   {
-    employeeId: 'GOV-67005',
+    employeeId: 'GOV-670005',
     userName: 'deptstaff_opd1',
     firstname: 'วรรณภา',
     lastname: 'พยาบาลวิชาชีพ OPD 1',
@@ -165,7 +165,7 @@ const systemUsers = [
     sectionCode: 'OPD',
   },
   {
-    employeeId: 'GOV-67006',
+    employeeId: 'GOV-670006',
     userName: 'deptstaff_opd2',
     firstname: 'อนุชา',
     lastname: 'พยาบาลวิชาชีพ OPD 2 (แผนกเดียวกันกับ OPD 1)',
@@ -175,7 +175,7 @@ const systemUsers = [
     sectionCode: 'OPD',
   },
   {
-    employeeId: 'GOV-67007',
+    employeeId: 'GOV-670007',
     userName: 'deptstaff_icu',
     firstname: 'ชลธิชา',
     lastname: 'พยาบาลวิชาชีพ ICU (ต่างแผนก)',
@@ -185,7 +185,7 @@ const systemUsers = [
     sectionCode: 'ICU',
   },
   {
-    employeeId: 'GOV-67008',
+    employeeId: 'GOV-670008',
     userName: 'deptstaff_er',
     firstname: 'ภานุวัฒน์',
     lastname: 'พยาบาลฉุกเฉิน ER (ต่างแผนก)',
@@ -195,7 +195,7 @@ const systemUsers = [
     sectionCode: 'ER',
   },
   {
-    employeeId: 'GOV-67009',
+    employeeId: 'GOV-670009',
     userName: 'maintenance',
     firstname: 'ประเสริฐ',
     lastname: 'วิศวกรชีวการแพทย์',
@@ -206,7 +206,7 @@ const systemUsers = [
   },
   // Additional users ensuring at least 2 users per section
   {
-    employeeId: 'GOV-67010',
+    employeeId: 'GOV-670010',
     userName: 'deptstaff_it2',
     firstname: 'พิชิต',
     lastname: 'เจ้าหน้าที่เทคโนโลยีสารสนเทศ 2',
@@ -216,7 +216,7 @@ const systemUsers = [
     sectionCode: 'IT',
   },
   {
-    employeeId: 'GOV-67011',
+    employeeId: 'GOV-670011',
     userName: 'parcel2',
     firstname: 'สุภาพร',
     lastname: 'เจ้าหน้าที่พัสดุจัดซื้อ 2',
@@ -226,7 +226,7 @@ const systemUsers = [
     sectionCode: 'PARCEL',
   },
   {
-    employeeId: 'GOV-67012',
+    employeeId: 'GOV-670012',
     userName: 'deptstaff_icu2',
     firstname: 'นภา',
     lastname: 'พยาบาลวิชาชีพ ICU 2',
@@ -236,7 +236,7 @@ const systemUsers = [
     sectionCode: 'ICU',
   },
   {
-    employeeId: 'GOV-67013',
+    employeeId: 'GOV-670013',
     userName: 'deptstaff_er2',
     firstname: 'วีระ',
     lastname: 'พยาบาลฉุกเฉิน ER 2',
@@ -246,7 +246,7 @@ const systemUsers = [
     sectionCode: 'ER',
   },
   {
-    employeeId: 'GOV-67014',
+    employeeId: 'GOV-670014',
     userName: 'deptstaff_surgery1',
     firstname: 'วิภา',
     lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 1',
@@ -256,7 +256,7 @@ const systemUsers = [
     sectionCode: 'SURGERY',
   },
   {
-    employeeId: 'GOV-67015',
+    employeeId: 'GOV-670015',
     userName: 'deptstaff_surgery2',
     firstname: 'กิตติ',
     lastname: 'พยาบาลวิชาชีพ ห้องผ่าตัด 2',
@@ -266,7 +266,7 @@ const systemUsers = [
     sectionCode: 'SURGERY',
   },
   {
-    employeeId: 'GOV-67016',
+    employeeId: 'GOV-670016',
     userName: 'deptstaff_lab1',
     firstname: 'สมพงษ์',
     lastname: 'นักเทคนิคการแพทย์ 1',
@@ -276,7 +276,7 @@ const systemUsers = [
     sectionCode: 'LAB',
   },
   {
-    employeeId: 'GOV-67017',
+    employeeId: 'GOV-670017',
     userName: 'deptstaff_lab2',
     firstname: 'นิภา',
     lastname: 'นักเทคนิคการแพทย์ 2',
@@ -286,7 +286,7 @@ const systemUsers = [
     sectionCode: 'LAB',
   },
   {
-    employeeId: 'GOV-67018',
+    employeeId: 'GOV-670018',
     userName: 'deptstaff_xray1',
     firstname: 'รังสรรค์',
     lastname: 'นักรังสีการแพทย์ 1',
@@ -296,7 +296,7 @@ const systemUsers = [
     sectionCode: 'XRAY',
   },
   {
-    employeeId: 'GOV-67019',
+    employeeId: 'GOV-670019',
     userName: 'deptstaff_xray2',
     firstname: 'มยุรี',
     lastname: 'นักรังสีการแพทย์ 2',
@@ -306,7 +306,7 @@ const systemUsers = [
     sectionCode: 'XRAY',
   },
   {
-    employeeId: 'GOV-67020',
+    employeeId: 'GOV-670020',
     userName: 'deptstaff_pharm1',
     firstname: 'ธนินท์',
     lastname: 'เภสัชกรวิชาชีพ 1',
@@ -316,7 +316,7 @@ const systemUsers = [
     sectionCode: 'PHARMACY',
   },
   {
-    employeeId: 'GOV-67021',
+    employeeId: 'GOV-670021',
     userName: 'deptstaff_pharm2',
     firstname: 'พิมพ์',
     lastname: 'เภสัชกรวิชาชีพ 2',
@@ -327,7 +327,7 @@ const systemUsers = [
   },
   // ── Maintenance Heads & Technicians for Testing ────────────────────────────
   {
-    employeeId: 'GOV-67022',
+    employeeId: 'GOV-670022',
     userName: 'head_maintenance',
     firstname: 'สมศักดิ์',
     lastname: 'หัวหน้าฝ่ายวิศวกรรมการแพทย์',
@@ -337,7 +337,7 @@ const systemUsers = [
     sectionCode: 'MAINTENANCE',
   },
   {
-    employeeId: 'GOV-67023',
+    employeeId: 'GOV-670023',
     userName: 'head_it',
     firstname: 'ธีรเดช',
     lastname: 'หัวหน้างานเทคโนโลยีสารสนเทศ',
@@ -347,7 +347,7 @@ const systemUsers = [
     sectionCode: 'MAINTENANCE',
   },
   {
-    employeeId: 'GOV-67024',
+    employeeId: 'GOV-670024',
     userName: 'mech_bio1',
     firstname: 'อนุพงษ์',
     lastname: 'ช่างเครื่องมือแพทย์ 1',
@@ -357,7 +357,7 @@ const systemUsers = [
     sectionCode: 'MAINTENANCE',
   },
   {
-    employeeId: 'GOV-67025',
+    employeeId: 'GOV-670025',
     userName: 'mech_bio2',
     firstname: 'ชัชชัย',
     lastname: 'ช่างเครื่องมือแพทย์ 2',
@@ -367,7 +367,7 @@ const systemUsers = [
     sectionCode: 'MAINTENANCE',
   },
   {
-    employeeId: 'GOV-67026',
+    employeeId: 'GOV-670026',
     userName: 'mech_it',
     firstname: 'วรวิทย์',
     lastname: 'ช่างเทคนิคคอมพิวเตอร์',
@@ -377,7 +377,7 @@ const systemUsers = [
     sectionCode: 'MAINTENANCE',
   },
   {
-    employeeId: 'GOV-67027',
+    employeeId: 'GOV-670027',
     userName: 'mech_general',
     firstname: 'บุญส่ง',
     lastname: 'ช่างซ่อมบำรุงทั่วไป/อาคาร',
