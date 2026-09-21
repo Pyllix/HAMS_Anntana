@@ -9,6 +9,8 @@ import {
   getWorkflowProgress,
 } from "../../config/repairWorkflow";
 import RepairWorkflowActionDialog from "./RepairWorkflowActionDialog";
+import UnrepairableHandoverDialog from "../unrepairable-technician/UnrepairableHandoverDialog";
+import SpareRejectionReasonDialog from "./SpareRejectionReasonDialog";
 import {
   RepairActionFilter,
   RepairActionType,
@@ -22,7 +24,10 @@ import {
   advanceRepairWorkflow,
   getRepairHistory,
 } from "../../services/repairHistoryService";
-import { publishWorkflowNotification } from "../../services/notificationService";
+import {
+  publishSpareApprovalNotificationOnce,
+  publishWorkflowNotification,
+} from "../../services/notificationService";
 
 const features = tableFeatures({});
 
@@ -50,18 +55,20 @@ function formatDateTH(dateString?: string | null): string {
 
 const actionLabels: Record<RepairActionType, string> = {
   SELF_REPAIR: "ซ่อมเองได้",
+  WITH_PARTS: "ขอเบิกอะไหล่",
   INTERNAL_STOCK: "ขอเบิกอะไหล่ภายใน",
   EXTERNAL_STOCK: "ขอจัดหาอะไหล่ภายนอก",
   OUTSOURCE: "ส่งซ่อมภายนอก",
-  PURCHASE_REPLACEMENT: "เสนอซื้อทดแทน",
+  UNREPAIRABLE: "ไม่สามารถซ่อมได้",
 };
 
 const actionStyles: Record<RepairActionType, string> = {
   SELF_REPAIR: "bg-emerald-50 text-emerald-700",
+  WITH_PARTS: "bg-amber-50 text-amber-700",
   INTERNAL_STOCK: "bg-blue-50 text-blue-700",
   EXTERNAL_STOCK: "bg-amber-50 text-amber-700",
   OUTSOURCE: "bg-violet-50 text-violet-700",
-  PURCHASE_REPLACEMENT: "bg-rose-50 text-rose-700",
+  UNREPAIRABLE: "bg-rose-50 text-rose-700",
 };
 
 const statusStyles: Record<RepairJobStatusCode, string> = {
@@ -89,6 +96,14 @@ function ActionBadge({ value }: { value?: RepairActionType | null }) {
 }
 
 function StatusBadge({ job }: { job: RepairJob }) {
+  const rejected = getSpareRejectionReason(job);
+  if (rejected) {
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />ปฏิเสธการขอเบิกอะไหล่</span>;
+  }
+  if (job.actionType === "WITH_PARTS") {
+    const approved = (job.workflowStep || 0) >= 5;
+    return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{approved ? "อนุมัติแล้ว — รอช่างรับอะไหล่" : "รอเจ้าหน้าที่พัสดุอนุมัติ"}</span>;
+  }
   const code = job.status?.statusCode || "IN_PROGRESS";
   return (
     <span
@@ -98,6 +113,12 @@ function StatusBadge({ job }: { job: RepairJob }) {
       {job.status?.statusName || "กำลังดำเนินการ"}
     </span>
   );
+}
+
+function getSpareRejectionReason(job: RepairJob): string | null {
+  if (job.actionType !== "WITH_PARTS" || job.status?.statusCode !== "PENDING_ASSIGN") return null;
+  const note = job.steps?.find((step) => step.stepName && step.note?.startsWith("[ไม่อนุมัติ]"))?.note;
+  return note ? note.replace(/^\[ไม่อนุมัติ\]\s*/, "") : null;
 }
 
 function pendingActorLabel(stage: RepairWorkflowStage): string {
@@ -146,6 +167,8 @@ export default function RepairHistoryTable({
     job: RepairJob;
     stage: RepairWorkflowStage;
   } | null>(null);
+  const [handoverJobId, setHandoverJobId] = useState<string | null>(null);
+  const [rejectionTarget, setRejectionTarget] = useState<{ jobNo: string; reason: string } | null>(null);
   const pageSize = 5;
 
   const {
@@ -174,6 +197,10 @@ export default function RepairHistoryTable({
       setWorkflowTarget(null);
     },
   });
+
+  useEffect(() => {
+    jobs.forEach(publishSpareApprovalNotificationOnce);
+  }, [jobs]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -274,7 +301,8 @@ export default function RepairHistoryTable({
             job.status?.statusCode === "WAITING_DELIVERY";
           const isCancelled = job.status?.statusCode === "CANCELLED";
           const nextStage = getNextWorkflowStage(job);
-          const canUpdateStage = nextStage?.actor === "MAINTENANCE";
+          const rejectionReason = getSpareRejectionReason(job);
+          const canUpdateStage = !rejectionReason && nextStage?.actor === "MAINTENANCE";
           const progress = getWorkflowProgress(job);
 
           return (
@@ -287,12 +315,24 @@ export default function RepairHistoryTable({
               >
                 <Eye className="h-4 w-4" />
               </button>
-              {nextStage && canUpdateStage && (
+              {rejectionReason && (
+                <button type="button" onClick={() => setRejectionTarget({ jobNo: job.jobNo, reason: rejectionReason })} className="flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100">ดูเหตุผลการปฏิเสธ</button>
+              )}
+              {nextStage && !rejectionReason && canUpdateStage && (
                 <div className="w-full text-center">
                   <button
                     type="button"
                     disabled={updateWorkflow.isLoading}
-                    onClick={() => setWorkflowTarget({ job, stage: nextStage })}
+                    onClick={() => {
+                      if (
+                        job.actionType === "UNREPAIRABLE" &&
+                        nextStage.stepNumber === 5
+                      ) {
+                        setHandoverJobId(job.jobId);
+                      } else {
+                        setWorkflowTarget({ job, stage: nextStage });
+                      }
+                    }}
                     className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
                   >
                     <ClipboardCheck className="h-3.5 w-3.5" />
@@ -303,7 +343,7 @@ export default function RepairHistoryTable({
                   </p>
                 </div>
               )}
-              {nextStage && !canUpdateStage && (
+              {nextStage && !rejectionReason && !canUpdateStage && (
                 <div className="w-full text-center">
                   <span className="flex min-h-11 w-full items-center justify-center rounded-lg bg-amber-50 px-3 py-2 text-center text-xs font-semibold leading-4 text-amber-700">
                     {pendingActorLabel(nextStage)}
@@ -477,6 +517,17 @@ export default function RepairHistoryTable({
           }
         }}
       />
+      {handoverJobId && (
+        <UnrepairableHandoverDialog
+          jobId={handoverJobId}
+          onClose={() => setHandoverJobId(null)}
+          onSuccess={() => {
+            setHandoverJobId(null);
+            void queryClient.invalidateQueries();
+          }}
+        />
+      )}
+      {rejectionTarget && <SpareRejectionReasonDialog jobNo={rejectionTarget.jobNo} reason={rejectionTarget.reason} onClose={() => setRejectionTarget(null)} />}
     </div>
   );
 }

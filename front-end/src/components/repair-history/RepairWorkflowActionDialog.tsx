@@ -199,7 +199,7 @@ function statusLabel(status: RepairWorkflowStage["nextStatus"]): string {
     WAITING_PARTS: "สั่งซื้อ / รออะไหล่",
     PARCEL_PROCESSING: "พัสดุกำลังดำเนินการ",
     OUTSOURCED: "ส่งซ่อมบริษัทภายนอก",
-    UNREPAIRABLE: "ชำรุด / เสนอซื้อทดแทน",
+    UNREPAIRABLE: "ไม่สามารถซ่อมได้ / รอส่งคืน",
     WAITING_DELIVERY: "เสร็จแล้วรอรับคืน",
     COMPLETED: "ส่งคืน / ปิดงานแล้ว",
     CANCELLED: "ยกเลิกงานซ่อม",

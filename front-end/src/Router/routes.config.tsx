@@ -5,9 +5,12 @@ import {
   History,
   ShoppingCart,
   LucideIcon,
+  FilePlus2,
   Building2,
+  Banknote,
+  ClipboardCheck,
 } from "lucide-react";
-import { ROLES, RoleType } from "./roles";
+import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import BorrowHistory from "../Pages/BorrowHistort";
 import DepartMentBorrowReturn from "../Pages/DepartMentBorrowReturn";
@@ -18,11 +21,17 @@ import RepairRequestPage from "../Pages/RepairRequestPage";
 import RepairHistory from "../Pages/RepairHistory";
 import PartStock from "../Pages/PartStock";
 import OrderSpareParts from "../Pages/OrderSpareParts";
+import AcquisitionTypePage from "../Pages/AcquisitionTypePage";
+import CompanySupplierPage from "../Pages/CompanySupplierPage";
+import BudgetTypePage from "../Pages/BudgetTypePage";
 import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
 import UserManagement from "../pages/UserManagement";
 import DepartmentManagement from "../Pages/DepartmentManagement";
+import EquipmentStock from "../Pages/EquipmentStock";
+import UnrepairableReceipts from "../Pages/UnrepairableReceipts";
+import SparePartApprovals from "../Pages/SparePartApprovals";
 
 interface AppRote {
   path: string;
@@ -81,6 +90,37 @@ export const APP_ROUTE: AppRote[] = [
     showInNav: true,
   },
   {
+    path: "equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    icon: Archive,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "parcel-equipment-stock",
+    title: "จัดการสต็อกครุภัณฑ์",
+    element: <EquipmentStock />,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: false,
+  },
+  {
+    path: "unrepairable-receipts",
+    title: "อนุมัติรับคืนครุภัณฑ์",
+    element: <UnrepairableReceipts />,
+    icon: Wrench,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "spare-part-approvals",
+    title: "อนุมัติการเบิกอะไหล่",
+    element: <SparePartApprovals />,
+    icon: ClipboardCheck,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
     path: "order-spare-parts",
     title: "สั่งซื้ออะไหล่",
     element: <OrderSpareParts />,
@@ -89,11 +129,43 @@ export const APP_ROUTE: AppRote[] = [
     showInNav: true,
   },
   {
+    path: "acquisition-types",
+    title: "วิธีการได้มา",
+    element: <AcquisitionTypePage />,
+    icon: FilePlus2,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "companies",
+    title: "ผู้ผลิต/จำหน่าย",
+    element: <CompanySupplierPage />,
+    icon: Building2,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "budget-types",
+    title: "ประเภทเงิน",
+    element: <BudgetTypePage />,
+    icon: Banknote,
+    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
     path: "help-desk",
     title: "แจ้งซ่อมครุภัณฑ์",
     element: <RepairRequestPage />,
     icon: Wrench,
-    roles: [ROLES.ASSET_CENTER_STAFF],
+    roles: [
+      ROLES.ADMIN,
+      ROLES.ASSET_CENTER_STAFF,
+      ROLES.DEPARTMENT_STAFF,
+      ROLES.MANAGER,
+      ROLES.MAINTENANCE_STAFF,
+      ROLES.MAINTENANCE_HEAD,
+      ROLES.PARCEL_STAFF,
+    ],
     showInNav: true,
   },
   {
@@ -110,7 +182,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "งานซ่อม",
     element: <PendingEvaluations />,
     icon: History,
-    roles: [ROLES.MAINTENANCE_STAFF],
+    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF, ROLES.MAINTENANCE_HEAD],
     showInNav: true,
   },
   // -------- Admin ------------

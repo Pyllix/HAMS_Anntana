@@ -1,6 +1,5 @@
-export type MainCategory = "MEDICAL" | "GENERAL" | "COMPUTER";
-export type ReportType = "Repair" | "Maintenance";
-export type UrgencyStatus = "NORMAL" | "URGENT" | "HIGH_URGENT";
+export type ReportType = "Repair" | "Maintenance" | null;
+export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 
 export interface CreateRepairDto {
   assetId: string;
@@ -40,7 +39,6 @@ export interface AssetInfo {
 }
 
 export interface RepairFormState {
-  mainCategory: MainCategory;
   reportType: ReportType;
   assetSearchInput: string;
   assetInfo: AssetInfo | null;

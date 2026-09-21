@@ -20,7 +20,7 @@
 | 12 | **`Repairs: Unified WITH_PARTS & Mixed Requisition`** | **การเบิกอะไหล่แบบผสม และยุบรวม 4 แทร็กหลัก**<br>ยุบรวม `StepActionType` เป็น `SELF_REPAIR`, `WITH_PARTS`, `OUTSOURCE`, `UNREPAIRABLE` รองรับ `stockType: "INTERNAL" \| "EXTERNAL"` ในใบเดียว พร้อมจัดการสถานะ `WAITING_PARTS` อัตโนมัติ | 🔴 **สูง (High)** | 📋 **รอดำเนินการ** |
 | 13 | **`Repairs: Unrepairable Custody Handshake Flow`** | **ระบบส่งมอบเครื่องซ่อมไม่ได้ 2 ขั้นตอน**<br>ช่างประเมินและเลือก `UNREPAIRABLE` ➔ นำส่งพัสดุ ➔ พัสดุกดยืนยันรับมอบ (`complete-unrepairable`) ➔ ปรับสถานะครุภัณฑ์เป็น `WAIT_DISPOSAL` และปิด Job สมบูรณ์ | 🔴 **สูง (High)** | 📋 **รอดำเนินการ** |
 | 14 | **`Assets: Direct Asset Disposal Module (/disposals)`** | **ระบบจำหน่ายครุภัณฑ์แบบ Direct Disposal โดยเจ้าหน้าที่พัสดุ**<br>สร้างรายการจำหน่าย (`POST /disposals`) ปรับสถานะเป็น `DISPOSED` ทันที บันทึกประวัติและเอกสารลง `AssetDisposal` พร้อมรองรับ Query Filters และ Pagination | 🔴 **สูง (High)** | 📋 **รอดำเนินการ** |
-| 15 | **`Auth: Two-Factor Authentication (2FA via Auth App)`** | **ระบบยืนยันตัวตน 2 ชั้นด้วย Authenticator App (TOTP)**<br>บังคับใช้/เปิดใช้งานสำหรับบทบาทที่มีสิทธิ์สูงและจัดการข้อมูลสำคัญ ได้แก่ `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF` | 🟡 **ปานกลาง (Medium)** | 🔮 **แผนในอนาคต (Phase 2)** |
+| 15 | **`Auth: Two-Factor Authentication (2FA via Auth App)`** | **ระบบยืนยันตัวตน 2 ชั้นด้วย Authenticator App (TOTP)**<br>บังคับใช้เฉพาะ `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF`; Role อื่นไม่ต้องเปิดใช้ 2FA | 🟡 **ปานกลาง (Medium)** | 🔮 **แผนในอนาคต (Phase 2)** |
 | 16 | **`Borrow: Smart Asset Recommendation Engine`** | **ระบบแนะนำครุภัณฑ์สำหรับการยืมเพื่อกระจายการใช้งาน**<br>คำนวณจากความถี่และประวัติการยืมในอดีต แนะนำเครื่องที่ถูกยืมน้อยกว่า เพื่อหมุนเวียนการใช้งานอย่างสมดุล ไม่เกิดการยืมกระจุกตัวอยู่เครื่องเดียว | 🟡 **ปานกลาง (Medium)** | 🔮 **แผนในอนาคต (Phase 2)** |
 | 17 | **`Repairs: Economic Viability Analysis`** | **การวิเคราะห์ความคุ้มค่าในการซ่อมรายเครื่องสำหรับการซ่อมครั้งต่อไป**<br>ระบบวิเคราะห์และให้คำแนะนำแก่ช่าง/ผู้บริหารในการตัดสินใจซ่อมต่อ หรือแทงชำรุดซื้อทดแทน (*สูตรคำนวณจะกำหนดในรายละเอียดภายหลัง*) | 🟡 **ปานกลาง (Medium)** | 🔮 **แผนในอนาคต (Phase 2)** |
 | 18 | **`Assets: Bulk CSV / XLSX Status Sync (e-GP Sync)`** | **ระบบนำเข้าและอัปเดตสถานะครุภัณฑ์แบบกลุ่มจากไฟล์ CSV / XLSX**<br>รองรับการนำเข้าไฟล์ Export จากระบบหลักภาครัฐ (e-GP) เช่น รายการจำหน่าย เพื่อ Batch Update สถานะครุภัณฑ์ใน HAMS ให้ตรงกับ e-GP อัตโนมัติ | 🟡 **ปานกลาง (Medium)** | 🔮 **แผนในอนาคต (Phase 2)** |
@@ -119,8 +119,20 @@
 ### 🔮 15. ระบบยืนยันตัวตนสองขั้นตอน (2FA via Authenticator App) [Phase 2]
 * **ความต้องการ:**
   * รองรับ TOTP (Time-based One-Time Password) ร่วมกับ Authenticator App (เช่น Google Authenticator / Microsoft Authenticator)
-  * บังคับใช้หรือเปิดใช้งานเฉพาะ Role ที่มีอำนาจจัดการข้อมูลสูงและมีความเสี่ยงต่อระบบ: `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF`
+  * บังคับใช้เฉพาะ Role `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF`; Role อื่นไม่ต้องเปิดใช้ 2FA
+  * ผู้ใช้ใน Role ที่ถูกบังคับต้องลงทะเบียนและยืนยัน TOTP สำเร็จก่อน ระบบจึงจะออก Session ปกติและอนุญาตให้เรียก Business API; ไม่มีช่วงที่ใช้งานระบบปกติได้โดยยังไม่เปิด 2FA
+  * Admin สร้างบัญชีได้ แต่ก่อนยืนยัน TOTP บัญชีต้องเข้าได้เฉพาะ 2FA Enrollment Flow; เจ้าของบัญชีเป็นผู้ผูก Authenticator ด้วยตนเอง และ Admin ต้องไม่เห็นหรือเก็บ Secret Key แทนผู้ใช้
   * มีขั้นตอน Setup QR Code, Secret Key, และหน้าจอยืนยัน 6-digit OTP ระหว่างการ Login
+  * หลังยืนยัน TOTP ให้สร้าง Recovery Codes 10 รหัส บังคับให้ผู้ใช้ยืนยันว่าเก็บแล้วก่อนจบ Enrollment; แต่ละรหัสใช้ได้ครั้งเดียวและจัดเก็บในฐานข้อมูลแบบเข้ารหัส
+  * รองรับ Admin-assisted 2FA Reset เมื่อผู้ใช้สูญเสีย Authenticator และ Recovery Codes โดยต้องเป็น `ADMIN` คนอื่นหลังตรวจตัวตนนอกระบบ พร้อมเพิกถอน Session ทั้งหมด ลบ 2FA credential ชุดเดิม บันทึก Audit Log และบังคับ Enrollment ใหม่ก่อนเข้าใช้ Business API
+  * ต้องมี `ADMIN` ที่ Active และผ่าน 2FA Enrollment อย่างน้อย 2 บัญชีเสมอ และปฏิเสธการลบ ปิดใช้งาน หรือเปลี่ยน Role ที่ทำให้จำนวนต่ำกว่าเกณฑ์นี้
+  * รองรับ Trusted Browser 14 วันแบบ Absolute Expiry เฉพาะเครื่องประจำ โดยผู้ใช้เลือกเองและช่องเลือกต้องไม่ถูกติ๊กไว้ล่วงหน้า; Trust ต้องผูกกับ `userId` และ Browser token จึงใช้ข้ามบัญชีไม่ได้ และห้ามใช้บนเครื่องส่วนกลาง/เครื่องที่สลับหลายบัญชี
+  * เมื่อพบบัญชีอื่นล็อกอินผ่าน Browser ที่มี Trust อยู่ ให้เพิกถอน Trust เดิมอัตโนมัติ จัด Browser เป็นเครื่องใช้งานร่วมกัน และบังคับทุกบัญชียืนยัน TOTP ใหม่ในการล็อกอินครั้งถัดไป
+  * ห้าม `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF` ปิด 2FA; อนุญาตเฉพาะเปลี่ยน Authenticator โดยยืนยันรหัสผ่านและ TOTP ปัจจุบัน หรือรีเซ็ต 2FA แล้วเพิกถอน Session และกลับเข้า Enrollment Gate
+  * บังคับ Step-up TOTP แม้ Browser ยัง Trusted ก่อนเปลี่ยน/รีเซ็ต 2FA สร้าง Recovery Codes ชุดใหม่ ดำเนินการ Admin Reset Password ให้ผู้ใช้อื่น หรือเปลี่ยน Role เป็น/ออกจาก `ADMIN`; การเปลี่ยน Role อื่นไม่ต้อง Step-up แต่ Role ที่อยู่ในขอบเขต 2FA ยังต้องผ่าน Enrollment Gate
+  * Step-up TOTP สำเร็จแล้วให้ยกระดับสิทธิ์เฉพาะ Admin และ Session ปัจจุบันเป็นเวลา 5 นาที รองรับการ Reset Password หลายบัญชีในช่วงเดียว และยกเลิกทันทีเมื่อ Sign-out, Session ถูก revoke หรือ Admin เปลี่ยนรหัสผ่าน/2FA
+  * นับ TOTP และ Recovery Code ที่ผิดติดต่อกันร่วมกัน ผิดครบ 5 ครั้งให้ล็อกการยืนยัน 2FA ของบัญชี 10 นาที พร้อม Audit Log; ยืนยันสำเร็จให้ล้างตัวนับ และไม่ปิดบัญชีถาวร
+  * กำหนด TOTP เป็นรหัส 6 หลัก รอบละ 30 วินาที และยอมรับ previous/current/next time step (`window = 1`) เพื่อรองรับ clock skew ประมาณ ±30 วินาที
 
 ---
 

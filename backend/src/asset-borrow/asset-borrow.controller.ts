@@ -10,6 +10,12 @@ import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { CreateBorrowExtensionDto } from './dto/create-borrow-extension.dto';
 import { ReviewBorrowExtensionDto } from './dto/review-borrow-extension.dto';
 import { BorrowExtensionFilterDto } from './dto/borrow-extension-filter.dto';
+import { QueryBorrowRecommendationsDto } from './dto/query-borrow-recommendations.dto';
+import { CheckSwapDto } from './dto/check-swap.dto';
+import {
+  BorrowRecommendationsResponseDto,
+  SwapCheckResponseDto,
+} from './dto/borrow-recommendation-response.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -233,6 +239,36 @@ export class AssetBorrowController {
     @Session() session: UserSession
   ) {
     return this.assetBorrowService.cancelBorrow(id, dto, session.user);
+  }
+
+  // Recommendations: Swap Check (must be before :id to prevent collision)
+  @Get('recommendations/swap-check')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({ summary: 'Check if a significantly more rested alternative exists for swap nudge' })
+  @ApiResponse({ status: 200, description: 'Swap recommendation evaluation result', type: SwapCheckResponseDto })
+  async checkSwap(@Query() query: CheckSwapDto) {
+    return this.assetBorrowService.checkSwapRecommendation(query.assetId);
+  }
+
+  // Recommendations: Balanced Usage Rotation list (must be before :id to prevent collision)
+  @Get('recommendations')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({ summary: 'Get smart asset borrow recommendations based on balanced usage rotation' })
+  @ApiResponse({ status: 200, description: 'List of recommended assets sorted by usage and rest days', type: BorrowRecommendationsResponseDto })
+  async getRecommendations(@Query() query: QueryBorrowRecommendationsDto) {
+    return this.assetBorrowService.getBorrowRecommendations(query);
   }
 
   // Get All Borrowing

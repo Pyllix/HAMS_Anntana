@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Search, Plus, Trash2, Package, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { SparePart } from "../../Types/TypeAssessment";
@@ -6,10 +6,11 @@ import { getSpareParts } from "../../services/assessmentService";
 
 export interface SelectedSpareItem extends SparePart {
   quantity: number;
+  stockType: "INTERNAL" | "EXTERNAL";
 }
 
 export interface SpareItem {
-  id: string;
+  id: string | number;
   quantity: number;
   price?: number;
 }
@@ -47,9 +48,13 @@ export default function InternalSpareFields({
   const handleAddSpare = (item: SparePart) => {
     const exists = selectedSpares.some((s) => String(s.id) === String(item.id));
     if (!exists) {
-      setSelectedSpares((prev) => [...prev, { ...item, quantity: 1 }]);
+      setSelectedSpares((prev) => [
+        ...prev,
+        { ...item, quantity: 1, stockType: "INTERNAL" },
+      ]);
     }
   };
+
   // ฟังก์ชันลบรายการอะไหล่
   const handleRemoveSpare = (id: string | number) => {
     setSelectedSpares((prev) =>
@@ -58,10 +63,21 @@ export default function InternalSpareFields({
   };
 
   // ฟังก์ชันเปลี่ยนจำนวนที่เบิก
-  const handleQuantityChange = (id: string, qty: number) => {
+  const handleQuantityChange = (id: string | number, qty: number) => {
     setSelectedSpares((prev) =>
       prev.map((s) =>
         String(s.id) === String(id) ? { ...s, quantity: qty } : s,
+      ),
+    );
+  };
+
+  const handleStockTypeChange = (
+    id: string | number,
+    stockType: "INTERNAL" | "EXTERNAL",
+  ) => {
+    setSelectedSpares((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(id) ? { ...item, stockType } : item,
       ),
     );
   };
@@ -79,7 +95,7 @@ export default function InternalSpareFields({
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
           <Package className="w-4 h-4 text-emerald-600" />
-          รายการอะไหล่ภายในคลังที่ขอเบิก{" "}
+          รายการอะไหล่ที่ขอเบิก{" "}
           <span className="text-rose-500">*</span>
         </label>
         <span className="text-[11px] text-slate-400">
@@ -95,10 +111,10 @@ export default function InternalSpareFields({
           className="w-full bg-white border border-slate-200 hover:border-emerald-500 rounded-lg px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer"
         >
           <span className="text-slate-500 font-medium">
-            + คลิกเพื่อเลือกเบิกอะไหล่จากคลัง...
+            + คลิกเพื่อเลือกอะไหล่...
           </span>
           <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-md">
-            คลังอะไหล่
+            ในคลัง / ภายนอก
           </span>
         </button>
 
@@ -130,7 +146,7 @@ export default function InternalSpareFields({
                   const isAdded = selectedSpares.some(
                     (s) => String(s.id) === String(item.id),
                   );
-                  const itemPrice = Number(item.price ?? item.price ?? 0);
+                  const itemPrice = Number(item.price ?? 0);
 
                   return (
                     <div
@@ -146,7 +162,7 @@ export default function InternalSpareFields({
                         </div>
                         <div className="text-[11px] font-medium flex items-center gap-3 pt-0.5">
                           <span className="text-emerald-600">
-                            คลัง: {item.qtyInStock} {item.unit || "ชิ้น"}
+                            คลัง: {item.qtyInStock ?? 0} {item.unit || "ชิ้น"}
                           </span>
                           <span className="text-slate-600 font-mono">
                             {itemPrice.toFixed(2)} ฿
@@ -156,7 +172,7 @@ export default function InternalSpareFields({
 
                       <button
                         type="button"
-                    onClick={() => handleAddSpare(item)}
+                        onClick={() => handleAddSpare(item)}
                         disabled={isAdded}
                         className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer shrink-0 ${
                           isAdded
@@ -195,6 +211,7 @@ export default function InternalSpareFields({
                 <th className="p-2.5">รายการอะไหล่</th>
                 <th className="p-2.5 text-center w-24">คงเหลือ</th>
                 <th className="p-2.5 text-center w-28">จำนวนที่เบิก</th>
+                <th className="p-2.5 text-center w-32">แหล่งอะไหล่</th>
                 <th className="p-2.5 text-right w-24">ราคา/หน่วย</th>
                 <th className="p-2.5 text-center w-12"></th>
               </tr>
@@ -211,11 +228,7 @@ export default function InternalSpareFields({
                 const stock =
                   item.qtyInStock ?? matchedStockItem?.qtyInStock ?? 0;
                 const priceNum = Number(
-                  item.price ??
-                    item.price ??
-                    matchedStockItem?.price ??
-                    matchedStockItem?.price ??
-                    0,
+                  item.price ?? matchedStockItem?.price ?? 0,
                 );
 
                 const unit = item.unit || matchedStockItem?.unit || "ชิ้น";
@@ -238,7 +251,7 @@ export default function InternalSpareFields({
                       <input
                         type="number"
                         min={1}
-                        max={stock || undefined}
+                        max={item.stockType === "INTERNAL" ? stock || undefined : undefined}
                         value={qty}
                         onChange={(e) =>
                           handleQuantityChange(
@@ -248,6 +261,21 @@ export default function InternalSpareFields({
                         }
                         className="w-16 border border-slate-200 rounded-md py-1 px-2 text-center text-xs focus:outline-none focus:border-emerald-500"
                       />
+                    </td>
+                    <td className="p-2.5 text-center">
+                      <select
+                        value={item.stockType || "INTERNAL"}
+                        onChange={(event) =>
+                          handleStockTypeChange(
+                            item.id,
+                            event.target.value as "INTERNAL" | "EXTERNAL",
+                          )
+                        }
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="INTERNAL">ในคลัง</option>
+                        <option value="EXTERNAL">จัดหาภายนอก</option>
+                      </select>
                     </td>
                     <td className="p-2.5 text-right font-mono text-slate-600">
                       {priceNum.toFixed(2)} ฿

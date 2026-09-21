@@ -8,10 +8,11 @@ import {
 
 const actionLabels: Record<RepairActionType, string> = {
   SELF_REPAIR: "ซ่อมเองได้",
+  WITH_PARTS: "ขอเบิกอะไหล่",
   INTERNAL_STOCK: "ขอเบิกอะไหล่ภายใน",
   EXTERNAL_STOCK: "ขอจัดหาอะไหล่ภายนอก",
   OUTSOURCE: "ส่งซ่อมภายนอก",
-  PURCHASE_REPLACEMENT: "เสนอซื้อทดแทน",
+  UNREPAIRABLE: "ไม่สามารถซ่อมได้",
 };
 
 const statusStyles: Record<RepairJobStatusCode, string> = {
@@ -61,9 +62,11 @@ export default function RepairHistoryDetailModal() {
   if (!isOpen || !job) return null;
 
   const statusCode = job.status?.statusCode || "IN_PROGRESS";
-  const withdrawnParts =
+  const requestedParts =
     job.sparePartTransactions?.filter(
-      (item) => item.transactionType === "WITHDRAW",
+      (item) =>
+        item.transactionType === "PENDING_WITHDRAW" ||
+        item.transactionType === "WITHDRAW",
     ) || [];
 
   return (
@@ -180,7 +183,21 @@ export default function RepairHistoryDetailModal() {
                 </div>
                 <div className="space-y-3 text-xs">
                   <Info label="อาการ / สาเหตุที่ตรวจพบ" value={job.diagnosis} />
-                  <Info label="วิธีแก้ไขที่ดำเนินการ" value={job.solution} />
+                  <Info
+                    label={
+                      job.actionType === "UNREPAIRABLE"
+                        ? "แนวทางดำเนินการ"
+                        : "วิธีแก้ไขที่ดำเนินการ"
+                    }
+                    value={job.solution}
+                  />
+                  {job.actionType === "UNREPAIRABLE" && (
+                    <Info
+                      label="เหตุผลที่ไม่สามารถซ่อมได้"
+                      value={job.unrepairableReason}
+                      danger
+                    />
+                  )}
                   <div className="grid grid-cols-3 gap-3">
                     <Info
                       label="วิเคราะห์สาเหตุ"
@@ -211,7 +228,7 @@ export default function RepairHistoryDetailModal() {
                 </div>
               </section>
 
-              {(withdrawnParts.length > 0 || job.company) && (
+              {(requestedParts.length > 0 || job.company) && (
                 <section className="rounded-2xl border border-slate-200 p-5">
                   <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
                     <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -229,7 +246,7 @@ export default function RepairHistoryDetailModal() {
                     </div>
                   </div>
 
-                  {withdrawnParts.length > 0 ? (
+                  {requestedParts.length > 0 ? (
                     <div className="overflow-hidden rounded-xl border border-slate-100">
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
@@ -240,13 +257,16 @@ export default function RepairHistoryDetailModal() {
                             <th className="px-3 py-2 text-center font-semibold">
                               จำนวน
                             </th>
+                            <th className="px-3 py-2 text-center font-semibold">
+                              แหล่งอะไหล่
+                            </th>
                             <th className="px-3 py-2 text-right font-semibold">
                               มูลค่า
                             </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {withdrawnParts.map((part) => (
+                          {requestedParts.map((part) => (
                             <tr key={part.transactionId}>
                               <td className="px-3 py-2">
                                 <strong className="block text-slate-800">
@@ -258,6 +278,11 @@ export default function RepairHistoryDetailModal() {
                               </td>
                               <td className="px-3 py-2 text-center text-slate-600">
                                 {part.quantity}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${part.stockType === "EXTERNAL" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                                  {part.stockType === "EXTERNAL" ? "จัดหาภายนอก" : "ในคลัง"}
+                                </span>
                               </td>
                               <td className="px-3 py-2 text-right text-slate-600">
                                 {(

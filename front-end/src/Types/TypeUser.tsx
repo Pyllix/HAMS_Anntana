@@ -1,5 +1,7 @@
 import { RoleType } from "../router/roles";
 
+export type UserRole = RoleType | null;
+
 export interface User {
   id: string;
   employeeId: string;
