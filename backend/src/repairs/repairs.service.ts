@@ -24,6 +24,8 @@ import {
   UserRole,
 } from '@prisma/client';
 
+export const REJECTED_STEP_PREFIX = '[ไม่อนุมัติ]';
+
 @Injectable()
 export class RepairsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -408,6 +410,7 @@ export class RepairsService {
           include: { stepMaster: true },
           orderBy: { stepMaster: { stepNumber: 'asc' } },
         },
+        mechanicRepairs: true,
       },
     });
 
@@ -417,6 +420,16 @@ export class RepairsService {
 
     if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
       throw new BadRequestException(`Cannot modify completed or cancelled repair job`);
+    }
+
+    if (job.mechanicRepairs && job.mechanicRepairs.length > 0) {
+      const isAssigned = job.mechanicRepairs.some((m) => m.userId === user.id);
+      const isHead = user.role === UserRole.MAINTENANCE_HEAD;
+      if (!isAssigned && !isHead) {
+        throw new ForbiddenException(
+          'Only the assigned technician or maintenance head can re-diagnose this repair job',
+        );
+      }
     }
 
     if (job.repairJobSteps && job.repairJobSteps.length > 0) {
@@ -652,9 +665,12 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${jobId} not found`);
     }
 
-    if (job.jobStatus.code === 'PENDING_ASSIGN') {
+    const rejectedStep = job.repairJobSteps.find(
+      (s) => s.note && s.note.startsWith(REJECTED_STEP_PREFIX),
+    );
+    if (rejectedStep) {
       throw new BadRequestException(
-        'This repair job has been rejected and is awaiting re-diagnosis by the technician before steps can be updated',
+        `Step #${rejectedStep.stepMaster.stepNumber} ("${rejectedStep.stepMaster.label}") has been rejected. This repair job is awaiting re-diagnosis by the technician before steps can be updated.`,
       );
     }
 
@@ -967,12 +983,6 @@ export class RepairsService {
       throw new BadRequestException(`Cannot reject a completed or cancelled repair job`);
     }
 
-    if (job.jobStatus.code === 'PENDING_ASSIGN') {
-      throw new BadRequestException(
-        'This repair job has already been rejected and is awaiting re-diagnosis by the technician',
-      );
-    }
-
     if (!job.repairJobSteps || job.repairJobSteps.length === 0) {
       throw new BadRequestException('Repair job must be diagnosed before rejecting steps');
     }
@@ -982,6 +992,12 @@ export class RepairsService {
 
     if (!nextPendingStep) {
       throw new BadRequestException('All repair steps have already been completed for this job');
+    }
+
+    if (nextPendingStep.note && nextPendingStep.note.startsWith(REJECTED_STEP_PREFIX)) {
+      throw new BadRequestException(
+        'This repair job has already been rejected and is awaiting re-diagnosis by the technician',
+      );
     }
 
     const stepNumber = nextPendingStep.stepMaster.stepNumber;
@@ -1004,13 +1020,13 @@ export class RepairsService {
       );
     }
 
-    const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
+    const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
 
     return this.prisma.$transaction(async (tx) => {
       const updatedStep = await tx.repairJobStep.update({
         where: { id: nextPendingStep.id },
         data: {
-          note: `[ไม่อนุมัติ] ${dto.reason}`,
+          note: `${REJECTED_STEP_PREFIX} ${dto.reason}`,
           completedBy: user.id,
         },
         include: { stepMaster: true, user: true },
@@ -1019,7 +1035,7 @@ export class RepairsService {
       await tx.repairJob.update({
         where: { id: jobId },
         data: {
-          jobStatusId: pendingAssignStatusId,
+          jobStatusId: inProgressStatusId,
           updatedBy: user.id,
         },
       });
@@ -1029,7 +1045,7 @@ export class RepairsService {
       });
 
       return {
-        message: `Step #${stepNumber} has been rejected. Repair job returned to PENDING_ASSIGN for re-diagnosis.`,
+        message: `Step #${stepNumber} has been rejected. Repair job returned to IN_PROGRESS for re-diagnosis.`,
         step: updatedStep,
       };
     });
@@ -1500,11 +1516,23 @@ export class RepairsService {
     const totalCost = Math.max(0, sparePartsCost) + outsourceCost;
     const overdueInfo = this.calculateOverdueInfo(job);
 
+    const rejectedStep = job.repairJobSteps.find(
+      (s) => s.note && s.note.startsWith(REJECTED_STEP_PREFIX),
+    );
+    const isRejected = Boolean(rejectedStep);
+    const rejectReason = rejectedStep?.note
+      ? rejectedStep.note.replace(new RegExp(`^\\${REJECTED_STEP_PREFIX}\\s*`), '')
+      : null;
+
     return {
       ...job,
+      isRejected,
+      rejectReason,
       isOverdue: overdueInfo.isOverdue,
       overdueDays: overdueInfo.overdueDays,
       summary: {
+        isRejected,
+        rejectReason,
         outsourceCost,
         totalSparePartsCost: Math.max(0, sparePartsCost),
         totalCost,
