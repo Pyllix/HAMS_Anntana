@@ -5,6 +5,7 @@ import {
   History,
   ShoppingCart,
   LucideIcon,
+  Building2,
 } from "lucide-react";
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
@@ -20,6 +21,7 @@ import { ToolCase } from "lucide-react";
 import TrackingAssetCenter from "../Pages/TrackingAssetCenter";
 import PendingEvaluations from "../Pages/PendingEvaluations";
 import UserManagement from "../pages/UserManagement";
+import DepartmentManagement from "../Pages/DepartmentManagement";
 
 interface AppRote {
   path: string;
@@ -74,7 +76,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "สั่งซื้ออะไหล่",
     element: <OrderSpareParts />,
     icon: ToolCase,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.ADMIN, ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
@@ -108,6 +110,14 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการผู้ใช้งาน",
     element: <UserManagement />,
     icon: History,
+    roles: [ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "department-management",
+    title: "จัดการแผนก",
+    element: <DepartmentManagement />,
+    icon: Building2,
     roles: [ROLES.ADMIN],
     showInNav: true,
   },
