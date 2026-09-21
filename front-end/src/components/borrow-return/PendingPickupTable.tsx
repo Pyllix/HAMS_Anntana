@@ -14,6 +14,7 @@ import {
   getBorrowErrorMessage,
   type BorrowHistory,
 } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -37,15 +38,16 @@ const formatThaiDate = (dateString: string | null) => {
 
 function ClaimPickupAction({ transaction }: { transaction: BorrowHistory }) {
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
 
   const { mutate: handleClaim, isPending: isSubmitting } = useMutation({
     mutationFn: () => claimPickup(transaction.id),
     onSuccess: () => {
-      alert("รับงานไปเก็บครุภัณฑ์เรียบร้อยแล้ว");
+      showToast("success", "รับงานไปเก็บครุภัณฑ์เรียบร้อยแล้ว");
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 

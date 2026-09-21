@@ -6,12 +6,14 @@ import {
   completeReturn,
   getBorrowErrorMessage,
 } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 export default function CompleteReturnModal() {
   const { closeForm, selectedTransaction: transaction } =
     useCompleteReturnModalStore();
 
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
   const [conditionStatus, setConditionStatus] = useState<"Normal" | "Damage">(
     "Normal",
   );
@@ -24,13 +26,13 @@ export default function CompleteReturnModal() {
         returnRemark: returnRemark || undefined,
       }),
     onSuccess: () => {
-      alert("บันทึกตรวจรับครุภัณฑ์เข้าคลังเรียบร้อยแล้ว");
+      showToast("success", "บันทึกตรวจรับครุภัณฑ์เข้าคลังเรียบร้อยแล้ว");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
       closeForm();
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 
@@ -38,7 +40,7 @@ export default function CompleteReturnModal() {
     e.preventDefault();
 
     if (!transaction?.id) {
-      alert("ไม่พบข้อมูลรายการคืนที่เลือก");
+      showToast("warning", "ไม่พบข้อมูลรายการคืนที่เลือก");
       return;
     }
 

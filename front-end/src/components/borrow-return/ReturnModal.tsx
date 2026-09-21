@@ -8,20 +8,23 @@ import {
   X,
 } from "lucide-react";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
-import { use, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUserById } from "../../services/userService";
+import { getSections } from "../../services/assetService";
 import {
   returnAsset,
   ReturnReq,
   getBorrowErrorMessage,
 } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 export default function ReturnModal() {
   // ปิด Modal กับ รับ Asset
   const { closeForm, selectedAsset: asset } = useReturnModalStore();
 
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
 
   // State ฟอร์มการคืน
   const [conditionStatus, setConditionStatus] = useState<"Normal" | "Damage">(
@@ -48,10 +51,21 @@ export default function ReturnModal() {
     enabled: false,
   });
 
+  // ดึงรายชื่อแผนก/หน่วยงานทั้งหมด มาแปลง section_id ของผู้ใช้ให้เป็นชื่อแผนกจริง
+  const { data: sections } = useQuery({
+    queryKey: ["sections"],
+    queryFn: getSections,
+  });
+
+  const userSectionName = useMemo(() => {
+    if (!user?.section_id || !sections) return null;
+    return sections.find((s) => s.id === user.section_id)?.name ?? null;
+  }, [user, sections]);
+
   // function ในปุ่มค้นหารหัสพนักงาน
   const handleFetchClick = () => {
     if (!employeeId.trim()) {
-      alert("กรุณากรอกรหัสพนักงาน");
+      showToast("warning", "กรุณากรอกรหัสพนักงาน");
       return;
     }
     refetchUser();
@@ -62,14 +76,14 @@ export default function ReturnModal() {
     mutationFn: ({ id, data }: { id: string; data: ReturnReq }) =>
       returnAsset(id, data),
     onSuccess: (data) => {
-      alert("บันทึกการคืนครุภัณฑ์สำเร็จเรียบร้อย");
+      showToast("success", "บันทึกการคืนครุภัณฑ์สำเร็จเรียบร้อย");
       console.log("Return success:", data);
       // Invalidate queries เพื่ออัปเดตข้อมูลหน้าตาราง
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       closeForm();
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 
@@ -79,17 +93,17 @@ export default function ReturnModal() {
     console.log("กดเเล้ว:", asset);
 
     if (!asset?.id) {
-      alert("ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
+      showToast("warning", "ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
       return;
     }
 
     if (!user?.id) {
-      alert("กรุณากรอกและค้นหารหัสพนักงานก่อนทำรายการ");
+      showToast("warning", "กรุณากรอกและค้นหารหัสพนักงานก่อนทำรายการ");
       return;
     }
 
-    if (!user) {
-      console.log("ไม่เจอ user");
+    if (!asset.currentBorrowing?.id) {
+      showToast("warning", "ไม่พบรายการยืมที่กำลังดำเนินการอยู่ของครุภัณฑ์นี้");
       return;
     }
 
@@ -99,7 +113,7 @@ export default function ReturnModal() {
       returnedByUserId: user.id,
     };
 
-    handleReturnSubmit({ id: asset?.currentBorrowing.id, data: payload });
+    handleReturnSubmit({ id: asset.currentBorrowing.id, data: payload });
   };
 
   return (
@@ -251,7 +265,7 @@ export default function ReturnModal() {
                 }`}
               >
                 <option value="" disabled className="text-gray-300">
-                  {user ? user.role : "เลือกแผนก"}
+                  {user ? (userSectionName ?? "ไม่พบแผนก") : "เลือกแผนก"}
                 </option>
               </select>
             </div>

@@ -15,6 +15,7 @@ import {
   type BorrowHistory,
 } from "../../services/borrowService";
 import { useRejectModalStore } from "../../stores/useRejectModalStore";
+import { useToastStore } from "../../stores/useToastStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -39,17 +40,17 @@ const formatThaiDate = (dateString: string | null) => {
 function ApprovalActions({ transaction }: { transaction: BorrowHistory }) {
   const queryClient = useQueryClient();
   const { openForm: openRejectForm } = useRejectModalStore();
+  const showToast = useToastStore((s) => s.showToast);
 
   const { mutate: handleApprove, isPending: isApproving } = useMutation({
     mutationFn: () => approveBorrow(transaction.id),
     onSuccess: () => {
-      alert("อนุมัติคำขอยืมครุภัณฑ์เรียบร้อยแล้ว");
+      showToast("success", "อนุมัติคำขอยืมครุภัณฑ์เรียบร้อยแล้ว");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
-      queryClient.invalidateQueries({ queryKey: ["borrowings"] });
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 

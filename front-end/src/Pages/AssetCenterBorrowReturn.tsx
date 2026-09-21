@@ -31,6 +31,7 @@ import PendingPickupTable from "../components/borrow-return/PendingPickupTable";
 import PendingCompleteReturnTable from "../components/borrow-return/PendingCompleteReturnTable";
 import RejectBorrowModal from "../components/borrow-return/RejectBorrowModal";
 import CompleteReturnModal from "../components/borrow-return/CompleteReturnModal";
+import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useRejectModalStore } from "../stores/useRejectModalStore";
 import { useCompleteReturnModalStore } from "../stores/useCompleteReturnModalStore";
 
@@ -334,6 +335,9 @@ export default function AssetCenterBorrowReturn() {
       {isFormOpenReturn && <ReturnModal />}
       {isFormOpenReject && <RejectBorrowModal />}
       {isFormOpenCompleteReturn && <CompleteReturnModal />}
+
+      {/* Toast แจ้งเตือน */}
+      <ToastContainer />
     </div>
   );
 }

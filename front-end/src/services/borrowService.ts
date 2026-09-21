@@ -43,10 +43,11 @@ export function getBorrowErrorMessage(err: any): string {
   return raw || "เกิดข้อผิดพลาดในการทำรายการ กรุณาลองใหม่อีกครั้ง";
 }
 
-interface BorrowReq {
+export interface BorrowReq {
   assetId: string;
-  borrowerId: string;
+  borrowerId?: string;
   deliveryMethod: string;
+  expectedReturnDate?: string;
 }
 
 interface BorrowRes {

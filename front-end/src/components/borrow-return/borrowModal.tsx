@@ -1,12 +1,15 @@
 import { Building2, Loader2, Package, Search, Tag, X } from "lucide-react";
 import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
 import { getUserById } from "../../services/userService";
+import { getSections } from "../../services/assetService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { postBorrow, getBorrowErrorMessage } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 export default function BorrowModal() {
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
 
   // ตัวปิด Modal กับ Asset ที่รับเข้ามา
   const { closeForm, selectedAsset: asset } = useBorrowModalStore();
@@ -26,15 +29,15 @@ export default function BorrowModal() {
   const { mutate: handleBorrowSubmit, isPending: isSubmitting } = useMutation({
     mutationFn: postBorrow,
     onSuccess: (data) => {
-      alert("บันทึกการยืมครุภัณฑ์สำเร็จเรียบร้อย");
+      showToast("success", "บันทึกการยืมครุภัณฑ์สำเร็จเรียบร้อย");
       console.log("Borrow success:", data);
       // Invalidate queries เพื่ออัปเดตสถานะหน้าตารางรายการ
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      queryClient.invalidateQueries({ queryKey: ["borrowings"] });
+      queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
       closeForm();
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 
@@ -45,10 +48,21 @@ export default function BorrowModal() {
     enabled: false,
   });
 
+  // ดึงรายชื่อแผนก/หน่วยงานทั้งหมด มาแปลง section_id ของผู้ใช้ให้เป็นชื่อแผนกจริง
+  const { data: sections } = useQuery({
+    queryKey: ["sections"],
+    queryFn: getSections,
+  });
+
+  const userSectionName = useMemo(() => {
+    if (!user?.section_id || !sections) return null;
+    return sections.find((s) => s.id === user.section_id)?.name ?? null;
+  }, [user, sections]);
+
   // function ในปุ่มค้นหารหัสพนักงาน
   const handleFetchClick = () => {
     if (!employeeId.trim()) {
-      alert("กรุณากรอกรหัสพนักงาน");
+      showToast("warning", "กรุณากรอกรหัสพนักงาน");
       return;
     }
     refetchUser();
@@ -59,12 +73,12 @@ export default function BorrowModal() {
     e.preventDefault();
 
     if (!asset?.id) {
-      alert("ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
+      showToast("warning", "ไม่พบข้อมูลครุภัณฑ์ที่เลือก");
       return;
     }
 
     if (!user?.id) {
-      alert("กรุณากรอกและค้นหารหัสพนักงานก่อนทำรายการ");
+      showToast("warning", "กรุณากรอกและค้นหารหัสพนักงานก่อนทำรายการ");
       return;
     }
 
@@ -216,7 +230,7 @@ export default function BorrowModal() {
                 }`}
               >
                 <option value="" disabled className="text-gray-300">
-                  {user ? user.role : "เลือกแผนก"}
+                  {user ? (userSectionName ?? "ไม่พบแผนก") : "เลือกแผนก"}
                 </option>
               </select>
             </div>

@@ -10,6 +10,7 @@ import {
 import { ROLES, RoleType } from "./roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
 import BorrowHistory from "../Pages/BorrowHistort";
+import DepartMentBorrowReturn from "../Pages/DepartMentBorrowReturn";
 import React from "react";
 import AssetStock from "../Pages/AssetStock";
 import ConfirmRepair from "../Pages/ConfirmRepair";
@@ -33,6 +34,15 @@ interface AppRote {
 }
 
 export const APP_ROUTE: AppRote[] = [
+  // -------- สำหรับ แผนก/ผู้ใช้งานทั่วไป ------------
+  {
+    path: "borrow-request",
+    title: "ยืมครุภัณฑ์",
+    element: <DepartMentBorrowReturn />,
+    icon: Repeat,
+    roles: [ROLES.DEPARTMENT_STAFF, ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
   // -------- สำหรับ Assets Cente ------------
   {
     path: "borrow-return-assets_center",

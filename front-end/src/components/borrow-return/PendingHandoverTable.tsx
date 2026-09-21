@@ -14,6 +14,7 @@ import {
   getBorrowErrorMessage,
   type BorrowHistory,
 } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -37,16 +38,17 @@ const formatThaiDate = (dateString: string | null) => {
 
 function HandoverAction({ transaction }: { transaction: BorrowHistory }) {
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
 
   const { mutate: handleHandover, isPending: isSubmitting } = useMutation({
     mutationFn: () => handoverAsset(transaction.id),
     onSuccess: () => {
-      alert("ยืนยันการส่งมอบครุภัณฑ์เรียบร้อยแล้ว");
+      showToast("success", "ยืนยันการส่งมอบครุภัณฑ์เรียบร้อยแล้ว");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 

@@ -3,26 +3,27 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRejectModalStore } from "../../stores/useRejectModalStore";
 import { rejectBorrow, getBorrowErrorMessage } from "../../services/borrowService";
+import { useToastStore } from "../../stores/useToastStore";
 
 export default function RejectBorrowModal() {
   const { closeForm, selectedTransaction: transaction } =
     useRejectModalStore();
 
   const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
   const [reason, setReason] = useState("");
 
   const { mutate: handleReject, isPending: isSubmitting } = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       rejectBorrow(id, reason),
     onSuccess: () => {
-      alert("ปฏิเสธคำขอยืมครุภัณฑ์เรียบร้อยแล้ว");
+      showToast("success", "ปฏิเสธคำขอยืมครุภัณฑ์เรียบร้อยแล้ว");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
-      queryClient.invalidateQueries({ queryKey: ["borrowings"] });
       closeForm();
     },
     onError: (err: any) => {
-      alert(getBorrowErrorMessage(err));
+      showToast("error", getBorrowErrorMessage(err));
     },
   });
 
@@ -30,12 +31,12 @@ export default function RejectBorrowModal() {
     e.preventDefault();
 
     if (!transaction?.id) {
-      alert("ไม่พบข้อมูลคำขอยืมที่เลือก");
+      showToast("warning", "ไม่พบข้อมูลคำขอยืมที่เลือก");
       return;
     }
 
     if (!reason.trim()) {
-      alert("กรุณาระบุเหตุผลในการปฏิเสธคำขอ");
+      showToast("warning", "กรุณาระบุเหตุผลในการปฏิเสธคำขอ");
       return;
     }
 
