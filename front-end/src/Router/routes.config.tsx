@@ -75,7 +75,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการสต็อกอะไหล่",
     element: <PartStock />,
     icon: Wrench,
-    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ADMIN, ROLES.ASSET_CENTER_STAFF,ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {

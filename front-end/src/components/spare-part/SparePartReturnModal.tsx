@@ -1,5 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { X, HardDriveDownload, Search, Loader2, Info, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  X,
+  HardDriveDownload,
+  Search,
+  Loader2,
+  Info,
+  CheckCircle2,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSparePartReturnModalStore } from "../../stores/useSparePartModalStore";
 import type { SparePartReturnItem } from "../../Types/TypeSparePart";
@@ -29,13 +36,14 @@ export function SparePartReturnModal() {
 
   const [isLoadingJob, setIsLoadingJob] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  
-  
+
   const [searchError, setSearchError] = useState<string>("");
   const [searchNotice, setSearchNotice] = useState<string>("");
   const [submitError, setSubmitError] = useState<string>("");
 
-  const [returnItems, setReturnItems] = useState<SparePartReturnItemExtended[]>([]);
+  const [returnItems, setReturnItems] = useState<SparePartReturnItemExtended[]>(
+    [],
+  );
 
   const resetForm = () => {
     setRepairId("");
@@ -55,51 +63,88 @@ export function SparePartReturnModal() {
 
   const formatUserName = (userObj: any): string => {
     if (!userObj) return "";
-    if (typeof userObj === "string") return userObj;
-    const fn = userObj.firstname || userObj.first_name || userObj.firstName || "";
-    const ln = userObj.lastname || userObj.last_name || userObj.lastName || "";
-    return `${fn} ${ln}`.trim() || userObj.name || userObj.username || "";
+    if (typeof userObj === "string") return userObj.trim();
+
+    const fn =
+      userObj.firstname || userObj.firstName || userObj.first_name || "";
+    const ln = userObj.lastname || userObj.lastName || userObj.last_name || "";
+    const fullName = `${fn} ${ln}`.trim();
+
+    return fullName || userObj.name || userObj.username || userObj.email || "";
   };
 
   const extractEvaluatorName = (data: any): string => {
     if (!data) return "-";
-    const evalObj = data.evaluation || data.repairEvaluation || data.assessment;
-    if (evalObj) {
-      const evalName = formatUserName(evalObj.evaluator || evalObj.user || evalObj.createdBy);
-      if (evalName) return evalName;
+
+    if (Array.isArray(data.repairJobSteps) && data.repairJobSteps.length > 0) {
+      const lastCompletedStep = [...data.repairJobSteps]
+        .reverse()
+        .find(
+          (step: any) =>
+            step.actionBy || step.user || step.actor || step.createdBy,
+        );
+
+      if (lastCompletedStep) {
+        const stepUser = formatUserName(
+          lastCompletedStep.actionBy ||
+            lastCompletedStep.user ||
+            lastCompletedStep.actor ||
+            lastCompletedStep.createdBy,
+        );
+        if (stepUser) return stepUser;
+      }
     }
-    return formatUserName(data.responsiblePerson) || formatUserName(data.creator) || "-";
+
+    if (data.updater) {
+      const updaterName = formatUserName(data.updater);
+      if (updaterName) return updaterName;
+    }
+
+    const fallbackName = formatUserName(data.creator || data.reporter);
+    if (fallbackName) return fallbackName;
+
+    return "-";
   };
 
-  const processSparePartItems = (rawList: any[]): SparePartReturnItemExtended[] => {
+  const processSparePartItems = (
+    rawList: any[],
+  ): SparePartReturnItemExtended[] => {
     if (!Array.isArray(rawList)) return [];
 
-    const tempMap = new Map<string, {
-      validSparepartId: string | number;
-      code: string;
-      name: string;
-      unit: string;
-      totalBorrowed: number;
-      totalReturned: number;
-      totalUsed: number;
-      isFullyClosed: boolean;
-    }>();
+    const tempMap = new Map<
+      string,
+      {
+        validSparepartId: string | number;
+        code: string;
+        name: string;
+        unit: string;
+        totalBorrowed: number;
+        hasBeenReturned: boolean;
+      }
+    >();
 
     rawList.forEach((txn: any) => {
       const sp = txn.sparepart || txn.sparePart || txn.item || {};
-      const validSparepartId = txn.sparepartId ?? txn.sparepart_id ?? sp.id ?? "";
+      const validSparepartId =
+        txn.sparepartId ?? txn.sparepart_id ?? sp.id ?? "";
       const code = sp.code || txn.code || txn.sparepartCode || "-";
       const name = sp.name || txn.name || txn.sparepartName || "-";
       const unit = sp.unit || txn.unit || "ชิ้น";
 
-      const qty = Number(txn.qty ?? txn.quantity ?? txn.borrowedQty ?? 0);
-      const used = Number(txn.usedQty ?? txn.used_qty ?? 0);
-      const txnType = String(txn.txnType || txn.type || "").toUpperCase();
+      const qty = Number(
+        txn.qty ?? txn.quantity ?? txn.borrowedQty ?? txn.amount ?? 0,
+      );
+      const txnType = String(
+        txn.txnType || txn.type || txn.action || "",
+      ).toUpperCase();
+      const isReturnTxn =
+        txnType.includes("IN") ||
+        txnType.includes("RETURN") ||
+        txn.isReturn === true;
 
-      const isReturn = txnType.includes("IN") || txnType.includes("RETURN") || txn.isReturn === true;
-      const isClosedStatus = txn.isCompleted || txn.isReturned || ["COMPLETED", "RETURNED", "CLOSED"].includes(String(txn.status || "").toUpperCase());
-
-      const groupKey = validSparepartId ? `id-${validSparepartId}` : `code-${code}`;
+      const groupKey = validSparepartId
+        ? `id-${validSparepartId}`
+        : `code-${code}`;
 
       if (!tempMap.has(groupKey)) {
         tempMap.set(groupKey, {
@@ -108,33 +153,28 @@ export function SparePartReturnModal() {
           name,
           unit,
           totalBorrowed: 0,
-          totalReturned: 0,
-          totalUsed: 0,
-          isFullyClosed: false,
+          hasBeenReturned: false,
         });
       }
 
       const item = tempMap.get(groupKey)!;
 
-      if (isReturn) {
-        item.totalReturned += qty;
+      if (isReturnTxn) {
+        item.hasBeenReturned = true;
       } else {
         item.totalBorrowed += qty;
-        item.totalUsed += used;
       }
-
-      if (isClosedStatus) item.isFullyClosed = true;
     });
 
     const result: SparePartReturnItemExtended[] = [];
+
     tempMap.forEach((item) => {
-      const netRemaining = item.totalBorrowed - item.totalReturned - item.totalUsed;
-      if (netRemaining > 0 && !item.isFullyClosed) {
+      if (item.totalBorrowed > 0 && !item.hasBeenReturned) {
         result.push({
-          sparepartId: item.validSparepartId as any,
+          sparepartId: Number(item.validSparepartId) || 0,
           code: item.code,
           name: item.name,
-          borrowedQty: netRemaining,
+          borrowedQty: item.totalBorrowed,
           usedQty: 0,
           usedQtyInput: "",
           isUsedEntered: false,
@@ -147,60 +187,36 @@ export function SparePartReturnModal() {
     return result;
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      setSearchError("");
-      setSearchNotice("");
-      setSubmitError("");
-
-      if (initialJobData) {
-        setRepairId(initialJobData.repairId || "");
-        setJobNoInput(initialJobData.jobNo || "");
-        setEquipmentName(initialJobData.equipmentName || "-");
-        setResponsiblePerson(extractEvaluatorName(initialJobData));
-
-        if (initialJobData.isCompleted) {
-          setSearchNotice("ใบแจ้งซ่อมนี้ได้ทำการบันทึกรับคืนอะไหล่ครบถ้วนแล้ว");
-          setReturnItems([]);
-        } else {
-          const rawSpareParts = initialJobData.sparepartTxns || initialJobData.items || [];
-          setReturnItems(processSparePartItems(rawSpareParts));
-        }
-      } else {
-        resetForm();
-      }
-    } else {
-      resetForm();
-    }
-  }, [isOpen, initialJobData]);
-
-  const handleSearchJob = async () => {
-    if (!jobNoInput.trim()) return;
+  const fetchJobDetails = useCallback(async (jobNoToSearch: string) => {
+    if (!jobNoToSearch.trim()) return;
 
     setIsLoadingJob(true);
     setSearchError("");
     setSearchNotice("");
 
     try {
-      const response = await getRepairByJobNo(jobNoInput.trim());
+      const response = await getRepairByJobNo(jobNoToSearch.trim());
       const data = response?.data || response;
 
       if (data && (data.id || data.jobNo)) {
         setRepairId(String(data.id || ""));
-        setEquipmentName(data.asset?.name || data.equipmentName || data.equipment?.name || "-");
+        setEquipmentName(
+          data.asset?.name || data.equipmentName || data.equipment?.name || "-",
+        );
         setResponsiblePerson(extractEvaluatorName(data));
 
-        if (data.isCompleted) {
-          setSearchNotice("ใบแจ้งซ่อมรหัสนี้ ได้ทำการบันทึกรับคืนอะไหล่เสร็จสิ้นแล้ว");
-          setReturnItems([]);
-          return;
-        }
-
-        const rawSpareParts = data.sparepartTxns || data.repairSpareParts || data.spareParts || data.items || [];
+        const rawSpareParts =
+          data.sparepartTxns ||
+          data.repairSpareParts ||
+          data.spareParts ||
+          data.items ||
+          [];
         const processedItems = processSparePartItems(rawSpareParts);
 
-        if (processedItems.length === 0) {
-          setSearchNotice("ไม่พบรายการอะไหล่ที่ค้างคืน (ทำรายการคืนหรือตัดจ่ายครบถ้วนแล้ว)");
+        if (data.isCompleted || processedItems.length === 0) {
+          setSearchNotice(
+            "ใบแจ้งซ่อมรหัสนี้ ได้ทำการบันทึกรับคืนอะไหล่เสร็จสิ้นแล้ว",
+          );
           setReturnItems([]);
           return;
         }
@@ -223,7 +239,20 @@ export function SparePartReturnModal() {
     } finally {
       setIsLoadingJob(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialJobData?.jobNo) {
+        setJobNoInput(initialJobData.jobNo);
+        fetchJobDetails(initialJobData.jobNo);
+      } else {
+        resetForm();
+      }
+    } else {
+      resetForm();
+    }
+  }, [isOpen, initialJobData, fetchJobDetails]);
 
   const handleUsedQtyChange = (index: number, rawVal: string) => {
     setReturnItems((prev) =>
@@ -253,11 +282,12 @@ export function SparePartReturnModal() {
           isUsedEntered: true,
           returnQty: autoReturnQty,
         };
-      })
+      }),
     );
   };
 
-  const isAllItemsEntered = returnItems.length > 0 && returnItems.every((item) => item.isUsedEntered);
+  const isAllItemsEntered =
+    returnItems.length > 0 && returnItems.every((item) => item.isUsedEntered);
   const isFormValid = isAllItemsEntered && Boolean(repairId);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -274,8 +304,8 @@ export function SparePartReturnModal() {
           returnSparepart(repairId, {
             sparepartId: Number(item.sparepartId),
             qty: Number(item.returnQty),
-          })
-        )
+          }),
+        ),
       );
 
       await Promise.all([
@@ -322,11 +352,15 @@ export function SparePartReturnModal() {
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-7 space-y-6 max-h-[78vh] overflow-y-auto">
+        <form
+          onSubmit={handleSubmit}
+          className="p-7 space-y-6 max-h-[78vh] overflow-y-auto"
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-100 text-xs">
             <div>
               <label className="block text-slate-500 font-medium mb-1">
-                อ้างอิงใบแจ้งซ่อม (Job No.) <span className="text-red-500">*</span>
+                อ้างอิงใบแจ้งซ่อม (Job No.){" "}
+                <span className="text-red-500">*</span>
               </label>
               <div className="relative flex items-center">
                 <input
@@ -341,7 +375,7 @@ export function SparePartReturnModal() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      handleSearchJob();
+                      fetchJobDetails(jobNoInput);
                     }
                   }}
                   className={`w-full h-8 pl-3 pr-8 rounded-lg bg-white border font-bold text-slate-800 focus:outline-none transition-colors ${
@@ -352,7 +386,7 @@ export function SparePartReturnModal() {
                 />
                 <button
                   type="button"
-                  onClick={handleSearchJob}
+                  onClick={() => fetchJobDetails(jobNoInput)}
                   disabled={isLoadingJob}
                   className="absolute right-1.5 p-1 rounded-md text-slate-400 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
@@ -395,7 +429,7 @@ export function SparePartReturnModal() {
             </div>
           </div>
 
-          {/* Banner แจ้งเตือนเมื่อค้นพบ Job ที่คืนเสร็จสมบูรณ์แล้ว */}
+          {/* Banner แจ้งเตือน */}
           {searchNotice && (
             <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 text-xs flex items-center gap-2.5">
               <Info className="w-4 h-4 text-blue-500 shrink-0" />
@@ -412,18 +446,27 @@ export function SparePartReturnModal() {
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
                   <tr>
-                    <th className="py-3 px-4 whitespace-nowrap">รหัสอะไหล่ / รายการ</th>
-                    <th className="py-3 px-2 text-center whitespace-nowrap">เบิกมา</th>
+                    <th className="py-3 px-4 whitespace-nowrap">
+                      รหัสอะไหล่ / รายการ
+                    </th>
+                    <th className="py-3 px-2 text-center whitespace-nowrap">
+                      เบิกมา
+                    </th>
                     <th className="py-3 px-2 text-center w-36 whitespace-nowrap">
                       ใช้จริง <span className="text-red-500">*</span>
                     </th>
-                    <th className="py-3 px-4 text-center w-36 whitespace-nowrap">จำนวนคืน</th>
+                    <th className="py-3 px-4 text-center w-36 whitespace-nowrap">
+                      จำนวนคืน
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {returnItems.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400">
+                      <td
+                        colSpan={4}
+                        className="py-8 text-center text-slate-400"
+                      >
                         {isLoadingJob ? (
                           <div className="flex items-center justify-center gap-2">
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -432,8 +475,12 @@ export function SparePartReturnModal() {
                         ) : searchNotice ? (
                           <div className="flex flex-col items-center justify-center gap-1 text-slate-500">
                             <CheckCircle2 className="w-6 h-6 text-emerald-500 mb-1" />
-                            <span className="font-semibold text-slate-700">ไม่มีรายการค้างคืน</span>
-                            <span className="text-[11px] text-slate-400">รายการรับคืนทั้งหมดใน Job นี้ได้รับการบันทึกแล้ว</span>
+                            <span className="font-semibold text-slate-700">
+                              ไม่มีรายการค้างคืน
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              รายการรับคืนทั้งหมดใน Job นี้ได้รับการบันทึกแล้ว
+                            </span>
                           </div>
                         ) : (
                           "โปรดระบุ Job No. เพื่อค้นหารายการอะไหล่"
@@ -442,19 +489,30 @@ export function SparePartReturnModal() {
                     </tr>
                   ) : (
                     returnItems.map((item, idx) => {
-                      const maxReturn = item.borrowedQty - item.usedQty;
-                      const isReturnable = item.isUsedEntered && maxReturn > 0;
                       const unitText = item.unit || "ชิ้น";
 
                       return (
-                        <tr key={item.sparepartId ? `sp-${item.sparepartId}-${idx}` : `code-${item.code}-${idx}`} className="hover:bg-slate-50/50">
+                        <tr
+                          key={
+                            item.sparepartId
+                              ? `sp-${item.sparepartId}-${idx}`
+                              : `code-${item.code}-${idx}`
+                          }
+                          className="hover:bg-slate-50/50"
+                        >
                           <td className="py-3 px-4">
-                            <p className="font-bold text-slate-900 font-mono">{item.code}</p>
-                            <p className="text-[11px] text-slate-400">{item.name}</p>
+                            <p className="font-bold text-slate-900 font-mono">
+                              {item.code}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {item.name}
+                            </p>
                           </td>
                           <td className="py-3 px-2 text-center font-semibold whitespace-nowrap">
                             {item.borrowedQty}{" "}
-                            <span className="text-[11px] font-normal text-slate-400">{unitText}</span>
+                            <span className="text-[11px] font-normal text-slate-400">
+                              {unitText}
+                            </span>
                           </td>
                           <td className="py-3 px-2 text-center">
                             <div className="inline-flex items-center gap-1.5 justify-center">
@@ -464,7 +522,9 @@ export function SparePartReturnModal() {
                                 value={item.usedQtyInput ?? ""}
                                 min={0}
                                 max={item.borrowedQty}
-                                onChange={(e) => handleUsedQtyChange(idx, e.target.value)}
+                                onChange={(e) =>
+                                  handleUsedQtyChange(idx, e.target.value)
+                                }
                                 className={`w-16 h-8 text-center font-bold rounded-lg border transition-colors ${
                                   !item.isUsedEntered
                                     ? "border-red-400 bg-red-50/30 text-red-600 focus:border-red-500 focus:ring-1 focus:ring-red-500"
@@ -482,9 +542,11 @@ export function SparePartReturnModal() {
                                 type="text"
                                 readOnly
                                 disabled
-                                value={item.isUsedEntered ? item.returnQty : "-"}
+                                value={
+                                  item.isUsedEntered ? item.returnQty : "-"
+                                }
                                 className={`w-16 h-8 text-center font-bold rounded-lg cursor-not-allowed select-none transition-colors ${
-                                  isReturnable
+                                  item.isUsedEntered && item.returnQty > 0
                                     ? "text-[#00A96E] border border-emerald-300 bg-emerald-50/30"
                                     : "text-slate-400 border border-slate-200 bg-slate-100 opacity-70"
                                 }`}
