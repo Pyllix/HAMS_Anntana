@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { postBorrow, getBorrowErrorMessage } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
+import ThaiDatePicker from "./ThaiDatePicker";
 
 export default function BorrowModal() {
   const queryClient = useQueryClient();
@@ -24,6 +25,7 @@ export default function BorrowModal() {
   // ------------- ทำตัวเเปลของเวลา ------------------
 
   const [employeeId, setEmployeeId] = useState("");
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
 
   // จัดการการส่ง API สำหรับการยืมครุภัณฑ์
   const { mutate: handleBorrowSubmit, isPending: isSubmitting } = useMutation({
@@ -82,11 +84,17 @@ export default function BorrowModal() {
       return;
     }
 
+    if (!expectedReturnDate) {
+      showToast("warning", "กรุณาเลือกกำหนดวันคืนครุภัณฑ์");
+      return;
+    }
+
     // ส่ง Payload ไปยัง API
     handleBorrowSubmit({
       assetId: asset.id,
       borrowerId: user.id,
       deliveryMethod: "PICKUP",
+      expectedReturnDate,
     });
   };
 
@@ -256,6 +264,23 @@ export default function BorrowModal() {
               </div>
             </div>
 
+            {/* กำหนดวันคืน */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="expectedReturnDate"
+                className="text-xs font-semibold text-gray-700"
+              >
+                กำหนดวันคืน <span className="text-red-500">*</span>
+              </label>
+              <ThaiDatePicker
+                id="expectedReturnDate"
+                value={expectedReturnDate}
+                onChange={setExpectedReturnDate}
+                minDate={defaultDate}
+                placeholder="เลือกกำหนดวันคืน"
+              />
+            </div>
+
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-3 pt-4 mt-2 border-t border-gray-100 bg-white">
               <button
@@ -268,7 +293,7 @@ export default function BorrowModal() {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !user}
+                disabled={isSubmitting || !user || !expectedReturnDate}
                 className="flex items-center gap-2 px-6 py-2.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg transition-colors disabled:bg-emerald-300 disabled:cursor-not-allowed shadow-sm"
               >
                 {isSubmitting && (
