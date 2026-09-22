@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ChevronDown, Plus } from "lucide-react";
+import { Search, ChevronDown, Plus, HardDriveDownload } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSparepartGroups } from "../services/sparepartService";
 import SparePartTable from "../components/spare-part/SparePartTable";
@@ -8,12 +8,19 @@ import {
   SparePartFormModal,
   SparePartDeleteModal,
 } from "../components/spare-part/SparePartModals";
-import { useSparePartFormModalStore } from "../stores/useSparePartModalStore";
+import { SparePartReturnModal } from "../components/spare-part/SparePartReturnModal";
+import {
+  useSparePartFormModalStore,
+  useSparePartReturnModalStore,
+} from "../stores/useSparePartModalStore";
 import { useAuthStore } from "../stores/authStore";
 
 export default function PartStock() {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
+  const canManage =
+    role === "ASSET_CENTER_STAFF" ||
+    role === "ADMIN" ||
+    role === "PARCEL_STAFF";
 
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
@@ -109,14 +116,28 @@ export default function PartStock() {
 
         {/* Add Button - แสดงเฉพาะผู้มีสิทธิ์จัดการสต็อกอะไหล่ */}
         {canManage && (
-          <button
-            type="button"
-            onClick={() => useSparePartFormModalStore.getState().openAdd()}
-            className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer shrink-0"
-          >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            เพิ่มอะไหล่ใหม่
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => useSparePartFormModalStore.getState().openAdd()}
+              className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer shrink-0"
+            >
+              <Plus className="h-4 w-4 stroke-[2.5]" />
+              เพิ่มอะไหล่ใหม่
+            </button>
+
+            {/* ปุ่มบันทึกรับคืน */}
+            <button
+              type="button"
+              onClick={() =>
+                useSparePartReturnModalStore.getState().openModal(null as any)
+              }
+              className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+            >
+              <HardDriveDownload className="h-4 w-4 stroke-[2.5]" />
+              บันทึกรับคืน
+            </button>
+          </div>
         )}
       </div>
 
@@ -133,6 +154,7 @@ export default function PartStock() {
       <SparePartDetailModal />
       <SparePartFormModal />
       <SparePartDeleteModal />
+      <SparePartReturnModal />
     </div>
   );
 }
