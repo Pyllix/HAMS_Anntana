@@ -83,6 +83,7 @@ export interface ReturnJobData {
   repairSpareParts?: any[];
   sparePartUsages?: any[];
   sparepartTxns?: any[];
+  isCompleted?: boolean;
 }
 
 export interface ReturnSparepartDto {
