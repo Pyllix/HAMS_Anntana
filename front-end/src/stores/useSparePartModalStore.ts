@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { Sparepart } from '../Types/TypeSparePart';
+import { create } from "zustand";
+import type { Sparepart, ReturnJobData } from "../Types/TypeSparePart";
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
@@ -10,13 +10,14 @@ interface SparePartDetailModalState {
   closeModal: () => void;
 }
 
-export const useSparePartDetailModalStore =
-  create<SparePartDetailModalState>((set) => ({
+export const useSparePartDetailModalStore = create<SparePartDetailModalState>(
+  (set) => ({
     isOpen: false,
     selectedItem: null,
     openModal: (item) => set({ isOpen: true, selectedItem: item }),
     closeModal: () => set({ isOpen: false, selectedItem: null }),
-  }));
+  }),
+);
 
 // ─── Form Modal (Add / Edit) ──────────────────────────────────────────────────
 
@@ -47,10 +48,27 @@ interface SparePartDeleteModalState {
   closeModal: () => void;
 }
 
-export const useSparePartDeleteModalStore =
-  create<SparePartDeleteModalState>((set) => ({
+export const useSparePartDeleteModalStore = create<SparePartDeleteModalState>(
+  (set) => ({
     isOpen: false,
     targetItem: null,
     openDelete: (item) => set({ isOpen: true, targetItem: item }),
     closeModal: () => set({ isOpen: false, targetItem: null }),
-  }));
+  }),
+);
+
+interface SparePartReturnModalState {
+  isOpen: boolean;
+  jobData: ReturnJobData | null;
+  openModal: (item: ReturnJobData) => void;
+  closeModal: () => void;
+}
+
+export const useSparePartReturnModalStore = create<SparePartReturnModalState>(
+  (set) => ({
+    isOpen: false,
+    jobData: null,
+    openModal: (item) => set({ isOpen: true, jobData: item }),
+    closeModal: () => set({ isOpen: false, jobData: null }),
+  }),
+);

@@ -57,3 +57,36 @@ export interface StockInSparepartDto {
   totalPrice?: number;
   sparepartAddDoc: string;
 }
+
+// ─── Return Spare Part
+
+export interface SparePartReturnItem {
+  sparepartId: number;
+  code: string;
+  name: string;
+  borrowedQty: number;
+  unit?: string;
+  usedQty: number;
+  returnQty: number;
+  usedQtyInput?: number | "";
+  isUsedEntered?: boolean;
+  reason?: string;
+}
+
+export interface ReturnJobData {
+  repairId: string;
+  jobNo: string;
+  equipmentName: string;
+  responsiblePerson: string;
+  defaultLocation?: string;
+  items?: SparePartReturnItem[];
+  repairSpareParts?: any[];
+  sparePartUsages?: any[];
+  sparepartTxns?: any[];
+  isCompleted?: boolean;
+}
+
+export interface ReturnSparepartDto {
+  sparepartId: number;
+  qty: number;
+}
