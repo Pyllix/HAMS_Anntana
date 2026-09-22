@@ -395,6 +395,28 @@ describe('RepairsService', () => {
         BadRequestException,
       );
     });
+
+    it('should throw ForbiddenException if technician is not assigned to the job and not head', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'IN_PROGRESS' },
+        mechanicRepairs: [{ userId: 'other-tech-id' }],
+      });
+
+      const dto = {
+        diagnosis: 'ตรวจเช็ค',
+        solution: 'แก้ปัญหา',
+        causeId: 1,
+        techCategoryId: 1,
+        jobTypeId: 1,
+        actionType: ActionType.REPAIR,
+        stepActionType: StepActionType.SELF_REPAIR,
+      };
+
+      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -615,6 +637,113 @@ describe('RepairsService', () => {
       expect(result.summary.outsourceCost).toBe(2500);
       expect(result.summary.totalSparePartsCost).toBe(500);
       expect(result.summary.totalCost).toBe(3000);
+      expect(result.isRejected).toBe(false);
+      expect(result.rejectReason).toBeNull();
+    });
+
+    it('should calculate isRejected and rejectReason in findOne when job has a rejected step', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        repairCost: '0.00',
+        jobStatus: { code: 'IN_PROGRESS' },
+        repairJobSteps: [
+          { completeAt: new Date(), note: null },
+          { completeAt: null, note: '[ไม่อนุมัติ] เกินงบประมาณ' },
+        ],
+        sparepartTxns: [],
+      });
+
+      const result = await service.findOne('job-uuid-1');
+
+      expect(result.isRejected).toBe(true);
+      expect(result.rejectReason).toBe('เกินงบประมาณ');
+      expect(result.summary.isRejected).toBe(true);
+      expect(result.summary.rejectReason).toBe('เกินงบประมาณ');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8. Reject Step & Re-diagnosis Workflow
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('rejectStep & Re-diagnosis workflow', () => {
+    it('should allow PARCEL_STAFF to reject Step 5, set jobStatus to IN_PROGRESS, and delete PENDING_WITHDRAW', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PARCEL_PROCESSING' },
+        repairJobSteps: [
+          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
+          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.WITH_PARTS } },
+          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.WITH_PARTS } },
+          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.WITH_PARTS } },
+          { id: 105, completeAt: null, note: null, stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
+          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.WITH_PARTS } },
+        ],
+      });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
+      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 105, note: '[ไม่อนุมัติ] งบประมาณเกิน' });
+      mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1', jobStatusId: 2 });
+      mockPrisma.sparepartTxn.deleteMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.rejectStep(
+        'job-uuid-1',
+        { reason: 'งบประมาณเกิน' },
+        mockParcelUser,
+      );
+
+      expect(mockPrisma.repairJobStep.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 105 },
+          data: expect.objectContaining({
+            note: '[ไม่อนุมัติ] งบประมาณเกิน',
+            completedBy: mockParcelUser.id,
+          }),
+        }),
+      );
+      expect(mockPrisma.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-uuid-1' },
+        data: expect.objectContaining({
+          jobStatusId: 2,
+          updatedBy: mockParcelUser.id,
+        }),
+      });
+      expect(mockPrisma.sparepartTxn.deleteMany).toHaveBeenCalledWith({
+        where: { jobId: 'job-uuid-1', txnType: 'PENDING_WITHDRAW' },
+      });
+      expect(result.message).toContain('IN_PROGRESS');
+    });
+
+    it('should throw BadRequestException if step is already rejected', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'IN_PROGRESS' },
+        repairJobSteps: [
+          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
+          { id: 105, completeAt: null, note: '[ไม่อนุมัติ] เคยปฏิเสธไปแล้ว', stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
+        ],
+      });
+
+      await expect(
+        service.rejectStep('job-uuid-1', { reason: 'ปฏิเสธซ้ำ' }, mockParcelUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should block updateStepProgress if any step has been rejected until re-diagnosed', async () => {
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'IN_PROGRESS' },
+        repairJobSteps: [
+          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
+          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.WITH_PARTS } },
+          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.WITH_PARTS } },
+          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.WITH_PARTS } },
+          { id: 105, completeAt: null, note: '[ไม่อนุมัติ] งบประมาณเกิน', stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
+          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.WITH_PARTS, label: 'ช่างรับอะไหล่ & ลงมือซ่อม' } },
+        ],
+      });
+
+      await expect(
+        service.updateStepProgress('job-uuid-1', 6, { note: 'พยายามข้าม' }, mockUser),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

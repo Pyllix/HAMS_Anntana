@@ -12,6 +12,7 @@ import { useAuthStore } from "../stores/authStore";
 import axios from "axios";
 import UserBorrowReturn from "../Pages/DepartMentBorrowReturn";
 import { APP_ROUTE } from "../Router/routes.config";
+import Spinner from "../components/loader/Spinner";
 
 // Function สำหรับหา Path ที่ User จะต้องไป
 function RootRedirect() {
@@ -98,7 +99,8 @@ export default function AppRouter() {
 
   if (isInitializing) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-bg-app">
+      <div className="flex h-screen w-full items-center justify-center gap-2 bg-bg-app text-slate-500">
+        <Spinner className="h-6 w-6" />
         กำลังโหลด...
       </div>
     );
