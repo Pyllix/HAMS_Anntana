@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Wrench,
@@ -8,12 +8,18 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useRepairStore } from "../stores/useRepairModalStore";
+import { useAuthStore } from "../stores/authStore";
 import { getAssetByCode } from "../services/repairService";
 import ConfirmRepairModal from "../components/help-desk/ConfirmRepairModal";
 import type { UrgencyStatus } from "../Types/TypeRepair";
 
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+
 export default function RepairRequestPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const { user } = useAuthStore();
+  const lastActiveTimeRef = useRef<number>(Date.now());
 
   const {
     reportType,
@@ -30,6 +36,38 @@ export default function RepairRequestPage() {
     openConfirmModal,
     resetForm,
   } = useRepairStore();
+
+  useEffect(() => {
+    if (!user) {
+      resetForm();
+      setSearchError(null);
+    }
+  }, [user, resetForm]);
+
+  useEffect(() => {
+    return () => {
+      resetForm();
+    };
+  }, [resetForm]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        lastActiveTimeRef.current = Date.now();
+      } else {
+        const now = Date.now();
+        if (now - lastActiveTimeRef.current > INACTIVITY_TIMEOUT_MS) {
+          resetForm();
+          setSearchError(null);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [resetForm]);
 
   const { refetch: fetchAsset, isFetching: isSearching } = useQuery({
     queryKey: ["assetInfo", assetSearchInput],
