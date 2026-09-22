@@ -210,7 +210,10 @@ export default function AssessmentForm() {
       jobTypeId: previous.jobTypeId || "",
       techCategoryId: previous.techCategoryId || jobDetail.techCategoryId || "",
       causeId: previous.causeId || jobDetail.causeId || "",
-      isRepeatRepair: jobDetail.isRepeatRepair !== undefined ? jobDetail.isRepeatRepair : previous.isRepeatRepair,
+      isRepeatRepair:
+        jobDetail.isRepeatRepair !== undefined
+          ? jobDetail.isRepeatRepair
+          : previous.isRepeatRepair,
     }));
 
     if (!isAssignMode) {
@@ -469,7 +472,7 @@ export default function AssessmentForm() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Left Side: Asset Details */}
         <div className="lg:col-span-5">
-          <AssetInfoCard jobData={selectedJob} />
+          <AssetInfoCard jobData={jobDetail || selectedJob} />
         </div>
 
         {/* Right Side: Action Form */}
@@ -694,7 +697,8 @@ export default function AssessmentForm() {
               {/* ช่องกรอกเหตุผล */}
               <div className="space-y-1.5 text-xs">
                 <label className="block font-semibold text-slate-700">
-                  เหตุผลการยกเลิกใบแจ้งซ่อม <span className="text-rose-500">*</span>
+                  เหตุผลการยกเลิกใบแจ้งซ่อม{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}

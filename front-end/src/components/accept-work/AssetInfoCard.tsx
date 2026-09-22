@@ -1,22 +1,20 @@
-import { FileText } from "lucide-react";
+import { FileText, History } from "lucide-react";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
-import type {
-  RepairDetail,
-  UrgencyStatus,
-  BaseLookup,
-  RepairMetaLookups,
-} from "../../Types/TypeAssessment";
+import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
+import EquipmentDetailModal from "../../components/equipment-stock/EquipmentDetailModal";
+
+import type { RepairDetail, UrgencyStatus } from "../../Types/TypeAssessment";
 
 interface AssetInfoProps {
   jobData?: RepairDetail | null;
-  jobTypes?: BaseLookup[];
 }
 
 export default function AssetInfoCard({
   jobData: customJobData,
-  jobTypes: customJobTypes,
 }: AssetInfoProps) {
-  const { selectedJob, lookups } = useAssessmentStore() as any;
+  const { selectedJob } = useAssessmentStore() as any;
+
+  const { openModal } = useEquipmentDetailModalStore();
 
   const rawJob = customJobData || selectedJob;
   const job = (
@@ -29,39 +27,30 @@ export default function AssetInfoCard({
   const section = job.section;
   const reporter = job.reporter;
 
-  const jobTypesList: BaseLookup[] =
-    customJobTypes ||
-    lookups?.jobTypes ||
-    lookups?.meta?.jobTypes ||
-    lookups?.repairMeta?.jobTypes ||
-    (lookups as RepairMetaLookups)?.jobTypes ||
-    [];
-
-  const matchedJobType = jobTypesList.find(
-    (item) => String(item.id) === String(job.jobTypeId),
-  );
-
   const rawReportType = job.reportType?.trim();
-  const isGenericEnglishWord =
-    rawReportType?.toUpperCase() === "REPAIR" || !rawReportType;
-    
-  const rawJobTypeObj = (job as any)?.jobType;
-  const reportType =
-    (typeof rawJobTypeObj === "string" ? rawJobTypeObj : rawJobTypeObj?.name) ||
-    matchedJobType?.name ||
-    (!isGenericEnglishWord ? rawReportType : null) ||
-    "-";
+  const getReportType = () => {
+    if (rawReportType) {
+      const upper = rawReportType.toUpperCase();
+      if (upper === "MAINTENANCE" || upper === "PREVENTIVE") {
+        return "บำรุงรักษาตามรอบ (Maintenance)";
+      }
+      if (upper === "CORRECTIVE" || upper === "REPAIR") {
+        return "แจ้งซ่อมทั่วไป";
+      }
+      return rawReportType;
+    }
+    return (job as any)?.jobType?.name || "-";
+  };
 
+  const reportType = getReportType();
   const assetCode = asset?.noid || "-";
   const assetName = asset?.name
     ? `${asset.name} ${asset.model ? `(${asset.model})` : ""}`
     : "-";
   const serialNo = asset?.serialNo || "-";
-  const categoryName =
-    (job as any)?.techCategory?.name ||
-    asset?.type?.name ||
-    (job as any)?.jobType?.name ||
-    "-";
+
+  const categoryName = asset?.type?.name || "-";
+
   const location = section?.name
     ? `${section.name} ${section.building ? `(${section.building})` : ""}`
     : "-";
@@ -102,140 +91,157 @@ export default function AssetInfoCard({
   const urgencyBadge = getUrgencyBadge(urgencyStatus);
 
   return (
-    <div className="bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
-        <span className="p-1 rounded-md bg-emerald-50 text-emerald-600">
-          <FileText className="w-4 h-4" />
-        </span>
-        ข้อมูลครุภัณฑ์และรายการแจ้งซ่อม
-      </div>
-
-      <div className="space-y-3 text-xs">
-        {/* Row 1: Asset Code & Report Type */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-slate-400 font-medium block mb-1">
-              รหัสครุภัณฑ์
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={assetCode}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono font-semibold outline-hidden"
-            />
+    <>
+      <div className="bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+            <span className="p-1 rounded-md bg-emerald-50 text-emerald-600">
+              <FileText className="w-4 h-4" />
+            </span>
+            ข้อมูลครุภัณฑ์และรายการแจ้งซ่อม
           </div>
-          <div>
-            <label className="text-slate-400 font-medium block mb-1">
-              ประเภทการแจ้ง
-            </label>
-            <div className="w-full bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2 text-emerald-700 font-semibold truncate">
-              {reportType}
+
+          {/* ปุ่มดูประวัติการซ่อม */}
+          <button
+            type="button"
+            onClick={() => asset && openModal(asset as any)}
+            disabled={!asset}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-xs border border-emerald-200/60 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <History className="w-3.5 h-3.5 text-emerald-600" />
+            ดูประวัติการซ่อม
+          </button>
+        </div>
+
+        <div className="space-y-3 text-xs">
+          {/* Row 1: Asset Code & Report Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                รหัสครุภัณฑ์
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={assetCode}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono font-semibold outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                ประเภทการแจ้ง
+              </label>
+              <div className="w-full bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2 text-emerald-700 font-semibold truncate">
+                {reportType}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Row 2: Asset Name */}
-        <div>
-          <label className="text-slate-400 font-medium block mb-1">
-            ชื่อครุภัณฑ์ / รุ่น / ยี่ห้อ
-          </label>
-          <input
-            type="text"
-            readOnly
-            value={assetName}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-medium outline-hidden"
-          />
-        </div>
-
-        {/* Row 3: Serial No. & Category */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* Row 2: Asset Name */}
           <div>
             <label className="text-slate-400 font-medium block mb-1">
-              หมายเลขเครื่อง (Serial No.)
+              ชื่อครุภัณฑ์ / รุ่น / ยี่ห้อ
             </label>
             <input
               type="text"
               readOnly
-              value={serialNo}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono outline-hidden"
+              value={assetName}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-medium outline-hidden"
             />
           </div>
-          <div>
-            <label className="text-slate-400 font-medium block mb-1">
-              หมวดหมู่ครุภัณฑ์
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={categoryName}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
-            />
-          </div>
-        </div>
 
-        {/* Row 4: Location */}
-        <div>
-          <label className="text-slate-400 font-medium block mb-1">
-            สถานที่ติดตั้ง / แผนกที่ใช้งาน
-          </label>
-          <input
-            type="text"
-            readOnly
-            value={location}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-hidden"
-          />
-        </div>
-
-        {/* Row 5: Reporter, Urgency & Created Date */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
-            <label className="text-slate-400 font-medium block mb-1">
-              ผู้แจ้งซ่อม / เบอร์โทร
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={reporterName}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
-            />
-          </div>
-          <div>
-            <label className="text-slate-400 font-medium block mb-1">
-              ระดับความเร่งด่วน
-            </label>
-            <div
-              className={`w-full rounded-lg px-3 py-2 font-semibold text-center truncate  ${urgencyBadge.className}`}
-            >
-              {urgencyBadge.label}
+          {/* Row 3: Serial No. & Category */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                หมายเลขเครื่อง (Serial No.)
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={serialNo}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 font-mono outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                หมวดหมู่ครุภัณฑ์
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={categoryName}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
+              />
             </div>
           </div>
+
+          {/* Row 4: Location */}
           <div>
             <label className="text-slate-400 font-medium block mb-1">
-              วันที่แจ้ง
+              สถานที่ติดตั้ง / แผนกที่ใช้งาน
             </label>
             <input
               type="text"
               readOnly
-              value={reportedAt}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 text-center outline-hidden"
+              value={location}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-hidden"
+            />
+          </div>
+
+          {/* Row 5: Reporter, Urgency & Created Date */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label className="text-slate-400 font-medium block mb-1">
+                ผู้แจ้งซ่อม / เบอร์โทร
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={reporterName}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 truncate outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                ระดับความเร่งด่วน
+              </label>
+              <div
+                className={`w-full rounded-lg px-3 py-2 font-semibold text-center truncate ${urgencyBadge.className}`}
+              >
+                {urgencyBadge.label}
+              </div>
+            </div>
+            <div>
+              <label className="text-slate-400 font-medium block mb-1">
+                วันที่แจ้ง
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={reportedAt}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 text-center outline-hidden"
+              />
+            </div>
+          </div>
+
+          {/* Row 6: Symptom */}
+          <div>
+            <label className="text-slate-400 font-medium block mb-1">
+              อาการเสียที่ระบุ (จากผู้ใช้งาน)
+            </label>
+            <textarea
+              readOnly
+              rows={3}
+              value={symptomDetails}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-700 resize-none outline-hidden"
             />
           </div>
         </div>
-
-        {/* Row 6: Symptom */}
-        <div>
-          <label className="text-slate-400 font-medium block mb-1">
-            อาการเสียที่ระบุ (จากผู้ใช้งาน)
-          </label>
-          <textarea
-            readOnly
-            rows={3}
-            value={symptomDetails}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-700 resize-none outline-hidden"
-          />
-        </div>
       </div>
-    </div>
+
+      <EquipmentDetailModal />
+    </>
   );
 }
