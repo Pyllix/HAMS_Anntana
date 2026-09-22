@@ -58,7 +58,7 @@ export class RepairsController {
   // 2. Lookups & Workload Balancing
   // ───────────────────────────────────────────────────────────────────────────
   @Get('lookups/meta')
-  @ApiOperation({ summary: 'Get repair lookup tables (Causes, Tech categories, Job types, Step masters)' })
+  @ApiOperation({ summary: 'Get repair lookup tables (Job statuses, Causes, Tech categories, Job types, Step masters)' })
   async getLookups() {
     return this.repairsService.getLookups();
   }
