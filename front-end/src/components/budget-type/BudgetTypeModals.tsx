@@ -95,7 +95,7 @@ export function BudgetTypeDetailModal({
         {/* Description Section */}
         <div className="space-y-1.5">
           <label className="block text-xs font-semibold text-slate-700">
-            รายละเอียด <span className="text-emerald-600">*</span>
+            รายละเอียด <span className="text-rose-500">*</span>
           </label>
           <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-xs sm:text-sm text-slate-700 min-h-[90px] leading-relaxed">
             {item.description || "-"}
@@ -225,7 +225,7 @@ export function BudgetTypeFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
-                  ชื่อประเภทเงิน <span className="text-emerald-600">*</span>
+                  ชื่อประเภทเงิน <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -239,7 +239,7 @@ export function BudgetTypeFormModal({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
-                  ปีงบประมาณ <span className="text-emerald-600">*</span>
+                  ปีงบประมาณ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -255,7 +255,7 @@ export function BudgetTypeFormModal({
               {/* Edit Mode: Name */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
-                  ชื่อประเภทเงิน <span className="text-emerald-600">*</span>
+                  ชื่อประเภทเงิน <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -269,7 +269,7 @@ export function BudgetTypeFormModal({
               {/* Edit Mode: FiscalYear */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700">
-                  ปีงบประมาณ <span className="text-emerald-600">*</span>
+                  ปีงบประมาณ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -315,7 +315,7 @@ export function BudgetTypeFormModal({
           {/* Description */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700">
-              รายละเอียด <span className="text-emerald-600">*</span>
+              รายละเอียด <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={4}
@@ -330,7 +330,7 @@ export function BudgetTypeFormModal({
           {!isEdit && (
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-700">
-                สถานะ <span className="text-emerald-600">*</span>
+                สถานะ <span className="text-rose-500">*</span>
               </label>
               <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
