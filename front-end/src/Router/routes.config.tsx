@@ -9,6 +9,7 @@ import {
   Building2,
   Banknote,
   ClipboardCheck,
+  TrendingUp,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../Pages/AssetCenterBorrowReturn";
@@ -32,6 +33,7 @@ import DepartmentManagement from "../Pages/DepartmentManagement";
 import EquipmentStock from "../Pages/EquipmentStock";
 import UnrepairableReceipts from "../Pages/UnrepairableReceipts";
 import SparePartApprovals from "../Pages/SparePartApprovals";
+import ExpenseForecast from "../Pages/ExpenseForecast";
 
 interface AppRote {
   path: string;
@@ -200,6 +202,17 @@ export const APP_ROUTE: AppRote[] = [
     element: <DepartmentManagement />,
     icon: Building2,
     roles: [ROLES.ADMIN],
+    showInNav: true,
+  },
+  // -------- ผู้จัดการ ------------
+   {
+    path: "expense-forecast",
+    title: "พยากรณ์งบประมาณ (AI)",
+    element: <ExpenseForecast />,
+    icon: TrendingUp,
+    roles: [
+      ROLES.MANAGER,      
+    ],
     showInNav: true,
   },
 ];

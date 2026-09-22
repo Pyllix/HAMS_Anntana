@@ -23,6 +23,7 @@ import { CauseModule } from './cause/cause.module';
 import { JobTypeModule } from './job-type/job-type.module';
 import { AssetViabilityModule } from './asset-viability/asset-viability.module';
 import { RolesGuard } from './common/guards/roles.guard';
+import { ForecastModule } from './forecast/forecast.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CauseModule,
     JobTypeModule,
     AssetViabilityModule,
+    ForecastModule,
   ],
   controllers: [],
   providers: [
