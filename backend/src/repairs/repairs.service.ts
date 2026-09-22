@@ -1274,7 +1274,8 @@ export class RepairsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async getLookups() {
-    const [causes, techCategories, jobTypes, stepMasters] = await Promise.all([
+    const [jobStatuses, causes, techCategories, jobTypes, stepMasters] = await Promise.all([
+      this.prisma.jobStatus.findMany({ where: { deletedAt: null }, orderBy: { id: 'asc' } }),
       this.prisma.cause.findMany({ where: { deleteAt: null } }),
       this.prisma.techCategory.findMany({ where: { isActive: true, deleteAt: null } }),
       this.prisma.jobType.findMany({ where: { deletedAt: null } }),
@@ -1282,6 +1283,8 @@ export class RepairsService {
     ]);
 
     return {
+      jobStatuses,
+      jobStatus: jobStatuses,
       causes,
       techCategories,
       jobTypes,
