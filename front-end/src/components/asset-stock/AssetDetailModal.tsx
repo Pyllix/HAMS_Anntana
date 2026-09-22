@@ -330,7 +330,7 @@ export default function AssetDetailModal() {
           <button
             type="button"
             onClick={closeModal}
-            className="rounded-xl bg-slate-100 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+            className="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
           >
             ปิดหน้าต่าง
           </button>
