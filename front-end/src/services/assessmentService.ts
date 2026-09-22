@@ -12,6 +12,7 @@ import type {
   Mechanic,
   SparePart,
   RepairMetaLookups,
+  BaseLookup,
 } from "../Types/TypeAssessment";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
@@ -154,8 +155,24 @@ export async function getSpareParts(): Promise<SparePart[]> {
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
-export async function getRepairMetaLookups(): Promise<RepairMetaLookups> {
-  const res = await axios.get(`${BASE_URL}/repairs/lookups/meta`, getHeaders());
+export async function getAssetTypes(): Promise<BaseLookup[]> {
+  const res = await axios.get(`${BASE_URL}/asset-type`, getHeaders());
+  return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+}
 
-  return res.data;
+export async function getRepairMetaLookups(): Promise<RepairMetaLookups> {
+  const [metaRes, assetTypesRes] = await Promise.allSettled([
+    axios.get(`${BASE_URL}/repairs/lookups/meta`, getHeaders()),
+    getAssetTypes(),
+  ]);
+
+  const metaData = metaRes.status === "fulfilled" ? metaRes.value.data : {};
+  const assetTypesData = assetTypesRes.status === "fulfilled" ? assetTypesRes.value : [];
+
+  return {
+    ...metaData,
+    assetTypes: assetTypesData,
+    asset_types: assetTypesData,
+    categories: assetTypesData,
+  };
 }

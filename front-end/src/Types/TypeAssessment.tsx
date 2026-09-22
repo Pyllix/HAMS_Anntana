@@ -97,6 +97,7 @@ export interface RepairMetaLookups {
   jobTypes: BaseLookup[];
   causes: BaseLookup[];
   techCategories: LookupTechCategory[];
+  assetTypes?: BaseLookup[];
   stepMasters?: StepMaster[];
 }
 
@@ -257,6 +258,7 @@ export interface RepairDetail {
     riskLevel?: string;
     remark?: string;
     imageUrl?: string;
+    type_id?: number;
     type?: {
       id: number;
       name: string;
