@@ -22,6 +22,22 @@ interface loginSucces {
   user: User;
 }
 
+export function getLoginErrorMessage(err: any): string {
+  if (!err?.response) {
+    return "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง";
+  }
+
+  if (err.response.status === 401) {
+    return "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+  }
+
+  if (err.response.status === 429) {
+    return "พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่อีกครั้งภายหลัง";
+  }
+
+  return "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+}
+
 export async function authLogin(
   email: string,
   password: string,

@@ -1,9 +1,11 @@
-import { Box, Mail, Lock } from "lucide-react";
+import { Box, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { authLogin } from "../services/authService";
+import { authLogin, getLoginErrorMessage } from "../services/authService";
 import { useAuthStore } from "../stores/authStore";
 import { useNavigate } from "react-router-dom";
 import Spinner from "../components/loader/Spinner";
+import ToastContainer from "../components/borrow-return/ToastContainer";
+import { useToastStore } from "../stores/useToastStore";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -12,9 +14,11 @@ export default function Login() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+  const showToast = useToastStore((state) => state.showToast);
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
@@ -36,11 +40,11 @@ export default function Login() {
 
         login(loginData.user, loginData.token);
 
-        console.log("Login Success!");
+        showToast("success", "เข้าสู่ระบบสำเร็จ");
         navigate("/", { replace: true });
       }
     } catch (error) {
-      console.error("Login Failed:", error);
+      showToast("error", getLoginErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +114,7 @@ export default function Login() {
                   <Lock className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="****************"
                   onChange={handleInputChange}
                   name="password"
@@ -118,6 +122,18 @@ export default function Login() {
                   autoComplete="new-password"
                   className="w-full pl-10 pr-12 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" strokeWidth={1.5} />
+                  ) : (
+                    <Eye className="w-5 h-5" strokeWidth={1.5} />
+                  )}
+                </button>
               </div>
             </div>
             {/* ปุ่ม login */}
@@ -205,6 +221,8 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      <ToastContainer />
     </div>
   );
 }
