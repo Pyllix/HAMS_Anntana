@@ -5,6 +5,7 @@ import type {
   CreateSparepartDto,
   UpdateSparepartDto,
   StockInSparepartDto,
+  ReturnSparepartDto,
 } from "../Types/TypeSparePart";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
@@ -242,4 +243,96 @@ export async function getSparepartTransactions(id: number): Promise<any[]> {
   );
   const data = res.data;
   return Array.isArray(data) ? data : (data?.data ?? []);
+}
+
+export async function getRepairByJobNo(jobNo: string): Promise<any> {
+  if (!jobNo || !jobNo.trim()) {
+    return null;
+  }
+
+  const query = jobNo.trim();
+
+  try {
+    const res = await axios.get(`${BASE_URL}/repairs?limit=100`, getHeaders());
+    const data = res.data;
+    const items = Array.isArray(data) ? data : (data?.data ?? []);
+
+    const found = items.find(
+      (item: any) =>
+        String(item.id) === query ||
+        item.jobNo === query ||
+        item.code === query ||
+        item.repairCode === query,
+    );
+
+    if (!found) {
+      return null;
+    }
+
+    // ดึงรายละเอียดข้อมูลเต็ม
+    let repairData = found;
+    try {
+      const fullDetailRes = await axios.get(
+        `${BASE_URL}/repairs/${found.id}`,
+        getHeaders(),
+      );
+      repairData = fullDetailRes.data || found;
+    } catch (err) {
+      console.warn("Could not fetch full detail, using list item:", err);
+    }
+
+    // ตรวจสอบว่า Job นี้เคยทำรายการแล้วหรือไม่
+    const completedJobs: string[] = JSON.parse(
+      localStorage.getItem("completed_return_jobs") || "[]",
+    );
+
+    const isAlreadyCompleted = completedJobs.includes(String(found.id));
+
+    return {
+      ...repairData,
+      isCompleted: isAlreadyCompleted, 
+    };
+  } catch (err) {
+    console.warn("Error fetching repair data:", err);
+    return null;
+  }
+}
+
+export async function returnSparepart(
+  repairId: string,
+  dto: ReturnSparepartDto,
+): Promise<any> {
+  if (!repairId || String(repairId).trim() === "" || repairId === "undefined") {
+    throw new Error("ไม่พบรหัสใบแจ้งซ่อม (repairId)");
+  }
+
+  const rawId =
+    (dto as any).sparepartId ?? (dto as any).sparePartId ?? (dto as any).id;
+
+  const parsedSparepartId = Number(rawId);
+  const parsedQty = Number(dto.qty ?? (dto as any).quantity ?? 0);
+
+  if (
+    isNaN(parsedSparepartId) ||
+    !Number.isInteger(parsedSparepartId) ||
+    parsedSparepartId <= 0
+  ) {
+    throw new Error(`รหัสอะไหล่ต้องเป็นจำนวนเต็มบวก (sparepartId: ${rawId})`);
+  }
+
+  if (isNaN(parsedQty) || parsedQty <= 0) {
+    throw new Error(`จำนวนคืนต้องมากกว่า 0 (qty: ${dto.qty})`);
+  }
+
+  const payload = {
+    sparepartId: parsedSparepartId,
+    qty: parsedQty,
+  };
+
+  const res = await axios.post(
+    `${BASE_URL}/repairs/${repairId}/spare-parts/return`,
+    payload,
+    getHeaders(),
+  );
+  return res.data;
 }

@@ -208,7 +208,7 @@ export default function RepairRequestPage() {
                 </button>
               </div>
             </div>
-
+            
             {/* Asset Search Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -273,6 +273,9 @@ export default function RepairRequestPage() {
                   className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
                 />
               </div>
+              {searchError && (
+                <p className="text-[11px] text-red-500 mt-1">{searchError}</p>
+              )}
             </div>
 
             {/* Location Field (Auto-filled) */}

@@ -26,7 +26,8 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       <img
         src={(info.getValue() as string) || "/placeholder.png"}
         alt="Asset"
-        className="h-10 w-10 rounded-md object-cover bg-gray-100 border border-gray-200"
+        // เพิ่ม object-center เผื่อรูปมาสัดส่วนแปลกๆ
+        className="h-10 w-10 rounded-md object-cover object-center bg-slate-100 border border-slate-200"
       />
     ),
   },
@@ -36,11 +37,14 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div>
-          <div className="font-semibold text-gray-900">{row.name}</div>
-          <div className="text-sm text-gray-400 font-mono mt-0.5">
-            {row.serialNo || row.model}
-          </div>
+        // 🌟 เพิ่ม max-w-[300px] หรือขนาดตามต้องการ และใส่ whitespace-normal
+        <div className="flex flex-col justify-center min-w-[200px] max-w-[300px] lg:max-w-[400px] whitespace-normal">
+          <span className="font-semibold text-slate-800 leading-snug line-clamp-2">
+            {row.name || "-"}
+          </span>
+          <span className="text-xs text-slate-500 font-mono mt-1">
+            {row.serialNo || row.model || "ไม่ระบุรหัส"}
+          </span>
         </div>
       );
     },
@@ -50,7 +54,7 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
     header: "ประเภท",
     accessorFn: (row) => row.type?.name,
     cell: (info) => (
-      <span className="text-sm text-gray-600">
+      <span className="text-sm text-slate-600">
         {(info.getValue() as string) ?? "-"}
       </span>
     ),
@@ -61,50 +65,39 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div>
-          <div className="text-xs text-gray-500">
-            {row.section?.name ?? "-"}
-          </div>
-        </div>
+        <span className="text-sm text-slate-600">
+          {row.section?.name ?? "-"}
+        </span>
       );
     },
   },
-  //   {
-  //     accessorKey: "receivedDate",
-  //     header: "วันที่ยืม",
-  //     cell: (info) => {
-  //       const dateStr = info.getValue() as string;
-
-  //       const timePart = dateStr.split("T")[0];
-  //       return <span className="text-sm text-gray-600">{timePart || "-"}</span>;
-  //     },
-  //   },
   {
     id: "statusName",
     header: "สถานะ",
     cell: (info) => {
       const status = info.row.original.availabilityStatus;
       const code = status?.code;
-      const name = status?.name ?? "-";
+      const name =
+        code === "RESERVED"
+          ? (status?.name ?? "รออนุมัติ")
+          : (status?.name ?? "-");
 
-      // เลือก Class สีตาม Code
       const getStatusStyle = (statusCode?: string) => {
         switch (statusCode) {
           case "AVAILABLE":
-            return "bg-emerald-100 text-emerald-700";
+            return "bg-emerald-100 text-emerald-700 border-emerald-200";
+          case "RESERVED":
+            return "bg-cyan-100 text-cyan-700 border-cyan-200";
           case "BORROWED":
-            return "bg-red-100 text-red-700";
-          case "UNAVAILABLE":
+            return "bg-rose-100 text-rose-700 border-rose-200";
           default:
-            return "bg-gray-100 text-gray-700";
+            return "bg-slate-100 text-slate-600 border-slate-200";
         }
       };
 
       return (
         <span
-          className={`inline-flex items-center justify-center w-36 whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-medium ${getStatusStyle(
-            code,
-          )}`}
+          className={`inline-flex items-center justify-center min-w-[90px] px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(code)}`}
         >
           {name}
         </span>
@@ -118,22 +111,32 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       const row = info.row.original;
       const isAvailable = info.row.original.availabilityStatus?.code;
 
-      const handleOpenBorrowModal = () => {
+      const handleOpenBorrowModal = () =>
         useBorrowModalStore.getState().openForm(row);
-      };
-
-      const handleOpenReturnModal = () => {
+      const handleOpenReturnModal = () =>
         useReturnModalStore.getState().openForm(row);
-      };
 
       if (isAvailable === "AVAILABLE") {
         return (
           <button
             type="button"
             onClick={handleOpenBorrowModal}
-            className="w-full max-w-20 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+            className="w-24 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
           >
             ยืมของ
+          </button>
+        );
+      }
+
+      if (isAvailable === "RESERVED") {
+        return (
+          <button
+            disabled
+            type="button"
+            title='ดำเนินการได้ที่แท็บ "อนุมัติคำขอยืม"'
+            className="w-24 cursor-not-allowed rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-500"
+          >
+            รอดำเนินการ
           </button>
         );
       }
@@ -143,24 +146,22 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
           <button
             type="button"
             onClick={handleOpenReturnModal}
-            className="w-full max-w-20 rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-50"
+            className="w-24 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50"
           >
             รับคืน
           </button>
         );
       }
 
-      if (isAvailable === "UNAVAILABLE") {
-        return (
-          <button
-            disabled
-            type="button"
-            className="w-full whitespace-nowrap cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-400"
-          >
-            ไม่พร้อม
-          </button>
-        );
-      }
+      return (
+        <button
+          disabled
+          type="button"
+          className="w-24 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-400"
+        >
+          ไม่พร้อม
+        </button>
+      );
     },
   },
 ];
@@ -172,10 +173,9 @@ interface Props {
 }
 
 export default function AssetsTable({ search, category, type }: Props) {
-
   const user = useAuthStore((state) => state.user);
   const sectionId = user?.section_id;
-  
+
   const { data: assets } = useQuery({
     queryKey: ["assets", sectionId],
     queryFn: () => getAssets(sectionId),
@@ -216,15 +216,15 @@ export default function AssetsTable({ search, category, type }: Props) {
   });
 
   return (
-    <div className="flex flex-col justify-between mb-6">
-      <div className="space-y-4">
-        {/* table */}
-        <table className="bg-bg-component shadow-sm w-full rounded-sm text-left">
-          <thead className="font-bold text-md">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      {/* พื้นที่ตาราง Scroll ได้ */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-left border-collapse text-sm text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-slate-200">
+              <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="py-3 px-4">
+                  <th key={header.id} className="py-3.5 px-4 ">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -233,31 +233,63 @@ export default function AssetsTable({ search, category, type }: Props) {
               </tr>
             ))}
           </thead>
+
           <tbody className="divide-y divide-slate-100">
-            {/* ใช้ rowModel ตัวที่ผ่านการแบ่งหน้าแล้ว */}
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
-                {row.getAllCells().map((cell) => (
-                  <td key={cell.id} className="py-3 px-4">
-                    <table.FlexRender cell={cell} />
-                  </td>
-                ))}
+            {table.getRowModel().rows.length > 0 ? (
+              table.getRowModel().rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="hover:bg-slate-50/80 transition-colors"
+                >
+                  {row.getAllCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      className="py-3.5 px-4 whitespace-nowrap align-middle"
+                    >
+                      <table.FlexRender cell={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="text-center py-12 text-slate-400"
+                >
+                  ไม่พบข้อมูล
+                </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
+      </div>
 
-        {/* ส่วนล่าง: ปุ่ม Pagination ที่จะถูกดันมาอยู่ขวาล่างสุดอัตโนมัติ */}
-        <div className="flex items-center justify-end space-x-2 pt--6 mt-auto ">
-          {/* ปุ่ม Previous */}
+      {/* กล่อง Pagination (ที่คุณลืมใส่กรอบครอบไว้) */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-white border-t border-slate-200">
+        {/* ข้อความบอกจำนวนหน้า */}
+        <div className="text-xs text-slate-500 hidden sm:block">
+          หน้า{" "}
+          <span className="font-semibold text-slate-700">
+            {table.state.pagination.pageIndex + 1}
+          </span>{" "}
+          จาก{" "}
+          <span className="font-semibold text-slate-700">
+            {table.getPageCount() || 1}
+          </span>
+        </div>
+
+        {/* กลุ่มปุ่มเปลี่ยนหน้า */}
+        <div className="flex items-center space-x-1.5 ml-auto sm:ml-0">
+          {/* ปุ่ม Previous (ที่หายไป) */}
           <button
             type="button"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <svg
-              className="h-5 w-5"
+              className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -274,17 +306,20 @@ export default function AssetsTable({ search, category, type }: Props) {
           {/* ปุ่มตัวเลขหน้า */}
           {Array.from({ length: table.getPageCount() }, (_, index) => {
             const pageNumber = index + 1;
-            const isCurrentPage = table.state.pagination.pageIndex === index;
+            const currentPage = table.state.pagination.pageIndex;
+            const isCurrentPage = currentPage === index;
+
+            if (index < currentPage - 2 || index > currentPage + 2) return null;
 
             return (
               <button
                 key={pageNumber}
                 type="button"
                 onClick={() => table.setPageIndex(index)}
-                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors ${
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition-colors ${
                   isCurrentPage
                     ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 {pageNumber}
@@ -297,10 +332,10 @@ export default function AssetsTable({ search, category, type }: Props) {
             type="button"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <svg
-              className="h-5 w-5"
+              className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -309,7 +344,7 @@ export default function AssetsTable({ search, category, type }: Props) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M9 5l7 7-7 7"
+                d="M9 5l7 7-7"
               />
             </svg>
           </button>

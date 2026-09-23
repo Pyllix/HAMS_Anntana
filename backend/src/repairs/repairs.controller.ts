@@ -58,7 +58,7 @@ export class RepairsController {
   // 2. Lookups & Workload Balancing
   // ───────────────────────────────────────────────────────────────────────────
   @Get('lookups/meta')
-  @ApiOperation({ summary: 'Get repair lookup tables (Causes, Tech categories, Job types, Step masters)' })
+  @ApiOperation({ summary: 'Get repair lookup tables (Job statuses, Causes, Tech categories, Job types, Step masters)' })
   async getLookups() {
     return this.repairsService.getLookups();
   }
@@ -189,7 +189,7 @@ export class RepairsController {
   }
 
   @Patch(':id/steps/reject')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MANAGER)
+  @Roles(UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Reject/disapprove the pending approval step and return job for re-diagnosis' })
   async rejectStep(
     @Param('id') id: string,

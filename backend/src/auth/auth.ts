@@ -4,6 +4,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { openAPI, bearer, admin } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { sharedPrisma } from '../common/config/database.config';
+import { mailService } from '../common/mail/mail.service';
 
 // ─── Access Control ───────────────────────────────────────────────────────────
 // Define admin-level permissions matching better-auth's defaults,
@@ -36,8 +37,31 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false,
+    requireEmailVerification: true,
   },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: false,
+    expiresIn: 3600, // 1 hour
+    sendVerificationEmail: async ({ user, url }) => {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const targetUrl = new URL(url);
+      if (!targetUrl.searchParams.has('callbackURL') || targetUrl.searchParams.get('callbackURL') === '/') {
+        targetUrl.searchParams.set('callbackURL', `${frontendUrl}/login?verified=true`);
+      }
+      await mailService.sendVerificationEmail({
+        to: user.email,
+        name: user.name,
+        verificationUrl: targetUrl.toString(),
+      });
+    },
+  },
+  trustedOrigins: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',
+  ],
   // Map better-auth's built-in user fields to our schema column names
   user: {
     // Redirect better-auth's 'name' field to our 'firstname' column
