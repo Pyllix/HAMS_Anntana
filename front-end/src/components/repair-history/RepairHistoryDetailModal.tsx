@@ -296,9 +296,20 @@ export default function RepairHistoryDetailModal() {
                       </table>
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">
-                      เลขที่เอกสาร/ใบเสนอราคา: {job.billNo || "-"}
-                    </p>
+                    <div className="grid gap-3 text-xs sm:grid-cols-2">
+                      <Info
+                        label="เลขที่ใบสั่งจ้าง / เอกสารอ้างอิง"
+                        value={job.billNo || "-"}
+                      />
+                      <Info
+                        label="ค่าซ่อมภายนอก"
+                        value={
+                          job.repairCost === null || job.repairCost === undefined
+                            ? "-"
+                            : `${job.repairCost.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท`
+                        }
+                      />
+                    </div>
                   )}
                 </section>
               )}
