@@ -38,6 +38,9 @@ describeWithDatabase(
     let lostId: number;
     let borrowedTransactionStatusId: number;
     let cancelledBorrowStatusId: number;
+    let cancelledJobStatusId: number;
+    let sparepartGroupId: number;
+    let sparepartId: number;
 
     type AssetResponse = {
       name: string;
@@ -88,6 +91,40 @@ describeWithDatabase(
           borrow_status_id: borrowedTransactionStatusId,
         },
       });
+    }
+
+    async function addRepairJob(initialSolution?: string) {
+      const pendingAssignStatus = await prisma.jobStatus.findUniqueOrThrow({
+        where: { code: 'PENDING_ASSIGN' },
+      });
+      const job = await prisma.repairJob.create({
+        data: {
+          jobNo: `REP-${randomUUID().slice(0, 8)}`,
+          assetId,
+          sectionId,
+          reporterId: userId,
+          jobTypeId,
+          reportType: ReportType.Repair,
+          jobStatusId: pendingAssignStatus.id,
+          urgencyStatus: UrgencyStatus.NORMAL,
+          solution: initialSolution,
+          createdBy: userId,
+          updatedBy: userId,
+        },
+      });
+
+      const sparepartTxn = await prisma.sparepartTxn.create({
+        data: {
+          jobId: job.id,
+          sparepartId,
+          txnType: 'PENDING_WITHDRAW',
+          qty: 1,
+          unitPrice: 100,
+          txnBy: userId,
+        },
+      });
+
+      return { job, sparepartTxn };
     }
 
     beforeAll(async () => {
@@ -142,6 +179,26 @@ describeWithDatabase(
         create: { code: 'PENDING_ASSIGN', name: 'PENDING_ASSIGN' },
         update: { name: 'PENDING_ASSIGN' },
       });
+      cancelledJobStatusId = (
+        await prisma.jobStatus.upsert({
+          where: { code: 'CANCELLED' },
+          create: { code: 'CANCELLED', name: 'CANCELLED' },
+          update: { name: 'CANCELLED' },
+        })
+      ).id;
+      const spareGroup = await prisma.sparepartGroup.create({
+        data: { name: `Test Group-${randomUUID().slice(0, 8)}` },
+      });
+      sparepartGroupId = spareGroup.id;
+      const spare = await prisma.sparepart.create({
+        data: {
+          code: `SP-${randomUUID().slice(0, 8)}`,
+          name: 'Test Part',
+          price: 100,
+          groupId: sparepartGroupId,
+        },
+      });
+      sparepartId = spare.id;
       jobTypeId = (
         await prisma.jobType.create({
           data: { name: 'Integration test repair' },
@@ -246,6 +303,9 @@ describeWithDatabase(
 
     afterEach(async () => {
       if (!assetId) return;
+      await prisma.sparepartTxn.deleteMany({
+        where: { repairJob: { assetId } },
+      });
       await prisma.repairJob.deleteMany({ where: { assetId } });
       await prisma.borrowTransaction.deleteMany({
         where: { asset_id: assetId },
@@ -258,6 +318,12 @@ describeWithDatabase(
     afterAll(async () => {
       if (app) await app.close();
       if (prisma) {
+        if (sparepartId)
+          await prisma.sparepart.delete({ where: { id: sparepartId } });
+        if (sparepartGroupId)
+          await prisma.sparepartGroup.delete({
+            where: { id: sparepartGroupId },
+          });
         if (userId) await prisma.user.delete({ where: { id: userId } });
         if (companyId)
           await prisma.company.delete({ where: { id: companyId } });
@@ -491,6 +557,60 @@ describeWithDatabase(
       expect(updatedTx?.borrow_status_id).toBe(cancelledBorrowStatusId);
       expect(updatedTx?.cancelled_by_user_id).toBe(userId);
       expect(updatedTx?.cancelled_at).not.toBeNull();
+    });
+
+    it('auto-cascades repair cancellation and cleans up pending spare parts when an UNDER_REPAIR asset is marked LOST', async () => {
+      await setState(underRepairId, unavailableId);
+      const { job, sparepartTxn } = await addRepairJob(
+        'Initial mechanic assessment',
+      );
+
+      await request(server())
+        .patch(`/asset/${assetId}/status`)
+        .send({ asset_status_id: lostId })
+        .expect(200);
+
+      const asset = await getAsset();
+      expect(asset.body.status.code).toBe('LOST');
+      expect(asset.body.availabilityStatus.code).toBe('UNAVAILABLE');
+
+      const updatedJob = await prisma.repairJob.findUnique({
+        where: { id: job.id },
+      });
+      expect(updatedJob?.jobStatusId).toBe(cancelledJobStatusId);
+      expect(updatedJob?.solution).toContain('Initial mechanic assessment');
+      expect(updatedJob?.solution).toContain(
+        '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)',
+      );
+      expect(updatedJob?.updatedBy).toBe(userId);
+
+      const deletedTxn = await prisma.sparepartTxn.findUnique({
+        where: { id: sparepartTxn.id },
+      });
+      expect(deletedTxn).toBeNull();
+    });
+
+    it('auto-cascades repair cancellation when updating status to LOST via general update endpoint', async () => {
+      await setState(underRepairId, unavailableId);
+      const { job } = await addRepairJob();
+
+      await request(server())
+        .patch(`/asset/${assetId}`)
+        .send({ asset_status_id: lostId })
+        .expect(200);
+
+      const asset = await getAsset();
+      expect(asset.body.status.code).toBe('LOST');
+      expect(asset.body.availabilityStatus.code).toBe('UNAVAILABLE');
+
+      const updatedJob = await prisma.repairJob.findUnique({
+        where: { id: job.id },
+      });
+      expect(updatedJob?.jobStatusId).toBe(cancelledJobStatusId);
+      expect(updatedJob?.solution).toContain(
+        '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)',
+      );
+      expect(updatedJob?.updatedBy).toBe(userId);
     });
   },
 );

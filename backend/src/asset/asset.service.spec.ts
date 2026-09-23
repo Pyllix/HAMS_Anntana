@@ -45,6 +45,16 @@ describe('AssetService', () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
+    repairJob: {
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
+    jobStatus: {
+      findUnique: jest.fn(),
+    },
+    sparepartTxn: {
+      deleteMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -819,6 +829,108 @@ describe('AssetService', () => {
 
       await expect(service.updateStatus('asset-lost-1', 6, 'user-admin-1'))
         .rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Ticket 05 - Auto-Cascade Repair Cancellation When Under-Repair Asset Marked Lost', () => {
+    const mockUnderRepairAsset = {
+      id: 'asset-repair-lost-1',
+      name: 'Infusion Pump',
+      section_id: 'sec-1',
+      status: { id: 3, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
+      availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      borrowTransactions: [],
+    };
+
+    beforeEach(() => {
+      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
+      mockPrismaService.borrowStatus.findMany.mockResolvedValue([]);
+      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({ count: 0 });
+      mockPrismaService.jobStatus.findUnique.mockResolvedValue({ id: 88, code: 'CANCELLED' });
+      mockPrismaService.repairJob.findMany.mockResolvedValue([
+        { id: 'job-1', solution: 'Initial diagnosis note' },
+      ]);
+      mockPrismaService.repairJob.update.mockResolvedValue({ id: 'job-1', jobStatusId: 88 });
+      mockPrismaService.sparepartTxn.deleteMany.mockResolvedValue({ count: 2 });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 6, code: 'LOST', name: 'สูญหาย' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' });
+    });
+
+    it('TC-REPAIR-LOST-1: updateStatus to LOST on UNDER_REPAIR asset auto-cancels active repair jobs and deletes pending spare part txns', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      });
+
+      const result = await service.updateStatus('asset-repair-lost-1', 6, 'user-admin-1');
+
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.jobStatus.findUnique).toHaveBeenCalledWith({
+        where: { code: 'CANCELLED' },
+      });
+      expect(mockPrismaService.repairJob.findMany).toHaveBeenCalledWith({
+        where: {
+          assetId: 'asset-repair-lost-1',
+          jobStatus: {
+            code: { notIn: ['COMPLETED', 'CANCELLED'] },
+          },
+        },
+        select: { id: true, solution: true },
+      });
+      expect(mockPrismaService.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-1' },
+        data: {
+          jobStatusId: 88,
+          solution: expect.stringContaining('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)'),
+          updatedBy: 'user-admin-1',
+        },
+      });
+      expect(mockPrismaService.sparepartTxn.deleteMany).toHaveBeenCalledWith({
+        where: {
+          jobId: { in: ['job-1'] },
+          txnType: 'PENDING_WITHDRAW',
+        },
+      });
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-REPAIR-LOST-2: update with asset_status_id set to LOST on UNDER_REPAIR asset auto-cancels active repair jobs', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      });
+
+      const result = await service.update('asset-repair-lost-1', { asset_status_id: 6 } as any, 'user-admin-1');
+
+      expect(mockPrismaService.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-1' },
+        data: expect.objectContaining({
+          jobStatusId: 88,
+          updatedBy: 'user-admin-1',
+        }),
+      });
+      expect(mockPrismaService.sparepartTxn.deleteMany).toHaveBeenCalled();
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-REPAIR-LOST-3: preserves existing solution when appending automated cancellation note', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST' },
+      });
+
+      await service.updateStatus('asset-repair-lost-1', 6, 'user-admin-1');
+
+      const updateCall = mockPrismaService.repairJob.update.mock.calls[0][0];
+      expect(updateCall.data.solution).toContain('Initial diagnosis note');
+      expect(updateCall.data.solution).toContain('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)');
     });
   });
 });

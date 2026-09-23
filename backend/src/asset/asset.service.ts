@@ -26,6 +26,10 @@ const ALLOWED_FROM: Record<string, string[]> = {
 export const AUTO_CANCEL_BORROW_REASON =
   '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)';
 
+/** ข้อความเหตุผลการยกเลิกใบงานซ่อมอัตโนมัติเมื่อครุภัณฑ์สูญหาย */
+export const AUTO_CANCEL_REPAIR_NOTE =
+  '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)';
+
 /** Include block ที่ใช้ซ้ำทุก asset query */
 const ASSET_INCLUDE = {
   status: { select: { id: true, code: true, name: true } },
@@ -278,6 +282,53 @@ export class AssetService {
     });
   }
 
+  private async cascadeCancelActiveRepairJobs(
+    tx: Prisma.TransactionClient,
+    assetId: string,
+    userId: string,
+  ): Promise<void> {
+    const cancelledJobStatus = await tx.jobStatus.findUnique({
+      where: { code: 'CANCELLED' },
+    });
+    if (!cancelledJobStatus) {
+      throw new NotFoundException('JobStatus CANCELLED not found');
+    }
+
+    const activeJobs = await tx.repairJob.findMany({
+      where: {
+        assetId,
+        jobStatus: {
+          code: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+      },
+      select: { id: true, solution: true },
+    });
+
+    for (const job of activeJobs) {
+      const newSolution = job.solution
+        ? `${job.solution}\n${AUTO_CANCEL_REPAIR_NOTE}`
+        : AUTO_CANCEL_REPAIR_NOTE;
+
+      await tx.repairJob.update({
+        where: { id: job.id },
+        data: {
+          jobStatusId: cancelledJobStatus.id,
+          solution: newSolution,
+          updatedBy: userId,
+        },
+      });
+    }
+
+    if (activeJobs.length > 0) {
+      await tx.sparepartTxn.deleteMany({
+        where: {
+          jobId: { in: activeJobs.map((j) => j.id) },
+          txnType: 'PENDING_WITHDRAW',
+        },
+      });
+    }
+  }
+
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
     const asset = await this.findOne(id);
     const {
@@ -328,7 +379,12 @@ export class AssetService {
       ? await this.rejectStaleAssetWrite(() =>
           this.prisma.$transaction(async (tx) => {
             if (targetStatus?.code === 'LOST') {
-              await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+              if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
+                await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+              }
+              if (asset.status.code === 'UNDER_REPAIR') {
+                await this.cascadeCancelActiveRepairJobs(tx, id, userId);
+              }
             }
             return updateAsset(tx);
           }),
@@ -360,7 +416,12 @@ export class AssetService {
     const updated = await this.rejectStaleAssetWrite(() =>
       this.prisma.$transaction(async (tx) => {
         if (targetStatus.code === 'LOST') {
-          await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+          if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
+            await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+          }
+          if (asset.status.code === 'UNDER_REPAIR') {
+            await this.cascadeCancelActiveRepairJobs(tx, id, userId);
+          }
         }
 
         return tx.asset.update({
