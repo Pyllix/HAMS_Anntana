@@ -33,6 +33,8 @@ import DepartmentManagement from "../Pages/DepartmentManagement";
 import EquipmentStock from "../Pages/EquipmentStock";
 import UnrepairableReceipts from "../Pages/UnrepairableReceipts";
 import SparePartApprovals from "../Pages/SparePartApprovals";
+import OutsourceApprovals from "../Pages/OutsourceApprovals";
+import ParcelRepairOperations from "../Pages/ParcelRepairOperations";
 import ExpenseForecast from "../Pages/ExpenseForecast";
 
 interface AppRote {
@@ -107,12 +109,20 @@ export const APP_ROUTE: AppRote[] = [
     showInNav: false,
   },
   {
+    path: "parcel-repair-operations",
+    title: "อนุมัติงานซ่อม",
+    element: <ParcelRepairOperations />,
+    icon: ClipboardCheck,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
     path: "unrepairable-receipts",
     title: "อนุมัติรับคืนครุภัณฑ์",
     element: <UnrepairableReceipts />,
     icon: Wrench,
     roles: [ROLES.PARCEL_STAFF],
-    showInNav: true,
+    showInNav: false,
   },
   {
     path: "spare-part-approvals",
@@ -120,7 +130,14 @@ export const APP_ROUTE: AppRote[] = [
     element: <SparePartApprovals />,
     icon: ClipboardCheck,
     roles: [ROLES.PARCEL_STAFF],
-    showInNav: true,
+    showInNav: false,
+  },
+  {
+    path: "outsource-approvals",
+    title: "อนุมัติส่งซ่อมภายนอก",
+    element: <OutsourceApprovals />,
+    roles: [ROLES.PARCEL_STAFF],
+    showInNav: false,
   },
   {
     path: "order-spare-parts",

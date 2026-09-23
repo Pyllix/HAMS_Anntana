@@ -34,6 +34,7 @@ import {
   getRepairHistory,
 } from "../../services/repairHistoryService";
 import {
+  publishOutsourceApprovalNotificationOnce,
   publishSpareApprovalNotificationOnce,
   publishWorkflowNotification,
 } from "../../services/notificationService";
@@ -105,13 +106,22 @@ function ActionBadge({ value }: { value?: RepairActionType | null }) {
 }
 
 function StatusBadge({ job }: { job: RepairJob }) {
-  const rejected = getSpareRejectionReason(job);
+  const rejected = getWorkflowRejectionReason(job);
   if (rejected) {
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />ปฏิเสธการขอเบิกอะไหล่</span>;
+    return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{job.actionType === "OUTSOURCE" ? "ปฏิเสธการส่งซ่อมภายนอก" : "ปฏิเสธการขอเบิกอะไหล่"}</span>;
   }
   if (job.actionType === "WITH_PARTS") {
     const approved = (job.workflowStep || 0) >= 5;
     return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{approved ? "อนุมัติแล้ว — รอช่างรับอะไหล่" : "รอเจ้าหน้าที่พัสดุอนุมัติ"}</span>;
+  }
+  if (job.actionType === "OUTSOURCE") {
+    const completedStep = job.workflowStep || 0;
+    if (completedStep < 5) {
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />รอเจ้าหน้าที่พัสดุอนุมัติส่งซ่อมภายนอก</span>;
+    }
+    if (completedStep === 5) {
+      return <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />อนุมัติแล้ว — อยู่ระหว่างส่งซ่อมภายนอก</span>;
+    }
   }
   const code = job.status?.statusCode || "IN_PROGRESS";
   return (
@@ -124,8 +134,8 @@ function StatusBadge({ job }: { job: RepairJob }) {
   );
 }
 
-function getSpareRejectionReason(job: RepairJob): string | null {
-  if (job.actionType !== "WITH_PARTS") return null;
+function getWorkflowRejectionReason(job: RepairJob): string | null {
+  if (job.actionType !== "WITH_PARTS" && job.actionType !== "OUTSOURCE") return null;
 
   const apiReason = job.rejectReason?.trim();
   if (job.isRejected) {
@@ -139,7 +149,6 @@ function getSpareRejectionReason(job: RepairJob): string | null {
   }
 
   // รองรับข้อมูลจาก backend รุ่นเดิมที่ยังไม่มี isRejected/rejectReason
-  if (job.status?.statusCode !== "PENDING_ASSIGN") return null;
   const legacyNote = job.steps?.find((step) =>
     step.note?.startsWith("[ไม่อนุมัติ]"),
   )?.note;
@@ -243,7 +252,11 @@ export default function RepairHistoryTable({
     stage: RepairWorkflowStage;
   } | null>(null);
   const [handoverJobId, setHandoverJobId] = useState<string | null>(null);
-  const [rejectionTarget, setRejectionTarget] = useState<{ jobNo: string; reason: string } | null>(null);
+  const [rejectionTarget, setRejectionTarget] = useState<{
+    jobNo: string;
+    reason: string;
+    actionType?: RepairActionType | null;
+  } | null>(null);
   const pageSize = 5;
 
   const {
@@ -274,7 +287,10 @@ export default function RepairHistoryTable({
   });
 
   useEffect(() => {
-    jobs.forEach(publishSpareApprovalNotificationOnce);
+    jobs.forEach((job) => {
+      publishSpareApprovalNotificationOnce(job);
+      publishOutsourceApprovalNotificationOnce(job);
+    });
   }, [jobs]);
 
   useEffect(() => {
@@ -376,7 +392,7 @@ export default function RepairHistoryTable({
             job.status?.statusCode === "WAITING_DELIVERY";
           const isCancelled = job.status?.statusCode === "CANCELLED";
           const nextStage = getNextWorkflowStage(job);
-          const rejectionReason = getSpareRejectionReason(job);
+          const rejectionReason = getWorkflowRejectionReason(job);
           const canReassess = Boolean(
             rejectionReason &&
               isAssignedToUser(
@@ -407,6 +423,7 @@ export default function RepairHistoryTable({
                       setRejectionTarget({
                         jobNo: job.jobNo,
                         reason: rejectionReason,
+                        actionType: job.actionType,
                       })
                     }
                     className="flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100"
@@ -643,7 +660,7 @@ export default function RepairHistoryTable({
           }}
         />
       )}
-      {rejectionTarget && <SpareRejectionReasonDialog jobNo={rejectionTarget.jobNo} reason={rejectionTarget.reason} onClose={() => setRejectionTarget(null)} />}
+      {rejectionTarget && <SpareRejectionReasonDialog jobNo={rejectionTarget.jobNo} reason={rejectionTarget.reason} actionType={rejectionTarget.actionType} onClose={() => setRejectionTarget(null)} />}
     </div>
   );
 }

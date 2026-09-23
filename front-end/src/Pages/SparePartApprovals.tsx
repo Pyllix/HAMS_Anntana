@@ -9,7 +9,7 @@ import { getSpareApprovalRequests, spareApprovalError } from "../services/spareA
 const QUERY_KEY = ["spare-approval-requests"];
 const PAGE_SIZE = 5;
 
-export default function SparePartApprovals() {
+export default function SparePartApprovals({ embedded = false }: { embedded?: boolean }) {
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("ALL");
@@ -53,7 +53,7 @@ export default function SparePartApprovals() {
   }
 
   return (
-    <section className="flex min-h-[calc(100vh-120px)] flex-col bg-[#f8f9fb] px-4 py-6 text-slate-800 lg:px-7">
+    <section className={`flex flex-col bg-[#f8f9fb] text-slate-800 ${embedded ? "min-h-0 flex-1 px-0 py-0" : "min-h-[calc(100vh-120px)] px-4 py-6 lg:px-7"}`}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold">รายการขออนุมัติการเบิกอะไหล่</h2>
         <button type="button" disabled={query.isFetching} onClick={() => void query.refetch()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-white disabled:opacity-50"><RefreshCw size={15} className={query.isFetching ? "animate-spin" : ""} />รีเฟรช</button>

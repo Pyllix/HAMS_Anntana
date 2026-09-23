@@ -9,7 +9,7 @@ import ConfirmUnrepairableReceiptDialog from "../components/unrepairable-receipt
 const PAGE_SIZE = 5;
 const QUERY_KEY = ["unrepairable-receipts"];
 
-export default function UnrepairableReceipts() {
+export default function UnrepairableReceipts({ embedded = false }: { embedded?: boolean }) {
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -37,7 +37,7 @@ export default function UnrepairableReceipts() {
     void client.invalidateQueries();
   }
 
-  return <section className="flex min-h-[calc(100vh-120px)] flex-col bg-[#f8f9fb] px-4 py-6 text-slate-800 lg:px-7">
+  return <section className={`flex flex-col bg-[#f8f9fb] text-slate-800 ${embedded ? "min-h-0 flex-1 px-0 py-0" : "min-h-[calc(100vh-120px)] px-4 py-6 lg:px-7"}`}>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">รายการครุภัณฑ์ที่ส่งคืน</h2><button type="button" disabled={query.isFetching} onClick={() => void query.refetch()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-white disabled:opacity-50"><RefreshCw size={15} className={query.isFetching ? "animate-spin" : ""} />รีเฟรช</button></div>
     {success && <div role="status" className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18} />{success}</div>}
     <div className="mb-2 flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-white px-5 py-3">

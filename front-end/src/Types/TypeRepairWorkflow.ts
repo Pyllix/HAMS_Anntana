@@ -130,6 +130,7 @@ export interface RepairJob {
   jobStatusId: number;
   companyId?: string | null;
   billNo?: string | null;
+  repairCost?: number | null;
   symptom: string;
   diagnosis?: string | null;
   solution?: string | null;
