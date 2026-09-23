@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ClipboardCheck, Eye } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  ClipboardEdit,
+  Eye,
+} from "lucide-react";
 
 import {
   getNextWorkflowStage,
@@ -11,6 +17,7 @@ import {
 import RepairWorkflowActionDialog from "./RepairWorkflowActionDialog";
 import UnrepairableHandoverDialog from "../unrepairable-technician/UnrepairableHandoverDialog";
 import SpareRejectionReasonDialog from "./SpareRejectionReasonDialog";
+import type { RepairListItem } from "../../Types/TypeAssessment";
 import {
   RepairActionFilter,
   RepairActionType,
@@ -20,6 +27,8 @@ import {
   RepairWorkflowStage,
 } from "../../Types/TypeRepairWorkflow";
 import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalStore";
+import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
+import { useAuthStore } from "../../stores/authStore";
 import {
   advanceRepairWorkflow,
   getRepairHistory,
@@ -137,6 +146,52 @@ function getSpareRejectionReason(job: RepairJob): string | null {
   return legacyNote ? legacyNote.replace(/^\[ไม่อนุมัติ\]\s*/, "") : null;
 }
 
+function isAssignedToUser(
+  job: RepairJob,
+  userId?: string | number,
+  mechanicId?: string | number,
+): boolean {
+  const currentUserId = String(userId ?? "");
+  const currentMechanicId = String(mechanicId ?? userId ?? "");
+
+  return (job.mechanics || []).some((mechanic) => {
+    const assignedUserId = String(mechanic.user?.userId ?? "");
+    return (
+      Boolean(assignedUserId) &&
+      (assignedUserId === currentUserId || assignedUserId === currentMechanicId)
+    );
+  });
+}
+
+function toReassessmentListItem(
+  job: RepairJob,
+  rejectionReason: string,
+): RepairListItem {
+  return {
+    id: job.jobId,
+    jobNo: job.jobNo,
+    symptom: job.symptom,
+    urgencyStatus: job.urgencyStatus,
+    createdAt: job.createdAt,
+    isReassessment: true,
+    rejectionReason,
+    mechanicRepairs: (job.mechanics || []).map((mechanic) => ({
+      id: mechanic.mechanicRepairId,
+      jobId: mechanic.jobId,
+      userId: mechanic.user.userId,
+      createdAt: mechanic.createdAt,
+      updatedAt: mechanic.updatedAt,
+    })),
+    asset: job.asset
+      ? {
+          id: job.asset.assetId,
+          name: job.asset.assetName,
+          noid: job.asset.assetCode,
+        }
+      : undefined,
+  };
+}
+
 function pendingActorLabel(stage: RepairWorkflowStage): string {
   if (stage.actor === "PARCEL") {
     return stage.stepLabel.startsWith("พัสดุ")
@@ -178,6 +233,10 @@ export default function RepairHistoryTable({
 }: RepairHistoryTableProps) {
   const queryClient = useQueryClient();
   const openDetail = useRepairHistoryModalStore((state) => state.openModal);
+  const openAssessmentForm = useAssessmentStore(
+    (state) => state.openAssessmentForm,
+  );
+  const user = useAuthStore((state) => state.user);
   const [currentPage, setCurrentPage] = useState(1);
   const [workflowTarget, setWorkflowTarget] = useState<{
     job: RepairJob;
@@ -318,6 +377,15 @@ export default function RepairHistoryTable({
           const isCancelled = job.status?.statusCode === "CANCELLED";
           const nextStage = getNextWorkflowStage(job);
           const rejectionReason = getSpareRejectionReason(job);
+          const canReassess = Boolean(
+            rejectionReason &&
+              isAssignedToUser(
+                job,
+                user?.id,
+                (user as { mechanicId?: string | number } | undefined)
+                  ?.mechanicId,
+              ),
+          );
           const canUpdateStage = !rejectionReason && nextStage?.actor === "MAINTENANCE";
           const progress = getWorkflowProgress(job);
 
@@ -332,7 +400,34 @@ export default function RepairHistoryTable({
                 <Eye className="h-4 w-4" />
               </button>
               {rejectionReason && (
-                <button type="button" onClick={() => setRejectionTarget({ jobNo: job.jobNo, reason: rejectionReason })} className="flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100">ดูเหตุผลการปฏิเสธ</button>
+                <div className="flex w-full flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRejectionTarget({
+                        jobNo: job.jobNo,
+                        reason: rejectionReason,
+                      })
+                    }
+                    className="flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                  >
+                    ดูเหตุผลการปฏิเสธ
+                  </button>
+                  {canReassess && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openAssessmentForm(
+                          toReassessmentListItem(job, rejectionReason),
+                        )
+                      }
+                      className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+                    >
+                      <ClipboardEdit className="h-3.5 w-3.5" />
+                      ประเมินใหม่
+                    </button>
+                  )}
+                </div>
               )}
               {nextStage && !rejectionReason && canUpdateStage && (
                 <div className="w-full text-center">
@@ -389,7 +484,12 @@ export default function RepairHistoryTable({
         },
       },
     ],
-    [openDetail, updateWorkflow.isLoading],
+    [
+      openAssessmentForm,
+      openDetail,
+      updateWorkflow.isLoading,
+      user,
+    ],
   );
 
   const table = useTable({

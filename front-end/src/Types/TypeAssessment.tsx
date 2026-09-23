@@ -150,6 +150,9 @@ export interface RepairListItem {
   symptom: string;
   urgencyStatus: UrgencyStatus;
   createdAt: string;
+  isReassessment?: boolean;
+  rejectionReason?: string | null;
+  mechanicRepairs?: MechanicRepair[];
   asset?: {
     id: string;
     name: string;
