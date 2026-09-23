@@ -34,6 +34,17 @@ export default function CommonEvaluationFields({
   const [isCauseOpen, setIsCauseOpen] = useState(false);
   const causeDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [isJobTypeOpen, setIsJobTypeOpen] = useState<boolean>(false);
+  const jobTypeDropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedJobType = jobTypes.find(
+    (t) => String(t.id) === String(formState.jobTypeId),
+  );
+
+  const selectedCause = causes.find(
+    (c) => String(c.id) === String(formState.causeId),
+  );
+
   const actionOptions: StepActionType[] = [
     "SELF_REPAIR",
     "WITH_PARTS",
@@ -61,16 +72,18 @@ export default function CommonEvaluationFields({
       ) {
         setIsCauseOpen(false);
       }
+      if (
+        jobTypeDropdownRef.current &&
+        !jobTypeDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsJobTypeOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  const selectedCause = causes.find(
-    (c) => String(c.id) === String(formState.causeId),
-  );
 
   return (
     <div className="space-y-4">
@@ -124,7 +137,7 @@ export default function CommonEvaluationFields({
             });
           }}
           placeholder="ระบุอาการหรือสาเหตุ..."
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
         />
       </div>
 
@@ -148,7 +161,7 @@ export default function CommonEvaluationFields({
               ? "เช่น ส่งคืนพัสดุเพื่อพักรอจำหน่าย..."
               : "ระบุวิธีแก้ไข..."
           }
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-slate-500  focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
         />
       </div>
 
@@ -167,7 +180,7 @@ export default function CommonEvaluationFields({
             type="button"
             disabled={readOnly}
             onClick={() => setIsCauseOpen((prev) => !prev)}
-            className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-left flex items-center justify-between bg-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${
+            className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-left flex items-center justify-between bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${
               selectedCause ? "text-slate-700" : "text-slate-400"
             }`}
           >
@@ -180,7 +193,7 @@ export default function CommonEvaluationFields({
           </button>
 
           {isCauseOpen && !readOnly && (
-            <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-[216px] overflow-y-auto py-1">
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-54 overflow-y-auto py-1">
               <div
                 onClick={() => {
                   handleChange("causeId", "");
@@ -215,29 +228,65 @@ export default function CommonEvaluationFields({
           )}
         </div>
 
-        <div>
+        {/* ประเภทงาน (Custom Dropdown) */}
+        <div className="relative" ref={jobTypeDropdownRef}>
           <label
             htmlFor="evaluation-job-type"
             className="text-xs font-semibold text-slate-700 block mb-1.5"
           >
             ประเภทงาน <span className="text-rose-500">*</span>
           </label>
-          <select
+          <button
             id="evaluation-job-type"
+            type="button"
             disabled={readOnly}
-            value={formState.jobTypeId || ""}
-            onChange={(e) => handleChange("jobTypeId", Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+            onClick={() => setIsJobTypeOpen((prev) => !prev)}
+            className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-left flex items-center justify-between bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${
+              selectedJobType ? "text-slate-700" : "text-slate-400"
+            }`}
           >
-            <option value="" disabled>
-              -- เลือกประเภทงาน --
-            </option>
-            {jobTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
+            <span className="truncate">
+              {selectedJobType
+                ? `${selectedJobType.code ? `${selectedJobType.code} - ` : ""}${selectedJobType.name}`
+                : "-- เลือกประเภทงาน --"}
+            </span>
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+          </button>
+
+          {isJobTypeOpen && !readOnly && (
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-54 overflow-y-auto py-1">
+              <div
+                onClick={() => {
+                  handleChange("jobTypeId", "");
+                  setIsJobTypeOpen(false);
+                }}
+                className="px-3 py-2 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer"
+              >
+                -- เลือกประเภทงาน --
+              </div>
+              {jobTypes.map((type) => {
+                const isSelected =
+                  String(type.id) === String(formState.jobTypeId);
+                return (
+                  <div
+                    key={type.id}
+                    onClick={() => {
+                      handleChange("jobTypeId", Number(type.id));
+                      setIsJobTypeOpen(false);
+                    }}
+                    className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-emerald-50 text-emerald-700 font-semibold"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {type.code ? `${type.code} - ` : ""}
+                    {type.name}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div>
@@ -254,7 +303,7 @@ export default function CommonEvaluationFields({
                 disabled={readOnly}
                 checked={formState.isRepeatRepair === true}
                 onChange={() => handleChange("isRepeatRepair", true)}
-                className="text-emerald-600 focus:ring-emerald-500 disabled:text-slate-400"
+                className="text-emerald-600 focus:ring-slate-500 disabled:text-slate-400"
               />
               ใช่
             </label>
@@ -267,38 +316,36 @@ export default function CommonEvaluationFields({
                 disabled={readOnly}
                 checked={formState.isRepeatRepair === false}
                 onChange={() => handleChange("isRepeatRepair", false)}
-                className="text-emerald-600 focus:ring-emerald-500 disabled:text-slate-400"
+                className="text-emerald-600 focus:ring-slate-500 disabled:text-slate-400"
               />
               ไม่
             </label>
           </div>
         </div>
 
-        {actionStatus !== "UNREPAIRABLE" && (
-          <div>
-            <label
-              htmlFor="evaluation-due-date"
-              className="text-xs font-semibold text-slate-700 block mb-1.5"
-            >
-              ระยะเวลาซ่อมโดยประมาณ <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="evaluation-due-date"
-                type="number"
-                min="0"
-                disabled={readOnly}
-                value={formState.dueDate || ""}
-                onChange={(e) => handleChange("dueDate", e.target.value)}
-                placeholder="0"
-                className="w-full rounded-lg border border-slate-200 pl-3 pr-16 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 pointer-events-none">
-                วันทำการ
-              </span>
-            </div>
+        <div>
+          <label
+            htmlFor="evaluation-due-date"
+            className="text-xs font-semibold text-slate-700 block mb-1.5"
+          >
+            ระยะเวลาซ่อมโดยประมาณ <span className="text-rose-500">*</span>
+          </label>
+          <div className="relative">
+            <input
+              id="evaluation-due-date"
+              type="number"
+              min="0"
+              disabled={readOnly}
+              value={formState.dueDate || ""}
+              onChange={(e) => handleChange("dueDate", e.target.value)}
+              placeholder="0"
+              className="w-full rounded-lg border border-slate-200 pl-3 pr-16 py-2 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 pointer-events-none">
+              วันทำการ
+            </span>
           </div>
-        )}
+        </div>
       </div>
 
       {actionStatus === "UNREPAIRABLE" && (
@@ -316,7 +363,7 @@ export default function CommonEvaluationFields({
             value={formState.unrepairableReason || ""}
             onChange={(e) => handleChange("unrepairableReason", e.target.value)}
             placeholder="เช่น อะไหล่เลิกผลิต ความเสียหายรุนแรง หรือค่าซ่อมไม่คุ้มค่า..."
-            className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
           />
         </div>
       )}
@@ -339,7 +386,7 @@ export default function CommonEvaluationFields({
             handleChange("technicalDiagnosisDetail", e.target.value)
           }
           placeholder="ระบุรายละเอียดทางเทคนิคเพิ่มเติม..."
-          className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+          className="w-full rounded-lg border border-slate-200 p-3 text-xs text-slate-700  focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
         />
       </div>
     </div>

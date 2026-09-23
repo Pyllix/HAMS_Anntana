@@ -239,6 +239,13 @@ UNAVAILABLE ──► AVAILABLE
 - Asset ที่ AssetStatus ≠ `NORMAL` **ห้าม**มี AvailabilityStatus = `AVAILABLE` หรือ `BORROWED`
 - Asset ที่ AssetStatus = `DISPOSAL` หรือ `LOST` **ไม่สามารถสร้างรายการยืมใหม่ได้**
 - การยืมสามารถเกิดขึ้นได้เฉพาะเมื่อ AssetStatus = `NORMAL` **และ** AvailabilityStatus = `AVAILABLE` เท่านั้น
+- **การแจ้งซ่อม (Create Repair Request)**: ห้ามแจ้งซ่อมครุภัณฑ์ที่ AvailabilityStatus = `BORROWED` หรือ `RESERVED` โดยเด็ดขาด หากชำรุดขณะยืม ต้องส่งคืนผ่านศูนย์ครุภัณฑ์ในสภาพชำรุด (`Return - Damaged`) ก่อนเสมอ
+- **การโอนย้าย (Transfer)**: ห้ามโอนย้ายครุภัณฑ์ที่ AvailabilityStatus = `BORROWED` หรือ AssetStatus = `UNDER_REPAIR`
+- **การปรับสถานะทางกายภาพโดยตรง (Direct Status Edit / Disposal)**:
+  - ขณะ AvailabilityStatus = `BORROWED` หรือ `RESERVED`: ห้ามปรับเป็น `DISPOSAL`, `WAIT_DISPOSAL`, `DAMAGED`, `UNDER_REPAIR` หรือตัดจำหน่ายโดยตรง (ต้องส่งคืนก่อน)
+  - กรณีปรับเป็น `LOST` ขณะ `BORROWED`/`RESERVED`: อนุญาตเฉพาะ Admin/Parcel Staff โดยระบบจะทำ Auto-Cascade ยกเลิกใบยืม (`BorrowTransaction` → `CANCELLED`) บันทึก `cancel_reason` และปรับ AvailabilityStatus เป็น `UNAVAILABLE`
+  - กรณีปรับเป็น `LOST` ขณะ `UNDER_REPAIR`: อนุญาต โดยระบบจะทำ Auto-Cascade ยกเลิกใบแจ้งซ่อม (`RepairJob` → `CANCELLED`) พร้อมบันทึกเหตุผลในงานซ่อม
+- **การแก้ไขข้อมูลทั่วไป (Metadata Edit)**: การแก้ไขข้อมูลที่ไม่ใช่สถานะ (เช่น `serialNo`, `model`, `price`, `remark`) สามารถทำได้ตลอดเวลาแม้เครื่องติดสถานะยืมหรือซ่อมอยู่
 
 ---
 

@@ -130,12 +130,15 @@ export interface RepairJob {
   jobStatusId: number;
   companyId?: string | null;
   billNo?: string | null;
+  repairCost?: number | null;
   symptom: string;
   diagnosis?: string | null;
   solution?: string | null;
   unrepairableReason?: string | null;
   causeId?: number | null;
   actionType?: RepairActionType | null;
+  isRejected?: boolean;
+  rejectReason?: string | null;
   urgencyStatus: Exclude<PriorityFilter, "ALL">;
   dueDate?: string | null;
   returnDate?: string | null;

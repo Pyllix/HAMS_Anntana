@@ -16,27 +16,30 @@ export default function ConfirmRepair() {
   const [status, setStatus] = useState<RepairStatusFilter>("ALL");
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-100 bg-white p-3.5 shadow-2xs">
-        <div className="relative min-w-[240px] flex-1 max-w-xl">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* Search & Filter Bar */}
+      {/* 2. ทำให้รองรับจอเล็กด้วย flex-wrap และ md:flex-row */}
+      <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
+        {/* กรอกคำค้นหา */}
+        <div className="relative flex-1 w-full md:max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="ค้นหารหัสงาน ชื่อครุภัณฑ์..."
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-xs text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500"
+            className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
           />
         </div>
 
-        <div className="relative inline-flex h-9 w-52 shrink-0 cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-3.5 text-xs transition-colors hover:border-slate-300">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 pr-2">
-            <span className="shrink-0 text-slate-500">สถานะ:</span>
-            <span className="truncate font-semibold text-emerald-600">
+        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-56 shrink-0 justify-between">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+            <span className="text-slate-500 shrink-0">สถานะ: </span>
+            <span className="font-semibold text-emerald-600 truncate">
               {statusOptions.find((option) => option.value === status)?.label}
             </span>
           </div>
-          <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
           <select
             aria-label="สถานะการยืนยัน"
             value={status}
@@ -54,7 +57,7 @@ export default function ConfirmRepair() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-2xs">
+      <div className="flex-1 overflow-hidden border-none">
         <ConfirmRepairTable search={search} status={status} />
       </div>
 

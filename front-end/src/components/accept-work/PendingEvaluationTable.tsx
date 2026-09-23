@@ -1,14 +1,27 @@
-import { useMemo, useState, useEffect } from "react";
-import { tableFeatures, useTable } from "@tanstack/react-table";
+import { useMemo } from "react";
+import {
+  tableFeatures,
+  useTable,
+  rowPaginationFeature,
+  createPaginatedRowModel,
+} from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, UserPlus, ClipboardEdit } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  UserPlus,
+  ClipboardEdit,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { RepairListItem, UrgencyStatus } from "../../Types/TypeAssessment";
 import { getPendingEvaluations } from "../../services/assessmentService";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import { useAuthStore } from "../../stores/authStore";
 
-const features = tableFeatures({});
+const features = tableFeatures({
+  rowPaginationFeature,
+  paginatedRowModel: createPaginatedRowModel(),
+});
 
 function formatDateTH(dateString?: string): string {
   if (!dateString) return "-";
@@ -87,13 +100,6 @@ export default function PendingEvaluationTable({
     refetchOnWindowFocus: true,
   });
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, urgencyStatus]);
-
   const columns = useMemo<ColumnDef<typeof features, RepairListItem>[]>(
     () => [
       {
@@ -102,7 +108,7 @@ export default function PendingEvaluationTable({
         cell: (info: any) => {
           const row = info.row.original;
           return (
-            <span className="font-semibold text-gray-900 font-mono text-sm">
+            <span className="whitespace-nowrap font-semibold text-gray-900 font-mono">
               {row.jobNo || "-"}
             </span>
           );
@@ -115,10 +121,10 @@ export default function PendingEvaluationTable({
           const row = info.row.original;
           return (
             <div>
-              <div className="font-semibold text-gray-900 text-sm">
+              <div className="font-semibold text-gray-900">
                 {row.asset?.name || "-"}
               </div>
-              <div className="text-sm text-gray-600 font-mono mt-0.5">
+              <div className="text-xs text-gray-500 font-mono mt-0.5">
                 {row.asset?.noid || "-"}
               </div>
             </div>
@@ -129,7 +135,7 @@ export default function PendingEvaluationTable({
         id: "symptom",
         header: "อาการเสียที่แจ้ง",
         cell: (info: any) => (
-          <span className="text-sm text-gray-600 line-clamp-2 max-w-xs">
+          <span className="text-slate-600 line-clamp-2 max-w-xs">
             {info.row.original.symptom || "-"}
           </span>
         ),
@@ -147,7 +153,7 @@ export default function PendingEvaluationTable({
         cell: (info: any) => {
           const date = info.row.original.createdAt;
           return (
-            <span className="text-sm text-gray-600 whitespace-nowrap">
+            <span className="text-slate-600 whitespace-nowrap">
               {date ? formatDateTH(date) : "-"}
             </span>
           );
@@ -182,12 +188,12 @@ export default function PendingEvaluationTable({
           const shouldShowAssessBtn = !isHead || isMyJob;
 
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 whitespace-nowrap">
               {shouldShowAssessBtn ? (
                 <button
                   type="button"
                   onClick={() => openAssessmentForm(row)}
-                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
                 >
                   <ClipboardEdit className="h-4 w-4" />
                   ประเมิน
@@ -196,7 +202,7 @@ export default function PendingEvaluationTable({
                 <button
                   type="button"
                   onClick={() => openAssessmentForm(row)}
-                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-1.5 justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
                 >
                   <UserPlus className="h-4 w-4" />
                   จ่ายงาน
@@ -325,28 +331,27 @@ export default function PendingEvaluationTable({
     });
   }, [jobsData, search, urgencyStatus, isHead, user]);
 
-  const totalItems = filteredData.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-  const paginatedData = useMemo(
-    () =>
-      filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filteredData, currentPage],
-  );
-
   const table = useTable({
     key: "pending-evaluation-table",
     features,
     columns,
-    data: paginatedData,
+    data: filteredData,
+    initialState: {
+      pagination: {
+        pageIndex: 0,
+        pageSize: 10,
+      },
+    },
   });
 
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="font-bold text-md">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      {/* พื้นที่ตาราง Scroll ได้ */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-left border-collapse text-sm text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup: any) => (
-              <tr key={headerGroup.id} className="border-b border-slate-200">
+              <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header: any) => (
                   <th key={header.id} className="py-3 px-4">
                     {header.isPlaceholder ? null : (
@@ -362,16 +367,16 @@ export default function PendingEvaluationTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="text-center py-12 text-slate-400"
                 >
                   กำลังโหลดรายการรอประเมิน...
                 </td>
               </tr>
-            ) : paginatedData.length === 0 ? (
+            ) : table.getRowModel().rows.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm"
+                  className="text-center py-12 text-slate-400"
                 >
                   ไม่พบรายการงานแจ้งซ่อมที่รอประเมิน
                 </td>
@@ -380,10 +385,13 @@ export default function PendingEvaluationTable({
               table.getRowModel().rows.map((row: any) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-slate-50/50 transition-colors"
+                  className="hover:bg-slate-50/80 transition-colors"
                 >
                   {row.getAllCells().map((cell: any) => (
-                    <td key={cell.id} className="py-3 px-4">
+                    <td
+                      key={cell.id}
+                      className="py-3.5 px-4 whitespace-nowrap align-middle"
+                    >
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -394,42 +402,62 @@ export default function PendingEvaluationTable({
         </table>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-100 text-sm text-slate-500">
-        <div>
-          แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(currentPage * pageSize, totalItems)} จาก{" "}
-          {totalItems.toLocaleString()} รายการ
+      {/* กล่อง Pagination */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-white border-t border-slate-200">
+        {/* ข้อความบอกจำนวนหน้า */}
+        <div className="text-xs text-slate-500 hidden sm:block">
+          หน้า{" "}
+          <span className="font-semibold text-slate-700">
+            {table.state.pagination.pageIndex + 1}
+          </span>{" "}
+          จาก{" "}
+          <span className="font-semibold text-slate-700">
+            {table.getPageCount() || 1}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
+
+        {/* กลุ่มปุ่มเปลี่ยนหน้า */}
+        <div className="flex items-center space-x-1.5 ml-auto sm:ml-0">
+          {/* ปุ่ม Previous */}
           <button
             type="button"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .slice(Math.max(0, currentPage - 3), currentPage + 2)
-            .map((page) => (
+
+          {/* ปุ่มตัวเลขหน้า */}
+          {Array.from({ length: table.getPageCount() }, (_, index) => {
+            const pageNumber = index + 1;
+            const currentPage = table.state.pagination.pageIndex;
+            const isCurrentPage = currentPage === index;
+
+            if (index < currentPage - 2 || index > currentPage + 2) return null;
+
+            return (
               <button
-                key={page}
+                key={pageNumber}
                 type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                  currentPage === page
-                    ? "bg-emerald-600 font-semibold text-white shadow-sm"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                onClick={() => table.setPageIndex(index)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                  isCurrentPage
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {page}
+                {pageNumber}
               </button>
-            ))}
+            );
+          })}
+
+          {/* ปุ่ม Next */}
           <button
             type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
             <ChevronRight className="h-4 w-4" />
           </button>

@@ -60,6 +60,28 @@
 GET /repairs/lookups/meta
 ```
 - **Authentication:** `Bearer Token` (ทุก Role)
+- **Response Body (200 OK):**
+  ```json
+  {
+    "jobStatuses": [
+      { "id": 1, "code": "WAITING_HANDOVER", "name": "รอรับเครื่องจากหน่วยงาน" },
+      { "id": 2, "code": "PENDING_ASSIGN", "name": "รอมอบหมายงานให้ช่าง" },
+      { "id": 3, "code": "IN_PROGRESS", "name": "ช่างกำลังดำเนินการซ่อม" }
+    ],
+    "causes": [
+      { "id": 1, "code": "01", "name": "เครื่องไม่มีคุณภาพ" }
+    ],
+    "techCategories": [
+      { "id": 1, "code": "MED_EQ", "name": "งานเครื่องมือแพทย์", "isActive": true }
+    ],
+    "jobTypes": [
+      { "id": 1, "name": "ซ่อมเครื่องมือแพทย์" }
+    ],
+    "stepMasters": [
+      { "id": 1, "stepNumber": 1, "actionType": "INTERNAL_STOCK", "label": "วันแจ้งซ่อม" }
+    ]
+  }
+  ```
 
 ---
 

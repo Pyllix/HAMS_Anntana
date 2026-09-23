@@ -746,4 +746,32 @@ describe('RepairsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('getLookups', () => {
+    it('should return all lookup tables including jobStatuses', async () => {
+      mockPrisma.jobStatus.findMany.mockResolvedValue([
+        { id: 1, code: 'WAITING_HANDOVER', name: 'รอรับเครื่องจากหน่วยงาน' },
+        { id: 2, code: 'PENDING_ASSIGN', name: 'รอมอบหมายงานให้ช่าง' },
+      ]);
+      mockPrisma.cause.findMany.mockResolvedValue([{ id: 1, code: '01', name: 'เครื่องไม่มีคุณภาพ' }]);
+      mockPrisma.techCategory.findMany.mockResolvedValue([{ id: 1, code: 'MED_EQ', name: 'งานเครื่องมือแพทย์' }]);
+      mockPrisma.jobType.findMany.mockResolvedValue([{ id: 1, name: 'ซ่อมเครื่องมือแพทย์' }]);
+      mockPrisma.stepMaster.findMany.mockResolvedValue([{ id: 1, stepNumber: 1, label: 'วันแจ้งซ่อม' }]);
+
+      const result = await service.getLookups();
+
+      expect(result).toHaveProperty('jobStatuses');
+      expect(result).toHaveProperty('jobStatus');
+      expect(result.jobStatuses).toHaveLength(2);
+      expect(result.jobStatuses[0].code).toBe('WAITING_HANDOVER');
+      expect(result.causes).toHaveLength(1);
+      expect(result.techCategories).toHaveLength(1);
+      expect(result.jobTypes).toHaveLength(1);
+      expect(result.stepMasters).toHaveLength(1);
+      expect(mockPrisma.jobStatus.findMany).toHaveBeenCalledWith({
+        where: { deletedAt: null },
+        orderBy: { id: 'asc' },
+      });
+    });
+  });
 });
