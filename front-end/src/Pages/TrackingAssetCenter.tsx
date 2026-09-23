@@ -1,23 +1,36 @@
 import { ChevronDown, Search } from "lucide-react";
 import TrackTable from "../components/track/TrackTable";
-import { useState } from "react";
-import { getAssetTypes } from "../services/assetService";
-import { useQuery } from "@tanstack/react-query";
-import { getLookUp } from "../services/trackingService";
+import type { JobStatusOption } from "../components/track/TrackTable";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function TrackingAssetCenter({}) {
-  // const { data: assetTypes } = useQuery({
-  //   queryKey: ["assetTypes"],
-  //   queryFn: getAssetTypes,
-  // });
-
-  const { data: jobStatuses } = useQuery({
-    queryKey: ["repairsLookups"],
-    queryFn: getLookUp,
-  });
+  // หมายเหตุ: /repairs/lookups/meta ไม่มี jobStatuses ให้ จึงให้ TrackTable รวบรวม
+  // รายการสถานะที่มีอยู่จริงจากงานซ่อมที่ดึงมา แล้วส่งกลับขึ้นมาผ่าน callback นี้แทน
+  const [statusOptions, setStatusOptions] = useState<JobStatusOption[]>([]);
+  const handleStatusOptionsChange = useCallback(
+    (options: JobStatusOption[]) => setStatusOptions(options),
+    [],
+  );
 
   const [inputSearch, setInputSearch] = useState("");
-  const [status, setStatus] = useState("ALL");
+  const [statusCode, setStatusCode] = useState("ALL");
+  const [statusLabel, setStatusLabel] = useState("ทั้งหมด");
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        statusDropdownRef.current &&
+        !statusDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsStatusOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     // 1. เปลี่ยนให้หน้าเพจนี้ใช้ความสูงเต็มพื้นที่ (h-full) และเรียงลงมา (flex-col)
@@ -40,39 +53,76 @@ export default function TrackingAssetCenter({}) {
         </div>
 
         {/* Dropdown สถานะ */}
-        <div className="w-full md:w-auto">
-          <div className="relative flex items-center justify-between md:justify-start h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full md:w-auto">
+        <div className="w-full md:w-auto relative" ref={statusDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsStatusOpen((prev) => !prev)}
+            className="relative flex items-center justify-between md:justify-start h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full md:w-auto"
+          >
             <div className="flex items-center">
               <span className="text-slate-600 mr-1.5 whitespace-nowrap">
                 สถานะ:
               </span>
               {/* ป้องกันชื่อสถานะยาวเกินไปแล้วทำให้ UI พังด้วย truncate */}
               <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[150px]">
-                {status === "ALL" ? "ทั้งหมด" : status}
+                {statusLabel}
               </span>
             </div>
-            <ChevronDown className="h-4 w-4 text-slate-400 ml-3 shrink-0" />
+            <ChevronDown
+              className={`h-4 w-4 text-slate-400 ml-3 shrink-0 transition-transform ${
+                isStatusOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
 
-            {/* <select
-              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="ALL">ทั้งหมด</option>
-              {jobStatuses?.jobStatuses?.map((item) => (
-                <option key={item.id} value={item.name}>
+          {isStatusOpen && (
+            <div className="absolute z-20 mt-1 w-full md:min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-lg py-1 max-h-60 overflow-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusCode("ALL");
+                  setStatusLabel("ทั้งหมด");
+                  setIsStatusOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                  statusCode === "ALL"
+                    ? "font-semibold text-emerald-600"
+                    : "text-slate-700"
+                }`}
+              >
+                ทั้งหมด
+              </button>
+              {statusOptions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setStatusCode(item.code);
+                    setStatusLabel(item.name);
+                    setIsStatusOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors truncate ${
+                    statusCode === item.code
+                      ? "font-semibold text-emerald-600"
+                      : "text-slate-700"
+                  }`}
+                >
                   {item.name}
-                </option>
+                </button>
               ))}
-            </select> */}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Table */}
       {/* 3. ดันตารางให้กินพื้นที่ที่เหลือทั้งหมด (flex-1) พร้อมกับบังคับให้ Scroll เกิดเฉพาะในกล่องนี้ (overflow-hidden) */}
       <div className="flex-1 overflow-hidden min-h-[420px]">
-        <TrackTable inputSearch={inputSearch} status={status} />
+        <TrackTable
+          inputSearch={inputSearch}
+          statusCode={statusCode}
+          onStatusOptionsChange={handleStatusOptionsChange}
+        />
       </div>
     </div>
   );
