@@ -62,6 +62,29 @@ export function publishSpareApprovalNotificationOnce(job: RepairJob): void {
   });
 }
 
+export function publishOutsourceApprovalNotificationOnce(job: RepairJob): void {
+  if (job.actionType !== "OUTSOURCE" || job.status?.statusCode !== "OUTSOURCED") return;
+  const title = "เจ้าหน้าที่พัสดุอนุมัติส่งซ่อมภายนอกแล้ว";
+  const store = useNotificationStore.getState();
+  if (
+    store.notifications.some(
+      (notification) =>
+        notification.jobNo === job.jobNo && notification.title === title,
+    )
+  ) {
+    return;
+  }
+  store.addNotification({
+    kind: "PARCEL",
+    title,
+    message: `${job.asset?.assetName || "ครุภัณฑ์"} ได้รับอนุมัติให้ส่งซ่อมกับบริษัทภายนอกแล้ว กรุณาติดตามและดำเนินการขั้นตอนถัดไป`,
+    jobNo: job.jobNo,
+    recipientRole: "MAINTENANCE_STAFF",
+    sourceRole: "PARCEL_STAFF",
+    createdAt: job.updatedAt || new Date().toISOString(),
+  });
+}
+
 function notificationKind(stage: RepairWorkflowStage): NotificationKind {
   if (stage.actor === "PARCEL") return "PARCEL";
   if (stage.actor === "SUPERVISOR") return "APPROVAL";
