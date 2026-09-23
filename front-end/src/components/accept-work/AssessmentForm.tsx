@@ -6,6 +6,8 @@ import {
   XCircle,
   ClipboardCheck,
   X,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import AssetInfoCard from "./AssetInfoCard";
@@ -118,6 +120,20 @@ export default function AssessmentForm() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
+  // Notification Modal State (ทดแทน alert)
+  const [noticeModal, setNoticeModal] = useState<{
+    open: boolean;
+    type: "success" | "error";
+    title: string;
+    message: string;
+    onClose?: () => void;
+  }>({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
+
   const currentJobId = selectedJob?.id;
   const displayJobNo = selectedJob?.jobNo || `JOB-${currentJobId || ""}`;
   const draftStorageKey = `draft_assessment_${displayJobNo}`;
@@ -161,10 +177,8 @@ export default function AssessmentForm() {
     });
   }, [jobDetail, selectedJob, user]);
 
-  // เป็นโหมดมอบหมายงานเฉพาะเมื่อเป็นหัวหน้าช่าง และ งานนี้ยังไม่มีการมอบหมายตนเอง
   const isAssignMode = isHeadRole && !isAssignedToMe;
 
-  // ดึงข้อมูลรายชื่อช่าง: ถ้าเป็น Assign Mode (หัวหน้ามอบหมาย) ให้ดึง Workloads (งานค้าง) ถ้าประเมินงานให้ดึงรายชื่อช่างธรรมดา
   const { data: mechanics = [] } = useQuery<Mechanic[]>({
     queryKey: ["repairMechanics", isAssignMode],
     queryFn: isAssignMode ? getMechanicWorkloads : getMechanics,
@@ -234,20 +248,30 @@ export default function AssessmentForm() {
       return await createEvaluation(String(currentJobId), dto);
     },
     onSuccess: async () => {
-      alert("บันทึกผลการประเมินสำเร็จ");
       if (draftStorageKey) localStorage.removeItem(draftStorageKey);
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
       await queryClient.invalidateQueries({ queryKey: ["repairList"] });
       await queryClient.invalidateQueries({ queryKey: ["repairJobs"] });
       await queryClient.invalidateQueries({ queryKey: ["acceptWorkList"] });
-      closeForm();
+
+      setNoticeModal({
+        open: true,
+        type: "success",
+        title: "บันทึกสำเร็จ",
+        message: "บันทึกผลการประเมินเรียบร้อยแล้ว",
+        onClose: () => closeForm(),
+      });
     },
     onError: (err: unknown) => {
-      alert(`ไม่สามารถทำรายการได้: ${requestErrorMessage(err)}`);
+      setNoticeModal({
+        open: true,
+        type: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: `ไม่สามารถทำรายการได้: ${requestErrorMessage(err)}`,
+      });
     },
   });
 
-  // Mutation สำหรับหัวหน้าช่างจ่ายงาน (POST /repairs/{id}/assign)
   const assignMutation = useMutation({
     mutationFn: async (payload: {
       techCategoryId: number;
@@ -260,15 +284,26 @@ export default function AssessmentForm() {
       });
     },
     onSuccess: async () => {
-      alert("มอบหมายงานซ่อมให้ช่างเรียบร้อยแล้ว");
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
       await queryClient.invalidateQueries({ queryKey: ["repairList"] });
       await queryClient.invalidateQueries({ queryKey: ["repairJobs"] });
       await queryClient.invalidateQueries({ queryKey: ["acceptWorkList"] });
-      closeForm();
+
+      setNoticeModal({
+        open: true,
+        type: "success",
+        title: "มอบหมายงานสำเร็จ",
+        message: "มอบหมายงานซ่อมให้ช่างเรียบร้อยแล้ว",
+        onClose: () => closeForm(),
+      });
     },
     onError: (err: unknown) => {
-      alert(`ไม่สามารถจ่ายงานได้: ${requestErrorMessage(err)}`);
+      setNoticeModal({
+        open: true,
+        type: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: `ไม่สามารถจ่ายงานได้: ${requestErrorMessage(err)}`,
+      });
     },
   });
 
@@ -281,11 +316,8 @@ export default function AssessmentForm() {
       } as any);
     },
     onSuccess: async () => {
-      alert("ยกเลิกใบแจ้งซ่อมเรียบร้อยแล้ว");
       setShowCancelDialog(false);
       setCancelReason("");
-
-      closeForm();
 
       // บังคับ Refetch และล้าง Cache รายการทุกตารางที่เกี่ยวข้อง
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
@@ -297,16 +329,21 @@ export default function AssessmentForm() {
       await queryClient.refetchQueries({ queryKey: ["repairList"] });
       await queryClient.refetchQueries({ queryKey: ["repairJobs"] });
       await queryClient.refetchQueries({ queryKey: ["acceptWorkList"] });
+
+      setNoticeModal({
+        open: true,
+        type: "success",
+        title: "ยกเลิกใบแจ้งซ่อมสำเร็จ",
+        message: "ยกเลิกใบแจ้งซ่อมเรียบร้อยแล้ว",
+        onClose: () => closeForm(),
+      });
     },
     onError: async (err: unknown) => {
       const errMsg = requestErrorMessage(err);
 
-      // ถ้า Backend แจ้งว่าใบแจ้งซ่อมถูกยกเลิกไปแล้ว ให้แจ้งเตือนและรีเฟรชหน้าเพื่อปิดฟอร์ม
       if (errMsg.includes("already CANCELLED")) {
-        alert("ใบแจ้งซ่อมนี้ถูกยกเลิกไปแล้ว");
         setShowCancelDialog(false);
         setCancelReason("");
-        closeForm();
 
         await queryClient.invalidateQueries({
           queryKey: ["pendingEvaluations"],
@@ -314,10 +351,23 @@ export default function AssessmentForm() {
         await queryClient.invalidateQueries({ queryKey: ["repairList"] });
         await queryClient.invalidateQueries({ queryKey: ["repairJobs"] });
         await queryClient.invalidateQueries({ queryKey: ["acceptWorkList"] });
+
+        setNoticeModal({
+          open: true,
+          type: "error",
+          title: "แจ้งเตือน",
+          message: "ใบแจ้งซ่อมนี้ถูกยกเลิกไปแล้ว",
+          onClose: () => closeForm(),
+        });
         return;
       }
 
-      alert(`ไม่สามารถยกเลิกใบแจ้งซ่อมได้: ${errMsg}`);
+      setNoticeModal({
+        open: true,
+        type: "error",
+        title: "เกิดข้อผิดพลาด",
+        message: `ไม่สามารถยกเลิกใบแจ้งซ่อมได้: ${errMsg}`,
+      });
     },
   });
 
@@ -387,19 +437,19 @@ export default function AssessmentForm() {
     const selectedDetail = jobDetail;
     if (!selectedDetail) return;
 
-    let formattedDueDate = "";
-    if (
-      stepActionType !== "UNREPAIRABLE" &&
-      stepActionType !== "WITH_PARTS" &&
-      formState.dueDate
-    ) {
+    let formattedDueDate = new Date().toISOString().slice(0, 10);
+
+    if (formState.dueDate) {
       const days = Number(formState.dueDate);
       if (!isNaN(days) && days > 0) {
         const d = new Date();
         d.setDate(d.getDate() + days);
         formattedDueDate = d.toISOString().slice(0, 10);
       } else {
-        formattedDueDate = String(formState.dueDate).slice(0, 10);
+        const parsedDate = new Date(formState.dueDate);
+        if (!isNaN(parsedDate.getTime())) {
+          formattedDueDate = parsedDate.toISOString().slice(0, 10);
+        }
       }
     }
 
@@ -468,11 +518,13 @@ export default function AssessmentForm() {
         </div>
       </div>
 
-      {/* Main Form Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Side: Asset Details */}
-        <div className="lg:col-span-5">
-          <AssetInfoCard jobData={jobDetail || selectedJob} />
+      {/* Main Grid Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch h-[calc(100vh-170px)] min-h-[500px]">
+        {/* Left Side: Asset Details Card */}
+        <div className="lg:col-span-5 flex flex-col h-full overflow-hidden">
+          <div className="h-full overflow-y-auto pr-1">
+            <AssetInfoCard jobData={jobDetail || selectedJob} />
+          </div>
         </div>
 
         {/* Right Side: Action Form */}
@@ -627,10 +679,23 @@ export default function AssessmentForm() {
         </div>
       </div>
 
-      {/* Modal ยกเลิกใบแจ้งซ่อม (Inline Replacement for TechnicianConfirmDialog) */}
+      {/* Modal ยกเลิกใบแจ้งซ่อม */}
       {showCancelDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* 1. Backdrop ฉากหลัง (ถอดแบบสีและความเบลอจากที่คุณส่งมาเป๊ะๆ) */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            onClick={() => {
+              if (!cancelMutation.isPending) {
+                cancelMutation.reset();
+                setShowCancelDialog(false);
+                setCancelReason("");
+              }
+            }}
+          />
+
+          {/* 2. กล่อง Modal (ใส่ relative z-10 เพื่อลอยอยู่เหนือฉากหลัง และกดปุ่มได้ 100%) */}
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden transition-all duration-300 animate-in fade-in zoom-in-95">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-800">
@@ -646,9 +711,9 @@ export default function AssessmentForm() {
                     setCancelReason("");
                   }
                 }}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+                className="w-8 h-8 rounded-full bg-slate-100/80 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
@@ -730,7 +795,12 @@ export default function AssessmentForm() {
                   disabled={cancelMutation.isPending}
                   onClick={() => {
                     if (!cancelReason.trim()) {
-                      alert("กรุณาระบุเหตุผลการยกเลิกใบแจ้งซ่อม");
+                      setNoticeModal({
+                        open: true,
+                        type: "error",
+                        title: "แจ้งเตือน",
+                        message: "กรุณาระบุเหตุผลการยกเลิกใบแจ้งซ่อม",
+                      });
                       return;
                     }
                     cancelMutation.mutate(cancelReason.trim());
@@ -743,6 +813,52 @@ export default function AssessmentForm() {
                   ยืนยันยกเลิกใบแจ้งซ่อม
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal แจ้งเตือนสถานะสำเร็จ / ข้อผิดพลาด (มาแทนที่ alert เดิม) */}
+      {noticeModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl overflow-hidden text-center p-6 space-y-4">
+            <div className="flex justify-center">
+              {noticeModal.type === "success" ? (
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+              ) : (
+                <div className="p-3 bg-rose-100 text-rose-600 rounded-full">
+                  <AlertCircle className="w-10 h-10" />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-800">
+                {noticeModal.title}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {noticeModal.message}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const cb = noticeModal.onClose;
+                  setNoticeModal((prev) => ({ ...prev, open: false }));
+                  if (cb) cb();
+                }}
+                className={`w-full py-2.5 rounded-xl text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer ${
+                  noticeModal.type === "success"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+              >
+                ตกลง
+              </button>
             </div>
           </div>
         </div>

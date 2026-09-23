@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { tableFeatures, useTable } from "@tanstack/react-table";
+import {
+  tableFeatures,
+  useTable,
+  rowPaginationFeature,
+  createPaginatedRowModel,
+} from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ClipboardCheck, Eye } from "lucide-react";
@@ -8,7 +13,10 @@ import { useConfirmRepairModalStore } from "../../stores/useConfirmRepairModalSt
 import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalStore";
 import { getRepairConfirmations } from "../../services/confirmRepairService";
 
-const features = tableFeatures({});
+const features = tableFeatures({
+  rowPaginationFeature,
+  paginatedRowModel: createPaginatedRowModel(),
+});
 
 function formatDateTH(dateString?: string | null): string {
   if (!dateString) return "-";
@@ -32,8 +40,6 @@ export default function ConfirmRepairTable({
 }: ConfirmRepairTableProps) {
   const openConfirm = useConfirmRepairModalStore((state) => state.openModal);
   const openDetail = useRepairHistoryModalStore((state) => state.openModal);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 5;
 
   const {
     data: jobs = [],
@@ -43,10 +49,6 @@ export default function ConfirmRepairTable({
     queryKey: ["repairConfirmations"],
     queryFn: getRepairConfirmations,
   });
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, status]);
 
   const filteredData = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -63,21 +65,13 @@ export default function ConfirmRepairTable({
     });
   }, [jobs, search, status]);
 
-  const totalItems = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedData = useMemo(
-    () => filteredData.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filteredData, safePage],
-  );
-
   const columns = useMemo<Array<ColumnDef<typeof features, RepairJob>>>(
     () => [
       {
         id: "jobNo",
         header: "รหัสงาน",
         cell: (info) => (
-          <span className="font-mono text-xs font-bold text-slate-900">
+          <span className="whitespace-nowrap font-semibold text-gray-900 font-mono">
             {info.row.original.jobNo}
           </span>
         ),
@@ -88,13 +82,13 @@ export default function ConfirmRepairTable({
         cell: (info) => {
           const job = info.row.original;
           return (
-            <div className="min-w-[210px]">
-              <p className="text-sm font-semibold text-slate-900">
+            <div>
+              <div className="font-semibold text-gray-900">
                 {job.asset?.assetName || "-"}
-              </p>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+              </div>
+              <div className="text-xs text-gray-500 font-mono mt-0.5">
                 {job.asset?.serialNumber || "-"} / {job.asset?.assetCode || "-"}
-              </p>
+              </div>
             </div>
           );
         },
@@ -103,8 +97,8 @@ export default function ConfirmRepairTable({
         id: "symptom",
         header: "อาการเสียที่แจ้ง",
         cell: (info) => (
-          <span className="block max-w-[250px] text-xs leading-5 text-slate-600">
-            {info.row.original.symptom}
+          <span className="text-slate-600 line-clamp-2 max-w-xs">
+            {info.row.original.symptom || "-"}
           </span>
         ),
       },
@@ -116,13 +110,12 @@ export default function ConfirmRepairTable({
             info.row.original.status?.statusCode === "COMPLETED";
           return (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                 completed
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-amber-50 text-amber-700"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-amber-100 text-amber-700"
               }`}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
               {completed ? "ตรวจรับแล้ว" : "รอตรวจรับ"}
             </span>
           );
@@ -132,7 +125,7 @@ export default function ConfirmRepairTable({
         id: "createdAt",
         header: "วันที่แจ้งซ่อม",
         cell: (info) => (
-          <span className="whitespace-nowrap text-xs text-slate-600">
+          <span className="text-slate-600 whitespace-nowrap">
             {formatDateTH(info.row.original.createdAt)}
           </span>
         ),
@@ -161,7 +154,7 @@ export default function ConfirmRepairTable({
             <button
               type="button"
               disabled
-              className="h-8 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-4 text-xs font-semibold text-slate-400"
+              className="h-8 cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-400"
             >
               ปิดงานแล้ว
             </button>
@@ -169,7 +162,7 @@ export default function ConfirmRepairTable({
             <button
               type="button"
               onClick={() => openConfirm(job)}
-              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
             >
               <ClipboardCheck className="h-3.5 w-3.5" />
               ตรวจรับ
@@ -185,16 +178,26 @@ export default function ConfirmRepairTable({
     key: "confirm-repair-table",
     features,
     columns,
-    data: paginatedData,
+    data: filteredData,
+    initialState: {
+      pagination: {
+        pageIndex: 0,
+        pageSize: 10,
+      },
+    },
   });
 
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [search, status]);
+
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/70 text-xs font-bold text-slate-700">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-left border-collapse text-sm text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-slate-200">
+              <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th key={header.id} className="px-4 py-3">
                     {header.isPlaceholder ? null : (
@@ -205,12 +208,12 @@ export default function ConfirmRepairTable({
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
+          <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-slate-400"
+                  className="text-center py-12 text-slate-400"
                 >
                   กำลังโหลดรายการรอยืนยัน...
                 </td>
@@ -219,79 +222,118 @@ export default function ConfirmRepairTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-rose-500"
+                  className="py-12 text-center text-rose-500 text-sm"
                 >
                   ไม่สามารถโหลดรายการยืนยันการซ่อมได้
                 </td>
               </tr>
-            ) : paginatedData.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="py-12 text-center text-sm text-slate-400"
-                >
-                  ไม่พบรายการที่รอยืนยันการซ่อม
-                </td>
-              </tr>
-            ) : (
+            ) : table.getRowModel().rows.length > 0 ? (
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="transition-colors hover:bg-slate-50/70"
+                  className="hover:bg-slate-50/80 transition-colors"
                 >
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td
+                      key={cell.id}
+                      className="py-3.5 px-4 whitespace-nowrap align-middle"
+                    >
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
                 </tr>
               ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="text-center py-12 text-slate-400"
+                >
+                  ไม่พบรายการที่รอยืนยันการซ่อม
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row">
-        <span>
-          แสดง {totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(safePage * pageSize, totalItems)} จาก {totalItems} รายการ
-        </span>
-        <div className="flex items-center gap-1.5">
+      {/* Pagination - ใช้โครงสร้างเดียวกับ AvailableAssetsTable */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-white border-t border-slate-200">
+        <div className="text-xs text-slate-500 hidden sm:block">
+          หน้า{" "}
+          <span className="font-semibold text-slate-700">
+            {table.state.pagination.pageIndex + 1}
+          </span>{" "}
+          จาก{" "}
+          <span className="font-semibold text-slate-700">
+            {table.getPageCount() || 1}
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-1.5 ml-auto sm:ml-0">
           <button
             type="button"
-            aria-label="หน้าก่อนหน้า"
-            disabled={safePage <= 1}
-            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
           </button>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-            (page) => (
+
+          {Array.from({ length: table.getPageCount() }, (_, index) => {
+            const pageNumber = index + 1;
+            const currentPage = table.state.pagination.pageIndex;
+            const isCurrentPage = currentPage === index;
+
+            if (index < currentPage - 2 || index > currentPage + 2) return null;
+
+            return (
               <button
-                key={page}
+                key={pageNumber}
                 type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-xs font-semibold ${
-                  safePage === page
-                    ? "bg-emerald-600 text-white"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                onClick={() => table.setPageIndex(index)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                  isCurrentPage
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {page}
+                {pageNumber}
               </button>
-            ),
-          )}
+            );
+          })}
+
           <button
             type="button"
-            aria-label="หน้าถัดไป"
-            disabled={safePage >= totalPages}
-            onClick={() =>
-              setCurrentPage((page) => Math.min(totalPages, page + 1))
-            }
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronRight className="h-4 w-4" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7"
+              />
+            </svg>
           </button>
         </div>
       </div>
