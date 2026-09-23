@@ -136,6 +136,8 @@ export interface RepairJob {
   unrepairableReason?: string | null;
   causeId?: number | null;
   actionType?: RepairActionType | null;
+  isRejected?: boolean;
+  rejectReason?: string | null;
   urgencyStatus: Exclude<PriorityFilter, "ALL">;
   dueDate?: string | null;
   returnDate?: string | null;

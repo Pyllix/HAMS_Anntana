@@ -158,6 +158,12 @@ export interface ApiRepairJob {
   mechanicRepairs?: ApiMechanicRepair[];
   repairJobSteps?: ApiRepairStep[];
   sparepartTxns?: ApiSparePartTransaction[];
+  isRejected?: boolean;
+  rejectReason?: string | null;
+  summary?: {
+    isRejected?: boolean;
+    rejectReason?: string | null;
+  };
 }
 
 const repairActionTypes: RepairActionType[] = [
@@ -312,6 +318,8 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
     unrepairableReason: job.unrepairableReason,
     causeId: job.causeId,
     actionType,
+    isRejected: job.isRejected ?? job.summary?.isRejected ?? false,
+    rejectReason: job.rejectReason ?? job.summary?.rejectReason ?? null,
     urgencyStatus:
       job.urgencyStatus === "URGENT" || job.urgencyStatus === "EMERGENCY"
         ? job.urgencyStatus
