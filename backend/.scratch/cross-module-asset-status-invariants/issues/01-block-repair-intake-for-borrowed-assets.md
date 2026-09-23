@@ -5,9 +5,9 @@ When an online repair request is submitted for an asset, the system checks wheth
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Submitting a repair request for an asset with `availabilityStatus` = `BORROWED` throws HTTP 400 Bad Request with an instructive Thai/English message
-- [ ] Submitting a repair request for an asset with `availabilityStatus` = `RESERVED` throws HTTP 400 Bad Request
-- [ ] Submitting a repair request for an asset with `availabilityStatus` = `AVAILABLE` or `UNAVAILABLE` (non-borrowed damaged equipment) succeeds and transitions the asset to `UNDER_REPAIR` and `UNAVAILABLE`
-- [ ] Unit and integration tests cover both rejection of borrowed/reserved equipment and successful intake of available/unborrowed equipment
+- [x] Submitting a repair request for an asset with `availabilityStatus` = `BORROWED` throws HTTP 400 Bad Request with an instructive Thai/English message
+- [x] Submitting a repair request for an asset with `availabilityStatus` = `RESERVED` throws HTTP 400 Bad Request
+- [x] Submitting a repair request for an asset with `availabilityStatus` = `AVAILABLE` or `UNAVAILABLE` (non-borrowed damaged equipment) succeeds and transitions the asset to `UNDER_REPAIR` and `UNAVAILABLE`
+- [x] Unit and integration tests cover both rejection of borrowed/reserved equipment and successful intake of available/unborrowed equipment

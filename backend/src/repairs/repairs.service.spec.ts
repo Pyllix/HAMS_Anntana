@@ -1,8 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RepairsService } from './repairs.service';
 import { PrismaService } from '../prisma.service';
-import { ActionType, ReportType, StepActionType, UrgencyStatus, UserRole } from '@prisma/client';
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ActionType,
+  ReportType,
+  StepActionType,
+  UrgencyStatus,
+  UserRole,
+} from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('RepairsService', () => {
   let service: RepairsService;
@@ -113,8 +124,14 @@ describe('RepairsService', () => {
     service = module.get<RepairsService>(RepairsService);
     prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
-    mockPrisma.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'UNDER_REPAIR' });
-    mockPrisma.availabilityStatus.findUnique.mockResolvedValue({ id: 2, code: 'UNAVAILABLE' });
+    mockPrisma.assetStatus.findUnique.mockResolvedValue({
+      id: 1,
+      code: 'UNDER_REPAIR',
+    });
+    mockPrisma.availabilityStatus.findUnique.mockResolvedValue({
+      id: 2,
+      code: 'UNAVAILABLE',
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -138,8 +155,14 @@ describe('RepairsService', () => {
       });
 
       mockPrisma.repairJob.findFirst.mockResolvedValue(null);
-      mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1, name: 'ซ่อมเครื่องมือแพทย์' });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 1, code: 'PENDING_ASSIGN' });
+      mockPrisma.jobType.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'ซ่อมเครื่องมือแพทย์',
+      });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 1,
+        code: 'PENDING_ASSIGN',
+      });
       mockPrisma.asset.update.mockResolvedValue({});
       mockPrisma.repairJob.create.mockResolvedValue({
         id: 'job-uuid-1',
@@ -182,6 +205,78 @@ describe('RepairsService', () => {
         ConflictException,
       );
     });
+
+    it('should reject createRequest with BadRequestException if asset is BORROWED', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        section_id: 'section-uuid-1',
+        status: { code: 'NORMAL', name: 'ใช้งานปกติ' },
+        availabilityStatus: { code: 'BORROWED', name: 'ถูกยืม' },
+      });
+
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(
+        /on loan or reserved|ยืมหรือรอส่งมอบ/,
+      );
+    });
+
+    it('should reject createRequest with BadRequestException if asset is RESERVED', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        section_id: 'section-uuid-1',
+        status: { code: 'NORMAL', name: 'ใช้งานปกติ' },
+        availabilityStatus: { code: 'RESERVED', name: 'ถูกจอง / รออนุมัติ' },
+      });
+
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(
+        /on loan or reserved|ยืมหรือรอส่งมอบ/,
+      );
+    });
+
+    it('should succeed and set asset to UNDER_REPAIR and UNAVAILABLE if asset is UNAVAILABLE (unborrowed damaged)', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        section_id: 'section-uuid-1',
+        deletedAt: null,
+        status: { code: 'DAMAGED', name: 'ชำรุด' },
+        availabilityStatus: { code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      });
+
+      mockPrisma.repairJob.findFirst.mockResolvedValue(null);
+      mockPrisma.jobType.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'ซ่อมเครื่องมือแพทย์',
+      });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 1,
+        code: 'PENDING_ASSIGN',
+      });
+      mockPrisma.asset.update.mockResolvedValue({});
+      mockPrisma.repairJob.create.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobNo: 'REP-202609-0001',
+        ...createDto,
+      });
+
+      const result = await service.createRequest(createDto, mockUser);
+
+      expect(result.id).toBe('job-uuid-1');
+      expect(mockPrisma.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'asset-uuid-1' },
+          data: expect.objectContaining({
+            asset_status_id: 1,
+            availability_status_id: 2,
+            updatedBy: mockUser.id,
+          }),
+        }),
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -192,14 +287,33 @@ describe('RepairsService', () => {
       mockPrisma.repairJob.findUnique.mockResolvedValue({
         id: 'job-uuid-1',
         jobStatus: { code: 'PENDING_ASSIGN' },
-        repairJobSteps: [{ id: 102, stepMaster: { stepNumber: 2 }, completeAt: null }],
+        repairJobSteps: [
+          { id: 102, stepMaster: { stepNumber: 2 }, completeAt: null },
+        ],
       });
-      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 2, name: 'งานไฟฟ้า' });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({
+        id: 2,
+        name: 'งานไฟฟ้า',
+      });
       mockPrisma.user.findUnique
-        .mockResolvedValueOnce({ id: 'mech-1', role: UserRole.MAINTENANCE_STAFF, firstname: 'A' })
-        .mockResolvedValueOnce({ id: 'head-1', role: UserRole.MAINTENANCE_HEAD, firstname: 'B' });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
-      mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1', techCategoryId: 2 });
+        .mockResolvedValueOnce({
+          id: 'mech-1',
+          role: UserRole.MAINTENANCE_STAFF,
+          firstname: 'A',
+        })
+        .mockResolvedValueOnce({
+          id: 'head-1',
+          role: UserRole.MAINTENANCE_HEAD,
+          firstname: 'B',
+        });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'IN_PROGRESS',
+      });
+      mockPrisma.repairJob.update.mockResolvedValue({
+        id: 'job-uuid-1',
+        techCategoryId: 2,
+      });
 
       const result = await service.assignJob(
         'job-uuid-1',
@@ -208,23 +322,41 @@ describe('RepairsService', () => {
       );
 
       expect(result.id).toBe('job-uuid-1');
-      expect(mockPrisma.mechanicRepair.deleteMany).toHaveBeenCalledWith({ where: { jobId: 'job-uuid-1' } });
+      expect(mockPrisma.mechanicRepair.deleteMany).toHaveBeenCalledWith({
+        where: { jobId: 'job-uuid-1' },
+      });
       expect(mockPrisma.mechanicRepair.create).toHaveBeenCalledTimes(2);
       expect(mockPrisma.repairJobStep.update).toHaveBeenCalled();
     });
 
     it('should reject assignJob if caller is MAINTENANCE_STAFF (not HEAD)', async () => {
       await expect(
-        service.assignJob('job-uuid-1', { techCategoryId: 2, mechanicIds: ['mech-1'] }, mockUser),
+        service.assignJob(
+          'job-uuid-1',
+          { techCategoryId: 2, mechanicIds: ['mech-1'] },
+          mockUser,
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('should calculate active job counts in getMechanicWorkloads', async () => {
       mockPrisma.user.findMany.mockResolvedValue([
-        { id: 'mech-1', firstname: 'Somchai', lastname: 'Dee', role: UserRole.MAINTENANCE_STAFF },
-        { id: 'head-1', firstname: 'Wichai', lastname: 'Head', role: UserRole.MAINTENANCE_HEAD },
+        {
+          id: 'mech-1',
+          firstname: 'Somchai',
+          lastname: 'Dee',
+          role: UserRole.MAINTENANCE_STAFF,
+        },
+        {
+          id: 'head-1',
+          firstname: 'Wichai',
+          lastname: 'Head',
+          role: UserRole.MAINTENANCE_HEAD,
+        },
       ]);
-      mockPrisma.mechanicRepair.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
+      mockPrisma.mechanicRepair.count
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(1);
 
       const result = await service.getMechanicWorkloads();
 
@@ -267,7 +399,11 @@ describe('RepairsService', () => {
       });
 
       await expect(
-        service.updateRepairRequest('job-uuid-1', { symptom: 'แก้ไขอาการ' }, mockUser),
+        service.updateRepairRequest(
+          'job-uuid-1',
+          { symptom: 'แก้ไขอาการ' },
+          mockUser,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -304,12 +440,14 @@ describe('RepairsService', () => {
         jobTypeId: 1,
         actionType: ActionType.REPAIR,
         stepActionType: StepActionType.WITH_PARTS,
-        spareParts: [{ sparepartId: 10, qty: 5, stockType: 'INTERNAL' as const }],
+        spareParts: [
+          { sparepartId: 10, qty: 5, stockType: 'INTERNAL' as const },
+        ],
       };
 
-      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.diagnoseAndPlan('job-uuid-1', dto, mockUser),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should record PENDING_WITHDRAW transactions with stockType on diagnoseAndPlan for WITH_PARTS', async () => {
@@ -337,12 +475,35 @@ describe('RepairsService', () => {
         price: '500.00',
         qtyInStock: 10,
       });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 3, code: 'WAITING_PARTS' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 3,
+        code: 'WAITING_PARTS',
+      });
       mockPrisma.stepMaster.findMany.mockResolvedValue([
-        { id: 1, stepNumber: 1, actionType: StepActionType.WITH_PARTS, label: 'วันแจ้งซ่อม' },
-        { id: 2, stepNumber: 2, actionType: StepActionType.WITH_PARTS, label: 'หัวหน้าช่าง Triage' },
-        { id: 3, stepNumber: 3, actionType: StepActionType.WITH_PARTS, label: 'ช่างตรวจเช็ค' },
-        { id: 4, stepNumber: 4, actionType: StepActionType.WITH_PARTS, label: 'ขอเบิกอะไหล่' },
+        {
+          id: 1,
+          stepNumber: 1,
+          actionType: StepActionType.WITH_PARTS,
+          label: 'วันแจ้งซ่อม',
+        },
+        {
+          id: 2,
+          stepNumber: 2,
+          actionType: StepActionType.WITH_PARTS,
+          label: 'หัวหน้าช่าง Triage',
+        },
+        {
+          id: 3,
+          stepNumber: 3,
+          actionType: StepActionType.WITH_PARTS,
+          label: 'ช่างตรวจเช็ค',
+        },
+        {
+          id: 4,
+          stepNumber: 4,
+          actionType: StepActionType.WITH_PARTS,
+          label: 'ขอเบิกอะไหล่',
+        },
       ]);
       mockPrisma.sparepartTxn.findMany.mockResolvedValue([]);
       mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1' });
@@ -355,7 +516,9 @@ describe('RepairsService', () => {
         jobTypeId: 1,
         actionType: ActionType.REPAIR,
         stepActionType: StepActionType.WITH_PARTS,
-        spareParts: [{ sparepartId: 10, qty: 2, stockType: 'EXTERNAL' as const }],
+        spareParts: [
+          { sparepartId: 10, qty: 2, stockType: 'EXTERNAL' as const },
+        ],
       };
 
       await service.diagnoseAndPlan('job-uuid-1', dto, mockUser);
@@ -391,9 +554,9 @@ describe('RepairsService', () => {
         // unrepairableReason omitted
       };
 
-      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.diagnoseAndPlan('job-uuid-1', dto, mockUser),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ForbiddenException if technician is not assigned to the job and not head', async () => {
@@ -413,9 +576,9 @@ describe('RepairsService', () => {
         stepActionType: StepActionType.SELF_REPAIR,
       };
 
-      await expect(service.diagnoseAndPlan('job-uuid-1', dto, mockUser)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.diagnoseAndPlan('job-uuid-1', dto, mockUser),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -428,23 +591,96 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'PARCEL_PROCESSING' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
-          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.WITH_PARTS } },
-          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.WITH_PARTS } },
-          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.WITH_PARTS } },
-          { id: 105, completeAt: new Date(), stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS } },
-          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.WITH_PARTS, label: 'ช่างรับอะไหล่' } },
-          { id: 107, completeAt: null, stepMaster: { stepNumber: 7, actionType: StepActionType.WITH_PARTS } },
-          { id: 108, completeAt: null, stepMaster: { stepNumber: 8, actionType: StepActionType.WITH_PARTS } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 1,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 102,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 2,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 103,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 3,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 104,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 4,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 105,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 5,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 106,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 6,
+              actionType: StepActionType.WITH_PARTS,
+              label: 'ช่างรับอะไหล่',
+            },
+          },
+          {
+            id: 107,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 7,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 108,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 8,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
         ],
       });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'IN_PROGRESS',
+      });
       mockPrisma.sparepartTxn.findMany.mockResolvedValue([
-        { id: 1, sparepartId: 10, qty: 2, stockType: 'INTERNAL', txnType: 'PENDING_WITHDRAW' },
+        {
+          id: 1,
+          sparepartId: 10,
+          qty: 2,
+          stockType: 'INTERNAL',
+          txnType: 'PENDING_WITHDRAW',
+        },
       ]);
-      mockPrisma.sparepart.findUnique.mockResolvedValue({ id: 10, name: 'Battery', qtyInStock: 5 });
+      mockPrisma.sparepart.findUnique.mockResolvedValue({
+        id: 10,
+        name: 'Battery',
+        qtyInStock: 5,
+      });
       mockPrisma.repairJob.update.mockResolvedValue({});
-      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 106, completeAt: new Date() });
+      mockPrisma.repairJobStep.update.mockResolvedValue({
+        id: 106,
+        completeAt: new Date(),
+      });
 
       await service.updateStepProgress('job-uuid-1', 6, {}, mockUser);
 
@@ -454,7 +690,10 @@ describe('RepairsService', () => {
       });
       expect(mockPrisma.sparepartTxn.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: expect.objectContaining({ txnType: 'WITHDRAW', txnBy: mockUser.id }),
+        data: expect.objectContaining({
+          txnType: 'WITHDRAW',
+          txnBy: mockUser.id,
+        }),
       });
     });
 
@@ -463,20 +702,65 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'PARCEL_PROCESSING' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.OUTSOURCE } },
-          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.OUTSOURCE } },
-          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.OUTSOURCE } },
-          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.OUTSOURCE } },
-          { id: 105, completeAt: null, stepMaster: { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'พัสดุส่งบริษัทภายนอกซ่อม' } },
-          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.OUTSOURCE } },
-          { id: 107, completeAt: null, stepMaster: { stepNumber: 7, actionType: StepActionType.OUTSOURCE } },
-          { id: 108, completeAt: null, stepMaster: { stepNumber: 8, actionType: StepActionType.OUTSOURCE } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 102,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 2, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 103,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 3, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 104,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 4, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 105,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 5,
+              actionType: StepActionType.OUTSOURCE,
+              label: 'พัสดุส่งบริษัทภายนอกซ่อม',
+            },
+          },
+          {
+            id: 106,
+            completeAt: null,
+            stepMaster: { stepNumber: 6, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 107,
+            completeAt: null,
+            stepMaster: { stepNumber: 7, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 108,
+            completeAt: null,
+            stepMaster: { stepNumber: 8, actionType: StepActionType.OUTSOURCE },
+          },
         ],
       });
-      mockPrisma.company.findUnique.mockResolvedValue({ id: 'comp-1', name: 'Vendor A' });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 5, code: 'OUTSOURCED' });
+      mockPrisma.company.findUnique.mockResolvedValue({
+        id: 'comp-1',
+        name: 'Vendor A',
+      });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 5,
+        code: 'OUTSOURCED',
+      });
       mockPrisma.repairJob.update.mockResolvedValue({});
-      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 105, completeAt: new Date() });
+      mockPrisma.repairJobStep.update.mockResolvedValue({
+        id: 105,
+        completeAt: new Date(),
+      });
 
       // Successfully record companyId, billNo, and repairCost on Step 5 by PARCEL_STAFF
       await service.updateStepProgress(
@@ -501,19 +785,61 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'OUTSOURCED' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.OUTSOURCE } },
-          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.OUTSOURCE } },
-          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.OUTSOURCE } },
-          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.OUTSOURCE } },
-          { id: 105, completeAt: new Date(), stepMaster: { stepNumber: 5, actionType: StepActionType.OUTSOURCE } },
-          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'รับเครื่องคืนและทดสอบ' } },
-          { id: 107, completeAt: null, stepMaster: { stepNumber: 7, actionType: StepActionType.OUTSOURCE } },
-          { id: 108, completeAt: null, stepMaster: { stepNumber: 8, actionType: StepActionType.OUTSOURCE } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 1, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 102,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 2, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 103,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 3, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 104,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 4, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 105,
+            completeAt: new Date(),
+            stepMaster: { stepNumber: 5, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 106,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 6,
+              actionType: StepActionType.OUTSOURCE,
+              label: 'รับเครื่องคืนและทดสอบ',
+            },
+          },
+          {
+            id: 107,
+            completeAt: null,
+            stepMaster: { stepNumber: 7, actionType: StepActionType.OUTSOURCE },
+          },
+          {
+            id: 108,
+            completeAt: null,
+            stepMaster: { stepNumber: 8, actionType: StepActionType.OUTSOURCE },
+          },
         ],
       });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'IN_PROGRESS',
+      });
       mockPrisma.repairJob.update.mockResolvedValue({});
-      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 106, completeAt: new Date() });
+      mockPrisma.repairJobStep.update.mockResolvedValue({
+        id: 106,
+        completeAt: new Date(),
+      });
 
       // PARCEL_STAFF must be rejected for Step 6 (testing and receiving must be done by maintenance)
       await expect(
@@ -562,9 +888,18 @@ describe('RepairsService', () => {
           { id: 106, completeAt: null, stepMaster: { stepNumber: 6 } },
         ],
       });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 8, code: 'COMPLETED' });
-      mockPrisma.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'WAIT_DISPOSAL' });
-      mockPrisma.availabilityStatus.findUnique.mockResolvedValue({ id: 2, code: 'UNAVAILABLE' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 8,
+        code: 'COMPLETED',
+      });
+      mockPrisma.assetStatus.findUnique.mockResolvedValue({
+        id: 4,
+        code: 'WAIT_DISPOSAL',
+      });
+      mockPrisma.availabilityStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'UNAVAILABLE',
+      });
       mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1' });
 
       await service.completeUnrepairable(
@@ -594,13 +929,25 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'IN_PROGRESS' },
       });
-      mockPrisma.sparepart.findUnique.mockResolvedValue({ id: 1, price: '150.00', name: 'IC' });
+      mockPrisma.sparepart.findUnique.mockResolvedValue({
+        id: 1,
+        price: '150.00',
+        name: 'IC',
+      });
       mockPrisma.sparepartTxn.findMany
         .mockResolvedValueOnce([{ qty: 3 }])
         .mockResolvedValueOnce([]);
-      mockPrisma.sparepartTxn.create.mockResolvedValue({ id: 2, txnType: 'RETURN', qty: 1 });
+      mockPrisma.sparepartTxn.create.mockResolvedValue({
+        id: 2,
+        txnType: 'RETURN',
+        qty: 1,
+      });
 
-      await service.returnSparePart('job-uuid-1', { sparepartId: 1, qty: 1 }, mockParcelUser);
+      await service.returnSparePart(
+        'job-uuid-1',
+        { sparepartId: 1, qty: 1 },
+        mockParcelUser,
+      );
 
       expect(mockPrisma.sparepart.update).toHaveBeenCalledWith({
         where: { id: 1 },
@@ -610,7 +957,11 @@ describe('RepairsService', () => {
 
     it('should reject returning spare parts if caller is not PARCEL_STAFF', async () => {
       await expect(
-        service.returnSparePart('job-uuid-1', { sparepartId: 1, qty: 1 }, mockUser),
+        service.returnSparePart(
+          'job-uuid-1',
+          { sparepartId: 1, qty: 1 },
+          mockUser,
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -671,17 +1022,70 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'PARCEL_PROCESSING' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
-          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.WITH_PARTS } },
-          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.WITH_PARTS } },
-          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.WITH_PARTS } },
-          { id: 105, completeAt: null, note: null, stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
-          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.WITH_PARTS } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 1,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 102,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 2,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 103,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 3,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 104,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 4,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 105,
+            completeAt: null,
+            note: null,
+            stepMaster: {
+              stepNumber: 5,
+              actionType: StepActionType.WITH_PARTS,
+              label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก',
+            },
+          },
+          {
+            id: 106,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 6,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
         ],
       });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 2, code: 'IN_PROGRESS' });
-      mockPrisma.repairJobStep.update.mockResolvedValue({ id: 105, note: '[ไม่อนุมัติ] งบประมาณเกิน' });
-      mockPrisma.repairJob.update.mockResolvedValue({ id: 'job-uuid-1', jobStatusId: 2 });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'IN_PROGRESS',
+      });
+      mockPrisma.repairJobStep.update.mockResolvedValue({
+        id: 105,
+        note: '[ไม่อนุมัติ] งบประมาณเกิน',
+      });
+      mockPrisma.repairJob.update.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatusId: 2,
+      });
       mockPrisma.sparepartTxn.deleteMany.mockResolvedValue({ count: 1 });
 
       const result = await service.rejectStep(
@@ -717,13 +1121,33 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'IN_PROGRESS' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
-          { id: 105, completeAt: null, note: '[ไม่อนุมัติ] เคยปฏิเสธไปแล้ว', stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 1,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 105,
+            completeAt: null,
+            note: '[ไม่อนุมัติ] เคยปฏิเสธไปแล้ว',
+            stepMaster: {
+              stepNumber: 5,
+              actionType: StepActionType.WITH_PARTS,
+              label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก',
+            },
+          },
         ],
       });
 
       await expect(
-        service.rejectStep('job-uuid-1', { reason: 'ปฏิเสธซ้ำ' }, mockParcelUser),
+        service.rejectStep(
+          'job-uuid-1',
+          { reason: 'ปฏิเสธซ้ำ' },
+          mockParcelUser,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -732,17 +1156,67 @@ describe('RepairsService', () => {
         id: 'job-uuid-1',
         jobStatus: { code: 'IN_PROGRESS' },
         repairJobSteps: [
-          { id: 101, completeAt: new Date(), stepMaster: { stepNumber: 1, actionType: StepActionType.WITH_PARTS } },
-          { id: 102, completeAt: new Date(), stepMaster: { stepNumber: 2, actionType: StepActionType.WITH_PARTS } },
-          { id: 103, completeAt: new Date(), stepMaster: { stepNumber: 3, actionType: StepActionType.WITH_PARTS } },
-          { id: 104, completeAt: new Date(), stepMaster: { stepNumber: 4, actionType: StepActionType.WITH_PARTS } },
-          { id: 105, completeAt: null, note: '[ไม่อนุมัติ] งบประมาณเกิน', stepMaster: { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' } },
-          { id: 106, completeAt: null, stepMaster: { stepNumber: 6, actionType: StepActionType.WITH_PARTS, label: 'ช่างรับอะไหล่ & ลงมือซ่อม' } },
+          {
+            id: 101,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 1,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 102,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 2,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 103,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 3,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 104,
+            completeAt: new Date(),
+            stepMaster: {
+              stepNumber: 4,
+              actionType: StepActionType.WITH_PARTS,
+            },
+          },
+          {
+            id: 105,
+            completeAt: null,
+            note: '[ไม่อนุมัติ] งบประมาณเกิน',
+            stepMaster: {
+              stepNumber: 5,
+              actionType: StepActionType.WITH_PARTS,
+              label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก',
+            },
+          },
+          {
+            id: 106,
+            completeAt: null,
+            stepMaster: {
+              stepNumber: 6,
+              actionType: StepActionType.WITH_PARTS,
+              label: 'ช่างรับอะไหล่ & ลงมือซ่อม',
+            },
+          },
         ],
       });
 
       await expect(
-        service.updateStepProgress('job-uuid-1', 6, { note: 'พยายามข้าม' }, mockUser),
+        service.updateStepProgress(
+          'job-uuid-1',
+          6,
+          { note: 'พยายามข้าม' },
+          mockUser,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -753,10 +1227,18 @@ describe('RepairsService', () => {
         { id: 1, code: 'WAITING_HANDOVER', name: 'รอรับเครื่องจากหน่วยงาน' },
         { id: 2, code: 'PENDING_ASSIGN', name: 'รอมอบหมายงานให้ช่าง' },
       ]);
-      mockPrisma.cause.findMany.mockResolvedValue([{ id: 1, code: '01', name: 'เครื่องไม่มีคุณภาพ' }]);
-      mockPrisma.techCategory.findMany.mockResolvedValue([{ id: 1, code: 'MED_EQ', name: 'งานเครื่องมือแพทย์' }]);
-      mockPrisma.jobType.findMany.mockResolvedValue([{ id: 1, name: 'ซ่อมเครื่องมือแพทย์' }]);
-      mockPrisma.stepMaster.findMany.mockResolvedValue([{ id: 1, stepNumber: 1, label: 'วันแจ้งซ่อม' }]);
+      mockPrisma.cause.findMany.mockResolvedValue([
+        { id: 1, code: '01', name: 'เครื่องไม่มีคุณภาพ' },
+      ]);
+      mockPrisma.techCategory.findMany.mockResolvedValue([
+        { id: 1, code: 'MED_EQ', name: 'งานเครื่องมือแพทย์' },
+      ]);
+      mockPrisma.jobType.findMany.mockResolvedValue([
+        { id: 1, name: 'ซ่อมเครื่องมือแพทย์' },
+      ]);
+      mockPrisma.stepMaster.findMany.mockResolvedValue([
+        { id: 1, stepNumber: 1, label: 'วันแจ้งซ่อม' },
+      ]);
 
       const result = await service.getLookups();
 
