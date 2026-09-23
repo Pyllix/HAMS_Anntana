@@ -1,12 +1,12 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useMemo } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Asset } from "../../Types/TypeAsset";
 
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import { useAuthStore } from "../../stores/authStore";
 import { ROLES } from "../../router/roles";
+import StockTablePagination from "../equipment-stock/StockTablePagination";
 
 const features = tableFeatures({});
 
@@ -26,8 +26,6 @@ export default function StockAssetsTable({
   isLoading = false,
   currentPage = 1,
   totalPages = 1,
-  totalItems = 0,
-  pageSize = 10,
   onPageChange,
   isAssetCenter: isAssetCenterProp,
 }: StockAssetsTableProps) {
@@ -44,7 +42,7 @@ export default function StockAssetsTable({
         cell: (info) => {
           const row = info.row.original;
           return (
-            <span className="font-semibold text-gray-900 text-sm font-mono">
+            <span className="font-semibold text-slate-800 font-mono">
               {row.noid || row.id}
             </span>
           );
@@ -57,8 +55,10 @@ export default function StockAssetsTable({
           const row = info.row.original;
           return (
             <div>
-              <div className="font-semibold text-gray-900">{row.name}</div>
-              <div className="text-sm text-gray-400 font-mono mt-0.5">
+              <div className="font-semibold text-slate-800 leading-snug line-clamp-2 min-w-[200px] max-w-[300px] lg:max-w-[400px] whitespace-normal">
+                {row.name}
+              </div>
+              <div className="text-xs text-slate-500 font-mono mt-1">
                 {row.model || row.company?.name || "-"}
               </div>
             </div>
@@ -69,7 +69,7 @@ export default function StockAssetsTable({
         id: "serialNo",
         header: "หมายเลขเครื่อง (S/N)",
         cell: (info) => (
-          <span className="text-sm text-gray-600 font-mono">
+          <span className="text-sm text-slate-600 font-mono">
             {info.row.original.serialNo || "-"}
           </span>
         ),
@@ -85,11 +85,11 @@ export default function StockAssetsTable({
           const row = info.row.original;
           return (
             <div>
-              <div className="text-sm font-medium text-gray-900">
+              <div className="text-sm font-medium text-slate-800">
                 {row.section?.name ?? "-"}
               </div>
               {row.section?.building && (
-                <div className="text-xs text-gray-500 mt-0.5">
+                <div className="text-xs text-slate-500 mt-0.5">
                   {row.section.building}
                 </div>
               )}
@@ -111,17 +111,17 @@ export default function StockAssetsTable({
           const getStatusStyle = (statusCode?: string) => {
             switch (statusCode) {
               case "NORMAL":
-                return "border-emerald-500 text-emerald-700 bg-emerald-50/70";
+                return "bg-emerald-100 text-emerald-700 border-emerald-200";
               case "DAMAGED":
               case "LOST":
-                return "border-rose-400 text-rose-700 bg-rose-50/70";
+                return "bg-rose-100 text-rose-700 border-rose-200";
               case "UNDER_REPAIR":
               case "WAIT_DISPOSAL":
-                return "border-amber-400 text-amber-700 bg-amber-50/70";
+                return "bg-amber-100 text-amber-700 border-amber-200";
               case "DISPOSAL":
-                return "border-slate-400 text-slate-700 bg-slate-50/70";
+                return "bg-slate-100 text-slate-600 border-slate-200";
               default:
-                return "border-gray-300 text-gray-700 bg-gray-50";
+                return "bg-slate-100 text-slate-600 border-slate-200";
             }
           };
 
@@ -144,7 +144,7 @@ export default function StockAssetsTable({
 
           return (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium border ${getStatusStyle(
+              className={`inline-flex items-center justify-center gap-1.5 min-w-[90px] px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(
                 code
               )}`}
             >
@@ -163,7 +163,7 @@ export default function StockAssetsTable({
             onClick={() =>
               useAssetDetailModalStore.getState().openModal(info.row.original)
             }
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 transition-colors shadow-xs cursor-pointer"
+            className="w-24 rounded-lg border border-emerald-600 bg-white px-3 py-1.5 text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 cursor-pointer"
           >
             รายละเอียด
           </button>
@@ -180,120 +180,16 @@ export default function StockAssetsTable({
     data: assets,
   });
 
-  const visiblePages = useMemo(() => {
-    if (totalPages <= 3) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (currentPage <= 2) {
-      return [1, 2, 3];
-    }
-    if (currentPage >= totalPages - 1) {
-      return [totalPages - 2, totalPages - 1, totalPages];
-    }
-    return [currentPage - 1, currentPage, currentPage + 1];
-  }, [currentPage, totalPages]);
-
-  // Custom Horizontal Scrollbar logic
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [thumbWidthPercent, setThumbWidthPercent] = useState(25);
-  const [canScroll, setCanScroll] = useState(false);
-  const isDraggingRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const dragStartScrollLeftRef = useRef(0);
-
-  // Sync scroll position from table to custom thumb
-  const handleTableScroll = useCallback(() => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-    const maxScroll = el.scrollWidth - el.clientWidth;
-    if (maxScroll > 0) {
-      setScrollProgress(el.scrollLeft / maxScroll);
-    } else {
-      setScrollProgress(0);
-    }
-  }, []);
-
-  // Update track/thumb sizes whenever content or container resizes
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-
-    const measure = () => {
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      if (maxScroll > 2) {
-        setCanScroll(true);
-        const ratio = el.clientWidth / el.scrollWidth;
-        setThumbWidthPercent(Math.max(15, Math.min(85, ratio * 100)));
-        setScrollProgress(el.scrollLeft / maxScroll);
-      } else {
-        setCanScroll(false);
-        setScrollProgress(0);
-      }
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [assets, currentPage, isAssetCenter]);
-
-  // Handle clicking anywhere on the custom track
-  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!trackRef.current || !tableContainerRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickRatio = Math.max(0, Math.min(1, clickX / rect.width));
-    const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
-    tableContainerRef.current.scrollTo({
-      left: clickRatio * maxScroll,
-      behavior: "smooth",
-    });
-  };
-
-  // Handle dragging the custom thumb
-  const handleThumbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    isDraggingRef.current = true;
-    dragStartXRef.current = e.clientX;
-    dragStartScrollLeftRef.current = tableContainerRef.current?.scrollLeft || 0;
-
-    const handlePointerMove = (ev: PointerEvent) => {
-      if (!isDraggingRef.current || !tableContainerRef.current || !trackRef.current) return;
-      const deltaX = ev.clientX - dragStartXRef.current;
-      const trackWidth = trackRef.current.clientWidth;
-      const maxScroll = tableContainerRef.current.scrollWidth - tableContainerRef.current.clientWidth;
-      const scrollableTrackWidth = trackWidth * (1 - thumbWidthPercent / 100);
-      if (scrollableTrackWidth <= 0) return;
-      const scrollDelta = (deltaX / scrollableTrackWidth) * maxScroll;
-      tableContainerRef.current.scrollLeft = dragStartScrollLeftRef.current + scrollDelta;
-    };
-
-    const handlePointerUp = () => {
-      isDraggingRef.current = false;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-  };
 
   return (
-    <div className="w-full flex-1 flex flex-col min-h-0">
-      <div
-        ref={tableContainerRef}
-        onScroll={handleTableScroll}
-        className="flex-1 overflow-auto min-h-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <table className="w-full text-left min-w-[950px]">
-          <thead className="font-bold text-md border-b border-slate-200 bg-white sticky top-0 z-10">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex-1 min-h-0 table-scroll">
+        <table className="w-full text-left border-collapse text-sm text-slate-600 min-w-[950px]">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="py-2 px-4 font-bold text-slate-800 text-sm whitespace-nowrap">
+                  <th key={header.id} className="py-3.5 px-4">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -305,21 +201,21 @@ export default function StockAssetsTable({
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className="py-8 text-center text-slate-400 text-sm">
+                <td colSpan={columns.length} className="text-center py-12 text-slate-400">
                   กำลังโหลดข้อมูลครุภัณฑ์...
                 </td>
               </tr>
             ) : assets.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="py-8 text-center text-slate-400 text-sm">
+                <td colSpan={columns.length} className="text-center py-12 text-slate-400">
                   ไม่พบข้อมูลครุภัณฑ์
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-2 px-4 align-middle text-sm">
+                    <td key={cell.id} className="py-3.5 px-4 whitespace-nowrap align-middle">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -330,67 +226,12 @@ export default function StockAssetsTable({
         </table>
       </div>
 
-      {/* Custom Horizontal Scrollbar for Main Table */}
-      {canScroll && (
-        <div className="shrink-0 px-6 pt-2 pb-2 bg-white select-none">
-          <div
-            ref={trackRef}
-            onClick={handleTrackClick}
-            className="group relative h-2 w-full rounded-full bg-slate-100 hover:bg-slate-200/70 transition-colors cursor-pointer"
-            title="คลิกหรือลากเพื่อเลื่อนดูตารางแนวนอน"
-          >
-            <div
-              onPointerDown={handleThumbPointerDown}
-              style={{
-                width: `${thumbWidthPercent}%`,
-                left: `${scrollProgress * (100 - thumbWidthPercent)}%`,
-              }}
-              className="absolute top-0 bottom-0 rounded-full bg-slate-300 group-hover:bg-slate-400 hover:!bg-emerald-500 active:!bg-emerald-600 cursor-grab active:cursor-grabbing transition-colors shadow-2xs"
-            />
-          </div>
-        </div>
-      )}
 
-      {/* Pagination & Summary footer */}
-      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
-        <div>
-          แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(currentPage * pageSize, totalItems)} จาก {totalItems.toLocaleString()}{" "}
-          รายการ
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={currentPage <= 1 || isLoading}
-            onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          {visiblePages.map((page) => (
-            <button
-              key={page}
-              type="button"
-              disabled={isLoading}
-              onClick={() => onPageChange(page)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${currentPage === page
-                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-            >
-              {page}
-            </button>
-          ))}
-          <button
-            type="button"
-            disabled={currentPage >= totalPages || isLoading}
-            onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
+      <StockTablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </div>
   );
 }

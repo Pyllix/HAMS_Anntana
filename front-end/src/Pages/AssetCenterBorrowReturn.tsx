@@ -310,21 +310,21 @@ export default function AssetCenterBorrowReturn() {
 
           {/* Table */}
           {/* 3. ให้กล่องนี้ยืดจนสุด (flex-1) และซ่อนส่วนเกิน (overflow-hidden) เพื่อให้ Table Scroll ภายในตัวเองได้ */}
-          <div className="flex-1 overflow-hidden border-none">
+          <div className="flex-1 overflow-hidden min-h-[420px]">
             <AssetsTable search={inputSearch} category={category} type={type} />
           </div>
         </>
       )}
 
       {activeTab === "approve" && (
-        <div className="flex-1 overflow-auto flex flex-col gap-4 md:gap-6">
+        <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
           <PendingApprovalTable />
           <PendingHandoverTable />
         </div>
       )}
 
       {activeTab === "return" && (
-        <div className="flex-1 overflow-auto flex flex-col gap-4 md:gap-6">
+        <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
           <PendingPickupTable />
           <PendingCompleteReturnTable />
         </div>

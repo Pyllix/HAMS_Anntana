@@ -253,8 +253,8 @@ export default function WaitDisposalTable({
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       {/* Scrollable Container with Fixed Header */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-        <table className="w-full text-left border-collapse table-fixed">
+      <div className="flex-1 min-h-0 table-scroll">
+        <table className="w-full min-w-[1000px] text-left border-collapse table-fixed">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>

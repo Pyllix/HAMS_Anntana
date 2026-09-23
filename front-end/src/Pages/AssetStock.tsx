@@ -13,6 +13,8 @@ import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
 import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistoryModal";
 import { useAuthStore } from "../stores/authStore";
 import { ROLES } from "../router/roles";
+import StatCards from "../components/borrow-return/StatCards";
+import type { StatCardData } from "../components/borrow-return/StatCards";
 
 export default function AssetStock() {
   const [page, setPage] = useState(1);
@@ -175,162 +177,168 @@ export default function AssetStock() {
     );
   }, [statusId, assetStatuses]);
 
+  // การ์ดสรุป (ใช้ StatCards แบบเดียวกับหน้ายืม-คืน)
+  const statsSummary: StatCardData[] = [
+    {
+      id: "total",
+      filterKey: "ALL",
+      title: "จำนวนครุภัณฑ์ทั้งหมด (รายการ)",
+      value: totalAssets,
+      icon: Plus,
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-600",
+      valueColor: "text-slate-800",
+    },
+    {
+      id: "normal",
+      filterKey: normalStatus ? String(normalStatus.id) : "NORMAL",
+      title: "ใช้งานปกติ (รายการ)",
+      value: normalAssets,
+      icon: Check,
+      iconBg: "bg-emerald-100",
+      iconColor: "text-emerald-600",
+      valueColor: "text-emerald-600",
+    },
+    {
+      id: "damaged",
+      filterKey: damagedStatus ? String(damagedStatus.id) : "DAMAGED",
+      title: "กำลังชำรุด / รอซ่อม (รายการ)",
+      value: damagedAssets,
+      icon: X,
+      iconBg: "bg-rose-100",
+      iconColor: "text-rose-600",
+      valueColor: "text-rose-600",
+    },
+  ];
+
   return (
-    <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-2 overflow-hidden">
-      {/* KPI / Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 shrink-0">
-        {/* Total Assets */}
-        <div className="flex items-center gap-4 bg-bg-component rounded-sm p-5 shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-700 shrink-0">
-            <Plus className="h-6 w-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">
-              จำนวนครุภัณฑ์ทั้งหมด (รายการ)
-            </p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-0.5">
-              {totalAssets.toLocaleString()}
-            </h3>
-          </div>
-        </div>
-
-        {/* Normal / In-use Assets */}
-        <div className="flex items-center gap-4 bg-bg-component rounded-sm p-5 shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
-            <Check className="h-6 w-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">
-              ใช้งานปกติ (รายการ)
-            </p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-0.5">
-              {normalAssets.toLocaleString()}
-            </h3>
-          </div>
-        </div>
-
-        {/* Damaged / Repairing Assets */}
-        <div className="flex items-center gap-4 bg-bg-component rounded-sm p-5 shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-500 shrink-0">
-            <X className="h-6 w-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">
-              กำลังชำรุด / รอซ่อม (รายการ)
-            </p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-rose-500 mt-0.5">
-              {damagedAssets.toLocaleString()}
-            </h3>
-          </div>
-        </div>
+    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* Stat Cards */}
+      <div className="shrink-0">
+        <StatCards
+          stats={statsSummary}
+          // กรองสถานะได้เฉพาะศูนย์ครุภัณฑ์ / Admin (API ของแผนกไม่รองรับตัวกรองสถานะ)
+          selectedCategory={isAssetCenter ? statusId : undefined}
+          onSelectCategory={
+            isAssetCenter
+              ? (key) => {
+                  setStatusId(key);
+                  setPage(1);
+                }
+              : undefined
+          }
+          gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+        />
       </div>
 
-      {/* Filter / Search Bar */}
-      <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4 shrink-0">
-        {/* Search input */}
-        <div className="relative flex-1 max-w-md">
+      {/* Search & Filter Bar */}
+      <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
+        {/* กรอกคำค้นหา */}
+        <div className="relative flex-1 w-full md:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             placeholder="ค้นหารหัส, ชื่อ, Serial Number..."
             value={inputSearch}
             onChange={(e) => setInputSearch(e.target.value)}
-            className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
           />
         </div>
 
-        {/* Dropdown: ประเภท */}
-        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-56 shrink-0 justify-between">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-            <span className="text-slate-500 shrink-0">ประเภท:</span>
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          {/* Dropdown ประเภท */}
+          <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+            <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+              ประเภท:
+            </span>
             <span
-              className="font-semibold text-emerald-600 truncate"
+              className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]"
               title={selectedTypeName}
             >
               {selectedTypeName}
             </span>
-          </div>
-          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={typeId}
-            onChange={(e) => {
-              setTypeId(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="ALL">ทั้งหมด</option>
-            {assetTypes?.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Dropdown: แผนก (แสดงเฉพาะศูนย์ครุภัณฑ์ / Admin) */}
-        {isAssetCenter && (
-          <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-48 shrink-0 justify-between">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-              <span className="text-slate-500 shrink-0">แผนก:</span>
-              <span
-                className="font-semibold text-emerald-600 truncate"
-                title={selectedSectionName}
-              >
-                {selectedSectionName}
-              </span>
-            </div>
-            <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+            <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
             <select
               className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              value={sectionId}
+              value={typeId}
               onChange={(e) => {
-                setSectionId(e.target.value);
+                setTypeId(e.target.value);
                 setPage(1);
               }}
             >
               <option value="ALL">ทั้งหมด</option>
-              {sections?.map((sec) => (
-                <option key={sec.id} value={sec.id}>
-                  {sec.name}
+              {assetTypes?.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
                 </option>
               ))}
             </select>
           </div>
-        )}
 
-        {/* Dropdown: สถานะ */}
-        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-44 shrink-0 justify-between">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-            <span className="text-slate-500 shrink-0">สถานะ:</span>
+          {/* Dropdown แผนก (แสดงเฉพาะศูนย์ครุภัณฑ์ / Admin) */}
+          {isAssetCenter && (
+            <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+              <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+                แผนก:
+              </span>
+              <span
+                className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]"
+                title={selectedSectionName}
+              >
+                {selectedSectionName}
+              </span>
+              <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
+              <select
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                value={sectionId}
+                onChange={(e) => {
+                  setSectionId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="ALL">ทั้งหมด</option>
+                {sections?.map((sec) => (
+                  <option key={sec.id} value={sec.id}>
+                    {sec.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Dropdown สถานะ */}
+          <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+            <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+              สถานะ:
+            </span>
             <span
-              className="font-semibold text-emerald-600 truncate"
+              className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]"
               title={selectedStatusName}
             >
               {selectedStatusName}
             </span>
+            <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
+            <select
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+              value={statusId}
+              onChange={(e) => {
+                setStatusId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="ALL">ทั้งหมด</option>
+              {assetStatuses?.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={statusId}
-            onChange={(e) => {
-              setStatusId(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="ALL">ทั้งหมด</option>
-            {assetStatuses?.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.name}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
-      {/* Table Container */}
-      <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
+      {/* Table */}
+      <div className="flex-1 overflow-hidden min-h-[420px]">
         <StockAssetsTable
           assets={assetResponse?.data ?? []}
           isLoading={isLoading}

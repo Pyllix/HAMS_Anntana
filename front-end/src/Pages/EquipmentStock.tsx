@@ -482,7 +482,7 @@ export default function EquipmentStock() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-hidden min-h-0">
+      <div className="flex-1 overflow-hidden min-h-[420px]">
         {activeTab === "WAIT_DISPOSAL" ? (
           <WaitDisposalTable
             assets={displayedAssets}

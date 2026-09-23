@@ -58,7 +58,7 @@ export default function DepartMentBorrowReturn() {
       </div>
 
       {/* Table แสดงเฉพาะครุภัณฑ์ของศูนย์ครุภัณฑ์กลางที่ว่างและใช้งานได้เท่านั้น */}
-      <div className="flex-1 overflow-hidden border-none">
+      <div className="flex-1 overflow-hidden min-h-[420px]">
         <AvailableAssetsTable search={inputSearch} typeFilter={type} />
       </div>
 
