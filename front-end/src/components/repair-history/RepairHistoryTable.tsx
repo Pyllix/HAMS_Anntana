@@ -116,9 +116,25 @@ function StatusBadge({ job }: { job: RepairJob }) {
 }
 
 function getSpareRejectionReason(job: RepairJob): string | null {
-  if (job.actionType !== "WITH_PARTS" || job.status?.statusCode !== "PENDING_ASSIGN") return null;
-  const note = job.steps?.find((step) => step.stepName && step.note?.startsWith("[ไม่อนุมัติ]"))?.note;
-  return note ? note.replace(/^\[ไม่อนุมัติ\]\s*/, "") : null;
+  if (job.actionType !== "WITH_PARTS") return null;
+
+  const apiReason = job.rejectReason?.trim();
+  if (job.isRejected) {
+    if (apiReason) return apiReason;
+    const rejectedNote = job.steps?.find((step) =>
+      step.note?.startsWith("[ไม่อนุมัติ]"),
+    )?.note;
+    return rejectedNote
+      ? rejectedNote.replace(/^\[ไม่อนุมัติ\]\s*/, "")
+      : "ไม่ระบุเหตุผล";
+  }
+
+  // รองรับข้อมูลจาก backend รุ่นเดิมที่ยังไม่มี isRejected/rejectReason
+  if (job.status?.statusCode !== "PENDING_ASSIGN") return null;
+  const legacyNote = job.steps?.find((step) =>
+    step.note?.startsWith("[ไม่อนุมัติ]"),
+  )?.note;
+  return legacyNote ? legacyNote.replace(/^\[ไม่อนุมัติ\]\s*/, "") : null;
 }
 
 function pendingActorLabel(stage: RepairWorkflowStage): string {
