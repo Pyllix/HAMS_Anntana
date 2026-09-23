@@ -5,11 +5,11 @@ When an administrator or parcel staff member updates an asset's physical status 
 
 **Blocked by:** 03 — Guard Direct Status Edits & Disposal Against Borrowed Assets
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Direct status update to `LOST` on an asset with availability `BORROWED` or `RESERVED` succeeds
-- [ ] Asset's physical status transitions to `LOST` and availability status transitions to `UNAVAILABLE`
-- [ ] Active `BorrowTransaction` for that asset transitions to `CANCELLED` status
-- [ ] `BorrowTransaction` record is populated with automated `cancel_reason`, acting user ID in `cancelled_by_user_id`, and current timestamp in `cancelled_at`
-- [ ] All database mutations execute atomically within a single database transaction (if any step fails, entire change rolls back)
-- [ ] Unit and integration tests verify the end-to-end auto-cascade cancellation and audit trail preservation
+- [x] Direct status update to `LOST` on an asset with availability `BORROWED` or `RESERVED` succeeds
+- [x] Asset's physical status transitions to `LOST` and availability status transitions to `UNAVAILABLE`
+- [x] Active `BorrowTransaction` for that asset transitions to `CANCELLED` status
+- [x] `BorrowTransaction` record is populated with automated `cancel_reason`, acting user ID in `cancelled_by_user_id`, and current timestamp in `cancelled_at`
+- [x] All database mutations execute atomically within a single database transaction (if any step fails, entire change rolls back)
+- [x] Unit and integration tests verify the end-to-end auto-cascade cancellation and audit trail preservation

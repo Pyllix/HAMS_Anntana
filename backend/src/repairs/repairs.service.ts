@@ -192,6 +192,26 @@ export class RepairsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      try {
+        await tx.asset.update({
+          where: {
+            id: dto.assetId,
+            asset_status_id: asset.asset_status_id ?? asset.status.id,
+            availability_status_id: asset.availability_status_id ?? asset.availabilityStatus?.id ?? null,
+          },
+          data: {
+            asset_status_id: underRepairStatusId,
+            availability_status_id: unavailableAvailabilityId,
+            updatedBy: user.id,
+          },
+        });
+      } catch (error) {
+        if ((error as { code?: unknown } | null)?.code === 'P2025') {
+          throw new BadRequestException('Asset status changed during repair intake; please retry');
+        }
+        throw error;
+      }
+
       const jobNo = await this.generateJobNo(tx);
 
       // 1. Create RepairJob
@@ -216,16 +236,6 @@ export class RepairsService {
             select: { id: true, firstname: true, lastname: true, email: true },
           },
           jobStatus: true,
-        },
-      });
-
-      // 2. Update Asset status to UNDER_REPAIR & UNAVAILABLE
-      await tx.asset.update({
-        where: { id: dto.assetId },
-        data: {
-          asset_status_id: underRepairStatusId,
-          availability_status_id: unavailableAvailabilityId,
-          updatedBy: user.id,
         },
       });
 

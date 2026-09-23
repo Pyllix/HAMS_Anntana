@@ -22,6 +22,10 @@ const ALLOWED_FROM: Record<string, string[]> = {
   UNDER_REPAIR: ['DAMAGED', 'NORMAL'],
 };
 
+/** ข้อความเหตุผลการยกเลิกใบยืมอัตโนมัติเมื่อครุภัณฑ์สูญหาย */
+export const AUTO_CANCEL_BORROW_REASON =
+  '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)';
+
 /** Include block ที่ใช้ซ้ำทุก asset query */
 const ASSET_INCLUDE = {
   status: { select: { id: true, code: true, name: true } },
@@ -213,13 +217,16 @@ export class AssetService {
     return avail?.id;
   }
 
+  private isBorrowedOrReserved(code: string | undefined): boolean {
+    return code === 'BORROWED' || code === 'RESERVED';
+  }
+
   private validateBorrowedOrReservedStatusGuard(
     currentAvailabilityCode: string | undefined,
     targetStatusCode: string,
   ): void {
     if (
-      currentAvailabilityCode &&
-      ['BORROWED', 'RESERVED'].includes(currentAvailabilityCode) &&
+      this.isBorrowedOrReserved(currentAvailabilityCode) &&
       ['DISPOSAL', 'WAIT_DISPOSAL', 'DAMAGED', 'UNDER_REPAIR'].includes(targetStatusCode)
     ) {
       throw new BadRequestException(
@@ -228,28 +235,88 @@ export class AssetService {
     }
   }
 
+  private async rejectStaleAssetWrite<T>(write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'P2025') {
+        throw new BadRequestException('Asset status changed during this request; please retry');
+      }
+      throw error;
+    }
+  }
+
+  private async cascadeCancelActiveBorrowTransactions(
+    tx: Prisma.TransactionClient,
+    assetId: string,
+    userId: string,
+  ): Promise<void> {
+    const cancelledStatus = await tx.borrowStatus.findUnique({
+      where: { code: 'CANCELLED' },
+    });
+    if (!cancelledStatus) {
+      throw new NotFoundException('BorrowStatus CANCELLED not found');
+    }
+
+    const terminalStatuses = await tx.borrowStatus.findMany({
+      where: { code: { in: ['RETURNED', 'REJECTED', 'CANCELLED'] } },
+      select: { id: true },
+    });
+    const terminalStatusIds = terminalStatuses.map((s) => s.id);
+
+    await tx.borrowTransaction.updateMany({
+      where: {
+        asset_id: assetId,
+        borrow_status_id: { notIn: terminalStatusIds },
+      },
+      data: {
+        borrow_status_id: cancelledStatus.id,
+        cancelled_by_user_id: userId,
+        cancelled_at: new Date(),
+        cancel_reason: AUTO_CANCEL_BORROW_REASON,
+      },
+    });
+  }
+
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
     const asset = await this.findOne(id);
-    const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = updateAssetDto as any;
+    const {
+      createdBy: _ignore,
+      updatedBy: _ignore2,
+      availability_status_id: requestedAvailabilityId,
+      ...dto
+    } = updateAssetDto as any;
+    if (requestedAvailabilityId != null && requestedAvailabilityId !== asset.availabilityStatus?.id) {
+      throw new BadRequestException('Availability status must be changed through its workflow');
+    }
 
     let autoAvailabilityId: number | undefined = undefined;
+    let targetStatus: { id: number; code: string; name: string } | null = null;
     if (dto.asset_status_id) {
-      const targetStatus = await this.prisma.assetStatus.findUnique({
+      targetStatus = await this.prisma.assetStatus.findUnique({
         where: { id: dto.asset_status_id },
       });
       if (!targetStatus) {
         throw new NotFoundException(`AssetStatus #${dto.asset_status_id} not found`);
       }
-      this.validateStatusTransition(asset.status.code, targetStatus.code);
+      if (targetStatus.code !== asset.status.code) {
+        this.validateStatusTransition(asset.status.code, targetStatus.code);
+      }
       this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
-      if (!dto.availability_status_id) {
+      if (targetStatus.code !== asset.status.code) {
         autoAvailabilityId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
       }
     }
 
     const payload = toAssetDates(dto);
-    const updated = await this.prisma.asset.update({
-      where: { id },
+    const updateAsset = (client: Prisma.TransactionClient | PrismaService) => client.asset.update({
+      where: {
+        id,
+        ...(dto.asset_status_id && {
+          asset_status_id: asset.status.id,
+          availability_status_id: asset.availabilityStatus?.id ?? null,
+        }),
+      },
       data: {
         ...payload,
         ...(autoAvailabilityId !== undefined && { availability_status_id: autoAvailabilityId }),
@@ -257,6 +324,16 @@ export class AssetService {
       },
       include: ASSET_INCLUDE,
     });
+    const updated = dto.asset_status_id
+      ? await this.rejectStaleAssetWrite(() =>
+          this.prisma.$transaction(async (tx) => {
+            if (targetStatus?.code === 'LOST') {
+              await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+            }
+            return updateAsset(tx);
+          }),
+        )
+      : await updateAsset(this.prisma);
     return this.transformAsset(updated);
   }
 
@@ -271,20 +348,36 @@ export class AssetService {
       throw new NotFoundException(`AssetStatus #${assetStatusId} not found`);
     }
 
-    this.validateStatusTransition(asset.status.code, targetStatus.code);
+    if (targetStatus.code !== asset.status.code) {
+      this.validateStatusTransition(asset.status.code, targetStatus.code);
+    }
     this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
 
-    const availabilityStatusId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
+    const availabilityStatusId = targetStatus.code === asset.status.code
+      ? undefined
+      : await this.getConsistentAvailabilityStatusId(targetStatus.code);
 
-    const updated = await this.prisma.asset.update({
-      where: { id },
-      data: {
-        asset_status_id: assetStatusId,
-        ...(availabilityStatusId !== undefined && { availability_status_id: availabilityStatusId }),
-        updatedBy: userId,
-      },
-      include: ASSET_INCLUDE,
-    });
+    const updated = await this.rejectStaleAssetWrite(() =>
+      this.prisma.$transaction(async (tx) => {
+        if (targetStatus.code === 'LOST') {
+          await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+        }
+
+        return tx.asset.update({
+          where: {
+            id,
+            asset_status_id: asset.status.id,
+            availability_status_id: asset.availabilityStatus?.id ?? null,
+          },
+          data: {
+            asset_status_id: assetStatusId,
+            ...(availabilityStatusId !== undefined && { availability_status_id: availabilityStatusId }),
+            updatedBy: userId,
+          },
+          include: ASSET_INCLUDE,
+        });
+      }),
+    );
     return this.transformAsset(updated);
   }
 
@@ -334,7 +427,7 @@ export class AssetService {
   async createDisposal(id: string, dto: CreateAssetDisposalDto, userId: string) {
     const asset = await this.findOne(id);
 
-    if (asset.availabilityStatus?.code === 'BORROWED' || asset.availabilityStatus?.code === 'RESERVED') {
+    if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
       throw new BadRequestException(
         `Cannot dispose an asset that is currently ${asset.availabilityStatus.code.toLowerCase()}`,
       );
@@ -348,14 +441,18 @@ export class AssetService {
     const unavailableStatus = await this.prisma.availabilityStatus.findUnique({ where: { code: 'UNAVAILABLE' } });
 
     return this.prisma.$transaction(async (prisma) => {
-      await prisma.asset.update({
-        where: { id },
+      await this.rejectStaleAssetWrite(() => prisma.asset.update({
+        where: {
+          id,
+          asset_status_id: asset.status.id,
+          availability_status_id: asset.availabilityStatus?.id ?? null,
+        },
         data: {
           asset_status_id: disposalStatus.id,
           availability_status_id: unavailableStatus?.id,
           updatedBy: userId,
         },
-      });
+      }));
 
       return prisma.disposal.create({
         data: {
@@ -472,13 +569,17 @@ export class AssetService {
 
     return this.prisma.$transaction(async (prisma) => {
       // อัปเดตแผนกของ Asset ไปยังแผนกใหม่
-      await prisma.asset.update({
-        where: { id },
+      await this.rejectStaleAssetWrite(() => prisma.asset.update({
+        where: {
+          id,
+          asset_status_id: asset.status.id,
+          availability_status_id: asset.availabilityStatus?.id ?? null,
+        },
         data: {
           section_id: dto.to_section_id,
           updatedBy: userId,
         },
-      });
+      }));
 
       // บันทึกระเบียนประวัติการโอนย้าย (Direct Transfer)
       return prisma.transfer.create({

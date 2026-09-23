@@ -175,7 +175,7 @@ describe('RepairsService', () => {
       expect(result.id).toBe('job-uuid-1');
       expect(mockPrisma.asset.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-uuid-1' },
+          where: expect.objectContaining({ id: 'asset-uuid-1' }),
           data: expect.objectContaining({
             updatedBy: mockUser.id,
           }),
@@ -183,6 +183,28 @@ describe('RepairsService', () => {
       );
     });
 
+    it('rejects repair intake if the asset becomes borrowed before the write', async () => {
+      mockPrisma.asset.findUnique.mockResolvedValue({
+        id: 'asset-uuid-1',
+        asset_status_id: 1,
+        availability_status_id: 1,
+        section_id: 'section-uuid-1',
+        status: { id: 1, code: 'NORMAL', name: 'ใช้งานปกติ' },
+        availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
+      });
+      mockPrisma.repairJob.findFirst.mockResolvedValue(null);
+      mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1 });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 1, code: 'PENDING_ASSIGN' });
+      mockPrisma.repairJob.create.mockResolvedValue({ id: 'job-uuid-1' });
+      mockPrisma.asset.update.mockImplementation(async ({ where }: any) => {
+        if (where.availability_status_id === 1) {
+          throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+        }
+        return {};
+      });
+
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(BadRequestException);
+    });
     it('should throw NotFoundException if asset does not exist', async () => {
       mockPrisma.asset.findUnique.mockResolvedValue(null);
 
@@ -268,7 +290,7 @@ describe('RepairsService', () => {
       expect(result.id).toBe('job-uuid-1');
       expect(mockPrisma.asset.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'asset-uuid-1' },
+          where: expect.objectContaining({ id: 'asset-uuid-1' }),
           data: expect.objectContaining({
             asset_status_id: 1,
             availability_status_id: 2,
