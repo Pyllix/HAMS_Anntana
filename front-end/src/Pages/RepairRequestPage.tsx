@@ -1,20 +1,26 @@
-import React, { useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Stethoscope,
   Wrench,
-  Monitor,
   Loader2,
   Search,
   ShieldCheck,
   CheckCircle2,
 } from "lucide-react";
 import { useRepairStore } from "../stores/useRepairModalStore";
+import { useAuthStore } from "../stores/authStore";
 import { getAssetByCode } from "../services/repairService";
 import ConfirmRepairModal from "../components/help-desk/ConfirmRepairModal";
-import type { ReportType, UrgencyStatus } from "../Types/TypeRepair";
+import type { UrgencyStatus } from "../Types/TypeRepair";
+
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 
 export default function RepairRequestPage() {
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const { user } = useAuthStore();
+  const lastActiveTimeRef = useRef<number>(Date.now());
+
   const {
     reportType,
     assetSearchInput,
@@ -31,6 +37,38 @@ export default function RepairRequestPage() {
     resetForm,
   } = useRepairStore();
 
+  useEffect(() => {
+    if (!user) {
+      resetForm();
+      setSearchError(null);
+    }
+  }, [user, resetForm]);
+
+  useEffect(() => {
+    return () => {
+      resetForm();
+    };
+  }, [resetForm]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        lastActiveTimeRef.current = Date.now();
+      } else {
+        const now = Date.now();
+        if (now - lastActiveTimeRef.current > INACTIVITY_TIMEOUT_MS) {
+          resetForm();
+          setSearchError(null);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [resetForm]);
+
   const { refetch: fetchAsset, isFetching: isSearching } = useQuery({
     queryKey: ["assetInfo", assetSearchInput],
     queryFn: async () => {
@@ -43,41 +81,40 @@ export default function RepairRequestPage() {
     enabled: false,
   });
 
-  const handleSearchAsset = () => {
+  const handleSearchAsset = async () => {
     if (!assetSearchInput.trim()) {
-      alert("กรุณากรอกรหัสครุภัณฑ์ก่อนค้นหา");
+      setSearchError("กรุณากรอกรหัสครุภัณฑ์ก่อนค้นหา");
       return;
     }
-    fetchAsset();
+    setSearchError(null);
+    try {
+      const result = await fetchAsset();
+      if (result.isError) {
+        setSearchError(
+          (result.error as Error)?.message || "ไม่พบข้อมูลครุภัณฑ์",
+        );
+      }
+    } catch (err: any) {
+      setSearchError(err.message || "เกิดข้อผิดพลาดในการค้นหา");
+    }
   };
 
-  // ตรวจสอบความถูกต้องของข้อมูลเบื้องต้น แล้วเปิด Modal ยืนยัน
   const handleOpenConfirmModal = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const targetAssetId = assetInfo?.assetId || assetSearchInput;
-
-    if (!targetAssetId.trim() || !symptom.trim()) {
-      alert("กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน");
-      return;
-    }
-
     openConfirmModal();
   };
 
-  // เช็คว่ากรอกข้อมูลครบตามต้องการหรือยัง
   const isFormInvalid =
-    !reportType ||
-    !(assetInfo?.assetId || assetSearchInput).trim() ||
-    !symptom.trim();
+    !reportType || !assetInfo || !symptom.trim() || isSearching;
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col overflow-hidden pb-2">
       {/* Main Container */}
-      <div className="bg-[#F8FAFC] border border-slate-200/80 rounded-xl p-6 shadow-xs">
-        <form onSubmit={handleOpenConfirmModal} className="space-y-6">
-          {/* Header */}
-          <div className="border-b border-slate-200/60 pb-4">
+      <div className="flex-1 bg-[#F8FAFC] border border-slate-200/80 rounded-xl shadow-xs overflow-hidden flex flex-col">
+        <form onSubmit={handleOpenConfirmModal} className="flex flex-col h-full">
+          
+          {/* Header - ล็อกให้อยู่ส่วนบนสุดตลอดเวลา */}
+          <div className="shrink-0 border-b border-slate-200/60 p-6 pb-4 bg-[#F8FAFC]">
             <h2 className="text-base font-bold text-slate-800">
               รายละเอียดการแจ้ง
             </h2>
@@ -86,220 +123,245 @@ export default function RepairRequestPage() {
             </p>
           </div>
 
-          {/* Sub-Type (reportType) */}
-          <div className="space-y-2.5">
-            <label className="block text-xs font-semibold text-slate-700">
-              ประเภทการแจ้ง <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* ตัวเลือกที่ 1: แจ้งซ่อมครุภัณฑ์ชำรุด */}
-              <button
-                type="button"
-                onClick={() => setReportType("Repair")}
-                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
-                  reportType === "Repair"
-                    ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
-                }`}
-              >
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                    reportType === "Repair"
-                      ? "bg-[#00A96E] text-white"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  <Wrench className="w-4 h-4" />
-                </div>
-                <div className="pr-5">
-                  <h4
-                    className={`font-bold text-xs leading-snug ${
-                      reportType === "Repair"
-                        ? "text-emerald-950"
-                        : "text-slate-800"
-                    }`}
-                  >
-                    แจ้งซ่อมครุภัณฑ์ชำรุด
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
-                    อุปกรณ์เสีย ใช้งานไม่ได้ หรือชำรุด (Repair)
-                  </p>
-                </div>
-                {reportType === "Repair" && (
-                  <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
-                )}
-              </button>
-
-              {/* ตัวเลือกที่ 2: บำรุงรักษาตามรอบ */}
-              <button
-                type="button"
-                onClick={() => setReportType("Maintenance")}
-                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
-                  reportType === "Maintenance"
-                    ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
-                }`}
-              >
-                <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                    reportType === "Maintenance"
-                      ? "bg-[#00A96E] text-white"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div className="pr-5">
-                  <h4
-                    className={`font-bold text-xs leading-snug ${
-                      reportType === "Maintenance"
-                        ? "text-emerald-950"
-                        : "text-slate-800"
-                    }`}
-                  >
-                    บำรุงรักษาตามรอบ
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
-                    ตรวจเช็กสภาพ หรือดูแลเชิงป้องกัน (Maintenance)
-                  </p>
-                </div>
-                {reportType === "Maintenance" && (
-                  <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Asset Search Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                รหัสครุภัณฑ์ <span className="text-red-500">*</span>
+          {/* Form Scrollable Content - เลื่อน Scroll ได้เฉพาะส่วนเนื้อหานี้ */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Sub-Type (reportType) */}
+            <div className="space-y-2.5">
+              <label className="block text-xs font-semibold text-slate-700">
+                ประเภทการแจ้ง <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    placeholder="เช่น EQ-2567-0008"
-                    value={assetSearchInput}
-                    onChange={(e) => setAssetSearchInput(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* ตัวเลือกที่ 1: แจ้งซ่อมครุภัณฑ์ชำรุด */}
                 <button
                   type="button"
-                  onClick={handleSearchAsset}
-                  disabled={isSearching}
-                  className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  onClick={() => setReportType("Repair")}
+                  className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
+                    reportType === "Repair"
+                      ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+                  }`}
                 >
-                  {isSearching ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="w-3.5 h-3.5 text-slate-500" />
-                      ค้นหา
-                    </>
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                      reportType === "Repair"
+                        ? "bg-[#00A96E] text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4" />
+                  </div>
+                  <div className="pr-5">
+                    <h4
+                      className={`font-bold text-xs leading-snug ${
+                        reportType === "Repair"
+                          ? "text-emerald-950"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      แจ้งซ่อมครุภัณฑ์ชำรุด
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                      อุปกรณ์เสีย ใช้งานไม่ได้ หรือชำรุด (Repair)
+                    </p>
+                  </div>
+                  {reportType === "Repair" && (
+                    <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
+                  )}
+                </button>
+
+                {/* ตัวเลือกที่ 2: บำรุงรักษาตามรอบ */}
+                <button
+                  type="button"
+                  onClick={() => setReportType("Maintenance")}
+                  className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer ${
+                    reportType === "Maintenance"
+                      ? "border-[#00A96E] bg-emerald-50/40 shadow-xs"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+                  }`}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                      reportType === "Maintenance"
+                        ? "bg-[#00A96E] text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div className="pr-5">
+                    <h4
+                      className={`font-bold text-xs leading-snug ${
+                        reportType === "Maintenance"
+                          ? "text-emerald-950"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      บำรุงรักษาตามรอบ
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                      ตรวจเช็กสภาพ หรือดูแลเชิงป้องกัน (Maintenance)
+                    </p>
+                  </div>
+                  {reportType === "Maintenance" && (
+                    <CheckCircle2 className="w-4 h-4 text-[#00A96E] absolute top-3.5 right-3.5" />
                   )}
                 </button>
               </div>
             </div>
 
+            {/* Asset Search Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  รหัสครุภัณฑ์ <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="เช่น EQ-2567-0008"
+                      value={assetSearchInput}
+                      onChange={(e) => {
+                        setAssetSearchInput(e.target.value);
+                        if (searchError) setSearchError(null);
+                        if (assetInfo) setAssetInfo(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSearchAsset();
+                        }
+                      }}
+                      className={`h-9 w-full rounded-lg border bg-white px-3.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
+                        searchError
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-500"
+                          : "border-slate-200 focus:border-slate-500 focus:ring-slate-500"
+                      }`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSearchAsset}
+                    disabled={isSearching}
+                    className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSearching ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5 text-slate-500" />
+                        ค้นหา
+                      </>
+                    )}
+                  </button>
+                </div>
+                {searchError && (
+                  <p className="text-[11px] text-red-500 mt-1">{searchError}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  ชื่อครุภัณฑ์ (ระบบดึงให้อัตโนมัติ)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={assetInfo?.assetName || ""}
+                  placeholder="ชื่อครุภัณฑ์จะแสดงขึ้นเมื่อกดค้นหา"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Location Field (Auto-filled) */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                ชื่อครุภัณฑ์ (ระบบดึงให้อัตโนมัติ)
+                สถานที่ตั้ง / ห้องที่ใช้งาน (ระบบดึงให้อัตโนมัติ)
               </label>
               <input
                 type="text"
                 readOnly
                 disabled
-                value={assetInfo?.assetName || ""}
-                placeholder="ชื่อครุภัณฑ์จะแสดงขึ้นเมื่อกดค้นหา"
-                className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          {/* Location Field (Auto-filled) */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              สถานที่ตั้ง / ห้องที่ใช้งาน (ระบบดึงให้อัตโนมัติ)
-            </label>
-            <input
-              type="text"
-              readOnly
-              disabled
-              value={assetInfo?.location || ""}
-              placeholder="สถานที่ตั้งจะแสดงขึ้นเมื่อกดค้นหา"
-              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          {/* Category & Urgency Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                หมวดหมู่ (ระบบดึงให้อัตโนมัติ)
-              </label>
-              <input
-                type="text"
-                readOnly
-                disabled
-                value={assetInfo?.category || ""}
-                placeholder="หมวดหมู่จะแสดงขึ้นตามข้อมูลครุภัณฑ์"
+                value={assetInfo?.location || ""}
+                placeholder="สถานที่ตั้งจะแสดงขึ้นเมื่อกดค้นหา"
                 className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
               />
             </div>
 
+            {/* Category & Urgency Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  หมวดหมู่ (ระบบดึงให้อัตโนมัติ)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={assetInfo?.category || ""}
+                  placeholder="หมวดหมู่จะแสดงขึ้นตามข้อมูลครุภัณฑ์"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-100/60 px-3.5 text-xs text-slate-500 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  ระดับความเร่งด่วน
+                  <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={urgencyStatus}
+                  onChange={(e) =>
+                    setUrgencyStatus(e.target.value as UrgencyStatus)
+                  }
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all cursor-pointer"
+                >
+                  <option value="NORMAL">ปกติ</option>
+                  <option value="URGENT">ด่วน</option>
+                  <option value="EMERGENCY">ด่วนมาก</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Symptom Details */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                ระดับความเร่งด่วน
+                รายละเอียดอาการเสีย
                 <span className="text-red-500">*</span>
               </label>
-              <select
-                value={urgencyStatus}
-                onChange={(e) =>
-                  setUrgencyStatus(e.target.value as UrgencyStatus)
-                }
-                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-xs text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all cursor-pointer"
-              >
-                <option value="NORMAL">ปกติ</option>
-                <option value="URGENT">ด่วน</option>
-                <option value="EMERGENCY">ด่วนมาก</option>
-              </select>
+              <textarea
+                rows={4}
+                placeholder="อธิบายอาการเสียเบื้องต้น เช่น เครื่องเปิดไม่ติด..."
+                value={symptom}
+                onChange={(e) => setSymptom(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all resize-none"
+              />
             </div>
           </div>
 
-          {/* Symptom Details */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              รายละเอียดอาการเสีย
-              <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              rows={4}
-              placeholder="อธิบายอาการเสียเบื้องต้น เช่น เครื่องเปิดไม่ติด..."
-              value={symptom}
-              onChange={(e) => setSymptom(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all resize-none"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200/60">
+          {/* Action Buttons Footer - ล็อกให้อยู่ด้านล่างสุดตลอดเวลา */}
+          <div className="shrink-0 flex items-center justify-end gap-3 p-4 px-6 border-t border-slate-200/60 bg-[#F8FAFC]">
             <button
               type="button"
-              onClick={resetForm}
-              className="h-9 px-5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              onClick={() => {
+                setSearchError(null);
+                resetForm();
+              }}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              className="h-9 flex items-center gap-2 px-6 rounded-lg bg-[#00A96E] text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
+              disabled={isFormInvalid}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#00A96E] hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-50"
             >
               ส่งแจ้งซ่อม
             </button>
           </div>
+
         </form>
       </div>
 
