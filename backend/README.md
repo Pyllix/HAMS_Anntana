@@ -103,6 +103,18 @@ pnpm run test       # Run unit tests
 pnpm dlx prisma studio # เปิด UI สำหรับดูข้อมูลใน Database ของ Prisma
 ```
 
+## Cross-module asset status integration tests
+
+These tests send HTTP requests to the asset and repair controllers and use a dedicated PostgreSQL test database. Set `TEST_DATABASE_URL` to a database whose name contains `test`; never point it at the development database. Apply the current Prisma schema to that database, then run the focused suite. For PowerShell:
+
+```powershell
+docker exec hams-postgres createdb -U postgres hams_asset_invariants_test # once
+$env:TEST_DATABASE_URL = 'postgresql://USER:PASSWORD@localhost:5432/hams_asset_invariants_test?schema=public'
+$env:DATABASE_URL = $env:TEST_DATABASE_URL
+pnpm exec prisma db push
+pnpm run test:asset-status:e2e
+```
+
 ## Project Structure
 
 ```text

@@ -5,12 +5,12 @@ When an administrator or parcel staff member updates an asset's physical status 
 
 **Blocked by:** 01 — Block Repair Intake for Borrowed or Reserved Assets, 03 — Guard Direct Status Edits & Disposal Against Borrowed Assets
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Direct status update to `LOST` on an asset whose status is `UNDER_REPAIR` succeeds
-- [ ] Asset's physical status transitions to `LOST` and availability status transitions to `UNAVAILABLE`
-- [ ] Active in-progress `RepairJob` on that asset transitions to `CANCELLED` status
-- [ ] `RepairJob` record is updated with an automated cancellation note (e.g. "[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)") and `updatedBy` user ID
-- [ ] Any pending spare part transactions associated with the cancelled repair job are properly cleaned up or cancelled
-- [ ] All database mutations execute atomically within a single database transaction
-- [ ] Unit and integration tests verify the end-to-end auto-cascade cancellation of active repair jobs when equipment is lost
+- [x] Direct status update to `LOST` on an asset whose status is `UNDER_REPAIR` succeeds
+- [x] Asset's physical status transitions to `LOST` and availability status transitions to `UNAVAILABLE`
+- [x] Active in-progress `RepairJob` on that asset transitions to `CANCELLED` status
+- [x] `RepairJob` record is updated with an automated cancellation note (e.g. "[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)") and `updatedBy` user ID
+- [x] Any pending spare part transactions associated with the cancelled repair job are properly cleaned up or cancelled
+- [x] All database mutations execute atomically within a single database transaction
+- [x] Unit and integration tests verify the end-to-end auto-cascade cancellation of active repair jobs when equipment is lost
