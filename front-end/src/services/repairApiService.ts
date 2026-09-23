@@ -132,6 +132,7 @@ export interface ApiRepairJob {
   jobStatusId?: number | null;
   companyId?: string | null;
   billNo?: string | null;
+  repairCost?: number | string | null;
   symptom?: string | null;
   diagnosis?: string | null;
   solution?: string | null;
@@ -312,6 +313,10 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
     jobStatusId: job.jobStatus?.id || job.jobStatusId || 0,
     companyId: job.companyId,
     billNo: job.billNo,
+    repairCost:
+      job.repairCost === null || job.repairCost === undefined
+        ? null
+        : Number(job.repairCost),
     symptom: job.symptom || "",
     diagnosis: job.diagnosis,
     solution: job.solution,
