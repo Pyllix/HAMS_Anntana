@@ -51,7 +51,7 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
 
 function ActionsCell({ row }: { row: Sparepart }) {
   const role = useAuthStore((state) => state.role);
-  const canManage = role === "ASSET_CENTER_STAFF" || role === "ADMIN";
+  const canManage = role === "PARCEL_STAFF";
 
   return (
     <div className="flex items-center gap-2">

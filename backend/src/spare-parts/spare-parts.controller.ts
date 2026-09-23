@@ -32,7 +32,7 @@ export class SparePartsController {
   constructor(private readonly sparePartsService: SparePartsService) {}
 
   @Post()
-  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Create new Spare Part', description: 'ลงทะเบียนอะไหล่ใหม่เข้าระบบ' })
   @ApiResponse({ status: 201, description: 'Spare part created successfully' })
   @ApiResponse({ status: 409, description: 'Spare part code already exists' })
@@ -96,7 +96,7 @@ export class SparePartsController {
   }
 
   @Post('stock-in')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Stock-in Spare Part', description: 'รับอะไหล่เข้าคลัง เพิ่มยอดสต็อกและบันทึกประวัติการสั่งซื้อ/รับของ' })
   @ApiResponse({ status: 201, description: 'Stock-in recorded successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
@@ -139,7 +139,7 @@ export class SparePartsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Update Spare Part', description: 'แก้ไขข้อมูลอะไหล่' })
   @ApiResponse({ status: 200, description: 'Spare part updated successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
@@ -151,7 +151,7 @@ export class SparePartsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.ASSET_CENTER_STAFF)
+  @Roles(UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Delete Spare Part', description: 'Soft-delete อะไหล่' })
   @ApiResponse({ status: 200, description: 'Spare part deleted successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })

@@ -29,10 +29,8 @@ import { useAuthStore } from "../stores/authStore";
 
 export default function PartStock() {
   const role = useAuthStore((state) => state.role);
-  const canManage =
-    role === "ASSET_CENTER_STAFF" ||
-    role === "ADMIN" ||
-    role === "PARCEL_STAFF";
+  // จัดการสต็อกอะไหล่ได้เฉพาะเจ้าหน้าที่พัสดุ
+  const canManage = role === "PARCEL_STAFF";
 
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
