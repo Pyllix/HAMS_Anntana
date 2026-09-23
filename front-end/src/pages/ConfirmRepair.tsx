@@ -3,7 +3,7 @@ import { ChevronDown, Search } from "lucide-react";
 import ConfirmRepairTable from "../components/confirm-repair/ConfirmRepairTable";
 import ConfirmRepairDialog from "../components/confirm-repair/ConfirmRepairDialog";
 import RepairHistoryDetailModal from "../components/repair-history/RepairHistoryDetailModal";
-import { RepairStatusFilter } from "../Types/TypeRepairWorkflow";
+import { RepairStatusFilter } from "../types/TypeRepairWorkflow";
 
 const statusOptions: Array<{ value: RepairStatusFilter; label: string }> = [
   { value: "ALL", label: "ทั้งหมด" },

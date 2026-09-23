@@ -1,5 +1,5 @@
 import { Eye } from "lucide-react";
-import type { OutsourceApprovalRequest } from "../../Types/TypeOutsourceApproval";
+import type { OutsourceApprovalRequest } from "../../types/TypeOutsourceApproval";
 
 const dateTime = new Intl.DateTimeFormat("th-TH", {
   day: "2-digit",

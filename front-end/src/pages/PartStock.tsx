@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSparepartGroups, getSpareParts } from "../services/sparepartService";
-import { getSparePartStatus } from "../Types/TypeSparePart";
+import { getSparePartStatus } from "../types/TypeSparePart";
 import SparePartTable from "../components/spare-part/SparePartTable";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";

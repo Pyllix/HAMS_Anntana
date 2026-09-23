@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Building2, Check, Loader2, Truck, X } from "lucide-react";
-import type { OutsourceApprovalRequest } from "../../Types/TypeOutsourceApproval";
+import type { OutsourceApprovalRequest } from "../../types/TypeOutsourceApproval";
 import { getCompanies } from "../../services/companyService";
 import {
   approveOutsourceRequest,

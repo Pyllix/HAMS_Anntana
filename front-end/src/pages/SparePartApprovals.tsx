@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, PackageCheck, RefreshCw, Search } from "lucide-react";
-import type { SpareApprovalRequest } from "../Types/TypeSpareApproval";
+import type { SpareApprovalRequest } from "../types/TypeSpareApproval";
 import SpareApprovalTable from "../components/spare-approval/SpareApprovalTable";
 import SpareApprovalDialog, { type SpareApprovalDialogMode } from "../components/spare-approval/SpareApprovalDialog";
 import { getSpareApprovalRequests, spareApprovalError } from "../services/spareApprovalService";

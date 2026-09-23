@@ -9,7 +9,7 @@ import {
   Search,
   Truck,
 } from "lucide-react";
-import type { OutsourceApprovalRequest } from "../Types/TypeOutsourceApproval";
+import type { OutsourceApprovalRequest } from "../types/TypeOutsourceApproval";
 import OutsourceApprovalDialog, {
   type OutsourceApprovalDialogMode,
 } from "../components/outsource-approval/OutsourceApprovalDialog";

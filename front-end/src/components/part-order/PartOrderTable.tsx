@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getPartOrders } from "../../services/partOrderService";
 import { getSpareParts } from "../../services/sparepartService";
-import type { PartOrder } from "../../Types/TypePartOrder";
+import type { PartOrder } from "../../types/TypePartOrder";
 import { usePartOrderModalStore } from "../../stores/usePartOrderModalStore";
 
 const features = tableFeatures({});

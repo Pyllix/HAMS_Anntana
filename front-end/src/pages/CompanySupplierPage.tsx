@@ -16,7 +16,7 @@ import {
   updateCompany,
   deleteCompany,
 } from "../services/companyService";
-import type { Company } from "../Types/TypeCompany";
+import type { Company } from "../types/TypeCompany";
 import {
   CompanyDetailModal,
   CompanyFormModal,

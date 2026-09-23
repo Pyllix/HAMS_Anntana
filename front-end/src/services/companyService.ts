@@ -3,7 +3,7 @@ import type {
   Company,
   CreateCompanyDto,
   UpdateCompanyDto,
-} from "../Types/TypeCompany";
+} from "../types/TypeCompany";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

@@ -6,7 +6,7 @@ import type {
   RepairJob,
   RepairJobStatusCode,
   RepairUser,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 const PAGE_SIZE = 100;

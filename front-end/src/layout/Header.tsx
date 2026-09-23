@@ -1,7 +1,7 @@
 import { useAuthStore } from "../stores/authStore";
 import NotificationBell from "../components/notifications/NotificationBell";
 import { matchPath, useLocation } from "react-router-dom";
-import { APP_ROUTE } from "../Router/routes.config";
+import { APP_ROUTE } from "../router/routes.config";
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);

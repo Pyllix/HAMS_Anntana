@@ -16,7 +16,7 @@ import {
   updateBudgetType,
   deleteBudgetType,
 } from "../services/budgetTypeService";
-import type { BudgetType } from "../Types/TypeBudgetType";
+import type { BudgetType } from "../types/TypeBudgetType";
 import {
   BudgetTypeDetailModal,
   BudgetTypeFormModal,

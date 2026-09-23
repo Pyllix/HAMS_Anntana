@@ -3,7 +3,7 @@ import {
   RepairJob,
   RepairWorkflowActor,
   RepairWorkflowStage,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 
 export const workflowActorLabels: Record<RepairWorkflowActor, string> = {
   MAINTENANCE: "ช่างผู้รับผิดชอบ",

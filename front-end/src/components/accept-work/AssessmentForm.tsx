@@ -23,7 +23,7 @@ import type {
   Mechanic,
   RepairDetail,
   RepairMetaLookups,
-} from "../../Types/TypeAssessment";
+} from "../../types/TypeAssessment";
 import {
   createEvaluation,
   getRepairJobById,

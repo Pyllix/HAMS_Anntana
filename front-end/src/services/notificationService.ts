@@ -4,9 +4,9 @@ import {
   RepairJob,
   RepairWorkflowActor,
   RepairWorkflowStage,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 import { useNotificationStore } from "../stores/useNotificationStore";
-import { NotificationKind } from "../Types/TypeNotification";
+import { NotificationKind } from "../types/TypeNotification";
 
 const roleByActor: Record<RepairWorkflowActor, RoleType> = {
   MAINTENANCE: "MAINTENANCE_STAFF",

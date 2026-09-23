@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Sparepart, ReturnJobData } from "../Types/TypeSparePart";
+import type { Sparepart, ReturnJobData } from "../types/TypeSparePart";
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 

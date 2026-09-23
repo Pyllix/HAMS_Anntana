@@ -3,7 +3,7 @@ import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
 import EquipmentDetailModal from "../../components/equipment-stock/EquipmentDetailModal";
 
-import type { RepairDetail, UrgencyStatus } from "../../Types/TypeAssessment";
+import type { RepairDetail, UrgencyStatus } from "../../types/TypeAssessment";
 
 interface AssetInfoProps {
   jobData?: RepairDetail | null;

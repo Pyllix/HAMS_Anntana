@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, X, Plus, Check } from "lucide-react";
-import type { Mechanic } from "../../Types/TypeAssessment";
+import type { Mechanic } from "../../types/TypeAssessment";
 
 export interface MechanicSelectorProps {
   usersList: Mechanic[];

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, PackageCheck, RefreshCw, Search } from "lucide-react";
-import type { UnrepairableReceipt } from "../Types/TypeUnrepairableReceipt";
+import type { UnrepairableReceipt } from "../types/TypeUnrepairableReceipt";
 import { getUnrepairableReceipts, receiptError } from "../services/unrepairableReceiptService";
 import UnrepairableReceiptTable from "../components/unrepairable-receipt/UnrepairableReceiptTable";
 import ConfirmUnrepairableReceiptDialog from "../components/unrepairable-receipt/ConfirmUnrepairableReceiptDialog";

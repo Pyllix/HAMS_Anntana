@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import {
   AppNotification,
   CreateNotificationInput,
-} from "../Types/TypeNotification";
+} from "../types/TypeNotification";
 
 const initialNotifications: AppNotification[] = [
   {

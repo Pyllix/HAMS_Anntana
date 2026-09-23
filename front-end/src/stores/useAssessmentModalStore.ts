@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type {
   RepairListItem,
   RepairMetaLookups,
-} from "../Types/TypeAssessment";
+} from "../types/TypeAssessment";
 
 export type AssessmentViewMode = "list" | "form";
 export type AssessmentFormType = "assess" | "assign";

@@ -14,7 +14,7 @@ import RepairHistoryDetailModal from "../components/repair-history/RepairHistory
 import {
   RepairActionFilter,
   RepairStatusFilter,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 import { getRepairHistory } from "../services/repairHistoryService";
 
 const actionOptions: Array<{ value: RepairActionFilter; label: string }> = [

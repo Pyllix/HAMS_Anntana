@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, ChevronDown } from "lucide-react";
-import type { PriorityFilter, AssessmentTab } from "../Types/TypeAssessment";
+import type { PriorityFilter, AssessmentTab } from "../types/TypeAssessment";
 import PendingEvaluationTable from "../components/accept-work/PendingEvaluationTable";
 import AssessmentForm from "../components/accept-work/AssessmentForm";
 import { useAssessmentStore } from "../stores/useAssessmentModalStore";

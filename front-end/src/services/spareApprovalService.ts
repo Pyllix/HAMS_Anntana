@@ -3,7 +3,7 @@ import type {
   SpareApprovalDecision,
   SpareApprovalRequest,
   SpareRejectionDecision,
-} from "../Types/TypeSpareApproval";
+} from "../types/TypeSpareApproval";
 import type { ApiRepairJob } from "./repairApiService";
 
 const BASE_URL = "https://hams-anntana.onrender.com";

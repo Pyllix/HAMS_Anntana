@@ -11,7 +11,7 @@ import { useRepairStore } from "../stores/useRepairModalStore";
 import { useAuthStore } from "../stores/authStore";
 import { getAssetByCode } from "../services/repairService";
 import ConfirmRepairModal from "../components/help-desk/ConfirmRepairModal";
-import type { UrgencyStatus } from "../Types/TypeRepair";
+import type { UrgencyStatus } from "../types/TypeRepair";
 
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 

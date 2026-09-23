@@ -13,7 +13,7 @@ import {
   ClipboardEdit,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { RepairListItem, UrgencyStatus } from "../../Types/TypeAssessment";
+import type { RepairListItem, UrgencyStatus } from "../../types/TypeAssessment";
 import { getPendingEvaluations } from "../../services/assessmentService";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import { useAuthStore } from "../../stores/authStore";

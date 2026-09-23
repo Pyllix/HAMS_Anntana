@@ -4,8 +4,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpareParts } from "../../services/sparepartService";
-import type { Sparepart } from "../../Types/TypeSparePart";
-import { getSparePartStatus } from "../../Types/TypeSparePart";
+import type { Sparepart } from "../../types/TypeSparePart";
+import { getSparePartStatus } from "../../types/TypeSparePart";
 import {
   useSparePartDetailModalStore,
   useSparePartFormModalStore,

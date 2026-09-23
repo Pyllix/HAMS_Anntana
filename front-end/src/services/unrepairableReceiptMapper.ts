@@ -1,4 +1,4 @@
-import type { UnrepairableJobDto, UnrepairableReceipt } from "../Types/TypeUnrepairableReceipt";
+import type { UnrepairableJobDto, UnrepairableReceipt } from "../types/TypeUnrepairableReceipt";
 
 // Step 5 is physical handover by the mechanic in the backend UNREPAIRABLE track.
 // Status alone is insufficient: diagnosis already sets UNREPAIRABLE at step 4.

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Loader2, PackageCheck, X } from "lucide-react";
-import type { SpareApprovalRequest } from "../../Types/TypeSpareApproval";
+import type { SpareApprovalRequest } from "../../types/TypeSpareApproval";
 import {
   approveSpareRequest,
   rejectSpareRequest,

@@ -3,7 +3,7 @@ import type {
   OutsourceApprovalDecision,
   OutsourceApprovalRequest,
   OutsourceRejectionDecision,
-} from "../Types/TypeOutsourceApproval";
+} from "../types/TypeOutsourceApproval";
 import type { ApiRepairJob } from "./repairApiService";
 
 const BASE_URL = "https://hams-anntana.onrender.com";

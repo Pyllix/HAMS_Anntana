@@ -4,7 +4,7 @@ import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalSt
 import {
   RepairActionType,
   RepairJobStatusCode,
-} from "../../Types/TypeRepairWorkflow";
+} from "../../types/TypeRepairWorkflow";
 
 const actionLabels: Record<RepairActionType, string> = {
   SELF_REPAIR: "ซ่อมเองได้",

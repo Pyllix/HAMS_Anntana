@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSparePartReturnModalStore } from "../../stores/useSparePartModalStore";
-import type { SparePartReturnItem } from "../../Types/TypeSparePart";
+import type { SparePartReturnItem } from "../../types/TypeSparePart";
 import {
   returnSparepart,
   getRepairByJobNo,

@@ -1,6 +1,6 @@
 import { useAuthStore } from "../stores/authStore";
 import { NavLink } from "react-router-dom";
-import { APP_ROUTE } from "../Router/routes.config";
+import { APP_ROUTE } from "../router/routes.config";
 import { Box, LogOut } from "lucide-react";
 
 export default function Sidebar() {

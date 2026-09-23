@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { AlertTriangle, X } from "lucide-react";
-import type { RepairActionType } from "../../Types/TypeRepairWorkflow";
+import type { RepairActionType } from "../../types/TypeRepairWorkflow";
 
 export default function SpareRejectionReasonDialog({
   jobNo,

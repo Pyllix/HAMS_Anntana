@@ -4,14 +4,14 @@ import {
   RouterProvider,
 } from "react-router-dom";
 import Login from "../pages/Login";
-import ProtectedRoute from "../Router/ProtectedRoute";
+import ProtectedRoute from "../router/ProtectedRoute";
 import AppLayout from "../layout/AppLayout";
-import AdminBorrowReturn from "../Pages/AssetCenterBorrowReturn";
+import AdminBorrowReturn from "../pages/AssetCenterBorrowReturn";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
 import axios from "axios";
-import UserBorrowReturn from "../Pages/DepartMentBorrowReturn";
-import { APP_ROUTE } from "../Router/routes.config";
+import UserBorrowReturn from "../pages/DepartMentBorrowReturn";
+import { APP_ROUTE } from "../router/routes.config";
 import Spinner from "../components/loader/Spinner";
 
 // Function สำหรับหา Path ที่ User จะต้องไป

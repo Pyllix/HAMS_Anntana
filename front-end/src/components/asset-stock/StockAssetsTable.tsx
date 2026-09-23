@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { Asset } from "../../Types/TypeAsset";
+import type { Asset } from "../../types/TypeAsset";
 
 import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import { useAuthStore } from "../../stores/authStore";

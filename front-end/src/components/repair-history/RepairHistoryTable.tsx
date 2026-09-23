@@ -17,7 +17,7 @@ import {
 import RepairWorkflowActionDialog from "./RepairWorkflowActionDialog";
 import UnrepairableHandoverDialog from "../unrepairable-technician/UnrepairableHandoverDialog";
 import SpareRejectionReasonDialog from "./SpareRejectionReasonDialog";
-import type { RepairListItem } from "../../Types/TypeAssessment";
+import type { RepairListItem } from "../../types/TypeAssessment";
 import {
   RepairActionFilter,
   RepairActionType,
@@ -25,7 +25,7 @@ import {
   RepairJobStatusCode,
   RepairStatusFilter,
   RepairWorkflowStage,
-} from "../../Types/TypeRepairWorkflow";
+} from "../../types/TypeRepairWorkflow";
 import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalStore";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import { useAuthStore } from "../../stores/authStore";

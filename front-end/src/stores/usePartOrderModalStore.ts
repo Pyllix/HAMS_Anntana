@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { PartOrder } from "../Types/TypePartOrder";
+import type { PartOrder } from "../types/TypePartOrder";
 
 interface PartOrderModalState {
   // Modal สร้างรายการสั่งซื้ออะไหล่ใหม่ (Create Order / Stock-In)

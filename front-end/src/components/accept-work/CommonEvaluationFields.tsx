@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
-import type { StepActionType, BaseLookup } from "../../Types/TypeAssessment";
+import type { StepActionType, BaseLookup } from "../../types/TypeAssessment";
 import type { AssessmentFormState } from "./AssessmentForm";
 
 const ACTION_TYPE_LABELS: Record<StepActionType, string> = {

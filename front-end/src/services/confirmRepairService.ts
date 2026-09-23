@@ -2,7 +2,7 @@ import type {
   RepairConfirmationDto,
   RepairJob,
   RepairUser,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 import {
   advanceNextRepairStep,
   fetchDetailedRepairJobs,
