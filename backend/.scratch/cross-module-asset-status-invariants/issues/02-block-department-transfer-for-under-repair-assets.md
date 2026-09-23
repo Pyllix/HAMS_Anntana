@@ -5,9 +5,9 @@ When a department transfer is requested for an asset, the system checks whether 
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Creating an asset transfer for an asset whose status is `UNDER_REPAIR` throws HTTP 400 Bad Request
-- [ ] Existing transfer guards for `BORROWED` and `DISPOSAL` assets remain intact and functional
-- [ ] Creating an asset transfer for an eligible asset in normal or idle state continues to succeed and correctly updates the owning section
-- [ ] Unit and integration tests verify rejection of `UNDER_REPAIR` assets during transfer
+- [x] Creating an asset transfer for an asset whose status is `UNDER_REPAIR` throws HTTP 400 Bad Request
+- [x] Existing transfer guards for `BORROWED` and `DISPOSAL` assets remain intact and functional
+- [x] Creating an asset transfer for an eligible asset in normal or idle state continues to succeed and correctly updates the owning section
+- [x] Unit and integration tests verify rejection of `UNDER_REPAIR` assets during transfer

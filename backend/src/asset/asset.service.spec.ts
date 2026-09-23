@@ -232,6 +232,20 @@ describe('AssetService', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
+      it('TC-3b: should throw BadRequestException if asset is currently UNDER_REPAIR', async () => {
+        mockPrismaService.asset.findUnique.mockResolvedValue({
+          ...mockAsset,
+          status: { id: 5, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
+        });
+
+        await expect(
+          service.createTransfer('asset-1', validTransferDto, 'user-1'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.createTransfer('asset-1', validTransferDto, 'user-1'),
+        ).rejects.toThrow('Cannot transfer an asset that is currently under repair');
+      });
+
       it('TC-4: should throw BadRequestException if target section is identical to current section', async () => {
         mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
 

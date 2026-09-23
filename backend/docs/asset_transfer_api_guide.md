@@ -25,11 +25,13 @@
    - หากเครื่องมีสถานะ `DISPOSAL` จะปฏิเสธการโอนย้ายทันที (`HTTP 400: Cannot transfer an asset that has been disposed`)
 3. **บล็อกครุภัณฑ์ที่กำลังถูกยืมใช้งาน (`BORROWED`):**
    - เครื่องที่อยู่ระหว่างการยืมใช้งานต้องถูกส่งคืนเข้าคลังก่อน จึงจะสามารถทำเรื่องโอนย้ายได้ (`HTTP 400: Cannot transfer an asset that is currently borrowed`)
-4. **บล็อกการโอนย้ายไปยังแผนกเดิม:**
+4. **บล็อกครุภัณฑ์ที่อยู่ระหว่างการซ่อมบำรุง (`UNDER_REPAIR`):**
+   - เครื่องที่อยู่ระหว่างการซ่อมบำรุงไม่สามารถโอนย้ายระหว่างแผนกได้ (`HTTP 400: Cannot transfer an asset that is currently under repair (equipment under active maintenance cannot be transferred between departments)`)
+5. **บล็อกการโอนย้ายไปยังแผนกเดิม:**
    - แผนกปลายทาง (`to_section_id`) ต้องไม่ตรงกับแผนกปัจจุบัน (`HTTP 400: Target section must be different from current section`)
-5. **ตรวจสอบการมีอยู่ของแผนกปลายทาง:**
+6. **ตรวจสอบการมีอยู่ของแผนกปลายทาง:**
    - แผนกปลายทางต้องมีอยู่จริงในระบบ (`HTTP 404: Target section not found`)
-6. **การทำงานแบบ Atomic Transaction (`prisma.$transaction`):**
+7. **การทำงานแบบ Atomic Transaction (`prisma.$transaction`):**
    - สร้างข้อมูลในตาราง `transfer`
    - อัปเดต `section_id` ของเครื่องในตาราง `asset` ให้เป็นแผนกใหม่พร้อมกันแบบ 100% หากเกิดข้อผิดพลาดจะ Rollback ทั้งหมด
 

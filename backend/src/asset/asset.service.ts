@@ -424,6 +424,12 @@ export class AssetService {
       throw new BadRequestException('Cannot transfer an asset that is currently borrowed');
     }
 
+    if (asset.status?.code === 'UNDER_REPAIR') {
+      throw new BadRequestException(
+        'Cannot transfer an asset that is currently under repair (equipment under active maintenance cannot be transferred between departments)',
+      );
+    }
+
     // 2. ตรวจสอบว่าไม่ได้โอนย้ายไปยังแผนกเดิม
     if (asset.section?.id === dto.to_section_id) {
       throw new BadRequestException('Target section must be different from current section');

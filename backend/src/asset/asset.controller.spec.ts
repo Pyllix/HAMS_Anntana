@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { AssetController } from './asset.controller';
 import { AssetService } from './asset.service';
 
@@ -87,6 +88,22 @@ describe('AssetController', () => {
       const result = await controller.createTransfer('asset-1', dto, session);
       expect(mockAssetService.createTransfer).toHaveBeenCalledWith('asset-1', dto, 'user-1');
       expect(result).toEqual({ id: 'tf-1' });
+    });
+
+    it('should propagate BadRequestException when asset is UNDER_REPAIR', async () => {
+      const dto = {
+        to_section_id: 'sec-2',
+        transferDocNo: 'TF-001',
+        transferDate: '2026-09-15',
+      } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.createTransfer.mockRejectedValue(
+        new BadRequestException('Cannot transfer an asset that is currently under repair'),
+      );
+
+      await expect(
+        controller.createTransfer('asset-1', dto, session),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should call assetService.findTransferRecords', async () => {
