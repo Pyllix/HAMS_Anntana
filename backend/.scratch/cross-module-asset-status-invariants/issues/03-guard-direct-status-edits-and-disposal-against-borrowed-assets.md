@@ -5,9 +5,9 @@ When an administrator or parcel staff member updates an asset's physical status 
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Direct status update to `DISPOSAL`, `WAIT_DISPOSAL`, `DAMAGED`, or `UNDER_REPAIR` on an asset with availability `BORROWED` or `RESERVED` throws HTTP 400 Bad Request
-- [ ] Direct disposal creation on an asset with availability `BORROWED` or `RESERVED` throws HTTP 400 Bad Request
-- [ ] General asset property update (non-status fields such as `name`, `model`, `serialNo`, `price`, `remark`) on an asset with availability `BORROWED` succeeds and preserves existing availability and borrow transaction states
-- [ ] Unit and integration tests verify rejection of forbidden status changes and disposal while allowing general metadata edits on borrowed equipment
+- [x] Direct status update to `DISPOSAL`, `WAIT_DISPOSAL`, `DAMAGED`, or `UNDER_REPAIR` on an asset with availability `BORROWED` or `RESERVED` throws HTTP 400 Bad Request
+- [x] Direct disposal creation on an asset with availability `BORROWED` or `RESERVED` throws HTTP 400 Bad Request
+- [x] General asset property update (non-status fields such as `name`, `model`, `serialNo`, `price`, `remark`) on an asset with availability `BORROWED` succeeds and preserves existing availability and borrow transaction states
+- [x] Unit and integration tests verify rejection of forbidden status changes and disposal while allowing general metadata edits on borrowed equipment

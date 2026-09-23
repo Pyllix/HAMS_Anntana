@@ -123,4 +123,83 @@ describe('AssetController', () => {
       expect(result).toEqual({ data: [], total: 0 });
     });
   });
+
+  describe('updateStatus (Ticket 03)', () => {
+    it('should call assetService.updateStatus with session user id', async () => {
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.updateStatus.mockResolvedValue({ id: 'asset-1', status: { code: 'NORMAL' } });
+
+      const result = await controller.updateStatus('asset-1', 1, session);
+      expect(mockAssetService.updateStatus).toHaveBeenCalledWith('asset-1', 1, 'user-1');
+      expect(result).toEqual({ id: 'asset-1', status: { code: 'NORMAL' } });
+    });
+
+    it('should propagate BadRequestException when asset is BORROWED or RESERVED', async () => {
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.updateStatus.mockRejectedValue(
+        new BadRequestException('Cannot update asset status to DAMAGED while asset is BORROWED'),
+      );
+
+      await expect(
+        controller.updateStatus('asset-1', 2, session),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('createDisposal (Ticket 03)', () => {
+    it('should call assetService.createDisposal with session user id', async () => {
+      const dto = {
+        disposalDocNo: 'DSP-2026-001',
+        approvedDate: '2026-09-20',
+      } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.createDisposal.mockResolvedValue({ id: 'disp-1' });
+
+      const result = await controller.createDisposal('asset-1', dto, session);
+      expect(mockAssetService.createDisposal).toHaveBeenCalledWith('asset-1', dto, 'user-1');
+      expect(result).toEqual({ id: 'disp-1' });
+    });
+
+    it('should propagate BadRequestException when asset is BORROWED or RESERVED', async () => {
+      const dto = {
+        disposalDocNo: 'DSP-2026-001',
+        approvedDate: '2026-09-20',
+      } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.createDisposal.mockRejectedValue(
+        new BadRequestException('Cannot dispose an asset that is currently borrowed'),
+      );
+
+      await expect(
+        controller.createDisposal('asset-1', dto, session),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('update (Ticket 03)', () => {
+    it('should call assetService.update with session user id for metadata updates', async () => {
+      const dto = {
+        name: 'Updated Name',
+        model: 'Updated Model',
+      } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.update.mockResolvedValue({ id: 'asset-1', name: 'Updated Name' });
+
+      const result = await controller.update('asset-1', dto, session);
+      expect(mockAssetService.update).toHaveBeenCalledWith('asset-1', dto, 'user-1');
+      expect(result).toEqual({ id: 'asset-1', name: 'Updated Name' });
+    });
+
+    it('should propagate BadRequestException when updating to forbidden status on borrowed asset', async () => {
+      const dto = { asset_status_id: 5 } as any;
+      const session = { user: { id: 'user-1' } } as any;
+      mockAssetService.update.mockRejectedValue(
+        new BadRequestException('Cannot update asset status to DISPOSAL while asset is BORROWED'),
+      );
+
+      await expect(
+        controller.update('asset-1', dto, session),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

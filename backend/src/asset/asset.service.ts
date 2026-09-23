@@ -213,17 +213,36 @@ export class AssetService {
     return avail?.id;
   }
 
+  private validateBorrowedOrReservedStatusGuard(
+    currentAvailabilityCode: string | undefined,
+    targetStatusCode: string,
+  ): void {
+    if (
+      currentAvailabilityCode &&
+      ['BORROWED', 'RESERVED'].includes(currentAvailabilityCode) &&
+      ['DISPOSAL', 'WAIT_DISPOSAL', 'DAMAGED', 'UNDER_REPAIR'].includes(targetStatusCode)
+    ) {
+      throw new BadRequestException(
+        `Cannot update asset status to ${targetStatusCode} while asset is ${currentAvailabilityCode}`,
+      );
+    }
+  }
+
   async update(id: string, updateAssetDto: UpdateAssetDto, userId: string) {
     const asset = await this.findOne(id);
     const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = updateAssetDto as any;
 
     let autoAvailabilityId: number | undefined = undefined;
-    if (dto.asset_status_id && !dto.availability_status_id) {
+    if (dto.asset_status_id) {
       const targetStatus = await this.prisma.assetStatus.findUnique({
         where: { id: dto.asset_status_id },
       });
-      if (targetStatus) {
-        this.validateStatusTransition(asset.status.code, targetStatus.code);
+      if (!targetStatus) {
+        throw new NotFoundException(`AssetStatus #${dto.asset_status_id} not found`);
+      }
+      this.validateStatusTransition(asset.status.code, targetStatus.code);
+      this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
+      if (!dto.availability_status_id) {
         autoAvailabilityId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
       }
     }
@@ -253,6 +272,7 @@ export class AssetService {
     }
 
     this.validateStatusTransition(asset.status.code, targetStatus.code);
+    this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
 
     const availabilityStatusId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
 
@@ -313,6 +333,13 @@ export class AssetService {
    */
   async createDisposal(id: string, dto: CreateAssetDisposalDto, userId: string) {
     const asset = await this.findOne(id);
+
+    if (asset.availabilityStatus?.code === 'BORROWED' || asset.availabilityStatus?.code === 'RESERVED') {
+      throw new BadRequestException(
+        `Cannot dispose an asset that is currently ${asset.availabilityStatus.code.toLowerCase()}`,
+      );
+    }
+
     this.validateStatusTransition(asset.status.code, 'DISPOSAL');
 
     const disposalStatus = await this.prisma.assetStatus.findUnique({ where: { code: 'DISPOSAL' } });
