@@ -1,13 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getSpareParts } from "../../services/sparepartService";
 import type { Sparepart } from "../../Types/TypeSparePart";
@@ -18,6 +12,7 @@ import {
   useSparePartDeleteModalStore,
 } from "../../stores/useSparePartModalStore";
 import { useAuthStore } from "../../stores/authStore";
+import StockTablePagination from "../equipment-stock/StockTablePagination";
 
 const features = tableFeatures({});
 
@@ -28,12 +23,12 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
   const getStatusStyle = (statusCode: string) => {
     switch (statusCode) {
       case "NORMAL":
-        return "bg-emerald-100 text-emerald-700";
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
       case "LOW":
-        return "bg-amber-100 text-amber-700";
+        return "bg-amber-100 text-amber-700 border-amber-200";
       case "OUT":
       default:
-        return "bg-red-100 text-red-700";
+        return "bg-rose-100 text-rose-700 border-rose-200";
     }
   };
 
@@ -45,7 +40,7 @@ function StockStatusBadge({ item }: { item: Sparepart }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${getStatusStyle(
+      className={`inline-flex items-center justify-center min-w-[90px] px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(
         s,
       )}`}
     >
@@ -101,7 +96,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="font-semibold text-gray-900 font-mono text-sm whitespace-nowrap">
+        <span className="font-semibold text-slate-800 font-mono whitespace-nowrap">
           {row.code}
         </span>
       );
@@ -113,7 +108,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <div className="font-semibold text-gray-900 text-sm leading-snug">
+        <div className="font-semibold text-slate-800 leading-snug line-clamp-2 min-w-[200px] max-w-[300px] lg:max-w-[400px] whitespace-normal">
           {row.name}
         </div>
       );
@@ -125,7 +120,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="text-sm text-gray-600 whitespace-nowrap">
+        <span className="text-sm text-slate-600 whitespace-nowrap">
           {row.group?.name || row.category || "-"}
         </span>
       );
@@ -139,10 +134,10 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
       const st = getSparePartStatus(row);
       const color =
         st === "OUT"
-          ? "text-red-600 font-bold"
+          ? "text-rose-600 font-bold"
           : st === "LOW"
           ? "text-amber-600 font-bold"
-          : "text-gray-900 font-semibold";
+          : "text-slate-800 font-semibold";
       return (
         <span className={`text-sm whitespace-nowrap ${color}`}>
           {row.qtyInStock} {row.unit || "ชิ้น"}
@@ -156,7 +151,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="text-sm text-gray-600 whitespace-nowrap">
+        <span className="text-sm text-slate-600 whitespace-nowrap">
           {row.minStock}
         </span>
       );
@@ -168,7 +163,7 @@ const columns: Array<ColumnDef<typeof features, Sparepart>> = [
     cell: (info) => {
       const row = info.row.original;
       return (
-        <span className="text-sm text-gray-700 font-mono whitespace-nowrap">
+        <span className="text-sm text-slate-700 font-mono whitespace-nowrap">
           {Number(row.price).toLocaleString("th-TH", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -253,16 +248,16 @@ export default function SparePartTable({
   });
 
   return (
-    <div className="w-full flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       <div className="flex-1 overflow-auto min-h-0">
-        <table className="w-full text-left border-collapse">
-          <thead className="border-b border-slate-200 bg-white sticky top-0 z-10">
+        <table className="w-full text-left border-collapse text-sm text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="py-2.5 px-3.5 font-bold text-slate-800 whitespace-nowrap text-sm"
+                    className="py-3.5 px-4"
                   >
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
@@ -277,7 +272,7 @@ export default function SparePartTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm whitespace-nowrap"
+                  className="text-center py-12 text-slate-400"
                 >
                   กำลังโหลดข้อมูลอะไหล่...
                 </td>
@@ -286,16 +281,16 @@ export default function SparePartTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-8 text-center text-slate-400 text-sm whitespace-nowrap"
+                  className="text-center py-12 text-slate-400"
                 >
                   ไม่พบข้อมูลอะไหล่
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3 align-middle text-sm">
+                    <td key={cell.id} className="py-3.5 px-4 whitespace-nowrap align-middle">
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -306,48 +301,11 @@ export default function SparePartTable({
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-2.5 border-t border-slate-100 text-sm text-slate-500 bg-white">
-        <div>
-          แสดง {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(currentPage * pageSize, totalItems)} จาก{" "}
-          {totalItems.toLocaleString()} รายการ
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .slice(Math.max(0, currentPage - 3), currentPage + 2)
-            .map((page) => (
-              <button
-                key={page}
-                type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-colors cursor-pointer ${
-                  currentPage === page
-                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
-          <button
-            type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
+      <StockTablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 }

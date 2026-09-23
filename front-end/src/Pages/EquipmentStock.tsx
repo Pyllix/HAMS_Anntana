@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   ChevronDown,
@@ -32,6 +32,8 @@ import ConfirmDisposalModal from "../components/equipment-stock/ConfirmDisposalM
 import ConfirmLostModal from "../components/equipment-stock/ConfirmLostModal";
 import CalendarFilterDialog from "../components/equipment-stock/CalendarFilterDialog";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
+import StatCards from "../components/borrow-return/StatCards";
+import type { StatCardData } from "../components/borrow-return/StatCards";
 
 // Tab types matching Figma
 type TabKey = "ALL" | "WAIT_DISPOSAL" | "DISPOSAL" | "LOST";
@@ -252,181 +254,123 @@ export default function EquipmentStock() {
     activeTab === "ALL" &&
     (selectedStatus === "ALL" || (normalId && selectedStatus === String(normalId)));
 
+  // KPI Cards (เรียงตาม Lifecycle) ใช้ StatCards แบบเดียวกับหน้ายืม-คืน
+  const statusIdByCode: Record<string, number | undefined> = {
+    NORMAL: normalId,
+    DAMAGED: damagedId,
+    UNDER_REPAIR: underRepairId,
+  };
+
+  const statsSummary: StatCardData[] = [
+    {
+      id: "total",
+      filterKey: "ALL",
+      title: "รายการทั้งหมด",
+      value: totalAssets,
+      icon: Package,
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-600",
+      valueColor: "text-slate-800",
+    },
+    {
+      id: "normal",
+      filterKey: "NORMAL",
+      title: "ใช้งานปกติ",
+      value: normalCount,
+      icon: CheckCircle2,
+      iconBg: "bg-emerald-100",
+      iconColor: "text-emerald-600",
+      valueColor: "text-emerald-600",
+    },
+    {
+      id: "damaged",
+      filterKey: "DAMAGED",
+      title: "ชำรุด",
+      value: damagedCount,
+      icon: Wrench,
+      iconBg: "bg-orange-100",
+      iconColor: "text-orange-600",
+      valueColor: "text-orange-600",
+    },
+    {
+      id: "underRepair",
+      filterKey: "UNDER_REPAIR",
+      title: "อยู่ระหว่างซ่อม",
+      value: underRepairCount,
+      icon: Clock,
+      iconBg: "bg-sky-100",
+      iconColor: "text-sky-600",
+      valueColor: "text-sky-600",
+    },
+    {
+      id: "waitDisposal",
+      filterKey: "WAIT_DISPOSAL",
+      title: "รอจำหน่าย",
+      value: waitDisposalCount,
+      icon: Clock,
+      iconBg: "bg-amber-100",
+      iconColor: "text-amber-600",
+      valueColor: "text-amber-600",
+    },
+    {
+      id: "disposal",
+      filterKey: "DISPOSAL",
+      title: "จำหน่ายแล้ว",
+      value: disposalCount,
+      icon: XCircle,
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-500",
+      valueColor: "text-slate-600",
+    },
+    {
+      id: "lost",
+      filterKey: "LOST",
+      title: "สูญหาย",
+      value: lostCount,
+      icon: AlertTriangle,
+      iconBg: "bg-rose-100",
+      iconColor: "text-rose-600",
+      valueColor: "text-rose-600",
+    },
+  ];
+
+  const selectedStatKey =
+    activeTab !== "ALL"
+      ? activeTab
+      : selectedStatus === "ALL"
+        ? "ALL"
+        : (assetStatuses.find((s) => String(s.id) === selectedStatus)?.code ??
+          "");
+
+  const handleSelectStat = (key: string) => {
+    if (key === "ALL" || key === "WAIT_DISPOSAL" || key === "DISPOSAL" || key === "LOST") {
+      handleTabChange(key);
+      return;
+    }
+    const statusId = statusIdByCode[key];
+    if (statusId) handleStatusChange(String(statusId));
+  };
+
+  const isArchiveTab =
+    activeTab === "WAIT_DISPOSAL" ||
+    activeTab === "DISPOSAL" ||
+    activeTab === "LOST";
+
   return (
-    <div className="flex flex-col h-[calc(100vh-6.8rem)] max-h-[calc(100vh-6.8rem)] space-y-2 overflow-hidden">
-
-      {/* KPI Cards Row - All 7 Cards always displayed in Lifecycle Order */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 shrink-0">
-        {/* 1. Total Card - รายการทั้งหมด */}
-        <div
-          onClick={() => handleTabChange("ALL")}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "ALL" && selectedStatus === "ALL"
-              ? "border-emerald-400 ring-1 ring-emerald-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
-            <Package className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              รายการทั้งหมด
-            </p>
-            <h4 className="text-lg font-bold text-slate-800 mt-0.5">
-              {totalAssets}
-            </h4>
-          </div>
-        </div>
-
-        {/* 2. Normal Ready Card - ใช้งานปกติ */}
-        <div
-          onClick={() => {
-            if (normalId) {
-              handleStatusChange(String(normalId));
-            }
-          }}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "ALL" && selectedStatus === String(normalId)
-              ? "border-emerald-400 ring-1 ring-emerald-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              ใช้งานปกติ
-            </p>
-            <h4 className="text-lg font-bold text-emerald-600 mt-0.5">
-              {normalCount}
-            </h4>
-          </div>
-        </div>
-
-        {/* 3. Damaged Card - ชำรุด */}
-        <div
-          onClick={() => {
-            if (damagedId) {
-              handleStatusChange(String(damagedId));
-            }
-          }}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "ALL" && selectedStatus === String(damagedId)
-              ? "border-orange-400 ring-1 ring-orange-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-600 shrink-0">
-            <Wrench className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              ชำรุด
-            </p>
-            <h4 className="text-lg font-bold text-orange-600 mt-0.5">
-              {damagedCount}
-            </h4>
-          </div>
-        </div>
-
-        {/* 4. Under Repair Card - อยู่ระหว่างซ่อม */}
-        <div
-          onClick={() => {
-            if (underRepairId) {
-              handleStatusChange(String(underRepairId));
-            }
-          }}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "ALL" && selectedStatus === String(underRepairId)
-              ? "border-sky-400 ring-1 ring-sky-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 shrink-0">
-            <Clock className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              อยู่ระหว่างซ่อม
-            </p>
-            <h4 className="text-lg font-bold text-sky-600 mt-0.5">
-              {underRepairCount}
-            </h4>
-          </div>
-        </div>
-
-        {/* 5. Wait Disposal Card - รอจำหน่าย */}
-        <div
-          onClick={() => handleTabChange("WAIT_DISPOSAL")}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "WAIT_DISPOSAL"
-              ? "border-amber-400 ring-1 ring-amber-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 shrink-0">
-            <Clock className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              รอจำหน่าย
-            </p>
-            <h4 className="text-lg font-bold text-amber-600 mt-0.5">
-              {waitDisposalCount}
-            </h4>
-          </div>
-        </div>
-
-        {/* 6. Disposal Done Card - จำหน่ายแล้ว */}
-        <div
-          onClick={() => handleTabChange("DISPOSAL")}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "DISPOSAL"
-              ? "border-slate-400 ring-1 ring-slate-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 shrink-0">
-            <XCircle className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              จำหน่ายแล้ว
-            </p>
-            <h4 className="text-lg font-bold text-slate-600 mt-0.5">
-              {disposalCount}
-            </h4>
-          </div>
-        </div>
-
-        {/* 7. Lost Card - สูญหาย */}
-        <div
-          onClick={() => handleTabChange("LOST")}
-          className={`flex items-center gap-3 bg-white p-3 rounded-xl border shadow-2xs cursor-pointer hover:shadow-xs transition-all ${
-            activeTab === "LOST"
-              ? "border-rose-400 ring-1 ring-rose-300"
-              : "border-slate-100 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600 shrink-0">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium leading-tight">
-              สูญหาย
-            </p>
-            <h4 className="text-lg font-bold text-rose-600 mt-0.5">
-              {lostCount}
-            </h4>
-          </div>
-        </div>
+    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* Stat Cards */}
+      <div className="shrink-0">
+        <StatCards
+          stats={statsSummary}
+          selectedCategory={selectedStatKey}
+          onSelectCategory={handleSelectStat}
+          gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7"
+        />
       </div>
 
       {/* Disposal Warning Banner */}
       {activeTab === "DISPOSAL" && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100/90 text-slate-600 rounded-xl text-xs shrink-0 border border-slate-200/60">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 bg-slate-100/90 text-slate-600 rounded-lg text-sm border border-slate-200">
           <Info className="h-4 w-4 text-slate-500 shrink-0" />
           <span>
             รายการในหน้านี้ <strong className="font-semibold text-slate-800">"ถูกตัดออกจากทะเบียนพัสดุแล้ว"</strong> ข้อมูลถูกเก็บไว้เพื่อการตรวจสอบประวัติเท่านั้น
@@ -436,7 +380,7 @@ export default function EquipmentStock() {
 
       {/* Lost Warning Banner */}
       {activeTab === "LOST" && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100/90 text-slate-600 rounded-xl text-xs shrink-0 border border-slate-200/60">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 bg-slate-100/90 text-slate-600 rounded-lg text-sm border border-slate-200">
           <Info className="h-4 w-4 text-slate-500 shrink-0" />
           <span>
             รายการในหน้านี้ <strong className="font-semibold text-slate-800">"ถูกบันทึกเป็นสูญหายแล้ว"</strong> ข้อมูลถูกเก็บไว้เพื่อการตรวจสอบและดำเนินการทางบัญชี
@@ -444,38 +388,39 @@ export default function EquipmentStock() {
         </div>
       )}
 
-      {/* Filter / Search Bar */}
-      {activeTab === "WAIT_DISPOSAL" || activeTab === "DISPOSAL" || activeTab === "LOST" ? (
-        /* Filter bar matching reference for รอจำหน่าย / จำหน่ายออกแล้ว */
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-2xs shrink-0">
-          <div className="flex flex-wrap items-center gap-3 flex-1">
-            {/* Search Box */}
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="ค้นหารหัส, ชื่อ, หมายเลขเครื่อง..."
-                value={inputSearch}
-                onChange={(e) => setInputSearch(e.target.value)}
-                className="w-full h-8 pl-9 pr-3 rounded-lg border border-slate-200 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-              />
-            </div>
+      {/* Search & Filter Bar */}
+      <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
+        {/* กรอกคำค้นหา */}
+        <div className="relative flex-1 w-full md:max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="ค้นหารหัส, ชื่อ, หมายเลขเครื่อง..."
+            value={inputSearch}
+            onChange={(e) => setInputSearch(e.target.value)}
+            className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
+          />
+        </div>
 
-            {/* Date Filter: วันที่ทำ: [ทั้งหมด 📅] */}
-            <div className="inline-flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          {/* Date Filter (เฉพาะแท็บ รอจำหน่าย / จำหน่ายแล้ว / สูญหาย) */}
+          {isArchiveTab && (
+            <div className="inline-flex items-center gap-1 w-full sm:w-auto">
               <div
                 onClick={() => setIsCalendarOpen(true)}
-                className={`relative inline-flex items-center h-8 px-3 rounded-lg border transition-colors text-xs cursor-pointer shadow-2xs ${
+                className={`relative inline-flex items-center h-10 px-4 rounded-lg border text-sm transition-colors cursor-pointer w-full sm:w-auto ${
                   selectedDate || dateFilterLabel !== "ทั้งหมด"
                     ? "border-emerald-400 bg-emerald-50/50"
                     : "border-slate-200 bg-white hover:border-slate-300"
                 }`}
               >
-                <span className="text-slate-600 mr-1.5">วันที่ทำ:</span>
-                <span className="font-semibold text-emerald-600">
+                <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+                  วันที่ทำ:
+                </span>
+                <span className="font-semibold text-emerald-600 whitespace-nowrap">
                   {dateFilterLabel}
                 </span>
-                <CalendarIcon className="h-3.5 w-3.5 text-slate-400 ml-2.5" />
+                <CalendarIcon className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
               </div>
               {(selectedDate || dateFilterLabel !== "ทั้งหมด") && (
                 <button
@@ -486,103 +431,58 @@ export default function EquipmentStock() {
                     setDateFilterLabel("ทั้งหมด");
                     setPage(1);
                   }}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
             </div>
-
-            {/* Type Dropdown */}
-            <div>
-              <div className="relative inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs hover:border-slate-300 transition-colors cursor-pointer shadow-2xs">
-                <span className="text-slate-600 mr-1.5">ประเภท:</span>
-                <span className="font-semibold text-emerald-600 truncate">
-                  {selectedType === "ALL"
-                    ? "ทั้งหมด"
-                    : assetTypes.find((t) => String(t.id) === selectedType)?.name}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400 ml-2.5 shrink-0" />
-                <select
-                  value={selectedType}
-                  onChange={(e) => {
-                    setSelectedType(e.target.value);
-                    setPage(1);
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                >
-                  <option value="ALL">ทั้งหมด</option>
-                  {assetTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Standard Filter / Search Bar with + เพิ่มครุภัณฑ์ Button */
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3 rounded-xl border border-slate-100 shadow-2xs shrink-0">
-          <div className="flex flex-wrap items-center gap-3 flex-1">
-            {/* Search Box */}
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="ค้นหารหัส, ชื่อ, หมายเลขเครื่อง..."
-                value={inputSearch}
-                onChange={(e) => setInputSearch(e.target.value)}
-                className="w-full h-8 pl-9 pr-3 rounded-lg border border-slate-200 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-
-            {/* Type Dropdown */}
-            <div>
-              <div className="relative inline-flex items-center h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs hover:border-slate-300 transition-colors cursor-pointer shadow-2xs">
-                <span className="text-slate-600 mr-1.5">ประเภท:</span>
-                <span className="font-semibold text-emerald-600 truncate">
-                  {selectedType === "ALL"
-                    ? "ทั้งหมด"
-                    : assetTypes.find((t) => String(t.id) === selectedType)?.name}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400 ml-2.5 shrink-0" />
-                <select
-                  value={selectedType}
-                  onChange={(e) => {
-                    setSelectedType(e.target.value);
-                    setPage(1);
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                >
-                  <option value="ALL">ทั้งหมด</option>
-                  {assetTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Add Equipment Button (Only for "รายการทั้งหมด" and "ใช้งานปกติ") */}
-          {canCreateAsset && (
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer shrink-0"
-            >
-              <Plus className="h-4 w-4 stroke-[2.5]" />
-              <span>เพิ่มครุภัณฑ์</span>
-            </button>
           )}
-        </div>
-      )}
 
-      {/* Main Table */}
-      <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
+          {/* Dropdown ประเภท */}
+          <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full sm:w-auto">
+            <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+              ประเภท:
+            </span>
+            <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[100px]">
+              {selectedType === "ALL"
+                ? "ทั้งหมด"
+                : assetTypes.find((t) => String(t.id) === selectedType)?.name}
+            </span>
+            <ChevronDown className="h-4 w-4 text-slate-400 ml-auto sm:ml-3 shrink-0" />
+            <select
+              value={selectedType}
+              onChange={(e) => {
+                setSelectedType(e.target.value);
+                setPage(1);
+              }}
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            >
+              <option value="ALL">ทั้งหมด</option>
+              {assetTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Add Equipment Button (Only for "รายการทั้งหมด" and "ใช้งานปกติ") */}
+        {canCreateAsset && (
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="md:ml-auto inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer shrink-0 w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            เพิ่มครุภัณฑ์
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === "WAIT_DISPOSAL" ? (
           <WaitDisposalTable
             assets={displayedAssets}
