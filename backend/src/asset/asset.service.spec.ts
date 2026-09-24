@@ -26,6 +26,35 @@ describe('AssetService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    assetStatus: {
+      findUnique: jest.fn(),
+    },
+    availabilityStatus: {
+      findUnique: jest.fn(),
+    },
+    disposal: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    borrowTransaction: {
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    borrowStatus: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+    repairJob: {
+      findMany: jest.fn(),
+      update: jest.fn(),
+    },
+    jobStatus: {
+      findUnique: jest.fn(),
+    },
+    sparepartTxn: {
+      deleteMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 
@@ -41,6 +70,12 @@ describe('AssetService', () => {
     prisma = module.get<PrismaService>(PrismaService);
 
     jest.clearAllMocks();
+    mockPrismaService.$transaction.mockImplementation(async (arg: any) => {
+      if (typeof arg === 'function') {
+        return arg(mockPrismaService);
+      }
+      return arg;
+    });
   });
 
   it('should be defined', () => {
@@ -190,7 +225,7 @@ describe('AssetService', () => {
         const result = await service.createTransfer('asset-1', validTransferDto, 'user-1');
 
         expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
-          where: { id: 'asset-1' },
+          where: expect.objectContaining({ id: 'asset-1' }),
           data: {
             section_id: 'sec-to',
             updatedBy: 'user-1',
@@ -230,6 +265,33 @@ describe('AssetService', () => {
         await expect(
           service.createTransfer('asset-1', validTransferDto, 'user-1'),
         ).rejects.toThrow(BadRequestException);
+      });
+
+      it('TC-3b: should throw BadRequestException if asset is currently UNDER_REPAIR', async () => {
+        mockPrismaService.asset.findUnique.mockResolvedValue({
+          ...mockAsset,
+          status: { id: 5, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
+        });
+
+        await expect(
+          service.createTransfer('asset-1', validTransferDto, 'user-1'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.createTransfer('asset-1', validTransferDto, 'user-1'),
+        ).rejects.toThrow('Cannot transfer an asset that is currently under repair');
+      });
+
+      it('rejects a transfer if repair starts before the section write', async () => {
+        mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
+        mockPrismaService.section.findUnique.mockResolvedValue({ id: 'sec-to' });
+        mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
+          if (where.asset_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+          return {};
+        });
+        mockPrismaService.transfer.create.mockResolvedValue({ id: 'transfer-1' });
+
+        await expect(service.createTransfer('asset-1', validTransferDto, 'user-1'))
+          .rejects.toThrow(BadRequestException);
       });
 
       it('TC-4: should throw BadRequestException if target section is identical to current section', async () => {
@@ -324,4 +386,552 @@ describe('AssetService', () => {
       expect((result.data[0] as any).borrowTransactions).toBeUndefined();
     });
   });
+
+  describe('Disposal (Ticket 03 - Guard Direct Disposal Against Borrowed/Reserved Assets)', () => {
+    const mockAsset = {
+      id: 'asset-disp-1',
+      name: 'Ultrasound Machine',
+      section_id: 'sec-1',
+      status: { id: 1, code: 'NORMAL', name: 'ปกติ' },
+      availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
+      borrowTransactions: [],
+    };
+
+    const validDisposalDto = {
+      disposalDocNo: 'DSP-2026-001',
+      approvedDate: '2026-09-20T00:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      mockPrismaService.$transaction.mockImplementation(async (arg: any) => {
+        if (typeof arg === 'function') {
+          return arg(mockPrismaService);
+        }
+        return arg;
+      });
+    });
+
+    it('TC-DISP-1: should throw BadRequestException if asset is currently BORROWED', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        ...mockAsset,
+        availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
+      });
+
+      await expect(
+        service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'),
+      ).rejects.toThrow('Cannot dispose an asset that is currently borrowed');
+    });
+
+    it('TC-DISP-2: should throw BadRequestException if asset is currently RESERVED', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        ...mockAsset,
+        availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
+      });
+
+      await expect(
+        service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'),
+      ).rejects.toThrow('Cannot dispose an asset that is currently reserved');
+    });
+
+    it('rejects disposal if the asset becomes reserved before the write', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'DISPOSAL' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
+        if (where.availability_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+        return {};
+      });
+      mockPrismaService.disposal.create.mockResolvedValue({ id: 'disp-rec-1' });
+
+      await expect(service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('TC-DISP-3: should successfully create disposal record when asset is AVAILABLE', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'DISPOSAL' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockAsset,
+        status: { id: 4, code: 'DISPOSAL' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE' },
+      });
+      mockPrismaService.disposal.create.mockResolvedValue({
+        id: 'disp-rec-1',
+        asset_id: 'asset-disp-1',
+        disposalDocNo: 'DSP-2026-001',
+        approvedDate: new Date('2026-09-20T00:00:00.000Z'),
+        asset: mockAsset,
+      });
+
+      const result = await service.createDisposal('asset-disp-1', validDisposalDto, 'user-1');
+
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
+        where: expect.objectContaining({ id: 'asset-disp-1' }),
+        data: {
+          asset_status_id: 4,
+          availability_status_id: 10,
+          updatedBy: 'user-1',
+        },
+      });
+      expect(mockPrismaService.disposal.create).toHaveBeenCalledWith({
+        data: {
+          asset_id: 'asset-disp-1',
+          disposalDocNo: 'DSP-2026-001',
+          approvedDate: new Date(validDisposalDto.approvedDate),
+        },
+        include: expect.any(Object),
+      });
+      expect(result).toHaveProperty('id', 'disp-rec-1');
+    });
+  });
+
+  describe('updateStatus (Ticket 03 - Guard Direct Status Edits Against Borrowed/Reserved Assets)', () => {
+    const mockAsset = {
+      id: 'asset-status-1',
+      name: 'Defibrillator Lifepak 20',
+      section_id: 'sec-1',
+      status: { id: 1, code: 'NORMAL', name: 'ปกติ' },
+      availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
+      borrowTransactions: [],
+    };
+
+    const forbiddenStatuses = [
+      { id: 2, code: 'DAMAGED', name: 'ชำรุด' },
+      { id: 3, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
+      { id: 4, code: 'WAIT_DISPOSAL', name: 'รอจำหน่าย' },
+      { id: 5, code: 'DISPOSAL', name: 'จำหน่ายแล้ว' },
+    ];
+
+    forbiddenStatuses.forEach(({ id: targetId, code: targetCode }) => {
+      it(`TC-STATUS-BORROWED: should throw BadRequestException when updating BORROWED asset to ${targetCode}`, async () => {
+        mockPrismaService.asset.findUnique.mockResolvedValue({
+          ...mockAsset,
+          availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
+        });
+        mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: targetId, code: targetCode });
+
+        await expect(
+          service.updateStatus('asset-status-1', targetId, 'user-1'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.updateStatus('asset-status-1', targetId, 'user-1'),
+        ).rejects.toThrow(`Cannot update asset status to ${targetCode} while asset is BORROWED`);
+      });
+
+      it(`TC-STATUS-RESERVED: should throw BadRequestException when updating RESERVED asset to ${targetCode}`, async () => {
+        mockPrismaService.asset.findUnique.mockResolvedValue({
+          ...mockAsset,
+          availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
+        });
+        mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: targetId, code: targetCode });
+
+        await expect(
+          service.updateStatus('asset-status-1', targetId, 'user-1'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.updateStatus('asset-status-1', targetId, 'user-1'),
+        ).rejects.toThrow(`Cannot update asset status to ${targetCode} while asset is RESERVED`);
+      });
+    });
+
+    it('keeps a borrowed asset borrowed when NORMAL status is submitted again', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
+      mockPrismaService.asset.update.mockImplementation(async ({ data }: any) => ({
+        ...mockAsset,
+        availabilityStatus: data.availability_status_id === 10
+          ? { id: 10, code: 'AVAILABLE' }
+          : mockAsset.availabilityStatus,
+      }));
+
+      const result = await service.updateStatus('asset-status-1', 1, 'user-1');
+
+      expect(result.availabilityStatus.code).toBe('BORROWED');
+    });
+
+    it('rejects a status edit if the asset becomes borrowed before the write', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        ...mockAsset,
+        availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
+      });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 2, code: 'DAMAGED' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
+        if (where.availability_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+        return {};
+      });
+
+      await expect(service.updateStatus('asset-status-1', 2, 'user-1'))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('TC-STATUS-AVAILABLE: should allow updating status to DAMAGED when asset is AVAILABLE', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        ...mockAsset,
+        availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
+      });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 2, code: 'DAMAGED' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockAsset,
+        status: { id: 2, code: 'DAMAGED' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE' },
+      });
+
+      const result = await service.updateStatus('asset-status-1', 2, 'user-1');
+
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'asset-status-1' }),
+          data: expect.objectContaining({
+            asset_status_id: 2,
+            availability_status_id: 10,
+            updatedBy: 'user-1',
+          }),
+        }),
+      );
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('update (Ticket 03 - Metadata Edits vs Status Edits on Borrowed Assets)', () => {
+    const mockBorrowedAsset = {
+      id: 'asset-edit-1',
+      name: 'Patient Monitor B40',
+      model: 'B40',
+      serialNo: 'SN-100200',
+      price: '85000.00',
+      remark: 'Stationed at ER',
+      section_id: 'sec-1',
+      status: { id: 1, code: 'NORMAL', name: 'ปกติ' },
+      availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
+      borrowTransactions: [
+        {
+          id: 'borrow-tx-1',
+          borrowNo: 'BR-2026-0901',
+          borrowStatus: { id: 3, code: 'BORROWED', name: 'กำลังยืม' },
+        },
+      ],
+    };
+
+    it('TC-UPDATE-META: should allow general property edits on BORROWED asset without altering availability or borrow state', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+      const updatePayload = {
+        name: 'Patient Monitor B40 Plus',
+        model: 'B40-Pro',
+        serialNo: 'SN-100200-REV',
+        price: '90000.00',
+        remark: 'Upgraded battery module',
+      };
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockBorrowedAsset,
+        ...updatePayload,
+      });
+
+      const result = await service.update('asset-edit-1', updatePayload as any, 'user-1');
+
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
+        where: { id: 'asset-edit-1' },
+        data: expect.objectContaining({
+          ...updatePayload,
+          updatedBy: 'user-1',
+        }),
+        include: expect.any(Object),
+      });
+
+      // Ensure availability_status_id was NOT modified in the update data payload
+      const updateCallData = mockPrismaService.asset.update.mock.calls[0][0].data;
+      expect(updateCallData.availability_status_id).toBeUndefined();
+
+      // Ensure borrow state and availabilityStatus are intact in returned result
+      expect(result).toHaveProperty('currentBorrowing');
+      expect((result as any).currentBorrowing.id).toBe('borrow-tx-1');
+      expect(result.availabilityStatus.code).toBe('BORROWED');
+      expect(result.name).toBe('Patient Monitor B40 Plus');
+    });
+
+    it('rejects a direct availability change while a borrow is active', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+
+      await expect(
+        service.update('asset-edit-1', { availability_status_id: 1 } as any, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.asset.update).not.toHaveBeenCalled();
+    });
+
+    it('TC-UPDATE-STATUS-FORBIDDEN: should throw BadRequestException when updating asset_status_id to DISPOSAL on BORROWED asset', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 5, code: 'DISPOSAL' });
+
+      await expect(
+        service.update('asset-edit-1', { asset_status_id: 5 } as any, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.update('asset-edit-1', { asset_status_id: 5 } as any, 'user-1'),
+      ).rejects.toThrow('Cannot update asset status to DISPOSAL while asset is BORROWED');
+    });
+
+    it('TC-UPDATE-STATUS-FORBIDDEN: should throw BadRequestException when updating asset_status_id to WAIT_DISPOSAL on RESERVED asset', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue({
+        ...mockBorrowedAsset,
+        availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
+      });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'WAIT_DISPOSAL' });
+
+      await expect(
+        service.update('asset-edit-1', { asset_status_id: 4 } as any, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.update('asset-edit-1', { asset_status_id: 4 } as any, 'user-1'),
+      ).rejects.toThrow('Cannot update asset status to WAIT_DISPOSAL while asset is RESERVED');
+    });
+  });
+
+  describe('Ticket 04 - Auto-Cascade Borrow Cancellation When Loaned Asset Marked Lost', () => {
+    const mockBorrowedAsset = {
+      id: 'asset-lost-1',
+      name: 'Ultrasound Scanner',
+      section_id: 'sec-1',
+      status: { id: 1, code: 'NORMAL', name: 'ปกติ' },
+      availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
+      borrowTransactions: [
+        {
+          id: 'borrow-tx-1',
+          borrowNo: 'BR-2026-0001',
+          borrowStatus: { id: 3, code: 'BORROWED', name: 'กำลังยืม' },
+        },
+      ],
+    };
+
+    const mockReservedAsset = {
+      ...mockBorrowedAsset,
+      id: 'asset-lost-2',
+      availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
+    };
+
+    beforeEach(() => {
+      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
+      mockPrismaService.borrowStatus.findMany.mockResolvedValue([
+        { id: 90, code: 'RETURNED' },
+        { id: 91, code: 'REJECTED' },
+        { id: 99, code: 'CANCELLED' },
+      ]);
+      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 6, code: 'LOST', name: 'สูญหาย' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' });
+    });
+
+    it('TC-LOST-1: updateStatus to LOST on a BORROWED asset auto-cancels active borrow and sets status to LOST / UNAVAILABLE', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockBorrowedAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        borrowTransactions: [],
+      });
+
+      const result = await service.updateStatus('asset-lost-1', 6, 'user-admin-1');
+
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+        where: {
+          asset_id: 'asset-lost-1',
+          borrow_status_id: { notIn: [90, 91, 99] },
+        },
+        data: expect.objectContaining({
+          borrow_status_id: 99,
+          cancelled_by_user_id: 'user-admin-1',
+          cancelled_at: expect.any(Date),
+          cancel_reason: expect.stringContaining('LOST'),
+        }),
+      });
+      expect(mockPrismaService.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'asset-lost-1' }),
+          data: expect.objectContaining({
+            asset_status_id: 6,
+            availability_status_id: 10,
+            updatedBy: 'user-admin-1',
+          }),
+        }),
+      );
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+      expect(result.currentBorrowing).toBeNull();
+    });
+
+    it('TC-LOST-2: updateStatus to LOST on a RESERVED asset auto-cancels active borrow and updates asset', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockReservedAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockReservedAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        borrowTransactions: [],
+      });
+
+      const result = await service.updateStatus('asset-lost-2', 6, 'user-admin-1');
+
+      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+        where: {
+          asset_id: 'asset-lost-2',
+          borrow_status_id: { notIn: [90, 91, 99] },
+        },
+        data: expect.objectContaining({
+          borrow_status_id: 99,
+          cancelled_by_user_id: 'user-admin-1',
+          cancelled_at: expect.any(Date),
+        }),
+      });
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-LOST-3: update with asset_status_id set to LOST on BORROWED asset auto-cancels active borrow', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockBorrowedAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        borrowTransactions: [],
+      });
+
+      const result = await service.update('asset-lost-1', { asset_status_id: 6 } as any, 'user-admin-1');
+
+      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+        where: {
+          asset_id: 'asset-lost-1',
+          borrow_status_id: { notIn: [90, 91, 99] },
+        },
+        data: expect.objectContaining({
+          borrow_status_id: 99,
+          cancelled_by_user_id: 'user-admin-1',
+          cancelled_at: expect.any(Date),
+          cancel_reason: expect.stringContaining('LOST'),
+        }),
+      });
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-LOST-4: rolls back and throws BadRequestException if asset update encounters stale write error during cascade', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
+      mockPrismaService.asset.update.mockImplementation(async () => {
+        throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+      });
+
+      await expect(service.updateStatus('asset-lost-1', 6, 'user-admin-1'))
+        .rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Ticket 05 - Auto-Cascade Repair Cancellation When Under-Repair Asset Marked Lost', () => {
+    const mockUnderRepairAsset = {
+      id: 'asset-repair-lost-1',
+      name: 'Infusion Pump',
+      section_id: 'sec-1',
+      status: { id: 3, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
+      availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      borrowTransactions: [],
+    };
+
+    beforeEach(() => {
+      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
+      mockPrismaService.borrowStatus.findMany.mockResolvedValue([]);
+      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({ count: 0 });
+      mockPrismaService.jobStatus.findUnique.mockResolvedValue({ id: 88, code: 'CANCELLED' });
+      mockPrismaService.repairJob.findMany.mockResolvedValue([
+        { id: 'job-1', solution: 'Initial diagnosis note' },
+      ]);
+      mockPrismaService.repairJob.update.mockResolvedValue({ id: 'job-1', jobStatusId: 88 });
+      mockPrismaService.sparepartTxn.deleteMany.mockResolvedValue({ count: 2 });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 6, code: 'LOST', name: 'สูญหาย' });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' });
+    });
+
+    it('TC-REPAIR-LOST-1: updateStatus to LOST on UNDER_REPAIR asset auto-cancels active repair jobs and deletes pending spare part txns', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      });
+
+      const result = await service.updateStatus('asset-repair-lost-1', 6, 'user-admin-1');
+
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.jobStatus.findUnique).toHaveBeenCalledWith({
+        where: { code: 'CANCELLED' },
+      });
+      expect(mockPrismaService.repairJob.findMany).toHaveBeenCalledWith({
+        where: {
+          assetId: 'asset-repair-lost-1',
+          jobStatus: {
+            code: { notIn: ['COMPLETED', 'CANCELLED'] },
+          },
+        },
+        select: { id: true, solution: true },
+      });
+      expect(mockPrismaService.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-1' },
+        data: {
+          jobStatusId: 88,
+          solution: expect.stringContaining('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)'),
+          updatedBy: 'user-admin-1',
+        },
+      });
+      expect(mockPrismaService.sparepartTxn.deleteMany).toHaveBeenCalledWith({
+        where: {
+          jobId: { in: ['job-1'] },
+          txnType: 'PENDING_WITHDRAW',
+        },
+      });
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-REPAIR-LOST-2: update with asset_status_id set to LOST on UNDER_REPAIR asset auto-cancels active repair jobs', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST', name: 'สูญหาย' },
+        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      });
+
+      const result = await service.update('asset-repair-lost-1', { asset_status_id: 6 } as any, 'user-admin-1');
+
+      expect(mockPrismaService.repairJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-1' },
+        data: expect.objectContaining({
+          jobStatusId: 88,
+          updatedBy: 'user-admin-1',
+        }),
+      });
+      expect(mockPrismaService.sparepartTxn.deleteMany).toHaveBeenCalled();
+      expect(result.status.code).toBe('LOST');
+      expect(result.availabilityStatus.code).toBe('UNAVAILABLE');
+    });
+
+    it('TC-REPAIR-LOST-3: preserves existing solution when appending automated cancellation note', async () => {
+      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.update.mockResolvedValue({
+        ...mockUnderRepairAsset,
+        status: { id: 6, code: 'LOST' },
+      });
+
+      await service.updateStatus('asset-repair-lost-1', 6, 'user-admin-1');
+
+      const updateCall = mockPrismaService.repairJob.update.mock.calls[0][0];
+      expect(updateCall.data.solution).toContain('Initial diagnosis note');
+      expect(updateCall.data.solution).toContain('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)');
+    });
+  });
 });
+

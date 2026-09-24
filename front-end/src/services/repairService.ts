@@ -3,7 +3,7 @@ import type {
   CreateRepairDto,
   AssetApiResponse,
   AssetInfo,
-} from "../Types/TypeRepair";
+} from "../types/TypeRepair";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

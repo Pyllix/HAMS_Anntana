@@ -179,7 +179,7 @@ export default function PendingPickupTable() {
         </span>
       </div>
 
-      <div className="overflow-auto">
+      <div className="table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (

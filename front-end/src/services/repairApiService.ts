@@ -6,7 +6,7 @@ import type {
   RepairJob,
   RepairJobStatusCode,
   RepairUser,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 const PAGE_SIZE = 100;
@@ -132,6 +132,7 @@ export interface ApiRepairJob {
   jobStatusId?: number | null;
   companyId?: string | null;
   billNo?: string | null;
+  repairCost?: number | string | null;
   symptom?: string | null;
   diagnosis?: string | null;
   solution?: string | null;
@@ -158,6 +159,12 @@ export interface ApiRepairJob {
   mechanicRepairs?: ApiMechanicRepair[];
   repairJobSteps?: ApiRepairStep[];
   sparepartTxns?: ApiSparePartTransaction[];
+  isRejected?: boolean;
+  rejectReason?: string | null;
+  summary?: {
+    isRejected?: boolean;
+    rejectReason?: string | null;
+  };
 }
 
 const repairActionTypes: RepairActionType[] = [
@@ -306,12 +313,18 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
     jobStatusId: job.jobStatus?.id || job.jobStatusId || 0,
     companyId: job.companyId,
     billNo: job.billNo,
+    repairCost:
+      job.repairCost === null || job.repairCost === undefined
+        ? null
+        : Number(job.repairCost),
     symptom: job.symptom || "",
     diagnosis: job.diagnosis,
     solution: job.solution,
     unrepairableReason: job.unrepairableReason,
     causeId: job.causeId,
     actionType,
+    isRejected: job.isRejected ?? job.summary?.isRejected ?? false,
+    rejectReason: job.rejectReason ?? job.summary?.rejectReason ?? null,
     urgencyStatus:
       job.urgencyStatus === "URGENT" || job.urgencyStatus === "EMERGENCY"
         ? job.urgencyStatus

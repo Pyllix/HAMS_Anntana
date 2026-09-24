@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { X, AlertTriangle, Pencil, Lock, ChevronDown } from "lucide-react";
-import type { Company } from "../../Types/TypeCompany";
+import type { Company } from "../../types/TypeCompany";
 
 // ─── Detail Modal (Image 3) ──────────────────────────────────────────────────
 interface DetailModalProps {

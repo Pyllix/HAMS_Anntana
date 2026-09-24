@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ReportType, UrgencyStatus, AssetInfo } from "../Types/TypeRepair";
+import type { ReportType, UrgencyStatus, AssetInfo } from "../types/TypeRepair";
 
 interface RepairStoreState {
   reportType: ReportType| null;

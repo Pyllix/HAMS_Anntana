@@ -8,7 +8,7 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ClipboardCheck, Eye } from "lucide-react";
-import { RepairJob, RepairStatusFilter } from "../../Types/TypeRepairWorkflow";
+import { RepairJob, RepairStatusFilter } from "../../types/TypeRepairWorkflow";
 import { useConfirmRepairModalStore } from "../../stores/useConfirmRepairModalStore";
 import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalStore";
 import { getRepairConfirmations } from "../../services/confirmRepairService";

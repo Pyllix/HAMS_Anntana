@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Asset } from "../Types/TypeAsset";
+import type { Asset } from "../types/TypeAsset";
 
 interface AssetRepairHistoryModalState {
   isOpen: boolean;

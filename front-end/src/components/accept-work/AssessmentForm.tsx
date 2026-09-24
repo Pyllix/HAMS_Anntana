@@ -24,7 +24,7 @@ import type {
   Mechanic,
   RepairDetail,
   RepairMetaLookups,
-} from "../../Types/TypeAssessment";
+} from "../../types/TypeAssessment";
 import {
   createEvaluation,
   getRepairJobById,
@@ -108,6 +108,8 @@ export default function AssessmentForm() {
 
   const selectedJob = useAssessmentStore((state) => state.selectedJob);
   const closeForm = useAssessmentStore((state) => state.closeForm);
+  const isReassessment = Boolean(selectedJob?.isReassessment);
+  const rejectionReason = selectedJob?.rejectionReason?.trim();
 
   const [actionStatus, setActionStatus] = useState<ActionTypeUI>("ซ่อมเองได้");
   const [formState, setFormState] =
@@ -202,7 +204,7 @@ export default function AssessmentForm() {
   useEffect(() => {
     if (!currentJobId) return;
 
-    if (!isAssignMode) {
+    if (!isAssignMode && !isReassessment) {
       const savedDraft = localStorage.getItem(draftStorageKey);
       if (savedDraft) {
         try {
@@ -229,15 +231,51 @@ export default function AssessmentForm() {
     setFormState(INITIAL_FORM_STATE);
     setSelectedMechanicIds([]);
     setSelectedSpares([]);
-  }, [currentJobId, draftStorageKey, isAssignMode]);
+  }, [currentJobId, draftStorageKey, isAssignMode, isReassessment]);
 
   useEffect(() => {
     if (!jobDetail) return;
+
+    const previousStepActionType =
+      jobDetail.stepActionType ||
+      jobDetail.repairJobSteps?.[0]?.stepMaster?.actionType;
+    const previousActionStatus = previousStepActionType
+      ? REVERSE_ACTION_TYPE_MAP[previousStepActionType]
+      : undefined;
+    const dueDateTime = jobDetail.dueDate
+      ? new Date(jobDetail.dueDate).getTime()
+      : Number.NaN;
+    const remainingDays = Number.isNaN(dueDateTime)
+      ? ""
+      : Math.max(
+          1,
+          Math.ceil((dueDateTime - Date.now()) / (24 * 60 * 60 * 1000)),
+        );
+
+    if (isReassessment && previousActionStatus) {
+      setActionStatus(previousActionStatus);
+    }
+
     setFormState((previous) => ({
       ...previous,
-      jobTypeId: previous.jobTypeId || "",
+      symptomCause:
+        previous.symptomCause || (isReassessment ? jobDetail.diagnosis || "" : ""),
+      diagnosis:
+        previous.diagnosis || (isReassessment ? jobDetail.diagnosis || "" : ""),
+      solution:
+        previous.solution || (isReassessment ? jobDetail.solution || "" : ""),
+      technicalDiagnosisDetail:
+        previous.technicalDiagnosisDetail ||
+        (isReassessment ? jobDetail.diagnosis || "" : ""),
+      jobTypeId:
+        previous.jobTypeId || (isReassessment ? jobDetail.jobTypeId || "" : ""),
       techCategoryId: previous.techCategoryId || jobDetail.techCategoryId || "",
       causeId: previous.causeId || jobDetail.causeId || "",
+      dueDate:
+        previous.dueDate || (isReassessment ? remainingDays : ""),
+      unrepairableReason:
+        previous.unrepairableReason ||
+        (isReassessment ? jobDetail.unrepairableReason || "" : ""),
       isRepeatRepair:
         jobDetail.isRepeatRepair !== undefined
           ? jobDetail.isRepeatRepair
@@ -253,7 +291,7 @@ export default function AssessmentForm() {
             ),
       );
     }
-  }, [jobDetail, isAssignMode]);
+  }, [jobDetail, isAssignMode, isReassessment]);
 
   // Mutation สำหรับการประเมิน
   const diagnoseMutation = useMutation({
@@ -264,6 +302,7 @@ export default function AssessmentForm() {
     onSuccess: async () => {
       if (draftStorageKey) localStorage.removeItem(draftStorageKey);
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
+      await queryClient.invalidateQueries({ queryKey: ["repairHistory"] });
       await queryClient.invalidateQueries({ queryKey: ["repairList"] });
       await queryClient.invalidateQueries({ queryKey: ["repairJobs"] });
       await queryClient.invalidateQueries({ queryKey: ["acceptWorkList"] });
@@ -272,7 +311,9 @@ export default function AssessmentForm() {
         open: true,
         type: "success",
         title: "บันทึกสำเร็จ",
-        message: "บันทึกผลการประเมินเรียบร้อยแล้ว",
+        message: isReassessment
+          ? "บันทึกผลการประเมินใหม่เรียบร้อยแล้ว และส่งเข้าสู่ขั้นตอนดำเนินการถัดไป"
+          : "บันทึกผลการประเมินเรียบร้อยแล้ว",
         onClose: () => closeForm(),
       });
     },
@@ -517,7 +558,11 @@ export default function AssessmentForm() {
             <span
               className={`font-semibold ${isAssignMode ? "text-blue-600" : "text-emerald-600"}`}
             >
-              {isAssignMode ? "มอบหมายงานซ่อม" : "ประเมินการซ่อม"} (
+              {isAssignMode
+                ? "มอบหมายงานซ่อม"
+                : isReassessment
+                  ? "ประเมินใหม่"
+                  : "ประเมินการซ่อม"} (
               {displayJobNo})
             </span>
           </div>
@@ -545,22 +590,34 @@ export default function AssessmentForm() {
         </div>
 
         {/* Right Side: Action Form */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 shadow-xs rounded-xl p-5 flex flex-col h-full overflow-hidden">
-          {/* Header ค้างอยู่กับที่ (Locked Top Header) */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0 mb-4">
-            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-              <span
-                className={`p-1 rounded-md ${isAssignMode ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}
-              >
-                {isAssignMode ? (
-                  <UserPlus className="w-4 h-4" />
-                ) : (
-                  <ClipboardCheck className="w-4 h-4" />
-                )}
-              </span>
-              {isAssignMode
-                ? "มอบหมายงานซ่อมให้ช่าง"
-                : "บันทึกผลการประเมินและงานซ่อม"}
+        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            {isReassessment && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <p className="font-bold">เจ้าหน้าที่พัสดุปฏิเสธการขอเบิกอะไหล่</p>
+                <p className="mt-1 leading-5">
+                  เหตุผล: {rejectionReason || "ไม่ระบุเหตุผล"}
+                </p>
+                <p className="mt-1 text-rose-600">
+                  กรุณาตรวจสอบและประเมินงานใหม่ ผู้รับผิดชอบยังคงเป็นช่างคนเดิม
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                <span
+                  className={`p-1 rounded-md ${isAssignMode ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}
+                >
+                  {isAssignMode ? (
+                    <UserPlus className="w-4 h-4" />
+                  ) : (
+                    <ClipboardCheck className="w-4 h-4" />
+                  )}
+                </span>
+                {isAssignMode
+                  ? "มอบหมายงานซ่อมให้ช่าง"
+                  : "บันทึกผลการประเมินและงานซ่อม"}
+              </div>
             </div>
           </div>
 
@@ -719,7 +776,11 @@ export default function AssessmentForm() {
                 {(assignMutation.isPending || diagnoseMutation.isPending) && (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 )}
-                {isAssignMode ? "ยืนยันการจ่ายงาน" : "บันทึกผลการประเมิน"}
+                {isAssignMode
+                  ? "ยืนยันการจ่ายงาน"
+                  : isReassessment
+                    ? "บันทึกผลการประเมินใหม่"
+                    : "บันทึกผลการประเมิน"}
               </button>
             </div>
           </div>

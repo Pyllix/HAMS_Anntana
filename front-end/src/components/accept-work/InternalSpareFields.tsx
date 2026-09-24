@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Plus, Trash2, Package, Loader2, Box, ShoppingCart } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { SparePart } from "../../Types/TypeAssessment";
+import type { SparePart } from "../../types/TypeAssessment";
 import { getSpareParts } from "../../services/assessmentService";
 
 export interface SelectedSpareItem extends Partial<SparePart> {

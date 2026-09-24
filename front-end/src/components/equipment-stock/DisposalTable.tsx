@@ -1,13 +1,12 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ChevronLeft,
-  ChevronRight,
   Eye,
   Image as ImageIcon,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
+import StockTablePagination from "./StockTablePagination";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
 
 const features = tableFeatures({});
@@ -37,8 +36,6 @@ export default function DisposalTable({
   isLoading = false,
   currentPage = 1,
   totalPages = 1,
-  totalItems = 0,
-  pageSize = 10,
   onPageChange,
 }: DisposalTableProps) {
   const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
@@ -83,7 +80,7 @@ export default function DisposalTable({
         cell: (info) => {
           const row = info.row.original;
           return (
-            <span className="font-semibold text-slate-800 text-xs font-mono truncate block">
+            <span className="font-semibold text-slate-800 text-sm font-mono truncate block">
               {row.noid || row.id.slice(0, 8)}
             </span>
           );
@@ -98,13 +95,13 @@ export default function DisposalTable({
           return (
             <div className="min-w-0 pr-2">
               <div
-                className="font-bold text-slate-800 text-xs truncate"
+                className="font-semibold text-slate-800 truncate"
                 title={row.name}
               >
                 {row.name}
               </div>
               <div
-                className="text-[11px] text-slate-400 truncate mt-0.5"
+                className="text-xs text-slate-500 truncate mt-0.5"
                 title={row.model || row.company?.name}
               >
                 {row.model} {row.company?.name ? `/ ${row.company.name}` : ""}
@@ -119,7 +116,7 @@ export default function DisposalTable({
         size: 130,
         cell: (info) => (
           <span
-            className="font-mono text-xs text-slate-600 font-medium truncate block"
+            className="font-mono text-sm text-slate-600 truncate block"
             title={info.row.original.serialNo || "-"}
           >
             {info.row.original.serialNo || "-"}
@@ -151,7 +148,7 @@ export default function DisposalTable({
         cell: (info) => {
           const row = info.row.original;
           return (
-            <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+            <span className="text-sm text-slate-600 whitespace-nowrap">
               {formatThaiDate(row.updatedAt || row.receivedDate)}
             </span>
           );
@@ -162,7 +159,7 @@ export default function DisposalTable({
         header: "สถานะสต็อก",
         size: 140,
         cell: () => (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+          <span className="inline-flex items-center justify-center gap-1.5 min-w-[90px] px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-rose-50 text-rose-700 border border-rose-200">
             <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
             <span>จำหน่ายแล้ว</span>
           </span>
@@ -199,11 +196,11 @@ export default function DisposalTable({
   });
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       {/* Scrollable Container with Fixed Header */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-        <table className="w-full text-left border-collapse table-fixed">
-          <thead className="sticky top-0 z-10 bg-white border-b border-slate-200">
+      <div className="flex-1 min-h-0 table-scroll">
+        <table className="w-full min-w-[1000px] text-left border-collapse table-fixed">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -216,12 +213,12 @@ export default function DisposalTable({
                       style={{
                         width: colSize ? `${colSize}px` : undefined,
                       }}
-                      className={`py-2.5 text-xs font-semibold text-slate-600 bg-white whitespace-nowrap ${
+                      className={`py-3.5 bg-slate-50 ${
                         header.id === "image"
                           ? "pl-4 pr-2"
                           : header.id === "actions"
-                          ? "px-3 text-center"
-                          : "px-3"
+                          ? "px-4 text-center"
+                          : "px-4"
                       }`}
                     >
                       {header.isPlaceholder ? null : (
@@ -238,7 +235,7 @@ export default function DisposalTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="text-center py-10 text-xs text-slate-400"
+                  className="text-center py-12 text-slate-400"
                 >
                   กำลังโหลดข้อมูล...
                 </td>
@@ -247,7 +244,7 @@ export default function DisposalTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="text-center py-10 text-xs text-slate-400"
+                  className="text-center py-12 text-slate-400"
                 >
                   ไม่พบข้อมูลครุภัณฑ์ที่จำหน่ายแล้ว
                 </td>
@@ -261,12 +258,12 @@ export default function DisposalTable({
                   {row.getAllCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={`py-2.5 align-middle text-xs ${
+                      className={`py-3.5 align-middle ${
                         cell.column.id === "image"
                           ? "pl-4 pr-2"
                           : cell.column.id === "actions"
-                          ? "px-3"
-                          : "px-3"
+                          ? "px-4"
+                          : "px-4"
                       }`}
                     >
                       <table.FlexRender cell={cell} />
@@ -279,54 +276,11 @@ export default function DisposalTable({
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 bg-white shrink-0 text-xs text-slate-500">
-        <div>
-          แสดง {(currentPage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(currentPage * pageSize, totalItems)} จาก {totalItems} รายการ
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={currentPage <= 1}
-            onClick={() => onPageChange(currentPage - 1)}
-            className="p-1 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter((p) => {
-              if (totalPages <= 5) return true;
-              return Math.abs(p - currentPage) <= 1 || p === 1 || p === totalPages;
-            })
-            .map((p, idx, arr) => (
-              <React.Fragment key={p}>
-                {idx > 0 && p - arr[idx - 1] > 1 && (
-                  <span className="px-1 text-slate-400">...</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onPageChange(p)}
-                  className={`min-w-6 h-6 px-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${
-                    p === currentPage
-                      ? "bg-emerald-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {p}
-                </button>
-              </React.Fragment>
-            ))}
-          <button
-            type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => onPageChange(currentPage + 1)}
-            className="p-1 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <StockTablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+      />
     </div>
   );
 }

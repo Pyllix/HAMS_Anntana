@@ -12,7 +12,7 @@ import { getAllUser } from "../../services/userService";
 
 import UserInfo from "./table-compnent/UserInfo";
 import Actions from "./table-compnent/Actions";
-import Section from "./table-compnent/section";
+import Section from "./table-compnent/Section";
 import { ROLES, RoleType } from "../../router/roles";
 import type { StatusFilterValue } from "./StatusFilter";
 

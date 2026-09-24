@@ -6,9 +6,15 @@ import {
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { getRepairsHistory } from "../../services/trackingService";
 import type { TrackRes } from "../../services/trackingService";
+
+export interface JobStatusOption {
+  id: number;
+  code: string;
+  name: string;
+}
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -175,46 +181,69 @@ const columns: Array<ColumnDef<typeof features, TrackRes>> = [
 
 interface Props {
   inputSearch: string;
-  status: string;
+  statusCode: string;
+  onStatusOptionsChange?: (options: JobStatusOption[]) => void;
 }
 
-export default function TrackTable({ inputSearch, status }: Props) {
+export default function TrackTable({
+  inputSearch,
+  statusCode,
+  onStatusOptionsChange,
+}: Props) {
+  // backend ไม่มี endpoint แยกสำหรับดึงรายการสถานะทั้งหมด จึงดึงงานซ่อมแบบไม่กรองสถานะ
+  // (limit สูงสุดที่ backend อนุญาต) แล้วรวบรวมสถานะที่มีอยู่จริงจากงานซ่อม เพื่อใช้เป็นตัวเลือกใน dropdown
   const { data: repairsHistory } = useQuery({
     queryKey: ["repairsHistory"],
     queryFn: () => getRepairsHistory(),
   });
 
-  console.log("repairsHistory:", repairsHistory);
+  useEffect(() => {
+    if (!repairsHistory || !onStatusOptionsChange) return;
+
+    const uniqueStatuses = new Map<string, JobStatusOption>();
+    for (const item of repairsHistory) {
+      const jobStatus = item.jobStatus;
+      if (jobStatus?.code && !uniqueStatuses.has(jobStatus.code)) {
+        uniqueStatuses.set(jobStatus.code, {
+          id: jobStatus.id,
+          code: jobStatus.code,
+          name: jobStatus.name,
+        });
+      }
+    }
+
+    onStatusOptionsChange(
+      Array.from(uniqueStatuses.values()).sort((a, b) => a.id - b.id),
+    );
+  }, [repairsHistory, onStatusOptionsChange]);
 
   const filteredItems = useMemo(() => {
     if (!repairsHistory) {
-      console.log("repairsHistory is undefined at TrackTable.tsx");
       return [];
     }
 
     const searchLower = inputSearch?.trim().toLowerCase() || "";
 
     return repairsHistory.filter((item) => {
-      // 1. ค้นหาจาก รหัสแจ้งซ่อม, รหัสครุภัณฑ์ (noid), ชื่อครุภัณฑ์, Serial No และอาการ
-      const matchesSearch =
-        searchLower === "" ||
+      const matchesStatus =
+        !statusCode ||
+        statusCode === "ALL" ||
+        item.jobStatus?.code === statusCode;
+
+      if (!matchesStatus) return false;
+      if (searchLower === "") return true;
+
+      // ค้นหาจาก รหัสแจ้งซ่อม, รหัสครุภัณฑ์ (noid), ชื่อครุภัณฑ์, Serial No และอาการ
+      return (
         item.jobNo?.toLowerCase().includes(searchLower) ||
         item.asset?.noid?.toLowerCase().includes(searchLower) ||
         item.asset?.name?.toLowerCase().includes(searchLower) ||
         item.asset?.serialNo?.toLowerCase().includes(searchLower) ||
         item.symptom?.toLowerCase().includes(searchLower) ||
-        item.diagnosis?.toLowerCase().includes(searchLower);
-
-      // 2. กรองตามสถานะงานซ่อม (status จาก dropdown jobStatuses)
-      const matchesStatus =
-        !status ||
-        status === "ALL" ||
-        item.jobStatus?.name === status ||
-        item.jobStatus?.code === status;
-
-      return matchesSearch && matchesStatus;
+        item.diagnosis?.toLowerCase().includes(searchLower)
+      );
     });
-  }, [repairsHistory, inputSearch, status]); // เพิ่ม inputSearch และ category ใน dependency array เพื่อให้อัปเดตอัตโนมัติเมื่อพิมพ์ค้นหา
+  }, [repairsHistory, inputSearch, statusCode]);
 
   const table = useTable({
     key: "assets-table",
@@ -232,7 +261,7 @@ export default function TrackTable({ inputSearch, status }: Props) {
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       {/* พื้นที่ตาราง Scroll ได้ */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (

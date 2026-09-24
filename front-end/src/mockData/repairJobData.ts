@@ -3,7 +3,7 @@ import type {
   RepairJobStatusCode,
   RepairStatus,
   RepairUser,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 const evaluatorSomchai: RepairUser = {
   userId: "7c33d3b9-75db-4b9f-b251-bcc0289ee101",
   employeeId: "MT-001",

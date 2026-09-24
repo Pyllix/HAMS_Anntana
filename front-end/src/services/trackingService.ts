@@ -171,6 +171,7 @@ export async function getRepairsHistory(
     },
     params: {
       ...(sectionId && { sectionId }),
+      limit: 100,
     },
   });
 

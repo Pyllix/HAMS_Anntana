@@ -8,6 +8,7 @@ import {
   getBorrowErrorMessage,
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
+import ThaiDatePicker from "./ThaiDatePicker";
 
 // วันที่พรุ่งนี้ (ค่าต่ำสุดที่เลือกได้ เพราะ backend บังคับว่าต้องเป็นอนาคต)
 function getTomorrowDateString() {
@@ -33,6 +34,7 @@ export default function SelfBorrowModal() {
           "ส่งคำขอยืมครุภัณฑ์เรียบร้อยแล้ว รอเจ้าหน้าที่ศูนย์ครุภัณฑ์อนุมัติ",
         );
         queryClient.invalidateQueries({ queryKey: ["assets"] });
+        queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
         closeForm();
       },
       onError: (err: any) => {
@@ -144,13 +146,12 @@ export default function SelfBorrowModal() {
               >
                 วันที่ต้องการคืน (ถ้าไม่ระบุ เจ้าหน้าที่จะกำหนดให้ภายหลัง)
               </label>
-              <input
-                type="date"
+              <ThaiDatePicker
                 id="expectedReturnDate"
-                min={getTomorrowDateString()}
+                minDate={getTomorrowDateString()}
                 value={expectedReturnDate}
-                onChange={(e) => setExpectedReturnDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                onChange={setExpectedReturnDate}
+                placeholder="เลือกวันที่ต้องการคืน"
               />
             </div>
 

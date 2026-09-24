@@ -1,7 +1,7 @@
 import type {
   RepairJob,
   RepairWorkflowStage,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 import { getNextWorkflowStage } from "../config/repairWorkflow";
 import {
   advanceNextRepairStep,

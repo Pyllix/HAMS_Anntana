@@ -11,7 +11,7 @@ import { useNotificationStore } from "../../stores/useNotificationStore";
 import type {
   AppNotification,
   NotificationKind,
-} from "../../Types/TypeNotification";
+} from "../../types/TypeNotification";
 
 const kindIcons: Record<NotificationKind, typeof Bell> = {
   WORKFLOW: ClipboardCheck,

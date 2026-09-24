@@ -13,7 +13,7 @@ import type {
   SparePart,
   RepairMetaLookups,
   BaseLookup,
-} from "../Types/TypeAssessment";
+} from "../types/TypeAssessment";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

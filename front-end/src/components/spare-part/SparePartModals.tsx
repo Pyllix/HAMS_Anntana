@@ -18,8 +18,8 @@ import {
   deleteSparepart,
   getSparepartGroups,
 } from "../../services/sparepartService";
-import type { Sparepart, CreateSparepartDto } from "../../Types/TypeSparePart";
-import { getSparePartStatus } from "../../Types/TypeSparePart";
+import type { Sparepart, CreateSparepartDto } from "../../types/TypeSparePart";
+import { getSparePartStatus } from "../../types/TypeSparePart";
 
 // ─── 1. Detail Modal (Dialog DetailStock) ──────────────────────────────────────
 

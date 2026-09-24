@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { RepairJob } from "../Types/TypeRepairWorkflow";
+import { RepairJob } from "../types/TypeRepairWorkflow";
 
 interface ConfirmRepairModalState {
   isOpen: boolean;

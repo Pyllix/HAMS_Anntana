@@ -17,7 +17,7 @@ import {
 import { usePartOrderModalStore } from "../../stores/usePartOrderModalStore";
 import { stockInSparepart, getSpareParts } from "../../services/sparepartService";
 import { updateOrderStatus, createPartOrder } from "../../services/partOrderService";
-import type { StockInSparepartDto } from "../../Types/TypeSparePart";
+import type { StockInSparepartDto } from "../../types/TypeSparePart";
 
 // ─── 0. Modal สร้างคำสั่งซื้ออะไหล่ใหม่ (Create Part Order / Stock-In) ─────────
 

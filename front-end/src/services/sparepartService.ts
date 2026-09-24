@@ -6,7 +6,7 @@ import type {
   UpdateSparepartDto,
   StockInSparepartDto,
   ReturnSparepartDto,
-} from "../Types/TypeSparePart";
+} from "../types/TypeSparePart";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

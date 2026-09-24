@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
 import { useConfirmRepairModalStore } from "../../stores/useConfirmRepairModalStore";
-import { RepairConfirmationDto } from "../../Types/TypeRepairWorkflow";
+import { RepairConfirmationDto } from "../../types/TypeRepairWorkflow";
 import {
   confirmRepair,
   getRepairReceivers,

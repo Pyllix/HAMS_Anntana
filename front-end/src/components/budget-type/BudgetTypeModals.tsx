@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, AlertTriangle, Lock } from "lucide-react";
-import type { BudgetType } from "../../Types/TypeBudgetType";
+import type { BudgetType } from "../../types/TypeBudgetType";
 
 // Helper สำหรับแปลง ID เป็นรหัส BT-xxx
 export function formatBudgetCode(id: number | string): string {

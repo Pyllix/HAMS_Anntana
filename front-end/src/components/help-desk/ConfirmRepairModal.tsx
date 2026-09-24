@@ -18,7 +18,7 @@ import type {
   ReportType,
   UrgencyStatus,
   CreateRepairDto,
-} from "../../Types/TypeRepair";
+} from "../../types/TypeRepair";
 
 export default function ConfirmRepairModal() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

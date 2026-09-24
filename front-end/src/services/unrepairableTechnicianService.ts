@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { UnrepairableJobDto } from "../Types/TypeUnrepairableReceipt";
+import type { UnrepairableJobDto } from "../types/TypeUnrepairableReceipt";
 
 export interface TechnicianUnrepairableJob extends UnrepairableJobDto {
   symptom?: string | null;

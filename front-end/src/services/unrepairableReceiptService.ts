@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { ConfirmUnrepairableReceiptDto, UnrepairableJobDto, UnrepairableReceipt } from "../Types/TypeUnrepairableReceipt";
+import type { ConfirmUnrepairableReceiptDto, UnrepairableJobDto, UnrepairableReceipt } from "../types/TypeUnrepairableReceipt";
 import { mapUnrepairableReceipt } from "./unrepairableReceiptMapper";
 
 const BASE_URL = "https://hams-anntana.onrender.com";

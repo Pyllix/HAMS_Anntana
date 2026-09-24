@@ -1,0 +1,129 @@
+import { ChevronDown, Search } from "lucide-react";
+import TrackTable from "../components/track/TrackTable";
+import type { JobStatusOption } from "../components/track/TrackTable";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+export default function TrackingAssetCenter({}) {
+  // หมายเหตุ: /repairs/lookups/meta ไม่มี jobStatuses ให้ จึงให้ TrackTable รวบรวม
+  // รายการสถานะที่มีอยู่จริงจากงานซ่อมที่ดึงมา แล้วส่งกลับขึ้นมาผ่าน callback นี้แทน
+  const [statusOptions, setStatusOptions] = useState<JobStatusOption[]>([]);
+  const handleStatusOptionsChange = useCallback(
+    (options: JobStatusOption[]) => setStatusOptions(options),
+    [],
+  );
+
+  const [inputSearch, setInputSearch] = useState("");
+  const [statusCode, setStatusCode] = useState("ALL");
+  const [statusLabel, setStatusLabel] = useState("ทั้งหมด");
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        statusDropdownRef.current &&
+        !statusDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsStatusOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    // 1. เปลี่ยนให้หน้าเพจนี้ใช้ความสูงเต็มพื้นที่ (h-full) และเรียงลงมา (flex-col)
+    // เพิ่มระยะห่างระหว่างส่วนค้นหากับตารางให้โปร่งขึ้น
+    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* Search & Filter Bar */}
+      {/* 2. ทำให้รองรับจอเล็ก (Responsive) จัดเรียงบน-ล่างในจอมือถือ และเรียงซ้าย-ขวาในจอใหญ่ */}
+      <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
+        {/* กรอกคำค้นหา */}
+        <div className="relative flex-1 w-full md:max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="ค้นหา ..."
+            onChange={(e) => setInputSearch(e.target.value)}
+            value={inputSearch}
+            // ปรับความสูงเป็น h-10 และทำขอบ rounded-lg ให้เข้ากัน
+            className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 transition-all"
+          />
+        </div>
+
+        {/* Dropdown สถานะ */}
+        <div className="w-full md:w-auto relative" ref={statusDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsStatusOpen((prev) => !prev)}
+            className="relative flex items-center justify-between md:justify-start h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-full md:w-auto"
+          >
+            <div className="flex items-center">
+              <span className="text-slate-600 mr-1.5 whitespace-nowrap">
+                สถานะ:
+              </span>
+              {/* ป้องกันชื่อสถานะยาวเกินไปแล้วทำให้ UI พังด้วย truncate */}
+              <span className="font-semibold text-emerald-600 whitespace-nowrap truncate max-w-[150px]">
+                {statusLabel}
+              </span>
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 text-slate-400 ml-3 shrink-0 transition-transform ${
+                isStatusOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {isStatusOpen && (
+            <div className="absolute z-20 mt-1 w-full md:min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-lg py-1 max-h-60 overflow-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusCode("ALL");
+                  setStatusLabel("ทั้งหมด");
+                  setIsStatusOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors ${
+                  statusCode === "ALL"
+                    ? "font-semibold text-emerald-600"
+                    : "text-slate-700"
+                }`}
+              >
+                ทั้งหมด
+              </button>
+              {statusOptions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setStatusCode(item.code);
+                    setStatusLabel(item.name);
+                    setIsStatusOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors truncate ${
+                    statusCode === item.code
+                      ? "font-semibold text-emerald-600"
+                      : "text-slate-700"
+                  }`}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Table */}
+      {/* 3. ดันตารางให้กินพื้นที่ที่เหลือทั้งหมด (flex-1) พร้อมกับบังคับให้ Scroll เกิดเฉพาะในกล่องนี้ (overflow-hidden) */}
+      <div className="flex-1 overflow-hidden min-h-[420px]">
+        <TrackTable
+          inputSearch={inputSearch}
+          statusCode={statusCode}
+          onStatusOptionsChange={handleStatusOptionsChange}
+        />
+      </div>
+    </div>
+  );
+}

@@ -4,9 +4,9 @@ import {
   RepairJob,
   RepairWorkflowActor,
   RepairWorkflowStage,
-} from "../Types/TypeRepairWorkflow";
+} from "../types/TypeRepairWorkflow";
 import { useNotificationStore } from "../stores/useNotificationStore";
-import { NotificationKind } from "../Types/TypeNotification";
+import { NotificationKind } from "../types/TypeNotification";
 
 const roleByActor: Record<RepairWorkflowActor, RoleType> = {
   MAINTENANCE: "MAINTENANCE_STAFF",
@@ -55,6 +55,29 @@ export function publishSpareApprovalNotificationOnce(job: RepairJob): void {
     kind: "PARCEL",
     title,
     message: `${job.asset?.assetName || "ครุภัณฑ์"} ได้รับอนุมัติการเบิกอะไหล่แล้ว กรุณาตรวจสอบและดำเนินการขั้นตอนถัดไป`,
+    jobNo: job.jobNo,
+    recipientRole: "MAINTENANCE_STAFF",
+    sourceRole: "PARCEL_STAFF",
+    createdAt: job.updatedAt || new Date().toISOString(),
+  });
+}
+
+export function publishOutsourceApprovalNotificationOnce(job: RepairJob): void {
+  if (job.actionType !== "OUTSOURCE" || job.status?.statusCode !== "OUTSOURCED") return;
+  const title = "เจ้าหน้าที่พัสดุอนุมัติส่งซ่อมภายนอกแล้ว";
+  const store = useNotificationStore.getState();
+  if (
+    store.notifications.some(
+      (notification) =>
+        notification.jobNo === job.jobNo && notification.title === title,
+    )
+  ) {
+    return;
+  }
+  store.addNotification({
+    kind: "PARCEL",
+    title,
+    message: `${job.asset?.assetName || "ครุภัณฑ์"} ได้รับอนุมัติให้ส่งซ่อมกับบริษัทภายนอกแล้ว กรุณาติดตามและดำเนินการขั้นตอนถัดไป`,
     jobNo: job.jobNo,
     recipientRole: "MAINTENANCE_STAFF",
     sourceRole: "PARCEL_STAFF",

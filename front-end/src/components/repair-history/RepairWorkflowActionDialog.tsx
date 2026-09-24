@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { workflowActorLabels } from "../../config/repairWorkflow";
-import { RepairJob, RepairWorkflowStage } from "../../Types/TypeRepairWorkflow";
+import { RepairJob, RepairWorkflowStage } from "../../types/TypeRepairWorkflow";
 
 interface RepairWorkflowActionDialogProps {
   job: RepairJob | null;

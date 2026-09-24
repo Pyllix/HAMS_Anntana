@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, PackageCheck, X } from "lucide-react";
-import type { UnrepairableReceipt } from "../../Types/TypeUnrepairableReceipt";
+import type { UnrepairableReceipt } from "../../types/TypeUnrepairableReceipt";
 import { confirmUnrepairableReceipt, getUnrepairableReceipt, receiptError } from "../../services/unrepairableReceiptService";
 import { receiptDate } from "../../services/unrepairableReceiptMapper";
 import { ReceiptAssetImage } from "./UnrepairableReceiptTable";

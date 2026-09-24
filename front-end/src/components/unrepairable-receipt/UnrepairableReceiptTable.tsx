@@ -1,5 +1,5 @@
 import { Package } from "lucide-react";
-import type { UnrepairableReceipt } from "../../Types/TypeUnrepairableReceipt";
+import type { UnrepairableReceipt } from "../../types/TypeUnrepairableReceipt";
 import { receiptDate } from "../../services/unrepairableReceiptMapper";
 
 export function ReceiptAssetImage({ src }: { src: string | null }) {

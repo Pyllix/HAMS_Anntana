@@ -3,7 +3,7 @@ import type {
   PartOrder,
   UpdatePurchasingInfoDto,
   PartOrderStatus,
-} from "../Types/TypePartOrder";
+} from "../types/TypePartOrder";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

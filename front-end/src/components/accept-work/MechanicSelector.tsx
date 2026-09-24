@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, X, Plus, Check } from "lucide-react";
-import type { Mechanic } from "../../Types/TypeAssessment";
+import type { Mechanic } from "../../types/TypeAssessment";
 
 export interface MechanicSelectorProps {
   usersList: Mechanic[];
@@ -52,7 +52,12 @@ export default function MechanicSelector({
   const getTaskCount = (user: Mechanic): number => {
     const u = user as any;
     return Number(
-      u.activeJobsCount ?? u.activeTasksCount ?? u.taskCount ?? u.pendingJobsCount ?? u.workload ?? 0
+      u.activeJobsCount ??
+        u.activeTasksCount ??
+        u.taskCount ??
+        u.pendingJobsCount ??
+        u.workload ??
+        0,
     );
   };
 
@@ -147,20 +152,20 @@ export default function MechanicSelector({
 
       {/* Dropdown ตัวเลือกรายชื่อ */}
       {!readOnly && isOpen && (
-       <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-slate-100 shadow-xl rounded-xl p-3 space-y-2">
+        <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-slate-100 shadow-xl rounded-xl p-3 space-y-2">
           {/* Header ค้นหา + ปุ่มปิด */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
-              type="text"
-              placeholder="ค้นหาชื่อช่าง, ตำแหน่ง หรือรหัสพนักงาน..."
-              value={mechanicSearch}
-              onChange={(e) => setMechanicSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-           <button
+                type="text"
+                placeholder="ค้นหาชื่อช่าง, ตำแหน่ง หรือรหัสพนักงาน..."
+                value={mechanicSearch}
+                onChange={(e) => setMechanicSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <button
               type="button"
               onClick={() => setIsOpen(false)}
               className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
@@ -219,11 +224,13 @@ export default function MechanicSelector({
                           taskCount === 0
                             ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                             : taskCount <= 2
-                            ? "bg-amber-50 text-amber-600 border border-amber-100"
-                            : "bg-rose-50 text-rose-600 border border-rose-100"
+                              ? "bg-amber-50 text-amber-600 border border-amber-100"
+                              : "bg-rose-50 text-rose-600 border border-rose-100"
                         }`}
                       >
-                        {taskCount === 0 ? "ว่าง 0 งาน" : `${taskCount} งานค้าง`}
+                        {taskCount === 0
+                          ? "ว่าง 0 งาน"
+                          : `${taskCount} งานค้าง`}
                       </span>
                     </div>
                   </div>

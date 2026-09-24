@@ -3,7 +3,7 @@ import type {
   BudgetType,
   CreateBudgetTypeDto,
   UpdateBudgetTypeDto,
-} from "../Types/TypeBudgetType";
+} from "../types/TypeBudgetType";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 

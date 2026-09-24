@@ -1,5 +1,5 @@
 import { Eye } from "lucide-react";
-import type { SpareApprovalRequest } from "../../Types/TypeSpareApproval";
+import type { SpareApprovalRequest } from "../../types/TypeSpareApproval";
 
 const dateTime = new Intl.DateTimeFormat("th-TH", {
   day: "2-digit",
