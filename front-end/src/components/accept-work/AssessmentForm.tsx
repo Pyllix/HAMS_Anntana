@@ -581,17 +581,19 @@ export default function AssessmentForm() {
       </div>
 
       {/* Main Grid Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch h-[calc(100vh-170px)] min-h-[500]">
-        {/* Left Side: Asset Details Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch h-[calc(100vh-170px)] min-h-[500px]">
+        {/* Left Side: Asset Details Card (ไม่มี Scrollbar) */}
         <div className="lg:col-span-5 flex flex-col h-full overflow-hidden">
-          <div className="h-full overflow-y-auto pr-1">
+          <div className="h-full">
             <AssetInfoCard jobData={jobDetail || selectedJob} />
           </div>
         </div>
 
-        {/* Right Side: Action Form */}
-        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4 flex flex-col justify-between">
-          <div className="space-y-4">
+        {/* Right Side: Action Form (มี Scrollbar ฝั่งเดียว) */}
+        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 flex flex-col justify-between overflow-hidden">
+          
+          {/* Locked Form Header Section */}
+          <div className="shrink-0 space-y-4 mb-4">
             {isReassessment && (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
                 <p className="font-bold">เจ้าหน้าที่พัสดุปฏิเสธการขอเบิกอะไหล่</p>
@@ -621,7 +623,7 @@ export default function AssessmentForm() {
             </div>
           </div>
 
-          {/* Scrollable Content Container */}
+          {/* Scrollable Content Container (มี Scrollbar ที่นี่ที่เดียว) */}
           <div className="overflow-y-auto pr-1.5 space-y-4 flex-1">
             {isAssignMode ? (
               /* ฟอร์มมอบหมายงานสำหรับหัวหน้าช่าง */
@@ -854,105 +856,87 @@ export default function AssessmentForm() {
                     {displayJobNo}
                   </span>
                 </div>
-                <div className="pt-1 font-semibold text-slate-800 flex items-start gap-1">
-                  <span className="text-slate-400 font-normal">ครุภัณฑ์:</span>
-                  <span>
-                    {selectedJob?.asset?.noid || jobDetail?.asset?.noid} ·{" "}
-                    {selectedJob?.asset?.name || jobDetail?.asset?.name}
-                  </span>
-                </div>
               </div>
 
-              <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-700">
-                  เหตุผลการยกเลิกใบแจ้งซ่อม{" "}
-                  <span className="text-rose-500">*</span>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  เหตุผลในการยกเลิก <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="กรอกเหตุผลที่ต้องการยกเลิกใบแจ้งซ่อมฉบับนี้..."
-                  className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 focus:outline-none placeholder:text-slate-400"
+                  placeholder="กรอกเหตุผลในการยกเลิกใบแจ้งซ่อม..."
+                  className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none transition-colors"
                 />
               </div>
+            </div>
 
-              {/* Dialog Footer */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={cancelMutation.isPending}
-                  onClick={() => {
-                    if (!cancelMutation.isPending) {
-                      cancelMutation.reset();
-                      setShowCancelDialog(false);
-                      setCancelReason("");
-                    }
-                  }}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="button"
-                  disabled={cancelMutation.isPending}
-                  onClick={() => {
-                    if (!cancelReason.trim()) {
-                      setNoticeModal({
-                        open: true,
-                        type: "error",
-                        title: "แจ้งเตือน",
-                        message: "กรุณาระบุเหตุผลการยกเลิกใบแจ้งซ่อม",
-                      });
-                      return;
-                    }
-                    cancelMutation.mutate(cancelReason.trim());
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {cancelMutation.isPending && (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  )}
-                  ยืนยันยกเลิกใบแจ้งซ่อม
-                </button>
-              </div>
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 bg-slate-50/50 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={cancelMutation.isPending}
+                onClick={() => {
+                  cancelMutation.reset();
+                  setShowCancelDialog(false);
+                  setCancelReason("");
+                }}
+                className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={!cancelReason.trim() || cancelMutation.isPending}
+                onClick={() => cancelMutation.mutate(cancelReason)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                {cancelMutation.isPending && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
+                ยืนยันยกเลิก
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Notification Modal */}
+      {/* Notice Modal */}
       {noticeModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-sm w-full p-6 text-center space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            onClick={() => {
+              setNoticeModal((prev) => ({ ...prev, open: false }));
+              if (noticeModal.onClose) noticeModal.onClose();
+            }}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-100 p-5 text-center animate-in fade-in zoom-in-95">
+            <div className="flex justify-center mb-3">
               {noticeModal.type === "success" ? (
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 className="w-7 h-7" />
+                <div className="p-3 bg-emerald-100 rounded-full text-emerald-600">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
-                  <AlertCircle className="w-7 h-7" />
+                <div className="p-3 bg-rose-100 rounded-full text-rose-600">
+                  <AlertCircle className="w-8 h-8" />
                 </div>
               )}
             </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-800">
-                {noticeModal.title}
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {noticeModal.message}
-              </p>
-            </div>
-
+            <h3 className="text-base font-bold text-slate-800 mb-1">
+              {noticeModal.title}
+            </h3>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              {noticeModal.message}
+            </p>
             <button
               type="button"
               onClick={() => {
                 setNoticeModal((prev) => ({ ...prev, open: false }));
                 if (noticeModal.onClose) noticeModal.onClose();
               }}
-              className={`w-full py-2.5 rounded-xl text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer ${
+              className={`w-full py-2.5 rounded-lg text-xs font-semibold text-white transition-colors cursor-pointer ${
                 noticeModal.type === "success"
                   ? "bg-emerald-600 hover:bg-emerald-700"
                   : "bg-rose-600 hover:bg-rose-700"

@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { tableFeatures, useTable } from "@tanstack/react-table";
+import {
+  tableFeatures,
+  useTable,
+  rowPaginationFeature,       
+  createPaginatedRowModel,    
+} from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,7 +44,11 @@ import {
   publishWorkflowNotification,
 } from "../../services/notificationService";
 
-const features = tableFeatures({});
+// เปิดใช้งาน Pagination Feature ใน tableFeatures ตามรูปแบบเดิม
+const features = tableFeatures({
+  rowPaginationFeature,
+  paginatedRowModel: createPaginatedRowModel(),
+});
 
 const THAI_MONTHS = [
   "ม.ค.",
@@ -108,19 +117,47 @@ function ActionBadge({ value }: { value?: RepairActionType | null }) {
 function StatusBadge({ job }: { job: RepairJob }) {
   const rejected = getWorkflowRejectionReason(job);
   if (rejected) {
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{job.actionType === "OUTSOURCE" ? "ปฏิเสธการส่งซ่อมภายนอก" : "ปฏิเสธการขอเบิกอะไหล่"}</span>;
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+        {job.actionType === "OUTSOURCE"
+          ? "ปฏิเสธการส่งซ่อมภายนอก"
+          : "ปฏิเสธการขอเบิกอะไหล่"}
+      </span>
+    );
   }
   if (job.actionType === "WITH_PARTS") {
     const approved = (job.workflowStep || 0) >= 5;
-    return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />{approved ? "อนุมัติแล้ว — รอช่างรับอะไหล่" : "รอเจ้าหน้าที่พัสดุอนุมัติ"}</span>;
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+          approved
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-amber-50 text-amber-700"
+        }`}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+        {approved ? "อนุมัติแล้ว — รอช่างรับอะไหล่" : "รอเจ้าหน้าที่พัสดุอนุมัติ"}
+      </span>
+    );
   }
   if (job.actionType === "OUTSOURCE") {
     const completedStep = job.workflowStep || 0;
     if (completedStep < 5) {
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />รอเจ้าหน้าที่พัสดุอนุมัติส่งซ่อมภายนอก</span>;
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+          รอเจ้าหน้าที่พัสดุอนุมัติส่งซ่อมภายนอก
+        </span>
+      );
     }
     if (completedStep === 5) {
-      return <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"><span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />อนุมัติแล้ว — อยู่ระหว่างส่งซ่อมภายนอก</span>;
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+          อนุมัติแล้ว — อยู่ระหว่างส่งซ่อมภายนอก
+        </span>
+      );
     }
   }
   const code = job.status?.statusCode || "IN_PROGRESS";
@@ -135,7 +172,8 @@ function StatusBadge({ job }: { job: RepairJob }) {
 }
 
 function getWorkflowRejectionReason(job: RepairJob): string | null {
-  if (job.actionType !== "WITH_PARTS" && job.actionType !== "OUTSOURCE") return null;
+  if (job.actionType !== "WITH_PARTS" && job.actionType !== "OUTSOURCE")
+    return null;
 
   const apiReason = job.rejectReason?.trim();
   if (job.isRejected) {
@@ -148,7 +186,6 @@ function getWorkflowRejectionReason(job: RepairJob): string | null {
       : "ไม่ระบุเหตุผล";
   }
 
-  // รองรับข้อมูลจาก backend รุ่นเดิมที่ยังไม่มี isRejected/rejectReason
   const legacyNote = job.steps?.find((step) =>
     step.note?.startsWith("[ไม่อนุมัติ]"),
   )?.note;
@@ -328,7 +365,7 @@ export default function RepairHistoryTable({
         id: "jobNo",
         header: "รหัสงาน",
         cell: (info) => (
-          <span className="font-mono text-xs font-bold text-slate-900">
+          <span className="font-mono text-xs font-bold text-slate-900 whitespace-nowrap">
             {info.row.original.jobNo}
           </span>
         ),
@@ -339,11 +376,11 @@ export default function RepairHistoryTable({
         cell: (info) => {
           const job = info.row.original;
           return (
-            <div className="min-w-[220px]">
+            <div className="min-w-[200px]">
               <p className="text-sm font-semibold text-slate-900">
                 {job.asset?.assetName || "-"}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">{job.symptom}</p>
+              <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{job.symptom}</p>
               <p className="mt-0.5 font-mono text-[11px] text-slate-400">
                 {job.asset?.assetCode || "-"}
               </p>
@@ -402,129 +439,134 @@ export default function RepairHistoryTable({
                   ?.mechanicId,
               ),
           );
-          const canUpdateStage = !rejectionReason && nextStage?.actor === "MAINTENANCE";
+          const canUpdateStage =
+            !rejectionReason && nextStage?.actor === "MAINTENANCE";
           const progress = getWorkflowProgress(job);
 
           return (
-            <div className="grid min-w-[270px] grid-cols-[40px_218px] items-center justify-end gap-3">
+            <div className="flex items-center justify-start gap-2.5 min-w-[240px]">
               <button
                 type="button"
                 title="ดูรายละเอียดประวัติงาน"
                 onClick={() => openDetail(job)}
-                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
               >
                 <Eye className="h-4 w-4" />
               </button>
-              {rejectionReason && (
-                <div className="flex w-full flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRejectionTarget({
-                        jobNo: job.jobNo,
-                        reason: rejectionReason,
-                        actionType: job.actionType,
-                      })
-                    }
-                    className="flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                  >
-                    ดูเหตุผลการปฏิเสธ
-                  </button>
-                  {canReassess && (
+              <div className="flex-1">
+                {rejectionReason && (
+                  <div className="flex flex-col gap-1.5">
                     <button
                       type="button"
                       onClick={() =>
-                        openAssessmentForm(
-                          toReassessmentListItem(job, rejectionReason),
-                        )
+                        setRejectionTarget({
+                          jobNo: job.jobNo,
+                          reason: rejectionReason,
+                          actionType: job.actionType,
+                        })
                       }
-                      className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+                      className="flex h-8 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                     >
-                      <ClipboardEdit className="h-3.5 w-3.5" />
-                      ประเมินใหม่
+                      ดูเหตุผลการปฏิเสธ
                     </button>
-                  )}
-                </div>
-              )}
-              {nextStage && !rejectionReason && canUpdateStage && (
-                <div className="w-full text-center">
-                  <button
-                    type="button"
-                    disabled={updateWorkflow.isLoading}
-                    onClick={() => {
-                      if (
-                        job.actionType === "UNREPAIRABLE" &&
-                        nextStage.stepNumber === 5
-                      ) {
-                        setHandoverJobId(job.jobId);
-                      } else {
-                        setWorkflowTarget({ job, stage: nextStage });
-                      }
-                    }}
-                    className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    <ClipboardCheck className="h-3.5 w-3.5" />
-                    {nextStage.actionLabel}
-                  </button>
-                  <p className="mt-1 text-[10px] text-slate-400">
-                    เสร็จแล้ว {progress.completed}/{progress.total} ขั้นตอน
-                  </p>
-                </div>
-              )}
-              {nextStage && !rejectionReason && !canUpdateStage && (
-                <div className="w-full text-center">
-                  <span className="flex min-h-11 w-full items-center justify-center rounded-lg bg-amber-50 px-3 py-2 text-center text-xs font-semibold leading-4 text-amber-700">
-                    {pendingActorLabel(nextStage)}
+                    {canReassess && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openAssessmentForm(
+                            toReassessmentListItem(job, rejectionReason),
+                          )
+                        }
+                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+                      >
+                        <ClipboardEdit className="h-3.5 w-3.5" />
+                        ประเมินใหม่
+                      </button>
+                    )}
+                  </div>
+                )}
+                {nextStage && !rejectionReason && canUpdateStage && (
+                  <div className="w-full text-center">
+                    <button
+                      type="button"
+                      disabled={updateWorkflow.isLoading}
+                      onClick={() => {
+                        if (
+                          job.actionType === "UNREPAIRABLE" &&
+                          nextStage.stepNumber === 5
+                        ) {
+                          setHandoverJobId(job.jobId);
+                        } else {
+                          setWorkflowTarget({ job, stage: nextStage });
+                        }
+                      }}
+                      className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      {nextStage.actionLabel}
+                    </button>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      เสร็จแล้ว {progress.completed}/{progress.total} ขั้นตอน
+                    </p>
+                  </div>
+                )}
+                {nextStage && !rejectionReason && !canUpdateStage && (
+                  <div className="w-full text-center">
+                    <span className="flex min-h-[36px] w-full items-center justify-center rounded-lg bg-amber-50 px-2 py-1.5 text-center text-xs font-semibold leading-4 text-amber-700">
+                      {pendingActorLabel(nextStage)}
+                    </span>
+                    <p className="mt-1 text-center text-[10px] leading-3 text-slate-400">
+                      {pendingActorHint(nextStage)}
+                    </p>
+                  </div>
+                )}
+                {isWaitingDelivery && (
+                  <span className="flex h-8 w-full items-center justify-center whitespace-nowrap rounded-lg bg-cyan-50 px-2.5 text-xs font-semibold text-cyan-700">
+                    รอหน่วยงานตรวจรับ
                   </span>
-                  <p className="mt-1 text-center text-[10px] leading-4 text-slate-400">
-                    {pendingActorHint(nextStage)}
-                  </p>
-                </div>
-              )}
-              {isWaitingDelivery && (
-                <span className="flex h-9 w-full items-center justify-center whitespace-nowrap rounded-lg bg-cyan-50 px-3 text-xs font-semibold text-cyan-700">
-                  รอหน่วยงานตรวจรับ
-                </span>
-              )}
-              {isCompleted && (
-                <span className="flex h-9 w-full items-center justify-center whitespace-nowrap rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-600">
-                  ปิดงานแล้ว
-                </span>
-              )}
-              {isCancelled && (
-                <span className="flex h-9 w-full items-center justify-center whitespace-nowrap rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-500">
-                  ยกเลิกแล้ว
-                </span>
-              )}
+                )}
+                {isCompleted && (
+                  <span className="flex h-8 w-full items-center justify-center whitespace-nowrap rounded-lg bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-600">
+                    ปิดงานแล้ว
+                  </span>
+                )}
+                {isCancelled && (
+                  <span className="flex h-8 w-full items-center justify-center whitespace-nowrap rounded-lg bg-slate-100 px-2.5 text-xs font-semibold text-slate-500">
+                    ยกเลิกแล้ว
+                  </span>
+                )}
+              </div>
             </div>
           );
         },
       },
     ],
-    [
-      openAssessmentForm,
-      openDetail,
-      updateWorkflow.isLoading,
-      user,
-    ],
+    [openAssessmentForm, openDetail, updateWorkflow.isLoading, user],
   );
 
   const table = useTable({
-    key: "repair-history-table",
+    key: "confirm-repair-table",
     features,
     columns,
-    data: paginatedData,
+    data: filteredData,
+    initialState: {
+      pagination: {
+        pageIndex: 0,
+        pageSize: 10,
+      },
+    },
   });
 
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/70 text-xs font-bold text-slate-700">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mt-4">
+      {/* Scrollable Container สำหรับตัวตาราง */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-left border-collapse text-sm text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-xs">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-slate-200">
+              <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-4 py-3">
+                  <th key={header.id} className="px-4 py-3.5 whitespace-nowrap">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -533,12 +575,12 @@ export default function RepairHistoryTable({
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
+          <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-slate-400"
+                  className="py-12 text-center text-slate-400"
                 >
                   กำลังโหลดรายการงานซ่อม...
                 </td>
@@ -547,7 +589,7 @@ export default function RepairHistoryTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-rose-500"
+                  className="py-12 text-center text-rose-500 text-sm"
                 >
                   ไม่สามารถโหลดรายการงานซ่อมได้
                 </td>
@@ -556,7 +598,7 @@ export default function RepairHistoryTable({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-sm text-slate-400"
+                  className="py-12 text-center text-slate-400"
                 >
                   ไม่พบรายการงานซ่อมตามเงื่อนไขที่เลือก
                 </td>
@@ -565,10 +607,13 @@ export default function RepairHistoryTable({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="transition-colors hover:bg-slate-50/70"
+                  className="hover:bg-slate-50/80 transition-colors"
                 >
                   {row.getAllCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td
+                      key={cell.id}
+                      className="px-4 py-3.5 whitespace-nowrap align-middle"
+                    >
                       <table.FlexRender cell={cell} />
                     </td>
                   ))}
@@ -579,47 +624,83 @@ export default function RepairHistoryTable({
         </table>
       </div>
 
-      <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row">
-        <span>
-          แสดง {totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1} ถึง{" "}
-          {Math.min(safePage * pageSize, totalItems)} จาก {totalItems} รายการ
-        </span>
-        <div className="flex items-center gap-1.5">
+      {/* Pagination - ใช้โครงสร้างเดียวกับ AvailableAssetsTable */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-white border-t border-slate-200">
+        <div className="text-xs text-slate-500 hidden sm:block">
+          หน้า{" "}
+          <span className="font-semibold text-slate-700">
+            {table.state.pagination.pageIndex + 1}
+          </span>{" "}
+          จาก{" "}
+          <span className="font-semibold text-slate-700">
+            {table.getPageCount() || 1}
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-1.5 ml-auto sm:ml-0">
           <button
             type="button"
-            aria-label="หน้าก่อนหน้า"
-            disabled={safePage <= 1}
-            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
           </button>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-            (page) => (
+
+          {Array.from({ length: table.getPageCount() }, (_, index) => {
+            const pageNumber = index + 1;
+            const currentPage = table.state.pagination.pageIndex;
+            const isCurrentPage = currentPage === index;
+
+            if (index < currentPage - 2 || index > currentPage + 2) return null;
+
+            return (
               <button
-                key={page}
+                key={pageNumber}
                 type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
-                  safePage === page
-                    ? "bg-emerald-600 text-white"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                onClick={() => table.setPageIndex(index)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                  isCurrentPage
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {page}
+                {pageNumber}
               </button>
-            ),
-          )}
+            );
+          })}
+
           <button
             type="button"
-            aria-label="หน้าถัดไป"
-            disabled={safePage >= totalPages}
-            onClick={() =>
-              setCurrentPage((page) => Math.min(totalPages, page + 1))
-            }
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
-            <ChevronRight className="h-4 w-4" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7"
+              />
+            </svg>
           </button>
         </div>
       </div>
@@ -660,7 +741,14 @@ export default function RepairHistoryTable({
           }}
         />
       )}
-      {rejectionTarget && <SpareRejectionReasonDialog jobNo={rejectionTarget.jobNo} reason={rejectionTarget.reason} actionType={rejectionTarget.actionType} onClose={() => setRejectionTarget(null)} />}
+      {rejectionTarget && (
+        <SpareRejectionReasonDialog
+          jobNo={rejectionTarget.jobNo}
+          reason={rejectionTarget.reason}
+          actionType={rejectionTarget.actionType}
+          onClose={() => setRejectionTarget(null)}
+        />
+      )}
     </div>
   );
 }
