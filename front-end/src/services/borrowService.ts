@@ -126,8 +126,12 @@ export interface BorrowHistory {
   request_source: string;
   delivery_method: string;
   createdAt: string;
+  isOverdue?: boolean;
+  remainingDays?: number;
+  overdueDays?: number;
   asset: {
     id: string;
+    noid?: string;
     name: string;
     model: string;
   };
@@ -279,6 +283,7 @@ export async function returnAsset(
 export async function getAllBorrowHistory(params?: {
   limit?: number;
   page?: number;
+  sectionId?: string; // กรองตามแผนกผู้ยืม (DEPARTMENT_STAFF ถูกจำกัดแผนกโดย API อยู่แล้ว)
 }): Promise<BorrowHistory[]> {
   const token = localStorage.getItem("token");
 

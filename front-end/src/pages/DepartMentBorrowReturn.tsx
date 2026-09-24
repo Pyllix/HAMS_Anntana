@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getAssetTypes } from "../services/assetService";
 import AvailableAssetsTable from "../components/borrow-return/AvailableAssetsTable";
+import DepartmentBorrowingsTable from "../components/borrow-return/DepartmentBorrowingsTable";
 import SelfBorrowModal from "../components/borrow-return/SelfBorrowModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useSelfBorrowModalStore } from "../stores/useSelfBorrowModalStore";
@@ -19,6 +20,11 @@ export default function DepartMentBorrowReturn() {
 
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* ครุภัณฑ์ที่แผนกยืมอยู่ และใครเป็นผู้ยืม */}
+      <div className="shrink-0">
+        <DepartmentBorrowingsTable />
+      </div>
+
       {/* Search & Filter Bar */}
       <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
         {/* กรอกคำค้นหา */}
