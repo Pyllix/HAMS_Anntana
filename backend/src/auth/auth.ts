@@ -62,6 +62,9 @@ export const auth = betterAuth({
     'http://localhost:3001',
     'http://localhost:5173',
   ],
+  // Block public self-signup; accounts are created only by ADMIN via POST /users.
+  // See docs/auth-api-contract.md §10 and TASK.md item 15.
+  disabledPaths: ['/sign-up/email'],
   // Map better-auth's built-in user fields to our schema column names
   user: {
     // Redirect better-auth's 'name' field to our 'firstname' column
