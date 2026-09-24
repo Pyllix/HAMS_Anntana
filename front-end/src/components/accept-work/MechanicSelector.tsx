@@ -106,7 +106,7 @@ export default function MechanicSelector({
       </label>
 
       {/* Chip ผู้รับผิดชอบงานที่เลือก */}
-      <div className="min-h-10.5 p-1.5 border border-slate-200 focus-within:border-emerald-500 rounded-xl bg-white flex flex-wrap items-center gap-1.5 transition-colors">
+      <div className="min-h-10.5 p-1.5 border border-slate-200 focus-within:border-blue-500 rounded-xl bg-white flex flex-wrap items-center gap-1.5 transition-colors">
         {selectedMechanics.map((m) => {
           const mId = getUserId(m);
           return (
@@ -137,7 +137,7 @@ export default function MechanicSelector({
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="inline-flex items-center gap-1 text-xs text-slate-500 border border-dashed border-slate-300 rounded-full px-3 py-1 hover:border-emerald-500 hover:text-emerald-600 transition-colors cursor-pointer ml-auto"
+            className="inline-flex items-center gap-1 text-xs text-slate-500 border border-dashed border-slate-300 rounded-full px-3 py-1 hover:border-blue-500 hover:text-blue-600 transition-colors cursor-pointer ml-auto"
           >
             <Plus className="h-3.5 w-3.5" />
             เพิ่มผู้รับผิดชอบ...
@@ -147,16 +147,27 @@ export default function MechanicSelector({
 
       {/* Dropdown ตัวเลือกรายชื่อ */}
       {!readOnly && isOpen && (
-        <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-slate-100 shadow-xl rounded-xl p-3 space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
+       <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-slate-100 shadow-xl rounded-xl p-3 space-y-2">
+          {/* Header ค้นหา + ปุ่มปิด */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
               type="text"
               placeholder="ค้นหาชื่อช่าง, ตำแหน่ง หรือรหัสพนักงาน..."
               value={mechanicSearch}
               onChange={(e) => setMechanicSearch(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
             />
+          </div>
+           <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
+              title="ปิดหน้าต่างเลือก"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">

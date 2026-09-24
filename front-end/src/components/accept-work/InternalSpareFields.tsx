@@ -1,18 +1,14 @@
 import { useState } from "react";
-import { Search, Plus, Trash2, Package, Loader2 } from "lucide-react";
+import { Search, Plus, Trash2, Package, Loader2, Box, ShoppingCart } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { SparePart } from "../../Types/TypeAssessment";
 import { getSpareParts } from "../../services/assessmentService";
 
-export interface SelectedSpareItem extends SparePart {
+export interface SelectedSpareItem extends Partial<SparePart> {
+  sparepartId: number; // ต้องเป็น positive integer เสมอ
+  name: string;
   quantity: number;
   stockType: "INTERNAL" | "EXTERNAL";
-}
-
-export interface SpareItem {
-  id: string | number;
-  quantity: number;
-  price?: number;
 }
 
 interface InternalSpareFieldsProps {
@@ -40,49 +36,55 @@ export default function InternalSpareFields({
   const availableSpares: SparePart[] = Array.isArray(rawSpares)
     ? rawSpares
     : (rawSpares as unknown as { data: SparePart[] })?.data &&
-        Array.isArray((rawSpares as unknown as { data: SparePart[] }).data)
+      Array.isArray((rawSpares as unknown as { data: SparePart[] }).data)
       ? (rawSpares as unknown as { data: SparePart[] }).data
       : [];
 
-  // ฟังก์ชันเพิ่มรายการอะไหล่
+  // เพิ่มรายการอะไหล่
   const handleAddSpare = (item: SparePart) => {
-    const exists = selectedSpares.some((s) => String(s.id) === String(item.id));
+    const numericId = Number(item.id);
+    if (!numericId || numericId <= 0) return;
+
+    const exists = selectedSpares.some((s) => s.sparepartId === numericId);
+
     if (!exists) {
+      const isOutOfStock = (item.qtyInStock ?? 0) <= 0;
       setSelectedSpares((prev) => [
         ...prev,
-        { ...item, quantity: 1, stockType: "INTERNAL" },
+        {
+          ...item,
+          sparepartId: numericId,
+          quantity: 1,
+          stockType: isOutOfStock ? "EXTERNAL" : "INTERNAL",
+        },
       ]);
+      setSearchTerm("");
     }
   };
 
-  // ฟังก์ชันลบรายการอะไหล่
-  const handleRemoveSpare = (id: string | number) => {
-    setSelectedSpares((prev) =>
-      prev.filter((s) => String(s.id) !== String(id)),
-    );
+  const handleRemoveSpare = (indexToRemove: number) => {
+    setSelectedSpares((prev) => prev.filter((_, index) => index !== indexToRemove));
   };
 
-  // ฟังก์ชันเปลี่ยนจำนวนที่เบิก
-  const handleQuantityChange = (id: string | number, qty: number) => {
+  const handleQuantityChange = (indexToUpdate: number, qty: number) => {
     setSelectedSpares((prev) =>
-      prev.map((s) =>
-        String(s.id) === String(id) ? { ...s, quantity: qty } : s,
-      ),
+      prev.map((item, index) =>
+        index === indexToUpdate ? { ...item, quantity: qty } : item
+      )
     );
   };
 
   const handleStockTypeChange = (
-    id: string | number,
-    stockType: "INTERNAL" | "EXTERNAL",
+    indexToUpdate: number,
+    stockType: "INTERNAL" | "EXTERNAL"
   ) => {
     setSelectedSpares((prev) =>
-      prev.map((item) =>
-        String(item.id) === String(id) ? { ...item, stockType } : item,
-      ),
+      prev.map((item, index) =>
+        index === indexToUpdate ? { ...item, stockType } : item
+      )
     );
   };
 
-  // กรองอะไหล่ตามคำค้นหา
   const filteredStock = availableSpares.filter((item) => {
     const search = searchTerm.toLowerCase();
     const nameStr = (item.name || "").toLowerCase();
@@ -95,15 +97,15 @@ export default function InternalSpareFields({
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
           <Package className="w-4 h-4 text-emerald-600" />
-          รายการอะไหล่ที่ขอเบิก{" "}
-          <span className="text-rose-500">*</span>
+          รายการอะไหล่ที่ขอเบิก <span className="text-rose-500">*</span>
         </label>
+
         <span className="text-[11px] text-slate-400">
           เลือกแล้ว {selectedSpares.length} รายการ
         </span>
       </div>
 
-      {/* Dropdown เลือกอะไหล่ */}
+      {/* Dropdown ค้นหาและเลือกอะไหล่ */}
       <div className="relative">
         <button
           type="button"
@@ -111,7 +113,7 @@ export default function InternalSpareFields({
           className="w-full bg-white border border-slate-200 hover:border-emerald-500 rounded-lg px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer"
         >
           <span className="text-slate-500 font-medium">
-            + คลิกเพื่อเลือกอะไหล่...
+            + คลิกเพื่อเลือกรายการอะไหล่...
           </span>
           <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-md">
             ในคลัง / ภายนอก
@@ -138,15 +140,18 @@ export default function InternalSpareFields({
                   กำลังโหลดรายการอะไหล่...
                 </div>
               ) : filteredStock.length === 0 ? (
-                <div className="p-3 text-center text-xs text-slate-400">
-                  ไม่พบรายการอะไหล่ในคลัง
+                <div className="p-4 text-center text-xs text-slate-400">
+                  ไม่พบรายการอะไหล่ตรงกับคำค้นหา
                 </div>
               ) : (
                 filteredStock.map((item) => {
+                  const itemId = Number(item.id);
                   const isAdded = selectedSpares.some(
-                    (s) => String(s.id) === String(item.id),
+                    (s) => s.sparepartId === itemId
                   );
                   const itemPrice = Number(item.price ?? 0);
+                  const stockQty = item.qtyInStock ?? 0;
+                  const isOutOfStock = stockQty <= 0;
 
                   return (
                     <div
@@ -161,8 +166,15 @@ export default function InternalSpareFields({
                           {item.code && <span>รหัส: {item.code}</span>}
                         </div>
                         <div className="text-[11px] font-medium flex items-center gap-3 pt-0.5">
-                          <span className="text-emerald-600">
-                            คลัง: {item.qtyInStock ?? 0} {item.unit || "ชิ้น"}
+                          <span
+                            className={
+                              isOutOfStock
+                                ? "text-amber-600 font-semibold"
+                                : "text-emerald-600"
+                            }
+                          >
+                            คงเหลือ: {stockQty} {item.unit || "ชิ้น"}
+                            {isOutOfStock && " (สินค้าหมด)"}
                           </span>
                           <span className="text-slate-600 font-mono">
                             {itemPrice.toFixed(2)} ฿
@@ -181,7 +193,7 @@ export default function InternalSpareFields({
                         }`}
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        {isAdded ? "เลือกแล้ว" : "เบิกอะไหล่"}
+                        {isAdded ? "เลือกแล้ว" : "เพิ่มรายการ"}
                       </button>
                     </div>
                   );
@@ -202,89 +214,124 @@ export default function InternalSpareFields({
         )}
       </div>
 
-      {/* ตารางอะไหล่ที่เลือกไว้ */}
+      {/* ตารางแสดงรายการที่เลือก */}
       {selectedSpares.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+            <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold">
               <tr>
-                <th className="p-2.5">รายการอะไหล่</th>
-                <th className="p-2.5 text-center w-24">คงเหลือ</th>
-                <th className="p-2.5 text-center w-28">จำนวนที่เบิก</th>
-                <th className="p-2.5 text-center w-32">แหล่งอะไหล่</th>
-                <th className="p-2.5 text-right w-24">ราคา/หน่วย</th>
-                <th className="p-2.5 text-center w-12"></th>
+                <th className="p-3">รายการอะไหล่</th>
+                <th className="p-3 text-center w-36">แหล่งอะไหล่</th>
+                <th className="p-3 text-center w-28">คงเหลือคลัง</th>
+                <th className="p-3 text-center w-28">จำนวนที่เบิก</th>
+                <th className="p-3 text-right w-28">ราคา/หน่วย</th>
+                <th className="p-3 text-right w-28">ราคารวม</th>
+                <th className="p-3 text-center w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {selectedSpares.map((item) => {
-                const matchedStockItem = availableSpares.find(
-                  (s) => String(s.id) === String(item.id),
-                );
-
-                const name =
-                  item.name || matchedStockItem?.name || "ไม่ระบุชื่ออะไหล่";
-                const code = item.code || matchedStockItem?.code;
-                const stock =
-                  item.qtyInStock ?? matchedStockItem?.qtyInStock ?? 0;
-                const priceNum = Number(
-                  item.price ?? matchedStockItem?.price ?? 0,
-                );
-
-                const unit = item.unit || matchedStockItem?.unit || "ชิ้น";
+              {selectedSpares.map((item, index) => {
+                const priceNum = Number(item.price ?? 0);
+                const stockQty = item.qtyInStock ?? 0;
                 const qty = item.quantity || 1;
+                const totalPrice = priceNum * qty;
+                const isOverStock = item.stockType === "INTERNAL" && qty > stockQty;
 
                 return (
-                  <tr key={item.id} className="hover:bg-slate-50/50">
-                    <td className="p-2.5">
-                      <div className="font-semibold text-slate-800">{name}</div>
-                      {code && (
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {code}
+                  <tr key={item.sparepartId} className="hover:bg-slate-50/50">
+                    {/* รายการอะไหล่ */}
+                    <td className="p-3 align-middle">
+                      <div className="font-semibold text-slate-800 leading-snug">
+                        {item.name}
+                      </div>
+                      {item.code && (
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {item.code}
                         </div>
                       )}
                     </td>
-                    <td className="p-2.5 text-center text-emerald-600 font-medium">
-                      {stock} {unit}
+
+                    {/* แหล่งอะไหล่ */}
+                    <td className="p-3 text-center align-middle">
+                      <div className="relative inline-block w-full max-w-[130]">
+                        <select
+                          value={item.stockType}
+                          onChange={(e) =>
+                            handleStockTypeChange(
+                              index,
+                              e.target.value as "INTERNAL" | "EXTERNAL"
+                            )
+                          }
+                          className={`w-full appearance-none rounded-full px-7 py-1.5 text-xs font-medium border focus:outline-none cursor-pointer transition-colors ${
+                            item.stockType === "INTERNAL"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300"
+                              : "bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-300"
+                          }`}
+                        >
+                          <option value="INTERNAL">ในคลัง</option>
+                          <option value="EXTERNAL">จัดหาภายนอก</option>
+                        </select>
+                        <div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500">
+                          {item.stockType === "INTERNAL" ? (
+                            <Box className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
+                          )}
+                        </div>
+                        <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                          ▼
+                        </div>
+                      </div>
                     </td>
-                    <td className="p-2.5 text-center">
-                      <input
-                        type="number"
-                        min={1}
-                        max={item.stockType === "INTERNAL" ? stock || undefined : undefined}
-                        value={qty}
-                        onChange={(e) =>
-                          handleQuantityChange(
-                            item.id,
-                            parseInt(e.target.value) || 1,
-                          )
-                        }
-                        className="w-16 border border-slate-200 rounded-md py-1 px-2 text-center text-xs focus:outline-none focus:border-emerald-500"
-                      />
+
+                    {/* คงเหลือคลัง */}
+                    <td className="p-3 text-center align-middle font-medium text-slate-600">
+                      {stockQty} {item.unit || "ชิ้น"}
                     </td>
-                    <td className="p-2.5 text-center">
-                      <select
-                        value={item.stockType || "INTERNAL"}
-                        onChange={(event) =>
-                          handleStockTypeChange(
-                            item.id,
-                            event.target.value as "INTERNAL" | "EXTERNAL",
-                          )
-                        }
-                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-emerald-500 focus:outline-none"
-                      >
-                        <option value="INTERNAL">ในคลัง</option>
-                        <option value="EXTERNAL">จัดหาภายนอก</option>
-                      </select>
+
+                    {/* จำนวนที่เบิก */}
+                    <td className="p-3 text-center align-middle">
+                      <div className="flex flex-col items-center">
+                        <input
+                          type="number"
+                          min={1}
+                          value={qty}
+                          onChange={(e) =>
+                            handleQuantityChange(
+                              index,
+                              parseInt(e.target.value) || 1
+                            )
+                          }
+                          className={`w-16 rounded-lg py-1 px-2 text-center text-xs font-semibold border focus:outline-none transition-colors ${
+                            isOverStock
+                              ? "border-rose-400 bg-rose-50 text-rose-600 focus:border-rose-500"
+                              : "border-emerald-500 bg-white text-slate-700 focus:border-emerald-600"
+                          }`}
+                        />
+                        {isOverStock && (
+                          <span className="text-[10px] font-bold text-rose-500 mt-0.5">
+                            เกินสต็อก!
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="p-2.5 text-right font-mono text-slate-600">
+
+                    {/* ราคา/หน่วย */}
+                    <td className="p-3 text-right align-middle font-mono text-slate-600">
                       {priceNum.toFixed(2)} ฿
                     </td>
-                    <td className="p-2.5 text-center">
+
+                    {/* ราคารวม */}
+                    <td className="p-3 text-right align-middle font-mono font-semibold text-slate-700">
+                      {totalPrice.toFixed(2)} ฿
+                    </td>
+
+                    {/* ปุ่มลบ */}
+                    <td className="p-3 text-center align-middle">
                       <button
                         type="button"
-                        onClick={() => handleRemoveSpare(item.id)}
-                        className="text-slate-400 hover:text-rose-500 p-1 rounded-md transition-colors cursor-pointer"
+                        onClick={() => handleRemoveSpare(index)}
+                        className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

@@ -1,4 +1,4 @@
-import { FileText, History } from "lucide-react";
+import { FileText, Eye } from "lucide-react";
 import { useAssessmentStore } from "../../stores/useAssessmentModalStore";
 import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
 import EquipmentDetailModal from "../../components/equipment-stock/EquipmentDetailModal";
@@ -35,7 +35,7 @@ export default function AssetInfoCard({
         return "บำรุงรักษาตามรอบ (Maintenance)";
       }
       if (upper === "CORRECTIVE" || upper === "REPAIR") {
-        return "แจ้งซ่อมทั่วไป";
+        return "แจ้งซ่อมครุภัณฑ์ชำรุด (Repair)";
       }
       return rawReportType;
     }
@@ -109,8 +109,8 @@ export default function AssetInfoCard({
             disabled={!asset}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-xs border border-emerald-200/60 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <History className="w-3.5 h-3.5 text-emerald-600" />
-            ดูประวัติการซ่อม
+            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+            ประวัติการซ่อม
           </button>
         </div>
 
