@@ -13,6 +13,7 @@ import {
   type BorrowHistory,
 } from "../../services/borrowService";
 import { useAuthStore } from "../../stores/authStore";
+import { useRequestReturnModalStore } from "../../stores/useRequestReturnModalStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -148,6 +149,48 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
           {status?.name || "-"}
         </span>
       );
+    },
+  },
+  {
+    id: "actions",
+    header: "จัดการ",
+    cell: (info) => {
+      const row = info.row.original;
+      const code = row.borrowStatus?.code;
+
+      if (code === "BORROWED") {
+        return (
+          <button
+            type="button"
+            onClick={() => useRequestReturnModalStore.getState().openForm(row)}
+            className={`w-28 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors ${
+              row.isOverdue
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            }`}
+          >
+            แจ้งคืน
+          </button>
+        );
+      }
+
+      if (code === "PENDING_RETURN" || code === "IN_PICKUP") {
+        return (
+          <span className="inline-flex w-28 justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-400">
+            รอเจ้าหน้าที่รับคืน
+          </span>
+        );
+      }
+
+      if (code === "PENDING_APPROVE" || code === "APPROVED") {
+        return (
+          <span className="inline-flex w-28 justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-500">
+            รอดำเนินการ
+          </span>
+        );
+      }
+
+      return null;
     },
   },
 ];

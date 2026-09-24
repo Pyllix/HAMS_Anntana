@@ -226,6 +226,25 @@ export async function claimPickup(id: string): Promise<ApproveBorrow> {
   return res.data;
 }
 
+export interface RequestReturnReq {
+  pickupLocation?: string;
+  remark?: string;
+}
+
+// ใช้ให้แผนกแจ้งคืน / เรียกเจ้าหน้าที่มารับครุภัณฑ์ (BORROWED -> PENDING_RETURN)
+export async function requestReturn(
+  id: string,
+  data: RequestReturnReq,
+): Promise<ApproveBorrow> {
+  const token = localStorage.getItem("token");
+  const res = await axios.patch(
+    `https://hams-anntana.onrender.com/borrowings/${id}/request-return`,
+    data,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return res.data;
+}
+
 export interface CompleteReturnReq {
   returnCondition: "Normal" | "Damage";
   returnRemark?: string;

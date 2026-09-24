@@ -4,14 +4,17 @@ import { useState } from "react";
 import { getAssetTypes } from "../services/assetService";
 import AvailableAssetsTable from "../components/borrow-return/AvailableAssetsTable";
 import DepartmentBorrowingsTable from "../components/borrow-return/DepartmentBorrowingsTable";
+import RequestReturnModal from "../components/borrow-return/RequestReturnModal";
 import SelfBorrowModal from "../components/borrow-return/SelfBorrowModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
+import { useRequestReturnModalStore } from "../stores/useRequestReturnModalStore";
 import { useSelfBorrowModalStore } from "../stores/useSelfBorrowModalStore";
 
 export default function DepartMentBorrowReturn() {
   const [inputSearch, setInputSearch] = useState("");
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useSelfBorrowModalStore();
+  const isRequestReturnOpen = useRequestReturnModalStore((s) => s.isFormOpen);
 
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
@@ -70,6 +73,7 @@ export default function DepartMentBorrowReturn() {
 
       {/* Modal */}
       {isFormOpen && <SelfBorrowModal />}
+      {isRequestReturnOpen && <RequestReturnModal />}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />
