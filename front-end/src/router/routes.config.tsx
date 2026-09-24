@@ -182,7 +182,6 @@ export const APP_ROUTE: AppRote[] = [
       ROLES.DEPARTMENT_STAFF,
       ROLES.MANAGER,
       ROLES.MAINTENANCE_STAFF,
-      ROLES.MAINTENANCE_HEAD,
       ROLES.PARCEL_STAFF,
     ],
     showInNav: true,
