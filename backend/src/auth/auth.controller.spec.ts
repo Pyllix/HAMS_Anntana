@@ -7,6 +7,7 @@ import {
 import type { Request } from 'express';
 import type { Session as BetterAuthSession } from 'better-auth/types';
 import { AuthController } from './auth.controller';
+import { TwoFactorService } from './two-factor.service';
 import { auth } from './auth';
 
 // ─── Mock Better Auth ────────────────────────────────────────────────────────
@@ -37,9 +38,23 @@ describe('AuthController', () => {
     },
   } as unknown as Request;
 
+  const mockTwoFactorService = {
+    requiresTwoFactor: jest.fn(),
+    hasCompletedEnrollment: jest.fn(),
+    generateSecret: jest.fn(),
+    verifyAndEnroll: jest.fn(),
+    confirmBackupCodesSaved: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
+      providers: [
+        {
+          provide: TwoFactorService,
+          useValue: mockTwoFactorService,
+        },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
@@ -229,7 +244,14 @@ describe('AuthController', () => {
         userId: 'user-uuid-1',
       };
 
-      const result = controller.getSession(session);
+      const mockReqWithRes = {
+        ...mockRequest,
+        res: {
+          setHeader: jest.fn(),
+        },
+      } as unknown as Request;
+
+      const result = controller.getSession(session, mockReqWithRes);
 
       expect(result).toEqual({
         session: {
