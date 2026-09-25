@@ -98,8 +98,9 @@ describe('TwoFactorService', () => {
 
       await service.verifyAndEnroll(userId, secret, validToken);
 
-      const isValid = await service.verifyToken(userId, validToken);
-      expect(isValid).toBe(true);
+      const result = await service.verifyToken(userId, validToken);
+      expect(result.success).toBe(true);
+      expect(result.usedRecoveryCode).toBeUndefined();
     });
 
     it('should reject an invalid TOTP token', async () => {
@@ -111,13 +112,13 @@ describe('TwoFactorService', () => {
 
       await service.verifyAndEnroll(userId, secret, validToken);
 
-      const isValid = await service.verifyToken(userId, '000000');
-      expect(isValid).toBe(false);
+      const result = await service.verifyToken(userId, '000000');
+      expect(result.success).toBe(false);
     });
 
     it('should return false for non-enrolled user', async () => {
-      const isValid = await service.verifyToken('non-existent-user', '123456');
-      expect(isValid).toBe(false);
+      const result = await service.verifyToken('non-existent-user', '123456');
+      expect(result.success).toBe(false);
     });
   });
 
@@ -137,6 +138,34 @@ describe('TwoFactorService', () => {
       }
 
       // Should be locked now
+      await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
+        'Account temporarily locked',
+      );
+    });
+
+    it('should reset failed attempts after successful verification', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      const validToken = '123456';
+
+      await service.verifyAndEnroll(userId, secret, validToken);
+
+      // 3 failed attempts
+      for (let i = 0; i < 3; i++) {
+        await service.verifyToken(userId, '000000');
+      }
+
+      // Successful verification should reset counter
+      const result = await service.verifyToken(userId, validToken);
+      expect(result.success).toBe(true);
+
+      // Verify counter was reset by checking we can fail 5 more times
+      for (let i = 0; i < 5; i++) {
+        await service.verifyToken(userId, '000000');
+      }
+
       await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
         'Account temporarily locked',
       );
@@ -178,6 +207,135 @@ describe('TwoFactorService', () => {
 
     it('should not require 2FA for student role', () => {
       expect(service.requiresTwoFactor('STUDENT')).toBe(false);
+    });
+  });
+
+  describe('recovery codes', () => {
+    it('should accept valid recovery code and consume it', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      const { backupCodes } = await service.verifyAndEnroll(
+        userId,
+        secret,
+        '123456',
+      );
+
+      // Use first recovery code
+      const result = await service.verifyToken(userId, backupCodes[0]);
+      expect(result.success).toBe(true);
+      expect(result.usedRecoveryCode).toBe(true);
+
+      // Same code should not work again
+      const secondAttempt = await service.verifyToken(userId, backupCodes[0]);
+      expect(secondAttempt.success).toBe(false);
+    });
+
+    it('should reject invalid recovery code', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      await service.verifyAndEnroll(userId, secret, '123456');
+
+      const result = await service.verifyToken(userId, 'DEADBEEF');
+      expect(result.success).toBe(false);
+    });
+
+    it('should count recovery code failures toward lockout', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      await service.verifyAndEnroll(userId, secret, '123456');
+
+      // 3 failed TOTP attempts
+      for (let i = 0; i < 3; i++) {
+        await service.verifyToken(userId, '000000');
+      }
+
+      // 2 failed recovery code attempts should trigger lockout
+      for (let i = 0; i < 2; i++) {
+        await service.verifyToken(userId, 'DEADBEEF');
+      }
+
+      // Should be locked now
+      await expect(service.verifyToken(userId, '123456')).rejects.toThrow(
+        'Account temporarily locked',
+      );
+    });
+
+    it('should handle concurrent recovery code usage', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      const { backupCodes } = await service.verifyAndEnroll(
+        userId,
+        secret,
+        '123456',
+      );
+
+      // Try to use same code concurrently
+      const results = await Promise.all([
+        service.verifyToken(userId, backupCodes[0]),
+        service.verifyToken(userId, backupCodes[0]),
+      ]);
+
+      // Only one should succeed
+      const successCount = results.filter((r) => r.success).length;
+      expect(successCount).toBe(1);
+    });
+
+    it('should accept recovery code regardless of case', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      const { backupCodes } = await service.verifyAndEnroll(
+        userId,
+        secret,
+        '123456',
+      );
+
+      // Use lowercase version of uppercase code
+      const result = await service.verifyToken(
+        userId,
+        backupCodes[0].toLowerCase(),
+      );
+      expect(result.success).toBe(true);
+      expect(result.usedRecoveryCode).toBe(true);
+    });
+
+    it('should reset failed attempts after successful recovery code usage', async () => {
+      const userId = 'test-user-id';
+      const email = 'test@example.com';
+
+      const { secret } = await service.generateSecret(userId, email);
+      const { backupCodes } = await service.verifyAndEnroll(
+        userId,
+        secret,
+        '123456',
+      );
+
+      // 3 failed attempts
+      for (let i = 0; i < 3; i++) {
+        await service.verifyToken(userId, '000000');
+      }
+
+      // Use recovery code
+      const result = await service.verifyToken(userId, backupCodes[0]);
+      expect(result.success).toBe(true);
+
+      // Should be able to fail 5 more times before lockout
+      for (let i = 0; i < 5; i++) {
+        await service.verifyToken(userId, '000000');
+      }
+
+      await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
+        'Account temporarily locked',
+      );
     });
   });
 });

@@ -128,15 +128,18 @@ export class TwoFactorService {
   }
 
   /**
-   * Verify TOTP for login
+   * Verify TOTP or recovery code for login
    */
-  async verifyToken(userId: string, token: string): Promise<boolean> {
+  async verifyToken(
+    userId: string,
+    token: string,
+  ): Promise<{ success: boolean; usedRecoveryCode?: boolean }> {
     const twoFactor = await sharedPrisma.twoFactorAuth.findUnique({
       where: { userId },
     });
 
     if (!twoFactor) {
-      return false;
+      return { success: false };
     }
 
     // Check if locked due to failed attempts
@@ -146,28 +149,45 @@ export class TwoFactorService {
       );
     }
 
-    // Decrypt secret
-    const secret = this.decryptSecret(twoFactor.secretEncrypted);
+    // First try recovery code (8 hex chars)
+    if (/^[A-F0-9]{8}$/i.test(token)) {
+      const recoveryResult = await this.tryRecoveryCode(userId, token);
+      if (recoveryResult) {
+        return { success: true, usedRecoveryCode: true };
+      }
+      // Fall through to try as TOTP in case it's a numeric code
+    }
 
-    // Verify token
+    // Try TOTP verification
+    const secret = this.decryptSecret(twoFactor.secretEncrypted);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const isValid = authenticator.verify({ token, secret });
 
     if (!isValid) {
       // Increment failed attempts
+      const newFailedAttempts = twoFactor.failedAttempts + 1;
+      const shouldLock = newFailedAttempts >= 5;
+
       await sharedPrisma.twoFactorAuth.update({
         where: { userId },
         data: {
-          failedAttempts: twoFactor.failedAttempts + 1,
-          // Lock for 10 minutes after 5 failed attempts
-          ...(twoFactor.failedAttempts + 1 >= 5
+          failedAttempts: newFailedAttempts,
+          ...(shouldLock
             ? {
                 lockedUntil: new Date(Date.now() + 10 * 60 * 1000),
               }
             : {}),
         },
       });
-      return false;
+
+      // Log lockout event
+      if (shouldLock) {
+        console.warn(
+          `[2FA] User ${userId} locked due to ${newFailedAttempts} failed attempts`,
+        );
+      }
+
+      return { success: false };
     }
 
     // Reset failed attempts and update last used
@@ -180,7 +200,105 @@ export class TwoFactorService {
       },
     });
 
-    return true;
+    return { success: true };
+  }
+
+  /**
+   * Try to verify and consume a recovery code
+   * Returns true if code was valid and consumed successfully
+   */
+  private async tryRecoveryCode(
+    userId: string,
+    code: string,
+  ): Promise<boolean> {
+    // Normalize to uppercase
+    const normalizedCode = code.toUpperCase();
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(normalizedCode)
+      .digest('hex');
+
+    // Use transaction with row lock to prevent race conditions
+    try {
+      const result = await sharedPrisma.$transaction(
+        async (tx) => {
+          // Lock the row for update to prevent concurrent modifications
+          // Use raw query with FOR UPDATE to lock the row
+          await tx.$executeRaw`SELECT 1 FROM two_factor_auth WHERE user_id = ${userId} FOR UPDATE`;
+
+          const twoFactor = await tx.twoFactorAuth.findUnique({
+            where: { userId },
+          });
+
+          if (!twoFactor) {
+            return false;
+          }
+
+          // Check if locked
+          if (twoFactor.lockedUntil && twoFactor.lockedUntil > new Date()) {
+            throw new BadRequestException(
+              'Account temporarily locked due to failed attempts',
+            );
+          }
+
+          // Check if code exists in backup codes
+          const codeIndex = twoFactor.backupCodes.indexOf(hashedCode);
+          if (codeIndex === -1) {
+            // Code not found - increment failed attempts
+            const newFailedAttempts = twoFactor.failedAttempts + 1;
+          const shouldLock = newFailedAttempts >= 5;
+
+          await tx.twoFactorAuth.update({
+            where: { userId },
+            data: {
+              failedAttempts: newFailedAttempts,
+              ...(shouldLock
+                ? {
+                    lockedUntil: new Date(Date.now() + 10 * 60 * 1000),
+                  }
+                : {}),
+            },
+          });
+
+          if (shouldLock) {
+            console.warn(
+              `[2FA] User ${userId} locked due to ${newFailedAttempts} failed recovery code attempts`,
+            );
+          }
+
+          return false;
+        }
+
+        // Remove the used recovery code
+        const updatedCodes = [...twoFactor.backupCodes];
+        updatedCodes.splice(codeIndex, 1);
+
+        await tx.twoFactorAuth.update({
+          where: { userId },
+          data: {
+            backupCodes: updatedCodes,
+            failedAttempts: 0,
+            lockedUntil: null,
+            lastUsedAt: new Date(),
+          },
+        });
+
+        console.info(
+          `[2FA] User ${userId} successfully used recovery code (${updatedCodes.length} remaining)`,
+        );
+
+        return true;
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      // Transaction failed - possibly concurrent usage
+      console.error(`[2FA] Recovery code transaction failed for ${userId}`, error);
+      return false;
+    }
   }
 
   /**
