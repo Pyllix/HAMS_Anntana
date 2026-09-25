@@ -2,6 +2,8 @@
 
 วันที่ค้นคว้า: 19 กันยายน 2569 (2026-09-19)
 
+> หมายเหตุ: ข้อเสนอในบันทึกค้นคว้านี้ไม่ใช่ข้อกำหนดล่าสุดทั้งหมดของ HAMS โดยเฉพาะ Step-up สำหรับการสร้าง `ADMIN`/เปลี่ยน Role; ให้ยึดมติล่าสุดใน [TASK.md](../../TASK.md) ซึ่งไม่บังคับ TOTP ซ้ำสำหรับสองกรณีนั้น
+
 ## คำตอบสั้น
 
 **30 วันไม่ใช่ระยะเวลาที่กฎหมายไทยกำหนดให้ Trusted Browser ต้องใช้ และไม่ใช่ค่ามาตรฐานความปลอดภัยสากลสำหรับการข้าม TOTP** ตัวเลข 30 วันที่พบใน BetterAuth เป็นค่าเริ่มต้นของปลั๊กอิน ซึ่งปรับได้ด้วย `trustDeviceMaxAge`; เอกสาร BetterAuth ระบุด้วยว่าระยะนี้ถูกต่ออายุใหม่ทุกครั้งที่ลงชื่อเข้าสำเร็จ จึงเป็นอายุแบบเลื่อนต่อ (sliding) ไม่ใช่เพดานตายตัว 30 วัน ([BetterAuth 2FA documentation](https://better-auth.com/docs/plugins/2fa), [BetterAuth option/source definition](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/plugins/two-factor/types.ts), [BetterAuth default constant](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/plugins/two-factor/constant.ts)).

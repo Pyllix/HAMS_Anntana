@@ -11,16 +11,32 @@ import { mailService } from '../common/mail/mail.service';
 // keyed by our Prisma UserRole enum values (uppercase).
 const ac = createAccessControl({
   user: [
-    'create', 'list', 'set-role', 'ban', 'impersonate',
-    'delete', 'set-password', 'set-email', 'get', 'update',
+    'create',
+    'list',
+    'set-role',
+    'ban',
+    'impersonate',
+    'delete',
+    'set-password',
+    'set-email',
+    'get',
+    'update',
   ] as const,
   session: ['list', 'revoke', 'delete'] as const,
 });
 
 const adminRole = ac.newRole({
   user: [
-    'create', 'list', 'set-role', 'ban', 'impersonate',
-    'delete', 'set-password', 'set-email', 'get', 'update',
+    'create',
+    'list',
+    'set-role',
+    'ban',
+    'impersonate',
+    'delete',
+    'set-password',
+    'set-email',
+    'get',
+    'update',
   ],
   session: ['list', 'revoke', 'delete'],
 });
@@ -46,8 +62,14 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       const targetUrl = new URL(url);
-      if (!targetUrl.searchParams.has('callbackURL') || targetUrl.searchParams.get('callbackURL') === '/') {
-        targetUrl.searchParams.set('callbackURL', `${frontendUrl}/login?verified=true`);
+      if (
+        !targetUrl.searchParams.has('callbackURL') ||
+        targetUrl.searchParams.get('callbackURL') === '/'
+      ) {
+        targetUrl.searchParams.set(
+          'callbackURL',
+          `${frontendUrl}/login?verified=true`,
+        );
       }
       await mailService.sendVerificationEmail({
         to: user.email,
@@ -62,9 +84,19 @@ export const auth = betterAuth({
     'http://localhost:3001',
     'http://localhost:5173',
   ],
-  // Block public self-signup; accounts are created only by ADMIN via POST /users.
-  // See docs/auth-api-contract.md §10 and TASK.md item 15.
-  disabledPaths: ['/sign-up/email'],
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 60 * 12, // 12 hours
+    },
+  },
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === 'production',
+    cookiePrefix: 'better-auth',
+    crossSubDomainCookies: {
+      enabled: false, // host-only cookies
+    },
+  },
   // Map better-auth's built-in user fields to our schema column names
   user: {
     // Redirect better-auth's 'name' field to our 'firstname' column
@@ -84,13 +116,67 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    // HTTP-only boundary: HAMS services still use internal auth.api methods.
+    {
+      id: 'hams-account-route-boundary',
+      async onRequest(request) {
+        const path = new URL(request.url).pathname;
+        const block = (code: string) => ({
+          response: Response.json(
+            {
+              code,
+              message: 'This auth route is unavailable',
+              statusCode: 403,
+            },
+            { status: 403 },
+          ),
+        });
+
+        if (request.method === 'POST' && path.endsWith('/sign-up/email')) {
+          return block('PUBLIC_SIGNUP_DISABLED');
+        }
+        if (path.includes('/admin/')) {
+          return block('DIRECT_ADMIN_ROUTE_DISABLED');
+        }
+      },
+    },
+    // CSRF protection plugin
+    {
+      id: 'hams-csrf-protection',
+      async onRequest(request) {
+        const path = new URL(request.url).pathname;
+        const method = request.method;
+
+        // State-changing methods require CSRF token
+        if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
+          // Skip CSRF check for auth routes that BetterAuth handles internally
+          if (path.startsWith('/api/auth/')) {
+            return;
+          }
+
+          const csrfToken = request.headers.get('X-CSRF-Token');
+          if (!csrfToken) {
+            return {
+              response: Response.json(
+                {
+                  code: 'CSRF_INVALID',
+                  message: 'Missing CSRF token',
+                  statusCode: 403,
+                },
+                { status: 403 },
+              ),
+            };
+          }
+        }
+      },
+    },
     openAPI(),
     bearer(), // Enable Bearer token auth for API clients
     admin({
       defaultRole: 'DEPARTMENT_STAFF',
       adminRoles: ['ADMIN'],
       roles: {
-        ADMIN: adminRole,            // Prisma UserRole.ADMIN (uppercase)
+        ADMIN: adminRole, // Prisma UserRole.ADMIN (uppercase)
         DEPARTMENT_STAFF: noPermRole,
         MANAGER: noPermRole,
         PARCEL_STAFF: noPermRole,

@@ -12,5 +12,5 @@
 - [x] ระบุว่า pre-auth/enrollment context ทำอะไรได้และทำอะไรไม่ได้ รวมถึงเมื่อ Role เปลี่ยนหรือ Session หมดอายุ → `docs/auth-api-contract.md` §3, §5, §9
 - [x] ระบุวิธีส่ง Cookie, CSRF proof, Trusted Browser choice และ Session activity ระหว่าง Backend/Frontend ก่อนเริ่มงานหน้าจอ → `docs/auth-api-contract.md` §2, §8
 - [x] ระบุรหัสข้อผิดพลาดที่ Frontend แยกได้ เช่น ต้องตั้ง 2FA, ต้องกรอก TOTP, Recovery Code ใช้แล้ว, ถูกล็อกชั่วคราว, Session หมดอายุ และต้อง Step-up → `docs/auth-api-contract.md` §6
-- [x] เพิ่มชุดทดสอบ HTTP ที่ใช้ auth integration จริงและฐานข้อมูลทดสอบ แทนการจำลอง Guard จนข้ามพฤติกรรม 2FA → `test/auth-contract.auth-integration.e2e-spec.ts` + `test/jest-auth-integration.json`
+- [x] วางชุดทดสอบ HTTP ที่ใช้ auth integration จริงและฐานข้อมูลทดสอบโดยไม่จำลอง Guard; ตรวจพฤติกรรมที่มีใน ticket 01 และระบุ assertion ของ Cookie/CSRF/Enrollment/2FA ให้เปิดใช้เมื่อ ticket 02–10 ทำพฤติกรรมนั้น → `test/auth-contract.auth-integration.e2e-spec.ts` + `test/jest-auth-integration.json`
 - [x] ตรวจให้สัญญาครอบคลุมทั้ง HAMS API และเส้นทาง BetterAuth ที่เปิดตรง → `docs/auth-api-contract.md` §10, §11; `disabledPaths` ใน `src/auth/auth.ts`

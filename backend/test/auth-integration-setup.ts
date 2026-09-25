@@ -1,20 +1,30 @@
 /**
- * Guard: abort if TEST_DATABASE_URL is not set.
+ * Guard: abort unless TEST_DATABASE_URL names a disposable PostgreSQL test DB.
  *
- * The auth-integration test suite spins up the real NestJS app against a real
- * database. Running it against a shared or production database would be
- * destructive. This file is listed in jest-auth-integration.json's
- * "setupFiles" so it runs before any test module is compiled.
+ * This setup runs before Jest loads the app, which performs real writes.
  */
-if (!process.env.TEST_DATABASE_URL) {
-  console.error(
-    '\n[auth-integration] TEST_DATABASE_URL is not set.\n' +
-      'Set it to a disposable test database URL and retry.\n' +
-      '  $env:TEST_DATABASE_URL = "postgresql://..."\n',
-  );
-  process.exit(1);
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+let testDatabaseName: string | undefined;
+
+try {
+  if (testDatabaseUrl) {
+    const parsedUrl = new URL(testDatabaseUrl);
+    if (
+      parsedUrl.protocol === 'postgresql:' ||
+      parsedUrl.protocol === 'postgres:'
+    ) {
+      testDatabaseName = decodeURIComponent(parsedUrl.pathname.slice(1));
+    }
+  }
+} catch {
+  // Reject malformed URLs before the application opens a database connection.
 }
 
-// Point BetterAuth's Prisma adapter and the shared Prisma instance to the
-// test database for the duration of this test run.
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+if (!testDatabaseName || !testDatabaseName.toLowerCase().includes('test')) {
+  throw new Error(
+    '[auth-integration] TEST_DATABASE_URL must name a PostgreSQL test database.',
+  );
+}
+
+// Point BetterAuth and the shared Prisma instance to the checked database.
+process.env.DATABASE_URL = testDatabaseUrl;

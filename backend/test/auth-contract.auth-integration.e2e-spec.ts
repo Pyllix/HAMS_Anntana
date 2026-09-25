@@ -19,53 +19,35 @@ import 'dotenv/config';
 import type { Server } from 'http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { UsersService } from '../src/users/users.service';
 
-// Skip the entire suite when TEST_DATABASE_URL is not set.
+// The setup file rejects missing or unsafe TEST_DATABASE_URL values before this suite loads.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const describeWithDatabase = describe;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract the value of a named cookie from a supertest response. */
-function extractCookie(res: request.Response, name: string): string | null {
-  const rawHeader = res.headers['set-cookie'] as string | string[] | undefined;
-  const cookies: string[] = Array.isArray(rawHeader)
-    ? rawHeader
-    : rawHeader
-    ? [rawHeader]
-    : [];
-  for (const cookie of cookies) {
-    if (cookie.startsWith(`${name}=`)) {
-      return cookie;
-    }
-  }
-  return null;
+/** Return all Set-Cookie header values without changing their attributes. */
+function setCookies(res: request.Response): string[] {
+  const header = res.headers['set-cookie'] as string | string[] | undefined;
+  return Array.isArray(header) ? header : header ? [header] : [];
 }
 
-/** Check whether the raw Set-Cookie header for a given cookie contains
- *  the HttpOnly attribute (case-insensitive). */
-function isHttpOnly(res: request.Response, cookieName: string): boolean {
-  const rawHeader = res.headers['set-cookie'] as string | string[] | undefined;
-  const cookies: string[] = Array.isArray(rawHeader)
-    ? rawHeader
-    : rawHeader
-    ? [rawHeader]
-    : [];
-  for (const cookie of cookies) {
-    if (
-      cookie.startsWith(`${cookieName}=`) &&
-      /httponly/i.test(cookie)
-    ) {
-      return true;
-    }
-  }
-  return false;
+function extractCookie(res: request.Response, name: string): string | null {
+  return (
+    setCookies(res).find((cookie) => cookie.startsWith(`${name}=`)) ?? null
+  );
+}
+
+function isHttpOnly(res: request.Response, name: string): boolean {
+  const cookie = extractCookie(res, name);
+  return cookie !== null && /(?:^|;)\s*HttpOnly(?:;|$)/i.test(cookie);
 }
 
 // ---------------------------------------------------------------------------
@@ -77,8 +59,10 @@ describeWithDatabase(
   () => {
     let app: INestApplication;
     let prisma: PrismaClient;
+    let pool: import('pg').Pool | undefined;
+    let testSectionId: string;
 
-    // Test-user credentials seeded directly via Prisma for each sub-suite.
+    // Fixture accounts use UsersService so BetterAuth hashes their passwords.
     const testEmail = {
       admin: 'test-admin-01@hams-test.local',
       parcel: 'test-parcel-01@hams-test.local',
@@ -94,7 +78,7 @@ describeWithDatabase(
     beforeAll(async () => {
       // Real Prisma connected to test DB (DATABASE_URL was set by setup file)
       const pg = await import('pg');
-      const pool = new pg.Pool({ connectionString: testDatabaseUrl });
+      pool = new pg.Pool({ connectionString: testDatabaseUrl });
       const adapter = new PrismaPg(pool);
       prisma = new PrismaClient({ adapter } as any);
 
@@ -111,18 +95,65 @@ describeWithDatabase(
         }),
       );
       await app.init();
+
+      const testSection = await prisma.section.upsert({
+        where: { code: 'TEST-AUTH-SEC' },
+        update: {},
+        create: {
+          code: 'TEST-AUTH-SEC',
+          name: 'Test Auth Section',
+        },
+      });
+      testSectionId = testSection.id;
     });
+
+    async function seedUser(
+      email: string,
+      role: 'ADMIN' | 'PARCEL_STAFF' | 'DEPARTMENT_STAFF',
+      userName: string,
+    ) {
+      await prisma.user.deleteMany({ where: { email } });
+
+      const usersService = app.get(UsersService);
+      await usersService.create({
+        email,
+        password: sharedPassword,
+        userName,
+        firstname: 'Test',
+        lastname: role,
+        role: role as UserRole,
+        sectionId: testSectionId,
+      });
+
+      await prisma.user.updateMany({
+        where: { email },
+        data: { emailVerified: true },
+      });
+    }
 
     afterAll(async () => {
       // Clean up test accounts to keep the DB tidy between runs
       try {
         await prisma.user.deleteMany({
-          where: { email: { in: Object.values(testEmail) } },
+          where: {
+            email: {
+              in: [
+                ...Object.values(testEmail),
+                'test-change-pwd@hams-test.local',
+              ],
+            },
+          },
+        });
+        await prisma.section.deleteMany({
+          where: { code: 'TEST-AUTH-SEC' },
         });
       } catch {
         // Ignore — table may not exist on a fresh DB
       }
       await prisma.$disconnect();
+      if (pool) {
+        await pool.end();
+      }
       await app.close();
     });
 
@@ -139,173 +170,153 @@ describeWithDatabase(
             name: 'Hacker',
           });
 
-        // BetterAuth will block this via disabledPaths. We expect 403 or 404.
-        // The spec says 403 PUBLIC_SIGNUP_DISABLED; 404 is also acceptable if
-        // the path is fully removed — adjust once ticket 02 configures this.
-        expect([403, 404]).toContain(res.status);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('PUBLIC_SIGNUP_DISABLED');
       });
     });
 
     // -----------------------------------------------------------------------
     // § 4.1 / § 4.2: Non-mandatory role — password-only sign-in
     // -----------------------------------------------------------------------
-    describe('Non-mandatory Role: password-only sign-in', () => {
+    describe('Current password sign-in transport (until tickets 02 and 23)', () => {
+      let sessionToken: string;
       let sessionCookie: string;
 
       beforeAll(async () => {
-        // Create a verified DEPARTMENT_STAFF account directly via Prisma so we
-        // don't depend on email delivery in CI.
-        // NOTE: In production, BetterAuth hashes passwords with its internal
-        // algorithm. Here we use BetterAuth's createUser API to ensure correct
-        // password hashing.
-        await request(server()).post('/users').send({
-          email: testEmail.dept,
-          password: sharedPassword,
-          firstname: 'Test',
-          lastname: 'Dept',
-          role: 'DEPARTMENT_STAFF',
-        }); // may fail if already exists — ignored
-
-        // Force email-verified flag directly via Prisma for test purposes.
-        await prisma.user.updateMany({
-          where: { email: testEmail.dept },
-          data: { emailVerified: true },
-        });
+        await seedUser(testEmail.dept, 'DEPARTMENT_STAFF', 'test_dept_01');
       });
 
-      it('returns 200 with requiresTwoFactor: false and user data', async () => {
+      it('authenticates a non-mandatory Role through real BetterAuth', async () => {
         const res = await request(server()).post('/auth/sign-in').send({
           email: testEmail.dept,
           password: sharedPassword,
         });
 
         expect(res.status).toBe(200);
-        expect(res.body.requiresTwoFactor).toBe(false);
-        expect(res.body).toHaveProperty('user');
-        expect(res.body.user).toHaveProperty('id');
+        expect(typeof res.body.token).toBe('string');
+        expect(res.body.token.length).toBeGreaterThan(0);
         expect(res.body.user).toHaveProperty('email', testEmail.dept);
+        sessionToken = res.body.token;
 
-        // SESSION TOKEN MUST NOT appear in the JSON body (contract § 4.1)
-        expect(res.body).not.toHaveProperty('token');
-        expect(res.body).not.toHaveProperty('sessionToken');
-        expect(res.body).not.toHaveProperty('accessToken');
-
-        // Capture the session cookie for subsequent tests
-        const rawCookie = extractCookie(res, 'better-auth.session_token');
-        if (rawCookie) sessionCookie = rawCookie;
+        // Store session cookie for ticket 02 tests
+        const cookie = extractCookie(res, 'better-auth.session_token');
+        if (cookie) {
+          sessionCookie = cookie;
+        }
       });
 
-      it('session cookie is HttpOnly (cannot be read by JS)', async () => {
-        const res = await request(server()).post('/auth/sign-in').send({
-          email: testEmail.dept,
-          password: sharedPassword,
-        });
+      it('reads the authenticated session via Bearer token', async () => {
+        expect(sessionToken).toBeTruthy();
+        const res = await request(server())
+          .get('/auth/session')
+          .set('Authorization', 'Bearer ' + sessionToken);
 
-        // The Set-Cookie header for the session cookie must include HttpOnly
-        expect(isHttpOnly(res, 'better-auth.session_token')).toBe(true);
+        expect(res.status).toBe(200);
+        expect(res.body.session).toHaveProperty('userId');
+        expect(res.headers['cache-control']).toBe('no-store');
       });
 
-      it('GET /auth/session returns valid session for authenticated user', async () => {
-        if (!sessionCookie) return; // Skip if sign-in above failed
-
+      it('reads the authenticated session via Cookie (ticket 02)', async () => {
+        expect(sessionCookie).toBeTruthy();
         const res = await request(server())
           .get('/auth/session')
           .set('Cookie', sessionCookie);
 
         expect(res.status).toBe(200);
-        expect(res.body.session).toBeTruthy();
         expect(res.body.session).toHaveProperty('userId');
-        expect(res.body.user).toHaveProperty('role', 'DEPARTMENT_STAFF');
+        expect(res.headers['cache-control']).toBe('no-store');
       });
 
-      it('POST /auth/sign-out revokes the session', async () => {
-        if (!sessionCookie) return;
-
-        const signOutRes = await request(server())
+      it('revokes the session on sign-out', async () => {
+        expect(sessionToken).toBeTruthy();
+        const signedOut = await request(server())
           .post('/auth/sign-out')
-          .set('Cookie', sessionCookie);
+          .set('Authorization', 'Bearer ' + sessionToken);
 
-        expect(signOutRes.status).toBe(200);
+        expect(signedOut.status).toBe(200);
 
-        // Subsequent use of the same cookie must now return 401
+        // Verify cookie was cleared
+        const cookieHeaders = setCookies(signedOut);
+        const clearedCookie = cookieHeaders.find((c) =>
+          c.startsWith('better-auth.session_token='),
+        );
+        expect(clearedCookie).toBeTruthy();
+        expect(clearedCookie).toMatch(/Max-Age=0|expires=.*Thu.*01.*Jan.*1970/i);
+
         const afterSignOut = await request(server())
           .get('/auth/session')
-          .set('Cookie', sessionCookie);
+          .set('Authorization', 'Bearer ' + sessionToken);
 
-        // BetterAuth returns null session, not 401, for GET /session
-        // but business API endpoints will return 401/403
-        expect(
-          afterSignOut.body.session === null ||
-            afterSignOut.status === 401,
-        ).toBe(true);
+        expect(afterSignOut.status).toBe(200);
+        expect(afterSignOut.body.session).toBeNull();
       });
+    });
+
+    // Ticket 02 adds the cookie assertion. Ticket 23 removes the legacy
+    // browser-visible token after the Frontend migration is complete.
+    it('sets an HttpOnly Session Cookie (ticket 02)', async () => {
+      const res = await request(server()).post('/auth/sign-in').send({
+        email: testEmail.dept,
+        password: sharedPassword,
+      });
+      expect(res.status).toBe(200);
+      expect(isHttpOnly(res, 'better-auth.session_token')).toBe(true);
+    });
+
+    it.skip('keeps the Session Token out of JSON (ticket 23)', async () => {
+      const res = await request(server()).post('/auth/sign-in').send({
+        email: testEmail.dept,
+        password: sharedPassword,
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).not.toHaveProperty('token');
+      expect(res.body).not.toHaveProperty('sessionToken');
+      expect(res.body).not.toHaveProperty('accessToken');
     });
 
     // -----------------------------------------------------------------------
     // § 3: Mandatory Role — enrollment gate
     // -----------------------------------------------------------------------
-    describe('Mandatory Role: enrollment gate blocks Business API', () => {
+    describe.skip('Mandatory Role: enrollment gate (ticket 03)', () => {
       let preAuthCookie: string;
 
       beforeAll(async () => {
-        // Create a verified ADMIN account
-        await request(server()).post('/users').send({
-          email: testEmail.admin,
-          password: sharedPassword,
-          firstname: 'Test',
-          lastname: 'Admin',
-          role: 'ADMIN',
-        });
-
-        await prisma.user.updateMany({
-          where: { email: testEmail.admin },
-          data: { emailVerified: true },
-        });
+        await seedUser(testEmail.admin, 'ADMIN', 'test_admin_01');
       });
 
-      it('sign-in returns requiresTwoFactor: true for unenrolled mandatory role', async () => {
-        // NOTE: This test will pass once ticket 02 adds the 2FA plugin to
-        // BetterAuth config. With the current config (no twoFactor plugin),
-        // BetterAuth will issue a normal session. Mark as pending until 02.
-        //
-        // Once ticket 02 is done: expect res.body.requiresTwoFactor === true
-        // and no full session cookie to be set.
+      it('issues only pre-auth state after password verification', async () => {
         const res = await request(server()).post('/auth/sign-in').send({
           email: testEmail.admin,
           password: sharedPassword,
         });
 
-        // Shape assertion — valid for current state (no 2FA plugin yet)
         expect(res.status).toBe(200);
-        expect(res.body).toHaveProperty('user');
-
-        // Capture any partial state cookie for the pre-auth boundary test
-        const rawCookie = extractCookie(res, 'better-auth.session_token');
-        if (rawCookie) preAuthCookie = rawCookie;
+        expect(res.body.requiresTwoFactor).toBe(true);
+        expect(res.body).not.toHaveProperty('token');
+        preAuthCookie = extractCookie(res, 'hams.pre_auth') ?? '';
+        expect(preAuthCookie).toBeTruthy();
       });
 
-      it('Business API returns 401 or 403 without a valid session', async () => {
-        // No cookie sent — should be rejected
-        const res = await request(server()).get('/users');
-        expect([401, 403]).toContain(res.status);
+      it('rejects Business API access with the pre-auth cookie', async () => {
+        expect(preAuthCookie).toBeTruthy();
+        const res = await request(server())
+          .get('/users')
+          .set('Cookie', preAuthCookie);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('ENROLLMENT_REQUIRED');
       });
     });
 
     // -----------------------------------------------------------------------
     // § 4.4: CSRF endpoint
     // -----------------------------------------------------------------------
-    describe('CSRF token endpoint', () => {
-      it('GET /auth/csrf returns a csrfToken field', async () => {
-        const res = await request(server()).get('/api/auth/csrf');
-        // BetterAuth exposes this at /api/auth/csrf
-        if (res.status === 200) {
-          expect(res.body).toHaveProperty('csrfToken');
-          expect(typeof res.body.csrfToken).toBe('string');
-          expect(res.body.csrfToken.length).toBeGreaterThan(0);
-        } else {
-          // If the route is not yet wired (ticket 02), accept 404
-          expect([200, 404]).toContain(res.status);
-        }
+    describe('CSRF proof for anonymous and pre-auth states (ticket 02)', () => {
+      it('GET /auth/csrf issues a proof before sign-in', async () => {
+        const res = await request(server()).get('/auth/csrf');
+        expect(res.status).toBe(200);
+        expect(typeof res.body.csrfToken).toBe('string');
+        expect(res.body.csrfToken.length).toBeGreaterThan(0);
       });
     });
 
@@ -335,71 +346,46 @@ describeWithDatabase(
     // -----------------------------------------------------------------------
     // § 4.12 / § 9: Change password (self-service)
     // -----------------------------------------------------------------------
-    describe('Change password (self-service)', () => {
+    describe('Change password (current transport)', () => {
       const changeEmail = 'test-change-pwd@hams-test.local';
       const newPassword = 'NewPassword@5678!';
-      let activeCookie: string;
+      let activeToken: string;
 
       beforeAll(async () => {
-        await request(server()).post('/users').send({
-          email: changeEmail,
-          password: sharedPassword,
-          firstname: 'Change',
-          lastname: 'Pwd',
-          role: 'DEPARTMENT_STAFF',
-        });
-
-        await prisma.user.updateMany({
-          where: { email: changeEmail },
-          data: { emailVerified: true },
-        });
-
+        await seedUser(changeEmail, 'DEPARTMENT_STAFF', 'test_change_pwd_01');
         const signInRes = await request(server()).post('/auth/sign-in').send({
           email: changeEmail,
           password: sharedPassword,
         });
-
-        const rawCookie = extractCookie(
-          signInRes,
-          'better-auth.session_token',
-        );
-        if (rawCookie) activeCookie = rawCookie;
+        expect(signInRes.status).toBe(200);
+        expect(typeof signInRes.body.token).toBe('string');
+        activeToken = signInRes.body.token;
       });
 
-      afterAll(async () => {
-        await prisma.user.deleteMany({ where: { email: changeEmail } });
-      });
-
-      it('returns 200 when old password is correct', async () => {
-        if (!activeCookie) return;
-
+      it('changes the password with the current password', async () => {
+        expect(activeToken).toBeTruthy();
         const res = await request(server())
           .post('/auth/change-password')
-          .set('Cookie', activeCookie)
-          .send({
-            currentPassword: sharedPassword,
-            newPassword,
-          });
+          .set('Authorization', 'Bearer ' + activeToken)
+          .send({ currentPassword: sharedPassword, newPassword });
 
         expect(res.status).toBe(200);
         expect(res.body).toHaveProperty('message');
       });
 
-      it('new password works for sign-in', async () => {
+      it('accepts the new password', async () => {
         const res = await request(server()).post('/auth/sign-in').send({
           email: changeEmail,
           password: newPassword,
         });
-
         expect(res.status).toBe(200);
       });
 
-      it('old password no longer works after change', async () => {
+      it('rejects the old password', async () => {
         const res = await request(server()).post('/auth/sign-in').send({
           email: changeEmail,
           password: sharedPassword,
         });
-
         expect(res.status).toBe(401);
       });
     });
@@ -411,30 +397,91 @@ describeWithDatabase(
       it('returns 200 with null session when unauthenticated', async () => {
         const res = await request(server()).get('/auth/session');
 
-        // BetterAuth returns 200 with null session, not a 401
         expect(res.status).toBe(200);
         expect(res.body.session).toBeNull();
       });
     });
 
     // -----------------------------------------------------------------------
-    // § 11: ADMIN creates user; non-ADMIN cannot
-    // (These tests use the mocked-guard setup via x-test-role header —
-    //  they are kept here as a contract assertion. The RBAC e2e suite covers
-    //  this in depth but re-asserting the shape here ensures contract parity.)
+    // § 11: HAMS account route and direct BetterAuth admin boundary
     // -----------------------------------------------------------------------
-    describe('Account creation gated to ADMIN (contract assertion)', () => {
-      it('POST /users without session returns 401/403', async () => {
+    describe('HAMS account creation and direct BetterAuth boundary', () => {
+      const createdEmail = 'test-created-by-admin@hams-test.local';
+
+      beforeAll(async () => {
+        await seedUser(testEmail.admin, 'ADMIN', 'test_admin_01');
+      });
+
+      afterAll(async () => {
+        await prisma.user.deleteMany({ where: { email: createdEmail } });
+      });
+
+      it('rejects an unauthenticated HAMS account creation request', async () => {
         const res = await request(server()).post('/users').send({
           email: 'sneaky@outside.com',
           password: 'Password@1234',
+          userName: 'sneaky',
           firstname: 'Sneaky',
           lastname: 'User',
           role: 'DEPARTMENT_STAFF',
+          sectionId: testSectionId,
         });
+        expect(res.status).toBe(401);
+      });
 
-        // Without authentication this should be rejected
-        expect([401, 403]).toContain(res.status);
+      it('blocks a direct BetterAuth admin route without a session', async () => {
+        const res = await request(server())
+          .post('/api/auth/admin/create-user')
+          .send({
+            email: 'sneaky@outside.com',
+            password: sharedPassword,
+            name: 'Sneaky',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('DIRECT_ADMIN_ROUTE_DISABLED');
+      });
+
+      it('blocks a direct BetterAuth admin route for non-ADMIN', async () => {
+        const signedIn = await request(server()).post('/auth/sign-in').send({
+          email: testEmail.dept,
+          password: sharedPassword,
+        });
+        expect(signedIn.status).toBe(200);
+        expect(typeof signedIn.body.token).toBe('string');
+
+        const res = await request(server())
+          .post('/api/auth/admin/set-user-password')
+          .set('Authorization', 'Bearer ' + signedIn.body.token)
+          .send({ userId: 'unknown', newPassword: sharedPassword });
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('DIRECT_ADMIN_ROUTE_DISABLED');
+      });
+
+      it('allows an ADMIN through the HAMS account route', async () => {
+        const signedIn = await request(server()).post('/auth/sign-in').send({
+          email: testEmail.admin,
+          password: sharedPassword,
+        });
+        expect(signedIn.status).toBe(200);
+        expect(typeof signedIn.body.token).toBe('string');
+
+        const res = await request(server())
+          .post('/users')
+          .set('Authorization', 'Bearer ' + signedIn.body.token)
+          .send({
+            email: createdEmail,
+            password: sharedPassword,
+            userName: 'test_created_by_admin',
+            firstname: 'Created',
+            lastname: 'By Admin',
+            role: 'DEPARTMENT_STAFF',
+            sectionId: testSectionId,
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body).toHaveProperty('email', createdEmail);
       });
     });
   },

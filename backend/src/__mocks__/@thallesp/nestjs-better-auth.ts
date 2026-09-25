@@ -13,6 +13,7 @@ export const Session = createParamDecorator((data: unknown, ctx: ExecutionContex
 });
 
 export const Public = () => SetMetadata('isPublic', true);
+export const Optional = () => SetMetadata('isOptional', true);
 
 export class AuthModule {
   static forRoot() {

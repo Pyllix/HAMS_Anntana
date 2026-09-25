@@ -18,7 +18,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Public, Session } from '@thallesp/nestjs-better-auth';
+import { Public, Session, Optional } from '@thallesp/nestjs-better-auth';
 import type { Request } from 'express';
 import type { Session as BetterAuthSession } from 'better-auth/types';
 import { auth } from './auth';
@@ -76,6 +76,9 @@ export class AuthController {
       if (!result?.token) {
         throw new UnauthorizedException('Invalid email or password');
       }
+
+      // Note: BetterAuth automatically sets session cookies via its middleware
+      // The session cookie will be set by better-auth's internal mechanism
 
       return {
         token: result.token,
@@ -186,6 +189,8 @@ export class AuthController {
 
     await auth.api.signOut({ headers });
 
+    // Note: BetterAuth automatically clears session cookies via its middleware
+
     return { message: 'Signed out successfully' };
   }
 
@@ -231,6 +236,7 @@ export class AuthController {
   // ─── Get Session ───────────────────────────────────────────────────────────
 
   @Get('session')
+  @Optional()
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
@@ -239,13 +245,69 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Current session data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getSession(@Session() session: BetterAuthSession) {
+  getSession(@Session() session: any, @Req() req: Request) {
+    // Add Cache-Control: no-store for session responses
+    req.res?.setHeader('Cache-Control', 'no-store');
+
+    if (!session) {
+      return { session: null };
+    }
+    const sessionObj = session.session || session;
+    const userObj = session.user;
     return {
       session: {
-        id: session.id,
-        expiresAt: session.expiresAt,
-        userId: session.userId,
+        id: sessionObj.id,
+        expiresAt: sessionObj.expiresAt,
+        userId: sessionObj.userId,
       },
+      ...(userObj
+        ? {
+            user: {
+              id: userObj.id,
+              email: userObj.email,
+              role: userObj.role,
+              name: userObj.name,
+            },
+          }
+        : {}),
+    };
+  }
+
+  // ─── Get CSRF Token ────────────────────────────────────────────────────────
+
+  @Get('csrf')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get CSRF token',
+    description: 'Returns a CSRF token for the current context (anonymous, pre-auth, or authenticated)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSRF token issued',
+    schema: {
+      example: {
+        csrfToken: 'abc123...',
+      },
+    },
+  })
+  async getCsrfToken(@Req() req: Request) {
+    // Generate a simple CSRF token based on session context
+    // In production, this would use BetterAuth's native CSRF support when available
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value)
+        headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+    }
+
+    // For now, generate a placeholder token
+    // This will be replaced when better-auth adds native CSRF support
+    const timestamp = Date.now();
+    const randomPart = Math.random().toString(36).substring(2, 15);
+    const csrfToken = `csrf-${timestamp}-${randomPart}`;
+
+    return {
+      csrfToken,
     };
   }
 }

@@ -1,7 +1,7 @@
 # Auth API Contract — HAMS
 
 > Version: 2026-09-25  
-> Status: **Active — canonical reference for all 2FA and session work**  
+> Status: **Target contract — implementation is staged across tickets 02–23; ticket 24 validates the release**
 > Scope: Backend observable behaviour + Frontend consumption rules.  
 > Ticket: [01-be-auth-contract](./../.scratch/two-factor-authentication/issues/01-be-auth-contract.md)
 
@@ -12,9 +12,9 @@
 | Term | Meaning |
 |---|---|
 | **Session Cookie** | The `better-auth.session_token` (or equivalent) `Secure; HttpOnly; SameSite` cookie managed by BetterAuth. Never appears in JSON. |
-| **CSRF Token** | A per-session CSRF proof required on every state-changing request (`POST`, `PATCH`, `DELETE`). |
+| **CSRF Token** | A proof bound to the current anonymous, pre-auth, or full-session context and required on every state-changing request (`POST`, `PATCH`, `DELETE`). |
 | **Enrollment** | The act of binding a TOTP authenticator app and acknowledging Recovery Codes. Until complete, an account in a mandatory-2FA Role is in a constrained **pre-auth** state. |
-| **Pre-auth state** | A transient server-side flag (no normal Session Cookie issued). Only the enrollment flow endpoints are reachable; all Business API calls are rejected. |
+| **Pre-auth state** | A transient server-side context carried by a `hams.pre_auth` HttpOnly cookie, without a normal Session Cookie. Only the enrollment flow endpoints are reachable; all Business API calls are rejected. |
 | **Step-up** | A short-lived (5 min) elevation for the current ADMIN Session, granted by re-entering a fresh TOTP. Allows batch admin operations. |
 | **Trusted Browser** | A 14-day absolute-expiry server-side credential tied to `userId` + `browserToken` cookie. Bypasses TOTP at sign-in only; does not extend Session lifetime. |
 | **Mandatory-2FA Roles** | `ADMIN`, `PARCEL_STAFF`, `ASSET_CENTER_STAFF` |
@@ -57,7 +57,7 @@ GET /auth/csrf
 Response 200: { "csrfToken": "<token>" }
 ```
 
-The token is tied to the current Session. Fetch a fresh token after sign-in. Include it in every mutation until sign-out.
+GET /auth/csrf is available before sign-in, during pre-auth, and with a full Session. For an anonymous caller it creates a short-lived server-side auth context with a Secure, HttpOnly, SameSite context cookie; the response contains only the CSRF proof. After password verification, the Backend rotates the proof and binds it to the pre-auth context. After full sign-in or enrollment acknowledgement, it rotates the proof again and binds it to the full Session. A proof from an earlier context is invalid. Fetch a proof before the first mutation and after each auth-state transition; send it with the matching context cookie.
 
 CORS is restricted to exact frontend origins specified in `trustedOrigins`. Cross-origin credentialed requests from unlisted origins are rejected.
 
@@ -82,53 +82,11 @@ The Frontend is responsible for adding `X-User-Activity: 1` to requests that ori
 
 ## 3 State Machine: Account Authentication States
 
-```
-                         +-----------------------------------------+
-                         |              UNAUTHENTICATED             |
-                         |  (no Session Cookie / cookie expired)   |
-                         +------------------+-----------------------+
-                                            |
-                                            | POST /auth/sign-in (password OK)
-                                            v
-                    +------Non-mandatory Role?------+
-                    | Yes                           | No (mandatory 2FA role)
-                    v                               v
-         +----------------------+     +------------------------------+
-         |   AUTHENTICATED      |     |         PRE-AUTH             |
-         |  (full Session)      |     |  (no full Session issued)    |
-         |                      |     |  only enrollment endpoints   |
-         +----------------------+     |  reachable                   |
-                                      +------------+-----------------+
-                                                   |
-                                                   | TOTP Enrollment + RC ack
-                                                   | POST /auth/2fa/enable  &
-                                                   | POST /auth/2fa/verify-setup &
-                                                   | POST /auth/2fa/acknowledge-recovery-codes
-                                                   v
-                                      +------------------------------+
-                                      |  ENROLLED / TOTP REQUIRED   |
-                                      |  (must verify TOTP or        |
-                                      |   Recovery Code this session)|
-                                      +------------+-----------------+
-                                                   |
-                                                   | Browser trusted?
-                          +-----------+-----------+-----------+
-                          | Yes                               | No
-                          v                                   v
-             +----------------------+       +----------------------------+
-             |   AUTHENTICATED      |       |  POST /auth/2fa/verify-   |
-             |  (full Session)      |       |  totp  OR                 |
-             +----------------------+       |  POST /auth/2fa/verify-   |
-                                            |  recovery-code            |
-                                            +------------+--------------+
-                                                         | verified
-                                                         v
-                                            +----------------------------+
-                                            |   AUTHENTICATED           |
-                                            |  (full Session issued)    |
-                                            |  Optional: trust browser  |
-                                            +----------------------------+
-```
+1. **Unauthenticated → authenticated:** A non-mandatory Role supplies valid credentials and receives a full Session.
+2. **Unauthenticated → pre-auth:** A mandatory-2FA Role supplies valid credentials without a trusted browser. No full Session is issued; Business API access is denied.
+3. **Pre-auth → authenticated (first enrollment):** The user enables TOTP, proves possession through `verify-setup`, receives Recovery Codes, and acknowledges storing them. The setup proof counts for this sign-in; acknowledgement issues the full Session.
+4. **Pre-auth → authenticated (later sign-ins):** An enrolled user verifies TOTP or a Recovery Code. A valid trusted browser may bypass this challenge after password verification.
+5. **Any state → unauthenticated:** Sign-out or expiry clears the current auth context. A Role change revokes the target account's Sessions and trusted browsers as specified in §9.
 
 ---
 
@@ -139,6 +97,7 @@ The Frontend is responsible for adding `X-User-Activity: 1` to requests that ori
 ```
 POST /auth/sign-in
 Content-Type: application/json
+X-CSRF-Token: <token>
 Body: { "email": string, "password": string }
 ```
 
@@ -147,7 +106,8 @@ Body: { "email": string, "password": string }
 | HTTP | Body | Meaning |
 |---|---|---|
 | `200` | `{ "requiresTwoFactor": false, "user": { "id", "email", "name", "role" } }` | Non-mandatory Role — full Session Cookie set |
-| `200` | `{ "requiresTwoFactor": true, "twoFactorRedirect": "/2fa/verify" }` | Mandatory Role + not trusted browser — pre-auth state; no full Session Cookie |
+| `200` | `{ "requiresTwoFactor": true, "twoFactorRedirect": "/2fa/enroll" }` | Mandatory Role not enrolled — pre-auth context; no full Session Cookie |
+| `200` | `{ "requiresTwoFactor": true, "twoFactorRedirect": "/2fa/verify" }` | Mandatory Role already enrolled, untrusted browser — TOTP verification context; no full Session Cookie |
 | `200` | `{ "requiresTwoFactor": false, "user": { ... }, "trustedBrowser": true }` | Mandatory Role + valid Trusted Browser — TOTP skipped, full Session set |
 | `401` | `{ "code": "INVALID_CREDENTIALS", "message": "..." }` | Wrong email or password |
 | `403` | `{ "code": "EMAIL_NOT_VERIFIED", "message": "..." }` | Email not yet verified |
@@ -164,9 +124,10 @@ GET /auth/session
 | HTTP | Body | Meaning |
 |---|---|---|
 | `200` | `{ "session": { "id", "expiresAt", "userId" }, "user": { "id", "email", "role", "enrollmentComplete": bool } }` | Valid Session |
-| `200` | `{ "session": null }` | No active Session (unauthenticated) |
+| `200` | `{ "session": null, "user": { "id", "email", "role", "enrollmentComplete": false } }` | Valid pre-auth context; no full Session |
+| `200` | `{ "session": null }` | No auth context |
 
-> `enrollmentComplete: false` means the account is in pre-auth / enrollment state.
+> `enrollmentComplete: false` is returned only with a valid pre-auth context.
 > Frontend uses this field to decide whether to show the enrollment screen.
 
 ### 4.3 Sign-out
@@ -189,7 +150,7 @@ GET /auth/csrf
 
 | HTTP | Body | Meaning |
 |---|---|---|
-| `200` | `{ "csrfToken": string }` | Always returns a token (new or existing for current session) |
+| `200` | `{ "csrfToken": string }` | Returns a proof for the current anonymous, pre-auth, or full-Session context |
 
 ### 4.5 2FA Enrollment — Enable & QR
 
@@ -238,7 +199,7 @@ Body: { "acknowledged": true }
 | `200` | `{ "enrollmentComplete": true }` | Enrollment gate lifted; full Session Cookie issued now |
 | `400` | `{ "code": "RECOVERY_CODES_NOT_SHOWN" }` | Acknowledge called before codes were shown |
 
-> Full Session is only issued **after** this endpoint completes successfully.
+> The setup TOTP proof counts for this enrollment. A full Session is issued **after** this acknowledgement; the next sign-in requires TOTP unless the browser is trusted.
 
 ### 4.8 TOTP Verification (Login — Mandatory Roles)
 
@@ -332,9 +293,9 @@ When an account is in pre-auth state (mandatory-2FA Role, not yet enrolled, or e
 | `GET /auth/session` | Yes (returns `enrollmentComplete: false`) |
 | `POST /auth/sign-out` | Yes (clears pre-auth state) |
 | Any Business API endpoint | No — `403 { "code": "ENROLLMENT_REQUIRED" }` |
-| Direct BetterAuth admin routes | No — must verify ADMIN RBAC and HAMS rules server-side |
+| Direct BetterAuth admin routes | No — `403 DIRECT_ADMIN_ROUTE_DISABLED` until ticket 10 |
 
-When `requiresTwoFactor: true` was returned (TOTP verification state):
+When `twoFactorRedirect: "/2fa/verify"` was returned (TOTP verification state):
 
 | Operation | Allowed? |
 |---|---|
@@ -384,6 +345,7 @@ All error responses follow:
 | `USER_NOT_FOUND` | 400 | Resend verification — no matching account |
 | `LAST_ADMIN_PROTECTED` | 403 | Attempt to delete/disable/demote last active enrolled ADMIN |
 | `PUBLIC_SIGNUP_DISABLED` | 403 | POST /api/auth/sign-up/email is disabled |
+| `DIRECT_ADMIN_ROUTE_DISABLED` | 403 | Direct BetterAuth admin routes are closed until HAMS policy is enforced |
 
 ---
 
@@ -452,14 +414,14 @@ Account creation is only possible via `POST /users` (ADMIN-only HAMS route). Thi
 
 ## 11 Direct BetterAuth Admin Routes
 
-BetterAuth exposes direct admin routes (e.g. `/api/auth/admin/create-user`, `/api/auth/admin/set-user-password`). These routes **must**:
+BetterAuth exposes direct admin routes (e.g. `/api/auth/admin/create-user`, `/api/auth/admin/set-user-password`). Until ticket 10 implements the HAMS policy, HTTP access to every `/api/auth/admin/*` route returns `403 DIRECT_ADMIN_ROUTE_DISABLED`. Internal `auth.api` calls used by HAMS services remain available. Ticket 10 may reopen individual routes only after they:
 
 1. Verify that the caller has `ADMIN` role in HAMS (not rely solely on BetterAuth's own role check).
 2. Require HAMS employee data fields for user creation.
 3. Enforce audit logging for Role changes.
 4. Not bypass `ENROLLMENT_REQUIRED` for the target account.
 
-Tests must confirm that unauthenticated callers and non-ADMIN callers receive `401`/`403` from these routes.
+Ticket 01 tests confirm that both unauthenticated and non-ADMIN callers receive `403 DIRECT_ADMIN_ROUTE_DISABLED`. Ticket 10 tests must cover the reopened routes with ADMIN and non-ADMIN sessions.
 
 ---
 
@@ -474,11 +436,13 @@ A separate Jest config (`test/jest-auth-integration.json`) runs against a real `
 Run:
 
 ```sh
-$env:TEST_DATABASE_URL = "postgres://..."
-jest --config ./test/jest-auth-integration.json --runInBand auth-contract.e2e-spec.ts
+$env:TEST_DATABASE_URL = "postgresql://.../hams_auth_test"
+pnpm run test:auth-integration
 ```
 
-### Coverage required (matches spec Testing Decisions)
+### Target coverage (added as each implementation ticket lands)
+
+Ticket 01 establishes the real HTTP and database test seam. Ticket 02 adds cookie and CSRF assertions; ticket 03 adds the enrollment gate; tickets 04–06 add recovery, lockout, trust, and session expiry; ticket 10 adds account-route authorization checks. Active tests must assert one expected response for the implemented stage.
 
 1. Non-mandatory roles get a full Session on password-only sign-in; Session Token absent from JSON.
 2. Mandatory roles without enrollment cannot reach any Business API endpoint (403 ENROLLMENT_REQUIRED).
