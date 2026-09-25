@@ -76,7 +76,7 @@ Routes that **do not** count as user activity and must omit this header:
 - Background polling (notifications, status checks)
 - Auto-refresh requests initiated by the system
 
-The Frontend is responsible for adding `X-User-Activity: 1` to requests that originate from genuine user interactions (clicks, form submissions, explicit data loads).
+The Frontend is responsible for adding `X-User-Activity: 1` to requests that originate from genuine user interactions (clicks, form submissions, explicit data loads). A marked request is accepted only while the existing idle and absolute deadlines are still in the future; it updates the idle deadline to 60 minutes after the request, capped by the original 12-hour sign-in deadline. Polling requests never move that deadline.
 
 ---
 
@@ -353,9 +353,9 @@ All error responses follow:
 
 | Rule | Value |
 |---|---|
-| Absolute Session lifetime | 12 hours from sign-in |
+| Absolute Session lifetime | 12 hours from sign-in; fixed and never sliding |
 | Idle expiry | 60 minutes of no genuine user activity |
-| Idle timer refresh | `X-User-Activity: 1` header on authenticated request |
+| Idle timer refresh | `X-User-Activity: 1` on an authenticated Session Cookie request |
 | Idle timer reset does NOT extend | 12-hour absolute cap |
 | Tab/browser close | Does **not** sign out |
 | Explicit sign-out | Revokes server Session, clears Cookie immediately |
