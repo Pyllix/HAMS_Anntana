@@ -98,14 +98,14 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการสต็อกครุภัณฑ์",
     element: <EquipmentStock />,
     icon: Archive,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
     path: "parcel-equipment-stock",
     title: "จัดการสต็อกครุภัณฑ์",
     element: <EquipmentStock />,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: false,
   },
   {
@@ -152,7 +152,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "วิธีการได้มา",
     element: <AcquisitionTypePage />,
     icon: FilePlus2,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
@@ -160,7 +160,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ผู้ผลิต/จำหน่าย",
     element: <CompanySupplierPage />,
     icon: Building2,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
@@ -168,7 +168,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ประเภทเงิน",
     element: <BudgetTypePage />,
     icon: Banknote,
-    roles: [ROLES.PARCEL_STAFF, ROLES.ADMIN],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
@@ -177,7 +177,6 @@ export const APP_ROUTE: AppRote[] = [
     element: <RepairRequestPage />,
     icon: Wrench,
     roles: [
-      ROLES.ADMIN,
       ROLES.ASSET_CENTER_STAFF,
       ROLES.DEPARTMENT_STAFF,
       ROLES.MANAGER,
@@ -200,7 +199,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "งานซ่อม",
     element: <PendingEvaluations />,
     icon: History,
-    roles: [ROLES.ADMIN, ROLES.MAINTENANCE_STAFF, ROLES.MAINTENANCE_HEAD],
+    roles: [ROLES.MAINTENANCE_STAFF, ROLES.MAINTENANCE_HEAD],
     showInNav: true,
   },
   // -------- Admin ------------
