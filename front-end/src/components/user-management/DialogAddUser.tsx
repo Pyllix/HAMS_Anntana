@@ -12,7 +12,7 @@ interface Props {
 }
 
 // รายการบทบาทเรียงลำดับตามที่แสดงในดรอปดาวน์ พร้อมคำอธิบายสิทธิ์การใช้งาน
-const ROLE_OPTIONS: { value: RoleType; label: string; description: string }[] = [
+export const ROLE_OPTIONS: { value: RoleType; label: string; description: string }[] = [
   {
     value: ROLES.MANAGER,
     label: "ผู้จัดการ / หัวหน้างาน",
@@ -85,6 +85,9 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   const selectedRole =
     ROLE_OPTIONS.find((option) => option.value === form.role) ?? ROLE_OPTIONS[0];
 
+  // ผู้ดูแลระบบไม่จำเป็นต้องสังกัดหน่วยงาน
+  const isSectionRequired = form.role !== ROLES.ADMIN;
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
@@ -115,7 +118,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
       email: form.email,
       password: form.password,
       role: form.role,
-      sectionId: form.sectionId,
+      ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
     });
   };
 
@@ -183,17 +186,27 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
             {/* หน่วยงาน/แผนก */}
             <div>
               <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
-                หน่วยงาน/แผนก <span className="text-emerald-600">*</span>
+                หน่วยงาน/แผนก{" "}
+                {isSectionRequired ? (
+                  <span className="text-emerald-600">*</span>
+                ) : (
+                  <span className="text-xs font-normal text-gray-400">
+                    (ไม่ต้องระบุ)
+                  </span>
+                )}
               </label>
               <select
                 name="sectionId"
-                required
-                value={form.sectionId}
+                required={isSectionRequired}
+                disabled={!isSectionRequired}
+                value={isSectionRequired ? form.sectionId : ""}
                 onChange={handleChange}
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm text-gray-900 bg-white"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm text-gray-900 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
-                <option value="" disabled>
-                  -- โปรดเลือกหน่วยงาน --
+                <option value="" disabled={isSectionRequired}>
+                  {isSectionRequired
+                    ? "-- โปรดเลือกหน่วยงาน --"
+                    : "-- ผู้ดูแลระบบไม่ต้องระบุหน่วยงาน --"}
                 </option>
                 {sections?.map((section) => (
                   <option key={section.id} value={section.id}>

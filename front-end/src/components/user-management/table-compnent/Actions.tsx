@@ -3,15 +3,12 @@ import { User } from "../../../types/TypeUser";
 import { useState } from "react";
 import DialogDetailUser from "../DialogDetailUser";
 import DialogDelUser from "../DialogDelUser";
+import DialogEditUser from "../DialogEditUser";
 
 export default function Actions({ row }: { row: User }) {
   const [isOpenView, setIsOpenView] = useState(false);
   const [isOpenDelete, setIsOpenDelete] = useState(false);
-
-  const handleEdit = () => {
-    // ใส่ logic เปิด modal แก้ไขผู้ใช้
-    console.log("Edit user:", row);
-  };
+  const [isOpenEdit, setIsOpenEdit] = useState(false);
 
   const handleDelete = () => {
     // ใส่ logic ระงับหรือลบผู้ใช้
@@ -30,7 +27,7 @@ export default function Actions({ row }: { row: User }) {
       <button
         type="button"
         title="แก้ไข"
-        onClick={handleEdit}
+        onClick={() => setIsOpenEdit(true)}
         className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-emerald-600"
       >
         <Pencil className="h-4 w-4" />
@@ -47,6 +44,12 @@ export default function Actions({ row }: { row: User }) {
       <DialogDelUser
         isOpen={isOpenDelete}
         onClose={() => setIsOpenDelete(false)}
+        user={row}
+      />
+
+      <DialogEditUser
+        isOpen={isOpenEdit}
+        onClose={() => setIsOpenEdit(false)}
         user={row}
       />
 
