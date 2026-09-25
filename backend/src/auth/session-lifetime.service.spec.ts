@@ -134,13 +134,21 @@ describe('SessionLifetimeService', () => {
     expect(session.expiresAt).toEqual(window?.expiresAt);
   });
 
-  it('does not report a concurrent update race as session expiry', async () => {
+  it('uses the latest valid deadline after concurrent update conflicts', async () => {
     const session = createSession();
     sessions.set(session.token, session);
-    prismaSession.updateMany.mockResolvedValue({ count: 0 });
+    prismaSession.updateMany.mockImplementation(async () => {
+      const activityAt = new Date();
+      session.updatedAt = activityAt;
+      session.expiresAt = new Date(activityAt.getTime() + 60 * 60 * 1000);
+      return { count: 0 };
+    });
 
-    await expect(service.enforceSession(session.token, true)).rejects.toThrow(
-      'Session changed repeatedly while enforcing its lifetime',
+    const window = await service.enforceSession(session.token, true);
+
+    expect(window?.expiresAt).toEqual(new Date('2026-09-25T01:00:00.000Z'));
+    expect(window?.absoluteExpiresAt).toEqual(
+      new Date('2026-09-25T12:00:00.000Z'),
     );
     expect(prismaSession.updateMany).toHaveBeenCalledTimes(8);
   });

@@ -5,12 +5,13 @@ export const SESSION_ABSOLUTE_LIFETIME_MS = 12 * 60 * 60 * 1000;
 export const SESSION_IDLE_LIFETIME_MS = 60 * 60 * 1000;
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 8;
 
-export class SessionLifetimeContentionError extends Error {
-  constructor() {
-    super('Session changed repeatedly while enforcing its lifetime');
-    this.name = 'SessionLifetimeContentionError';
-  }
-}
+type SessionRecord = {
+  id: string;
+  token: string;
+  createdAt: Date;
+  updatedAt: Date;
+  expiresAt: Date;
+};
 
 export interface SessionExpiryWindow {
   expiresAt: Date;
@@ -42,26 +43,14 @@ export class SessionLifetimeService {
       if (!session) return null;
 
       const now = new Date();
-      const absoluteExpiresAt = new Date(
-        session.createdAt.getTime() + SESSION_ABSOLUTE_LIFETIME_MS,
-      );
-      const idleExpiresAt = new Date(
-        session.updatedAt.getTime() + SESSION_IDLE_LIFETIME_MS,
-      );
-      const expiresAt = new Date(
-        Math.min(
-          session.expiresAt.getTime(),
-          absoluteExpiresAt.getTime(),
-          idleExpiresAt.getTime(),
-        ),
-      );
+      const window = this.calculateExpiryWindow(session);
       const expected = {
         id: session.id,
         updatedAt: session.updatedAt,
         expiresAt: session.expiresAt,
       };
 
-      if (expiresAt <= now) {
+      if (window.expiresAt <= now) {
         const deleted = await sharedPrisma.session.deleteMany({
           where: expected,
         });
@@ -74,7 +63,10 @@ export class SessionLifetimeService {
           now.getTime() + SESSION_IDLE_LIFETIME_MS,
         );
         const nextExpiresAt = new Date(
-          Math.min(absoluteExpiresAt.getTime(), nextIdleExpiresAt.getTime()),
+          Math.min(
+            window.absoluteExpiresAt.getTime(),
+            nextIdleExpiresAt.getTime(),
+          ),
         );
         const updated = await sharedPrisma.session.updateMany({
           where: expected,
@@ -84,29 +76,59 @@ export class SessionLifetimeService {
           return {
             expiresAt: nextExpiresAt,
             idleExpiresAt: nextExpiresAt,
-            absoluteExpiresAt,
+            absoluteExpiresAt: window.absoluteExpiresAt,
           };
         }
         continue;
       }
 
-      if (session.expiresAt.getTime() > expiresAt.getTime()) {
+      if (session.expiresAt.getTime() > window.expiresAt.getTime()) {
         const clamped = await sharedPrisma.session.updateMany({
           where: expected,
-          data: { expiresAt },
+          data: { expiresAt: window.expiresAt },
         });
         if (clamped.count !== 1) continue;
       }
 
-      return {
-        expiresAt,
-        idleExpiresAt: new Date(
-          Math.min(idleExpiresAt.getTime(), absoluteExpiresAt.getTime()),
-        ),
-        absoluteExpiresAt,
-      };
+      return window;
     }
 
-    throw new SessionLifetimeContentionError();
+    const latestSession = await sharedPrisma.session.findUnique({
+      where: { token },
+      select: {
+        id: true,
+        token: true,
+        createdAt: true,
+        updatedAt: true,
+        expiresAt: true,
+      },
+    });
+    if (!latestSession) return null;
+
+    const now = new Date();
+    const latestWindow = this.calculateExpiryWindow(latestSession);
+    return latestWindow.expiresAt <= now ? null : latestWindow;
+  }
+
+  private calculateExpiryWindow(session: SessionRecord): SessionExpiryWindow {
+    const absoluteExpiresAt = new Date(
+      session.createdAt.getTime() + SESSION_ABSOLUTE_LIFETIME_MS,
+    );
+    const idleExpiresAt = new Date(
+      session.updatedAt.getTime() + SESSION_IDLE_LIFETIME_MS,
+    );
+    return {
+      expiresAt: new Date(
+        Math.min(
+          session.expiresAt.getTime(),
+          absoluteExpiresAt.getTime(),
+          idleExpiresAt.getTime(),
+        ),
+      ),
+      idleExpiresAt: new Date(
+        Math.min(idleExpiresAt.getTime(), absoluteExpiresAt.getTime()),
+      ),
+      absoluteExpiresAt,
+    };
   }
 }
