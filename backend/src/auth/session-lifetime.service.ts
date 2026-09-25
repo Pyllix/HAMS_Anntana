@@ -5,6 +5,13 @@ export const SESSION_ABSOLUTE_LIFETIME_MS = 12 * 60 * 60 * 1000;
 export const SESSION_IDLE_LIFETIME_MS = 60 * 60 * 1000;
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 8;
 
+export class SessionLifetimeContentionError extends Error {
+  constructor() {
+    super('Session changed repeatedly while enforcing its lifetime');
+    this.name = 'SessionLifetimeContentionError';
+  }
+}
+
 export interface SessionExpiryWindow {
   expiresAt: Date;
   idleExpiresAt: Date;
@@ -100,7 +107,6 @@ export class SessionLifetimeService {
       };
     }
 
-    // A request racing several concurrent activity updates fails closed.
-    return null;
+    throw new SessionLifetimeContentionError();
   }
 }

@@ -134,6 +134,16 @@ describe('SessionLifetimeService', () => {
     expect(session.expiresAt).toEqual(window?.expiresAt);
   });
 
+  it('does not report a concurrent update race as session expiry', async () => {
+    const session = createSession();
+    sessions.set(session.token, session);
+    prismaSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.enforceSession(session.token, true)).rejects.toThrow(
+      'Session changed repeatedly while enforcing its lifetime',
+    );
+    expect(prismaSession.updateMany).toHaveBeenCalledTimes(8);
+  });
   it('keeps simultaneous device sessions independent', async () => {
     const firstDevice = createSession({
       token: 'device-one',
