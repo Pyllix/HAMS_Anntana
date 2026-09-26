@@ -4,6 +4,10 @@ import type {
   UpdatePurchasingInfoDto,
   PartOrderStatus,
 } from "../types/TypePartOrder";
+import {
+  getAccountStorageKey,
+  getCurrentSessionDraftAccountId,
+} from "./sessionDraftStorage.js";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 
@@ -104,7 +108,9 @@ const ORDER_STORAGE_KEY = "hams_part_orders_storage_v2";
 
 function loadSavedOrders(): PartOrder[] {
   try {
-    const saved = localStorage.getItem(ORDER_STORAGE_KEY);
+    const storageKey = getAccountStorageKey(ORDER_STORAGE_KEY);
+    if (!storageKey) return defaultFallbackOrders;
+    const saved = localStorage.getItem(storageKey);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -117,17 +123,27 @@ function loadSavedOrders(): PartOrder[] {
 
 function saveOrdersToStorage(list: PartOrder[]) {
   try {
-    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(list));
+    const storageKey = getAccountStorageKey(ORDER_STORAGE_KEY);
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(list));
   } catch (e) {
     console.warn("Error saving orders to localStorage:", e);
   }
 }
 
-let localOrders: PartOrder[] = loadSavedOrders();
+let localOrdersAccountId: string | null | undefined;
+let localOrders: PartOrder[] = defaultFallbackOrders;
+
+function ensureLocalOrdersForCurrentAccount(): void {
+  const accountId = getCurrentSessionDraftAccountId();
+  if (localOrdersAccountId === accountId) return;
+  localOrdersAccountId = accountId;
+  localOrders = loadSavedOrders();
+}
 
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function getPartOrders(): Promise<PartOrder[]> {
+  ensureLocalOrdersForCurrentAccount();
   try {
     // 1. ลองดึงข้อมูลประวัติการสั่งซื้อ/รับเข้าอะไหล่จริงจาก Backend
     const res = await axios.get(
@@ -180,6 +196,7 @@ export async function getPartOrders(): Promise<PartOrder[]> {
 }
 
 export async function getPartOrderById(id: number): Promise<PartOrder> {
+  ensureLocalOrdersForCurrentAccount();
   try {
     const res = await axios.get(
       `${BASE_URL}/part-orders/${id}`,
@@ -197,6 +214,7 @@ export async function updatePurchasingInfo(
   id: number,
   dto: UpdatePurchasingInfoDto,
 ): Promise<PartOrder> {
+  ensureLocalOrdersForCurrentAccount();
   try {
     const res = await axios.patch(
       `${BASE_URL}/part-orders/${id}/purchasing-info`,
@@ -225,6 +243,7 @@ export async function updateOrderStatus(
   id: number,
   status: PartOrderStatus,
 ): Promise<PartOrder> {
+  ensureLocalOrdersForCurrentAccount();
   const today = new Date().toISOString().split("T")[0];
   try {
     const res = await axios.patch(
@@ -260,6 +279,7 @@ export async function createPartOrder(data: {
   totalPrice: number;
   orderNo: string;
 }): Promise<PartOrder> {
+  ensureLocalOrdersForCurrentAccount();
   const newOrder: PartOrder = {
     id: Date.now(),
     orderNo: data.orderNo,

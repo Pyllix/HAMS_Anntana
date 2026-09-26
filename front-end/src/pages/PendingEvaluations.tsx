@@ -30,16 +30,16 @@ export default function PendingEvaluationsPage() {
   const viewMode = useAssessmentStore((state) => state.viewMode);
   const selectedJob = useAssessmentStore((state) => state.selectedJob);
   const closeForm = useAssessmentStore((state) => state.closeForm);
-  const { user, token } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
-    if (!token || !user) {
+    if (!isAuthenticated || !user) {
       closeForm();
     }
     return () => {
       closeForm();
     };
-  }, [token, user, closeForm]);
+  }, [isAuthenticated, user, closeForm]);
 
   useEffect(() => {
     const handler = setTimeout(() => {

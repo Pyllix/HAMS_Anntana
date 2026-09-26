@@ -9,12 +9,17 @@ import AppLayout from "../layout/AppLayout";
 import AdminBorrowReturn from "../pages/AssetCenterBorrowReturn";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
-import axios from "axios";
 import UserBorrowReturn from "../pages/DepartMentBorrowReturn";
 import { APP_ROUTE } from "../router/routes.config";
 import Spinner from "../components/loader/Spinner";
+import {
+  associateSessionDraftAccount,
+  initializeSessionDraftTab,
+} from "../services/sessionDraftStorage";
+import { getCurrentSession } from "../services/authService";
+import { publishAuthMessage } from "../services/authBroadcast";
+import SessionLifecycle from "../components/auth/SessionLifecycle";
 
-// Function สำหรับหา Path ที่ User จะต้องไป
 function RootRedirect() {
   const role = useAuthStore((state) => state.role);
   const defaultRoute = APP_ROUTE.find(
@@ -22,35 +27,24 @@ function RootRedirect() {
   );
   return (
     <Navigate
-      to={defaultRoute ? `/${defaultRoute.path}` : "/unauthorized"}
+      to={defaultRoute ? "/" + defaultRoute.path : "/unauthorized"}
       replace
     />
   );
 }
 
 const router = createBrowserRouter([
-  {
-    path: "/login",
-    element: <Login />,
-  },
+  { path: "/login", element: <Login /> },
   {
     element: <ProtectedRoute />,
     children: [
       {
         element: <AppLayout />,
         children: [
-          {
-            index: true,
-            element: <RootRedirect />,
-          },
+          { index: true, element: <RootRedirect /> },
           ...APP_ROUTE.map((route) => ({
             element: <ProtectedRoute allowedRoles={route.roles} />,
-            children: [
-              {
-                path: route.path,
-                element: route.element,
-              },
-            ],
+            children: [{ path: route.path, element: route.element }],
           })),
         ],
       },
@@ -60,41 +54,47 @@ const router = createBrowserRouter([
     path: "/unauthorized",
     element: <div>คุณไม่มีสิทธิ์เข้าถึงหน้านี้</div>,
   },
-  {
-    path: "*",
-    element: <Navigate to="/" replace />,
-  },
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 export default function AppRouter() {
   const [isInitializing, setIsInitializing] = useState(true);
-  const { login, logout } = useAuthStore();
+  const login = useAuthStore((state) => state.login);
+  const logout = useAuthStore((state) => state.logout);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem("token");
-      const userId = localStorage.getItem("userId");
+    let active = true;
 
-      if (token && userId) {
-        try {
-          const userResponse = await axios.get(
-            `https://hams-anntana.onrender.com/users/${userId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          );
-          login(userResponse.data, token);
-        } catch (error) {
-          console.error("Auto login failed, token might be expired.", error);
+    const initializeAuth = async () => {
+      try {
+        await initializeSessionDraftTab();
+        const current = await getCurrentSession();
+        if (!active) return;
+
+        if (current) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("userId");
+          associateSessionDraftAccount(current.user.id);
+          login(current.user, current.session);
+          publishAuthMessage({
+            type: "ACCOUNT_CHANGED",
+            userId: current.user.id,
+          });
+        } else {
           logout();
         }
+      } catch {
+        // Fail closed: without a server-confirmed session, protected routes stay hidden.
+        logout();
+      } finally {
+        if (active) setIsInitializing(false);
       }
-      setIsInitializing(false);
     };
 
-    initializeAuth();
+    void initializeAuth();
+    return () => {
+      active = false;
+    };
   }, [login, logout]);
 
   if (isInitializing) {
@@ -105,5 +105,11 @@ export default function AppRouter() {
       </div>
     );
   }
-  return <RouterProvider router={router} />;
+
+  return (
+    <>
+      <RouterProvider router={router} />
+      <SessionLifecycle />
+    </>
+  );
 }

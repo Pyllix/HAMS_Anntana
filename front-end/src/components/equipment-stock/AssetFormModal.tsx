@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   X,
@@ -20,10 +20,14 @@ import {
 } from "../../services/assetService";
 import { getCompanies } from "../../services/companyService";
 import { getAcqTypes } from "../../services/acqTypeService";
+import { useAuthStore } from "../../stores/authStore";
+import { useSessionDraft } from "../../hooks/useSessionDraft";
+import { clearSessionDraft } from "../../services/sessionDraftStorage.js";
 
 export default function AssetFormModal() {
   const { isOpen, mode, selectedAsset, closeModal } = useEquipmentModalStore();
   const queryClient = useQueryClient();
+  const accountId = useAuthStore((state) => state.user?.id);
 
   // Queries for Dropdowns
   const { data: assetTypes = [] } = useQuery({
@@ -109,10 +113,17 @@ export default function AssetFormModal() {
 
   const [imagePreview, setImagePreview] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const initializedFormKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setErrorMsg("");
+    if (!isOpen) {
+      initializedFormKeyRef.current = null;
+      return;
+    }
+    const formKey = mode === "edit" ? "edit:" + String(selectedAsset?.id ?? "pending") : "create";
+    if (initializedFormKeyRef.current === formKey) return;
+    initializedFormKeyRef.current = formKey;
+    setErrorMsg("");
       if (mode === "edit" && selectedAsset) {
         setFormData({
           noid: selectedAsset.noid || "",
@@ -170,9 +181,58 @@ export default function AssetFormModal() {
         });
         setImagePreview("");
       }
-    }
-  }, [isOpen, mode, selectedAsset, assetTypes, sections, assetStatuses, companies, acqTypes, budgetTypes, users, equipmentTypes]);
+      }, [isOpen, mode, selectedAsset?.id]);
 
+  useEffect(() => {
+    if (!isOpen || mode !== "create") return;
+    const normalStatus = assetStatuses.find((status) => status.code === "NORMAL") || assetStatuses[0];
+    setFormData((current) => ({
+      ...current,
+      type_id: current.type_id || (assetTypes[0]?.id ? String(assetTypes[0].id) : ""),
+      section_id: current.section_id || (sections[0]?.id ? String(sections[0].id) : ""),
+      asset_status_id: current.asset_status_id || (normalStatus?.id ? String(normalStatus.id) : ""),
+      equipment_type_id: current.equipment_type_id || (equipmentTypes[0]?.id ? String(equipmentTypes[0].id) : ""),
+      owner_id: current.owner_id || (users[0]?.id ? String(users[0].id) : ""),
+      company_id: current.company_id || (companies[0]?.id ? String(companies[0].id) : ""),
+      acqType: current.acqType || acqTypes[0]?.name || "จัดซื้อ",
+      budgetType: current.budgetType || budgetTypes[0]?.name || "เงินงบประมาณ",
+    }));
+  }, [isOpen, mode, assetTypes, sections, assetStatuses, companies, acqTypes, budgetTypes, users, equipmentTypes]);
+
+  const assetDraftKey = "asset:create";
+  const assetDraft = useMemo(
+    () => ({ formData: { ...formData }, imagePreview }),
+    [formData, imagePreview],
+  );
+
+  useSessionDraft({
+    key: assetDraftKey,
+    accountId,
+    enabled: Boolean(accountId && isOpen && mode === "create"),
+    value: assetDraft,
+    restore: (draft) => {
+      if (!draft?.formData || typeof draft.formData !== "object") return;
+      setFormData((current) => ({
+        ...current,
+        ...draft.formData,
+        imageUrl: "",
+      }));
+      setImagePreview(typeof draft.imagePreview === "string" ? draft.imagePreview : "");
+    },
+    isEmpty: (draft) => {
+      const data = draft.formData;
+      return !(
+        data.noid ||
+        data.name ||
+        data.model ||
+        data.serialNo ||
+        data.acqDoc ||
+        data.price ||
+        data.remark ||
+        draft.imagePreview
+      );
+    },
+  });
   const mutation = useMutation({
     mutationFn: async () => {
       // Validate essentials
@@ -227,6 +287,7 @@ export default function AssetFormModal() {
       }
     },
     onSuccess: () => {
+      clearSessionDraft(assetDraftKey);
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["my-assets"] });
       queryClient.invalidateQueries({ queryKey: ["kpi-total-assets"] });

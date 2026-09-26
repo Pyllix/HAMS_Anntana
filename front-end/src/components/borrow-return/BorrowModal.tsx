@@ -7,6 +7,9 @@ import { useMemo, useState } from "react";
 import { postBorrow, getBorrowErrorMessage } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
+import { useAuthStore } from "../../stores/authStore";
+import { useSessionDraft } from "../../hooks/useSessionDraft";
+import { clearSessionDraft } from "../../services/sessionDraftStorage.js";
 
 export default function BorrowModal() {
   const queryClient = useQueryClient();
@@ -14,6 +17,7 @@ export default function BorrowModal() {
 
   // ตัวปิด Modal กับ Asset ที่รับเข้ามา
   const { closeForm, selectedAsset: asset } = useBorrowModalStore();
+  const accountId = useAuthStore((state) => state.user?.id);
 
   // ------------- ทำตัวเเปลของเวลา ------------------
   // 1. เพิ่มตัวแปรดึงเวลาปัจจุบันไว้ด้านบน (ก่อน return ภายในฟังก์ชัน BorrowModal)
@@ -27,6 +31,23 @@ export default function BorrowModal() {
   const [employeeId, setEmployeeId] = useState("");
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
 
+  const borrowDraftKey = "borrow:" + String(asset?.id ?? "new");
+  const borrowDraft = useMemo(
+    () => ({ employeeId, expectedReturnDate }),
+    [employeeId, expectedReturnDate],
+  );
+  useSessionDraft({
+    key: borrowDraftKey,
+    accountId,
+    enabled: Boolean(accountId && asset?.id),
+    value: borrowDraft,
+    restore: (draft) => {
+      setEmployeeId(draft.employeeId ?? "");
+      setExpectedReturnDate(draft.expectedReturnDate ?? "");
+    },
+    isEmpty: (draft) => !draft.employeeId && !draft.expectedReturnDate,
+  });
+
   // จัดการการส่ง API สำหรับการยืมครุภัณฑ์
   const { mutate: handleBorrowSubmit, isPending: isSubmitting } = useMutation({
     mutationFn: postBorrow,
@@ -36,6 +57,7 @@ export default function BorrowModal() {
       // Invalidate queries เพื่ออัปเดตสถานะหน้าตารางรายการ
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
+      clearSessionDraft(borrowDraftKey);
       closeForm();
     },
     onError: (err: any) => {

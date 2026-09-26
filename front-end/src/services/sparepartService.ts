@@ -7,6 +7,10 @@ import type {
   StockInSparepartDto,
   ReturnSparepartDto,
 } from "../types/TypeSparePart";
+import {
+  getAccountStorageKey,
+  getCurrentSessionDraftAccountId,
+} from "./sessionDraftStorage.js";
 
 const BASE_URL = "https://hams-anntana.onrender.com";
 
@@ -23,7 +27,9 @@ const STORAGE_KEY = "hams_spareparts_storage_v1";
 
 function loadSavedSpareparts(): Sparepart[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const storageKey = getAccountStorageKey(STORAGE_KEY);
+    if (!storageKey) return [];
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -32,14 +38,23 @@ function loadSavedSpareparts(): Sparepart[] {
 
 function saveSparepartsToStorage(items: Sparepart[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    const storageKey = getAccountStorageKey(STORAGE_KEY);
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(items));
   } catch {
     // ignore
   }
 }
 
-// Local store for fallback/offline persistence
-let localSpareparts: Sparepart[] = loadSavedSpareparts();
+// Local store for fallback/offline persistence, isolated per authenticated account.
+let localSparepartsAccountId: string | null | undefined;
+let localSpareparts: Sparepart[] = [];
+
+function ensureLocalSparepartsForCurrentAccount(): void {
+  const accountId = getCurrentSessionDraftAccountId();
+  if (localSparepartsAccountId === accountId) return;
+  localSparepartsAccountId = accountId;
+  localSpareparts = loadSavedSpareparts();
+}
 
 // ─── Spare Part Groups ────────────────────────────────────────────────────────
 
@@ -68,6 +83,7 @@ export async function getSparepartGroups(): Promise<SparepartGroup[]> {
 // ─── Spare Parts CRUD ─────────────────────────────────────────────────────────
 
 export async function getSpareParts(): Promise<Sparepart[]> {
+  ensureLocalSparepartsForCurrentAccount();
   try {
     const res = await axios.get(
       `${BASE_URL}/spare-parts?limit=100`,
@@ -94,6 +110,7 @@ export async function getSpareParts(): Promise<Sparepart[]> {
 }
 
 export async function getSparepartById(id: number): Promise<Sparepart> {
+  ensureLocalSparepartsForCurrentAccount();
   try {
     const res = await axios.get(
       `${BASE_URL}/spare-parts/${id}`,
@@ -110,6 +127,7 @@ export async function getSparepartById(id: number): Promise<Sparepart> {
 export async function createSparepart(
   dto: CreateSparepartDto,
 ): Promise<Sparepart> {
+  ensureLocalSparepartsForCurrentAccount();
   const payload: Record<string, any> = {
     name: dto.name,
     unit: dto.unit || "ชิ้น",
@@ -158,6 +176,7 @@ export async function updateSparepart(
   id: number,
   dto: UpdateSparepartDto,
 ): Promise<Sparepart> {
+  ensureLocalSparepartsForCurrentAccount();
   const payload: Record<string, any> = {};
   if (dto.code !== undefined) payload.code = dto.code;
   if (dto.name !== undefined) payload.name = dto.name;
@@ -203,6 +222,7 @@ export async function updateSparepart(
 }
 
 export async function deleteSparepart(id: number): Promise<void> {
+  ensureLocalSparepartsForCurrentAccount();
   try {
     await axios.delete(
       `${BASE_URL}/spare-parts/${id}`,
@@ -282,8 +302,10 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
     }
 
     // ตรวจสอบว่า Job นี้เคยทำรายการแล้วหรือไม่
+    // Ignore the legacy unbound key because it may belong to another account.
+    const completedJobsKey = getAccountStorageKey("completed_return_jobs");
     const completedJobs: string[] = JSON.parse(
-      localStorage.getItem("completed_return_jobs") || "[]",
+      (completedJobsKey && localStorage.getItem(completedJobsKey)) || "[]",
     );
 
     const isAlreadyCompleted = completedJobs.includes(String(found.id));

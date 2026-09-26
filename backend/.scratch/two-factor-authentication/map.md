@@ -23,7 +23,7 @@
 | 03 | BE | [บังคับ Enrollment ตาม Role](issues/03-be-mandatory-enrollment.md) | 02 |
 | 04 | BE | [Recovery Code และ lockout](issues/04-be-recovery-login-lockout.md) | 03 |
 | 05 | BE | [Trusted Browser 14 วัน](issues/05-be-trusted-browser.md) | 03 |
-| 06 | BE | [Session lifetime](issues/06-be-session-lifetime.md) | 02 |
+| 06 | BE + FE | [อายุ Session, คำเตือน และ draft](issues/06-session-expiry-and-drafts.md) | 02 |
 | 07 | BE | [Self-service 2FA และ Step-up](issues/07-be-self-2fa-step-up.md) | 04 |
 | 08 | BE | [ADMIN ช่วยกู้ 2FA](issues/08-be-admin-2fa-recovery.md) | 07 |
 | 09 | BE | [Password lifecycle](issues/09-be-password-revocation.md) | 05, 07 |

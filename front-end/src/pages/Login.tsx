@@ -6,13 +6,11 @@ import { useNavigate } from "react-router-dom";
 import Spinner from "../components/loader/Spinner";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useToastStore } from "../stores/useToastStore";
+import { associateSessionDraftAccount } from "../services/sessionDraftStorage";
+import { publishAuthMessage } from "../services/authBroadcast";
 
 export default function Login() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -22,27 +20,24 @@ export default function Login() {
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const loginData = await authLogin(formData.email, formData.password);
-
-      if (loginData) {
-        localStorage.setItem("token", loginData.token);
-        localStorage.setItem("userId", loginData.user.id);
-
-        login(loginData.user, loginData.token);
-
-        showToast("success", "เข้าสู่ระบบสำเร็จ");
-        navigate("/", { replace: true });
-      }
+      const current = await authLogin(formData.email, formData.password);
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+      associateSessionDraftAccount(current.user.id);
+      login(current.user, current.session);
+      publishAuthMessage({
+        type: "ACCOUNT_CHANGED",
+        userId: current.user.id,
+      });
+      showToast("success", "เข้าสู่ระบบสำเร็จ");
+      navigate("/", { replace: true });
     } catch (error) {
       showToast("error", getLoginErrorMessage(error));
     } finally {
@@ -51,30 +46,22 @@ export default function Login() {
   }
 
   return (
-    /* container หลัก */
     <div className="min-h-screen w-full flex flex-col justify-center items-center bg-bg-app antialiased">
-      {/* ตัวเเบ่งซ้ายขวา */}
       <div className="relative overflow-hidden flex justify-between max-w-3xl w-full h-125 bg-bg-component rounded-3xl shadow-xl">
-        {/* ซ้าย */}
         <div className="relative overflow-hidden flex-1 flex flex-col gap-3 justify-center items-center bg-emerald-600 text-white p-8">
-          {/* กลมๆ 2 ลูก */}
-          <div className="absolute  top-[-15%] left-[-5%] w-60 h-60 bg-emerald-900/40 rounded-full  pointer-events-none"></div>
+          <div className="absolute top-[-15%] left-[-5%] w-60 h-60 bg-emerald-900/40 rounded-full pointer-events-none"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-60 h-60 bg-emerald-500/40 rounded-full pointer-events-none"></div>
           <Box className="w-10 h-10" />
-          {/*  */}
           <div className="space-y-3">
             <h1 className="text-2xl text-center font-bold tracking-tight">
               ระบบจัดการครุภัณฑ์
             </h1>
             <p className="text-sm text-center font-normal leading-relaxed">
-              บริหารจัดการทรัพยากรและอุปกรณ์ <br />{" "}
-              ขององค์กรได้อย่างมีประสิทธิภาพ
+              บริหารจัดการทรัพยากรและอุปกรณ์ <br />ขององค์กรได้อย่างมีประสิทธิภาพ
             </p>
           </div>
         </div>
-        {/* ขวา */}
-        <div className="flex-1 p-8 flex flex-col gap-3 justify-center ">
-          {/*  */}
+        <div className="flex-1 p-8 flex flex-col gap-3 justify-center">
           <div className="mb-6 space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">
               ยินดีต้อนรับเข้าสู่ระบบ
@@ -83,11 +70,9 @@ export default function Login() {
               กรุณากรอกข้อมูลเพื่อเข้าสู่ระบบ
             </p>
           </div>
-          {/* form */}
-          <form action="" className="space-y-3" onSubmit={handleSubmit}>
-            {/* Input: ชื่อผู้ใช้ */}
+          <form className="space-y-3" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">
+              <label htmlFor="email" className="block text-sm font-semibold text-slate-700">
                 ชื่อผู้ใช้
               </label>
               <div className="relative">
@@ -95,18 +80,19 @@ export default function Login() {
                   <Mail className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <input
+                  id="email"
                   type="email"
                   placeholder="admin@company.com"
                   onChange={handleInputChange}
                   name="email"
                   value={formData.email}
+                  autoComplete="username"
                   className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
               </div>
             </div>
-            {/* Input: รหัสผ่าน */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-semibold text-slate-700">
+              <label htmlFor="password" className="block text-sm font-semibold text-slate-700">
                 รหัสผ่าน
               </label>
               <div className="relative">
@@ -114,12 +100,13 @@ export default function Login() {
                   <Lock className="w-5 h-5" strokeWidth={1.5} />
                 </div>
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="****************"
                   onChange={handleInputChange}
                   name="password"
                   value={formData.password}
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   className="w-full pl-10 pr-12 py-3 bg-white border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-all placeholder:text-slate-400"
                 />
                 <button
@@ -136,7 +123,6 @@ export default function Login() {
                 </button>
               </div>
             </div>
-            {/* ปุ่ม login */}
             <button
               disabled={isLoading}
               type="submit"

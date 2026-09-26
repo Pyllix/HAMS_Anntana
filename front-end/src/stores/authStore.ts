@@ -1,36 +1,38 @@
 import { create } from "zustand";
-import { User, UserRole } from "../types/TypeUser";
-import { RoleType } from "../router/roles";
+import type { User } from "../types/TypeUser";
+import type { RoleType } from "../router/roles";
+import type { SessionDeadlines } from "../services/authService";
 
 interface AuthState {
   user: User | null;
   role: RoleType | null;
-  token: string | null;
+  session: SessionDeadlines | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User, session: SessionDeadlines) => void;
+  updateSession: (session: SessionDeadlines) => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   role: null,
-  token: null,
+  session: null,
   isAuthenticated: false,
-  login: (user, token) =>
+  login: (user, session) =>
     set({
-      user: user,
+      user,
       role: user.role,
-      token: token,
+      session,
       isAuthenticated: true,
     }),
-
+  updateSession: (session) => set({ session }),
   logout: () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
     set({
       user: null,
       role: null,
-      token: null,
+      session: null,
       isAuthenticated: false,
     });
   },

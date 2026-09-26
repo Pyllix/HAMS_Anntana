@@ -22,6 +22,7 @@ import { Public, Session, Optional } from '@thallesp/nestjs-better-auth';
 import type { Request } from 'express';
 import type { Session as BetterAuthSession } from 'better-auth/types';
 import { auth } from './auth';
+import type { SessionExpiryWindow } from './session-lifetime.service';
 import { SignInDto } from './dto/sign-in.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { SendVerificationEmailDto } from './dto/send-verification-email.dto';
@@ -254,11 +255,18 @@ export class AuthController {
     }
     const sessionObj = session.session || session;
     const userObj = session.user;
+    const expiryWindow = (
+      req as Request & {
+        sessionExpiryWindow?: SessionExpiryWindow;
+      }
+    ).sessionExpiryWindow;
     return {
       session: {
         id: sessionObj.id,
-        expiresAt: sessionObj.expiresAt,
+        expiresAt: expiryWindow?.expiresAt ?? sessionObj.expiresAt,
         userId: sessionObj.userId,
+        idleExpiresAt: expiryWindow?.idleExpiresAt ?? sessionObj.expiresAt,
+        absoluteExpiresAt: expiryWindow?.absoluteExpiresAt ?? sessionObj.expiresAt,
       },
       ...(userObj
         ? {

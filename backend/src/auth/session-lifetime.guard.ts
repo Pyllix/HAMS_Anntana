@@ -55,6 +55,7 @@ export class SessionLifetimeGuard implements CanActivate {
       });
     }
 
+    Object.assign(request, { sessionExpiryWindow: window });
     return true;
   }
 
