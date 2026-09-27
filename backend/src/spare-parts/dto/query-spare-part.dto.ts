@@ -11,7 +11,11 @@ export class QuerySparepartDto extends PaginationDto {
   @IsPositive()
   groupId?: number;
 
-  @ApiPropertyOptional({ example: true, description: 'กรองเฉพาะรายการที่สต็อกต่ำกว่าเกณฑ์ขั้นต่ำ (qty_in_stock <= min_stock)' })
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'กรองเฉพาะรายการที่สต็อกต่ำกว่าเกณฑ์ขั้นต่ำ (qty_in_stock <= min_stock)',
+  })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()

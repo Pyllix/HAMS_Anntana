@@ -23,8 +23,12 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:reset": "pnpm run prisma:generate && pnpm run prisma:migrate && pnpm run prisma:seed"
+    "prisma:seed": "tsx prisma/seed-reference.ts",
+    "prisma:seed:reference": "tsx prisma/seed-reference.ts",
+    "prisma:seed:demo": "tsx prisma/seed.ts --demo",
+    "prisma:bootstrap-admins": "tsx prisma/bootstrap-admins.ts",
+    "prisma:handover-check": "tsx prisma/handover-check.ts",
+    "prisma:reset": "node -e \"if (process.env.NODE_ENV === 'production') { console.error('prisma:reset is disabled in production'); process.exit(1); }\" && pnpm run prisma:generate && pnpm run prisma:migrate && pnpm run prisma:seed:demo"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -42,6 +46,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "nodemailer": "^10.0.7",
+    "otplib": "^13.5.0",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -88,12 +93,13 @@
       "^.+\\.(t|j|mj)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!.*@thallesp)"
+      "node_modules/(?!(@thallesp|otplib|@otplib|@scure))"
     ],
     "moduleNameMapper": {
       "^@thallesp/nestjs-better-auth$": "<rootDir>/__mocks__/@thallesp/nestjs-better-auth.ts",
       "^better-auth$": "<rootDir>/__mocks__/better-auth.ts",
       "^better-auth/(.*)$": "<rootDir>/__mocks__/better-auth.ts",
+      "^otplib$": "<rootDir>/__mocks__/otplib.ts",
       "^src/(.*)$": "<rootDir>/$1"
     },
     "collectCoverageFrom": [

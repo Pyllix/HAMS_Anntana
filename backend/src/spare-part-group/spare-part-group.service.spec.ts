@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SparePartGroupService } from './spare-part-group.service';
 import { PrismaService } from 'src/prisma.service';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('SparePartGroupService', () => {
   let service: SparePartGroupService;
@@ -55,24 +59,39 @@ describe('SparePartGroupService', () => {
     });
 
     it('should throw ConflictException if group name already exists', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 1, name: 'Electrical Parts' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'Electrical Parts',
+      });
 
-      await expect(service.create({ name: 'Electrical Parts' })).rejects.toThrow(ConflictException);
+      await expect(
+        service.create({ name: 'Electrical Parts' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
   describe('remove', () => {
     it('should prevent deleting a group if it has active spare parts', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 1, name: 'Electrical Parts' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'Electrical Parts',
+      });
       mockPrismaService.sparepart.count.mockResolvedValue(3);
 
       await expect(service.remove(1)).rejects.toThrow(BadRequestException);
     });
 
     it('should soft delete group if no active spare parts', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 1, name: 'Electrical Parts' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'Electrical Parts',
+      });
       mockPrismaService.sparepart.count.mockResolvedValue(0);
-      mockPrismaService.sparepartGroup.update.mockResolvedValue({ id: 1, name: 'Electrical Parts', deletedAt: new Date() });
+      mockPrismaService.sparepartGroup.update.mockResolvedValue({
+        id: 1,
+        name: 'Electrical Parts',
+        deletedAt: new Date(),
+      });
 
       const res = await service.remove(1);
       expect(mockPrismaService.sparepartGroup.update).toHaveBeenCalled();

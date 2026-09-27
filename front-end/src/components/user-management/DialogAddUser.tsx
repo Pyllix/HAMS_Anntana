@@ -70,7 +70,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   const { mutate: addUser, isPending } = useMutation({
     mutationFn: (user: UserDto) => createUser(user),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       setForm(initialForm);
       onClose();
     },

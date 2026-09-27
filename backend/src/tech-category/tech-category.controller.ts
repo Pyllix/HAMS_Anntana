@@ -10,7 +10,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -19,7 +24,7 @@ import { CreateTechCategoryDto } from './dto/create-tech-category.dto';
 import { UpdateTechCategoryDto } from './dto/update-tech-category.dto';
 
 @ApiTags('Tech Categories')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('tech-categories')
 export class TechCategoryController {

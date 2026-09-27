@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  UseGuards,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { AssetService } from './asset.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
@@ -7,13 +17,20 @@ import { CreateAssetTransferDto } from './dto/create-asset-transfer.dto';
 import { AssetFilterDto } from './dto/asset-filter.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { ApiBearerAuth, ApiResponse, ApiTags, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiResponse,
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBody,
+} from '@nestjs/swagger';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
 @UseGuards(AuthGuard)
-@ApiBearerAuth()
+@ApiCookieAuth()
 @ApiTags('Asset')
 @Controller('asset')
 export class AssetController {
@@ -23,10 +40,16 @@ export class AssetController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Create new Asset', description: 'Create a new asset' })
+  @ApiOperation({
+    summary: 'Create new Asset',
+    description: 'Create a new asset',
+  })
   @ApiResponse({ status: 201, description: 'Asset created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  create(@Body() createAssetDto: CreateAssetDto, @Session() session: UserSession) {
+  create(
+    @Body() createAssetDto: CreateAssetDto,
+    @Session() session: UserSession,
+  ) {
     return this.assetService.create(createAssetDto, session.user.id);
   }
 
@@ -39,11 +62,20 @@ export class AssetController {
     UserRole.MAINTENANCE_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Find all Assets (paginated)', description: 'Find all assets with pagination and optional search by name, model or serial number or filter by section_id' })
+  @ApiOperation({
+    summary: 'Find all Assets (paginated)',
+    description:
+      'Find all assets with pagination and optional search by name, model or serial number or filter by section_id',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiQuery({ name: 'section_id', required: false, type: String, description: 'Filter by Section ID' })
+  @ApiQuery({
+    name: 'section_id',
+    required: false,
+    type: String,
+    description: 'Filter by Section ID',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of assets' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAll(@Query() query: AssetFilterDto) {
@@ -59,11 +91,18 @@ export class AssetController {
     UserRole.MAINTENANCE_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Find all Completed Disposal Records (paginated)', description: 'Find all completed disposal records across all assets with pagination and optional search' })
+  @ApiOperation({
+    summary: 'Find all Completed Disposal Records (paginated)',
+    description:
+      'Find all completed disposal records across all assets with pagination and optional search',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'Paginated list of completed disposal records' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of completed disposal records',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAllDisposalRecords(@Query() query: PaginationDto) {
     return this.assetService.findAllDisposalRecords(query);
@@ -82,12 +121,16 @@ export class AssetController {
   )
   @ApiOperation({
     summary: 'Find all Completed/Recorded Transfer Records (paginated)',
-    description: 'Find all asset transfer records across all assets with pagination and optional search',
+    description:
+      'Find all asset transfer records across all assets with pagination and optional search',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'Paginated list of transfer records' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of transfer records',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAllTransferRecords(@Query() query: PaginationDto) {
     return this.assetService.findAllTransferRecords(query);
@@ -121,12 +164,15 @@ export class AssetController {
   )
   @ApiOperation({
     summary: 'Find Assets of logged-in user section (paginated)',
-    description: 'Find all assets belonging to the logged-in user section'
+    description: 'Find all assets belonging to the logged-in user section',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'Paginated list of assets in user section' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of assets in user section',
+  })
   @ApiResponse({ status: 400, description: 'User not assigned to a section' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findMySectionAssets(
@@ -147,12 +193,15 @@ export class AssetController {
   )
   @ApiOperation({
     summary: 'Find Assets by Section ID (paginated)',
-    description: 'Find all assets belonging to a specific section'
+    description: 'Find all assets belonging to a specific section',
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'Paginated list of assets in section' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of assets in section',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Section not found' })
   findBySection(
@@ -171,7 +220,10 @@ export class AssetController {
     UserRole.MAINTENANCE_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Find one Asset', description: 'Find one asset by ID' })
+  @ApiOperation({
+    summary: 'Find one Asset',
+    description: 'Find one asset by ID',
+  })
   @ApiResponse({ status: 200, description: 'Asset found successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
@@ -181,7 +233,10 @@ export class AssetController {
 
   @Patch(':id')
   @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Update one Asset', description: 'Update asset fields' })
+  @ApiOperation({
+    summary: 'Update one Asset',
+    description: 'Update asset fields',
+  })
   @ApiResponse({ status: 200, description: 'Asset updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
@@ -195,7 +250,11 @@ export class AssetController {
 
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Update Asset Status directly', description: 'Directly update asset status (e.g. WAIT_DISPOSAL, NORMAL, LOST)' })
+  @ApiOperation({
+    summary: 'Update Asset Status directly',
+    description:
+      'Directly update asset status (e.g. WAIT_DISPOSAL, NORMAL, LOST)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -203,13 +262,17 @@ export class AssetController {
         asset_status_id: {
           type: 'integer',
           example: 4,
-          description: 'รหัสสถานะครุภัณฑ์ใหม่ที่ต้องการเปลี่ยนไป (เช่น 1=NORMAL, 4=WAIT_DISPOSAL, 6=LOST)'
-        }
+          description:
+            'รหัสสถานะครุภัณฑ์ใหม่ที่ต้องการเปลี่ยนไป (เช่น 1=NORMAL, 4=WAIT_DISPOSAL, 6=LOST)',
+        },
       },
-      required: ['asset_status_id']
-    }
+      required: ['asset_status_id'],
+    },
   })
-  @ApiResponse({ status: 200, description: 'Asset status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset status updated successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid transition' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
@@ -240,7 +303,11 @@ export class AssetController {
     @Body() createAssetDisposalDto: CreateAssetDisposalDto,
     @Session() session: UserSession,
   ) {
-    return this.assetService.createDisposal(id, createAssetDisposalDto, session.user.id);
+    return this.assetService.createDisposal(
+      id,
+      createAssetDisposalDto,
+      session.user.id,
+    );
   }
 
   @Get(':id/disposal')
@@ -254,9 +321,13 @@ export class AssetController {
   )
   @ApiOperation({
     summary: 'Get Disposal History for Asset',
-    description: 'Get all disposal records for an asset, ordered by most recent first.',
+    description:
+      'Get all disposal records for an asset, ordered by most recent first.',
   })
-  @ApiResponse({ status: 200, description: 'Disposal records found successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Disposal records found successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   findDisposalRecords(@Param('id') id: string) {
@@ -274,17 +345,34 @@ export class AssetController {
       'Only ASSET_CENTER_STAFF and PARCEL_STAFF can perform this action. ' +
       'This action automatically updates the asset section_id to the destination section and sets transferred_by in an atomic transaction.',
   })
-  @ApiResponse({ status: 201, description: 'Transfer record created and asset updated' })
-  @ApiResponse({ status: 400, description: 'Asset cannot be transferred (disposed, borrowed, or same section)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Transfer record created and asset updated',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Asset cannot be transferred (disposed, borrowed, or same section)',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden (Only ASSET_CENTER_STAFF and PARCEL_STAFF)' })
-  @ApiResponse({ status: 404, description: 'Asset or target section not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (Only ASSET_CENTER_STAFF and PARCEL_STAFF)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Asset or target section not found',
+  })
   createTransfer(
     @Param('id') id: string,
     @Body() createAssetTransferDto: CreateAssetTransferDto,
     @Session() session: UserSession,
   ) {
-    return this.assetService.createTransfer(id, createAssetTransferDto, session.user.id);
+    return this.assetService.createTransfer(
+      id,
+      createAssetTransferDto,
+      session.user.id,
+    );
   }
 
   @Get(':id/transfer')
@@ -298,9 +386,13 @@ export class AssetController {
   )
   @ApiOperation({
     summary: 'Get Transfer History for Asset',
-    description: 'Get all transfer records for an asset, ordered by most recent first.',
+    description:
+      'Get all transfer records for an asset, ordered by most recent first.',
   })
-  @ApiResponse({ status: 200, description: 'Transfer records found successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transfer records found successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   findTransferRecords(@Param('id') id: string) {

@@ -2,10 +2,10 @@ import type { AuthenticatedSession } from "./authService";
 import { associateSessionDraftAccount } from "./sessionDraftStorage";
 import { publishAuthMessage } from "./authBroadcast";
 import { useAuthStore } from "../stores/authStore";
+import { clearLegacyBrowserAuthStorage } from "./legacyAuthStorage";
 
 export function establishClientSession(current: AuthenticatedSession): void {
-  localStorage.removeItem("token");
-  localStorage.removeItem("userId");
+  clearLegacyBrowserAuthStorage();
   associateSessionDraftAccount(current.user.id);
   useAuthStore.getState().login(current.user, current.session);
   publishAuthMessage({

@@ -48,7 +48,9 @@ describe('RBAC Authorization (e2e)', () => {
 
   const mockRepairsService = {
     findAll: jest.fn().mockResolvedValue({ data: [], total: 0 }),
-    createRequest: jest.fn().mockResolvedValue({ id: 'job-1', jobNo: 'REP-202609-0001' }),
+    createRequest: jest
+      .fn()
+      .mockResolvedValue({ id: 'job-1', jobNo: 'REP-202609-0001' }),
     diagnoseAndPlan: jest.fn().mockResolvedValue({ id: 'job-1' }),
     updateStepProgress: jest.fn().mockResolvedValue({ id: 'step-1' }),
     completeAndCloseJob: jest.fn().mockResolvedValue({ id: 'job-1' }),
@@ -319,4 +321,3 @@ describe('RBAC Authorization (e2e)', () => {
     });
   });
 });
-

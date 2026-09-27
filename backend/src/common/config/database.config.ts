@@ -7,9 +7,12 @@ import { PrismaClient } from '@prisma/client';
 // เพื่อให้ console สะอาด โดยยังคงความเร็วระดับสูงสุดไว้
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function (warning: string | Error, ...args: any[]) {
-  const warningMsg = typeof warning === 'string' ? warning : warning?.message || '';
+  const warningMsg =
+    typeof warning === 'string' ? warning : warning?.message || '';
   if (
-    warningMsg.includes('client.query() when the client is already executing') ||
+    warningMsg.includes(
+      'client.query() when the client is already executing',
+    ) ||
     warningMsg.includes('pg-connection-string') ||
     warningMsg.includes('libpq semantics')
   ) {

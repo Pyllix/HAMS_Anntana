@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { trustedOrigins } from './auth/csrf-protection';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -14,18 +15,13 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // Enable CORS with explicit trusted origins
-  const trustedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:5173',
-  ];
+  const allowedOrigins = trustedOrigins();
 
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (trustedOrigins.includes(origin)) {
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -33,7 +29,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-User-Activity'],
+    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-User-Activity'],
   });
 
   // Enable global validation pipe for DTO validation
@@ -50,7 +46,7 @@ async function bootstrap() {
     .setTitle('HAMS API References')
     .setDescription('ระบบบริหารจัดการครุภัณฑ์หลังบ้าน')
     .setVersion('1.0')
-    .addBearerAuth() // Enable Bearer token input in Scalar/Swagger UI
+    .addCookieAuth('better-auth.session_token')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

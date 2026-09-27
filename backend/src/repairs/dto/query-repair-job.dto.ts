@@ -1,11 +1,26 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
-import { ActionType, ReportType, StepActionType, UrgencyStatus } from '@prisma/client';
+import {
+  ActionType,
+  ReportType,
+  StepActionType,
+  UrgencyStatus,
+} from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class QueryRepairJobDto extends PaginationDto {
-  @ApiPropertyOptional({ description: 'Filter by overdue status (true = past due date and not completed/cancelled)' })
+  @ApiPropertyOptional({
+    description:
+      'Filter by overdue status (true = past due date and not completed/cancelled)',
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === 'true' || value === true) return true;
@@ -15,7 +30,10 @@ export class QueryRepairJobDto extends PaginationDto {
   @IsBoolean()
   isOverdue?: boolean;
 
-  @ApiPropertyOptional({ description: 'Filter by job status code (e.g. PENDING, IN_PROGRESS, COMPLETED)' })
+  @ApiPropertyOptional({
+    description:
+      'Filter by job status code (e.g. PENDING, IN_PROGRESS, COMPLETED)',
+  })
   @IsString()
   @IsOptional()
   statusCode?: string;
@@ -60,12 +78,18 @@ export class QueryRepairJobDto extends PaginationDto {
   @IsOptional()
   mechanicId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter ticket created from date (YYYY-MM-DD)', example: '2026-08-01' })
+  @ApiPropertyOptional({
+    description: 'Filter ticket created from date (YYYY-MM-DD)',
+    example: '2026-08-01',
+  })
   @IsDateString({ strict: true })
   @IsOptional()
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'Filter ticket created to date (YYYY-MM-DD)', example: '2026-08-31' })
+  @ApiPropertyOptional({
+    description: 'Filter ticket created to date (YYYY-MM-DD)',
+    example: '2026-08-31',
+  })
   @IsDateString({ strict: true })
   @IsOptional()
   endDate?: string;

@@ -44,19 +44,11 @@ BetterAuth automatically manages session cookies through its internal middleware
 
 ### Legacy Bearer Token Support (Expand Phase)
 
-During the migration period (until ticket 23):
-- Bearer token authentication is still supported via the `bearer()` plugin
-- Frontend clients can use either Cookie or Bearer token
-- Both authentication methods work simultaneously
-- Ticket 23 will remove Bearer token from JSON response body
+The expand phase ended with Ticket 13. Browser authentication now uses Cookie Session only; BetterAuth's Bearer plugin and the Browser's legacy Bearer fallback have been removed.
 
-### CSRF Implementation Note
+### CSRF Implementation Note (updated by Ticket 13)
 
-The current CSRF implementation is a placeholder:
-- Generates tokens based on timestamp + random string
-- Does NOT validate tokens server-side yet (enforcement is in the plugin structure)
-- Full CSRF validation will be implemented when BetterAuth adds native CSRF support
-- The plugin structure is ready to integrate proper validation
+The original placeholder was replaced by a signed double-submit proof. The Backend binds the proof to the current anonymous, pre-auth, or Session Cookie context, compares the request header with the HttpOnly CSRF Cookie, and rejects untrusted Browser Origins. Both Nest routes and direct BetterAuth routes run the verifier.
 
 ### Testing Without TEST_DATABASE_URL
 
@@ -73,12 +65,10 @@ Without this, tests will be skipped by the setup guard.
 - [x] Sign-in, Session lookup และ Sign-out รองรับ Cookie แบบ Secure, HttpOnly, host-only และ SameSite ที่กำหนดชัดตามสภาพแวดล้อม
 - [x] API ที่แก้ข้อมูลตรวจ CSRF/Origin ตามสัญญา และ CORS ยอมรับเฉพาะ Frontend Origin ที่ระบุชัด
 - [x] Response ที่มีข้อมูล Session หรือข้อมูลเฉพาะบัญชีใช้ no-store; Sign-out เพิกถอน Session และล้าง Cookie
-- [x] ช่วง expand ยังให้ Client เก่าทำงานได้ตามแผนย้าย แต่ไม่ถือว่าพร้อม Production จน ticket 23 ปิด token แบบเดิม
+- [x] ช่วง expand ยังให้ Client เก่าทำงานได้ตามแผนย้าย แต่ไม่ถือว่าพร้อม Production จน ticket 13 ปิด token แบบเดิม
 - [x] ทดสอบ Cookie attributes, คำขอข้าม Origin, CSRF, Sign-out และ Session lookup ผ่าน HTTP จริง
 
-## Next Steps
+## Ticket 13 Follow-up
 
-- Run integration tests with TEST_DATABASE_URL to verify cookie behavior
-- Monitor for BetterAuth CSRF native support to replace placeholder implementation
-- Frontend migration will begin using Cookie-based auth alongside Bearer token
-- Ticket 23 will remove Bearer token from response and enforce cookie-only auth
+- Validate the Browser cookie proxy and CSRF behavior on Preview before production release (Ticket 14).
+- Keep the CSRF signing secret private and rotate it through the normal authentication-secret rotation process.

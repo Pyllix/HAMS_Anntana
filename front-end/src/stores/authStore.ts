@@ -3,6 +3,7 @@ import type { User } from "../types/TypeUser";
 import type { PreAuthStep } from "../types/AuthFlow";
 import type { RoleType } from "../router/roles";
 import type { SessionDeadlines } from "../services/authService";
+import { clearLegacyBrowserAuthStorage } from "../services/legacyAuthStorage";
 
 interface AuthState {
   user: User | null;
@@ -17,10 +18,7 @@ interface AuthState {
   logout: () => void;
 }
 
-function clearLegacyBrowserTokens(): void {
-  localStorage.removeItem("token");
-  localStorage.removeItem("userId");
-}
+clearLegacyBrowserAuthStorage();
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -28,16 +26,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   isAuthenticated: false,
   preAuthStep: null,
-  login: (user, session) =>
+  login: (user, session) => {
+    clearLegacyBrowserAuthStorage();
     set({
       user,
       role: user.role,
       session,
       isAuthenticated: true,
       preAuthStep: null,
-    }),
+    });
+  },
   enterPreAuth: (step) => {
-    clearLegacyBrowserTokens();
+    clearLegacyBrowserAuthStorage();
     set({
       user: null,
       role: null,
@@ -49,7 +49,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   updateSession: (session) => set({ session }),
   logout: () => {
-    clearLegacyBrowserTokens();
+    clearLegacyBrowserAuthStorage();
     set({
       user: null,
       role: null,

@@ -17,12 +17,7 @@ import { QueryRepairJobDto } from './dto/query-repair-job.dto';
 import { AssignRepairJobDto } from './dto/assign-repair-job.dto';
 import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
 import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
-import {
-  ActionType,
-  Prisma,
-  StepActionType,
-  UserRole,
-} from '@prisma/client';
+import { ActionType, Prisma, StepActionType, UserRole } from '@prisma/client';
 
 export const REJECTED_STEP_PREFIX = '[ไม่อนุมัติ]';
 
@@ -42,7 +37,9 @@ export class RepairsService {
       where: { code },
     });
     if (!status) {
-      throw new NotFoundException(`Status code '${code}' not found in ${model}`);
+      throw new NotFoundException(
+        `Status code '${code}' not found in ${model}`,
+      );
     }
     return status.id;
   }
@@ -174,9 +171,18 @@ export class RepairsService {
       );
     }
 
-    const underRepairStatusId = await this.getStatusId('assetStatus', 'UNDER_REPAIR');
-    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
-    const pendingAssignStatusId = await this.getStatusId('jobStatus', 'PENDING_ASSIGN');
+    const underRepairStatusId = await this.getStatusId(
+      'assetStatus',
+      'UNDER_REPAIR',
+    );
+    const unavailableAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'UNAVAILABLE',
+    );
+    const pendingAssignStatusId = await this.getStatusId(
+      'jobStatus',
+      'PENDING_ASSIGN',
+    );
 
     const defaultJobType = await this.prisma.jobType.findFirst({
       orderBy: { id: 'asc' },
@@ -188,7 +194,9 @@ export class RepairsService {
     const callerSectionId = await this.getCallerSectionId(user);
     const sectionId = asset.section_id || callerSectionId;
     if (!sectionId) {
-      throw new BadRequestException('Asset has no associated section and caller user has no section');
+      throw new BadRequestException(
+        'Asset has no associated section and caller user has no section',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -197,7 +205,10 @@ export class RepairsService {
           where: {
             id: dto.assetId,
             asset_status_id: asset.asset_status_id ?? asset.status.id,
-            availability_status_id: asset.availability_status_id ?? asset.availabilityStatus?.id ?? null,
+            availability_status_id:
+              asset.availability_status_id ??
+              asset.availabilityStatus?.id ??
+              null,
           },
           data: {
             asset_status_id: underRepairStatusId,
@@ -207,7 +218,9 @@ export class RepairsService {
         });
       } catch (error) {
         if ((error as { code?: unknown } | null)?.code === 'P2025') {
-          throw new BadRequestException('Asset status changed during repair intake; please retry');
+          throw new BadRequestException(
+            'Asset status changed during repair intake; please retry',
+          );
         }
         throw error;
       }
@@ -290,27 +303,39 @@ export class RepairsService {
 
   async assignJob(jobId: string, dto: AssignRepairJobDto, user: any) {
     if (user.role !== UserRole.MAINTENANCE_HEAD) {
-      throw new ForbiddenException('Only MAINTENANCE_HEAD can triage and assign repair jobs');
+      throw new ForbiddenException(
+        'Only MAINTENANCE_HEAD can triage and assign repair jobs',
+      );
     }
 
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
-      include: { jobStatus: true, repairJobSteps: { include: { stepMaster: true } } },
+      include: {
+        jobStatus: true,
+        repairJobSteps: { include: { stepMaster: true } },
+      },
     });
 
     if (!job) {
       throw new NotFoundException(`Repair job #${jobId} not found`);
     }
 
-    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
-      throw new BadRequestException(`Cannot assign a repair job that is ${job.jobStatus.code}`);
+    if (
+      job.jobStatus.code === 'COMPLETED' ||
+      job.jobStatus.code === 'CANCELLED'
+    ) {
+      throw new BadRequestException(
+        `Cannot assign a repair job that is ${job.jobStatus.code}`,
+      );
     }
 
     const techCategory = await this.prisma.techCategory.findUnique({
       where: { id: dto.techCategoryId, deleteAt: null },
     });
     if (!techCategory) {
-      throw new NotFoundException(`Tech Category #${dto.techCategoryId} not found`);
+      throw new NotFoundException(
+        `Tech Category #${dto.techCategoryId} not found`,
+      );
     }
 
     if (!dto.mechanicIds || dto.mechanicIds.length === 0) {
@@ -324,14 +349,20 @@ export class RepairsService {
       if (!mech) {
         throw new NotFoundException(`Mechanic user #${mechId} not found`);
       }
-      if (mech.role !== UserRole.MAINTENANCE_STAFF && mech.role !== UserRole.MAINTENANCE_HEAD) {
+      if (
+        mech.role !== UserRole.MAINTENANCE_STAFF &&
+        mech.role !== UserRole.MAINTENANCE_HEAD
+      ) {
         throw new BadRequestException(
           `User "${mech.firstname} ${mech.lastname}" (${mech.role}) is not a maintenance technician or head`,
         );
       }
     }
 
-    const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+    const inProgressStatusId = await this.getStatusId(
+      'jobStatus',
+      'IN_PROGRESS',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updatedJob = await tx.repairJob.update({
@@ -353,7 +384,9 @@ export class RepairsService {
         });
       }
 
-      const step2 = job.repairJobSteps?.find((s) => s.stepMaster.stepNumber === 2);
+      const step2 = job.repairJobSteps?.find(
+        (s) => s.stepMaster.stepNumber === 2,
+      );
       if (step2 && !step2.completeAt) {
         await tx.repairJobStep.update({
           where: { id: step2.id },
@@ -372,7 +405,11 @@ export class RepairsService {
   // 3. Ticket Modification (แก้ไขข้อมูลใบแจ้งซ่อม)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async updateRepairRequest(jobId: string, dto: UpdateRepairRequestDto, user: any) {
+  async updateRepairRequest(
+    jobId: string,
+    dto: UpdateRepairRequestDto,
+    user: any,
+  ) {
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: { jobStatus: true },
@@ -382,24 +419,31 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${jobId} not found`);
     }
 
-    if (job.jobStatus.code !== 'PENDING_ASSIGN' && job.jobStatus.code !== 'WAITING_HANDOVER') {
+    if (
+      job.jobStatus.code !== 'PENDING_ASSIGN' &&
+      job.jobStatus.code !== 'WAITING_HANDOVER'
+    ) {
       throw new BadRequestException(
         `Cannot edit repair request details once it has progressed beyond PENDING_ASSIGN (Current status: ${job.jobStatus.code})`,
       );
     }
 
     const isReporter = job.reporterId === user.id;
-    const isAuthorizedRole = user.role === UserRole.MAINTENANCE_HEAD || user.role === UserRole.ADMIN;
+    const isAuthorizedRole =
+      user.role === UserRole.MAINTENANCE_HEAD || user.role === UserRole.ADMIN;
 
     if (!isReporter && !isAuthorizedRole) {
-      throw new ForbiddenException('You do not have permission to edit this repair request');
+      throw new ForbiddenException(
+        'You do not have permission to edit this repair request',
+      );
     }
 
     if (dto.jobTypeId) {
       const jt = await this.prisma.jobType.findUnique({
         where: { id: dto.jobTypeId, deletedAt: null },
       });
-      if (!jt) throw new NotFoundException(`Job Type #${dto.jobTypeId} not found`);
+      if (!jt)
+        throw new NotFoundException(`Job Type #${dto.jobTypeId} not found`);
     }
 
     return this.prisma.repairJob.update({
@@ -419,8 +463,13 @@ export class RepairsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async diagnoseAndPlan(id: string, dto: DiagnoseRepairJobDto, user: any) {
-    if (user.role !== UserRole.MAINTENANCE_STAFF && user.role !== UserRole.MAINTENANCE_HEAD) {
-      throw new ForbiddenException('Only maintenance staff or head can diagnose repair jobs');
+    if (
+      user.role !== UserRole.MAINTENANCE_STAFF &&
+      user.role !== UserRole.MAINTENANCE_HEAD
+    ) {
+      throw new ForbiddenException(
+        'Only maintenance staff or head can diagnose repair jobs',
+      );
     }
 
     const job = await this.prisma.repairJob.findUnique({
@@ -439,8 +488,13 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${id} not found`);
     }
 
-    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
-      throw new BadRequestException(`Cannot modify completed or cancelled repair job`);
+    if (
+      job.jobStatus.code === 'COMPLETED' ||
+      job.jobStatus.code === 'CANCELLED'
+    ) {
+      throw new BadRequestException(
+        `Cannot modify completed or cancelled repair job`,
+      );
     }
 
     if (job.mechanicRepairs && job.mechanicRepairs.length > 0) {
@@ -456,8 +510,9 @@ export class RepairsService {
     if (job.repairJobSteps && job.repairJobSteps.length > 0) {
       const hasProgressedBeyondDiagnosis = job.repairJobSteps.some(
         (s) =>
-          ((s.stepMaster?.stepNumber >= 5) ||
-            (s.stepMaster?.actionType === StepActionType.SELF_REPAIR && s.stepMaster?.stepNumber >= 4)) &&
+          (s.stepMaster?.stepNumber >= 5 ||
+            (s.stepMaster?.actionType === StepActionType.SELF_REPAIR &&
+              s.stepMaster?.stepNumber >= 4)) &&
           s.completeAt !== null,
       );
       if (hasProgressedBeyondDiagnosis) {
@@ -474,13 +529,19 @@ export class RepairsService {
 
     const [cause, techCat, jobType] = await Promise.all([
       this.prisma.cause.findUnique({ where: { id: dto.causeId } }),
-      this.prisma.techCategory.findUnique({ where: { id: effectiveTechCategoryId } }),
+      this.prisma.techCategory.findUnique({
+        where: { id: effectiveTechCategoryId },
+      }),
       this.prisma.jobType.findUnique({ where: { id: dto.jobTypeId } }),
     ]);
 
     if (!cause) throw new NotFoundException(`Cause #${dto.causeId} not found`);
-    if (!techCat) throw new NotFoundException(`Tech category #${effectiveTechCategoryId} not found`);
-    if (!jobType) throw new NotFoundException(`Job type #${dto.jobTypeId} not found`);
+    if (!techCat)
+      throw new NotFoundException(
+        `Tech category #${effectiveTechCategoryId} not found`,
+      );
+    if (!jobType)
+      throw new NotFoundException(`Job type #${dto.jobTypeId} not found`);
 
     if (dto.dueDate && !this.isValidCalendarDate(dto.dueDate)) {
       throw new BadRequestException(
@@ -491,48 +552,72 @@ export class RepairsService {
     // Validation per StepActionType (4 Tracks)
     if (dto.stepActionType === StepActionType.SELF_REPAIR) {
       if (dto.spareParts && dto.spareParts.length > 0) {
-        throw new BadRequestException('Spare parts requisition is not allowed for SELF_REPAIR action type');
+        throw new BadRequestException(
+          'Spare parts requisition is not allowed for SELF_REPAIR action type',
+        );
       }
       if (dto.unrepairableReason) {
-        throw new BadRequestException('unrepairableReason cannot be specified for SELF_REPAIR');
+        throw new BadRequestException(
+          'unrepairableReason cannot be specified for SELF_REPAIR',
+        );
       }
     } else if (dto.stepActionType === StepActionType.WITH_PARTS) {
       if (!dto.spareParts || dto.spareParts.length === 0) {
-        throw new BadRequestException('At least one spare part must be selected for WITH_PARTS action type');
+        throw new BadRequestException(
+          'At least one spare part must be selected for WITH_PARTS action type',
+        );
       }
       if (dto.unrepairableReason) {
-        throw new BadRequestException('unrepairableReason cannot be specified for WITH_PARTS');
+        throw new BadRequestException(
+          'unrepairableReason cannot be specified for WITH_PARTS',
+        );
       }
 
       const spIds = dto.spareParts.map((item) => item.sparepartId);
       if (new Set(spIds).size !== spIds.length) {
-        throw new BadRequestException('Duplicate spare parts found in requisition list');
+        throw new BadRequestException(
+          'Duplicate spare parts found in requisition list',
+        );
       }
     } else if (dto.stepActionType === StepActionType.OUTSOURCE) {
       if (dto.spareParts && dto.spareParts.length > 0) {
-        throw new BadRequestException('Spare parts requisition is not allowed for OUTSOURCE action type');
+        throw new BadRequestException(
+          'Spare parts requisition is not allowed for OUTSOURCE action type',
+        );
       }
       if (dto.unrepairableReason) {
-        throw new BadRequestException('unrepairableReason cannot be specified for OUTSOURCE');
+        throw new BadRequestException(
+          'unrepairableReason cannot be specified for OUTSOURCE',
+        );
       }
     } else if (dto.stepActionType === StepActionType.UNREPAIRABLE) {
       if (dto.spareParts && dto.spareParts.length > 0) {
-        throw new BadRequestException('Spare parts requisition is not allowed for UNREPAIRABLE action type');
+        throw new BadRequestException(
+          'Spare parts requisition is not allowed for UNREPAIRABLE action type',
+        );
       }
       if (!dto.unrepairableReason) {
-        throw new BadRequestException('unrepairableReason is required for UNREPAIRABLE action type');
+        throw new BadRequestException(
+          'unrepairableReason is required for UNREPAIRABLE action type',
+        );
       }
     }
 
     // Validate spare parts for WITH_PARTS
     const sparePartMap: Record<number, any> = {};
-    if (dto.stepActionType === StepActionType.WITH_PARTS && dto.spareParts && dto.spareParts.length > 0) {
+    if (
+      dto.stepActionType === StepActionType.WITH_PARTS &&
+      dto.spareParts &&
+      dto.spareParts.length > 0
+    ) {
       for (const item of dto.spareParts) {
         const sp = await this.prisma.sparepart.findUnique({
           where: { id: item.sparepartId, deletedAt: null },
         });
         if (!sp) {
-          throw new NotFoundException(`Spare part #${item.sparepartId} not found`);
+          throw new NotFoundException(
+            `Spare part #${item.sparepartId} not found`,
+          );
         }
 
         if (item.stockType === 'INTERNAL' && sp.qtyInStock < item.qty) {
@@ -547,7 +632,9 @@ export class RepairsService {
     // Determine target initial status
     let targetStatusCode = 'IN_PROGRESS';
     if (dto.stepActionType === StepActionType.WITH_PARTS) {
-      const hasExternal = dto.spareParts?.some((item) => item.stockType === 'EXTERNAL');
+      const hasExternal = dto.spareParts?.some(
+        (item) => item.stockType === 'EXTERNAL',
+      );
       targetStatusCode = hasExternal ? 'WAITING_PARTS' : 'PARCEL_PROCESSING';
     } else if (dto.stepActionType === StepActionType.OUTSOURCE) {
       targetStatusCode = 'PARCEL_PROCESSING';
@@ -556,7 +643,10 @@ export class RepairsService {
     } else if (dto.stepActionType === StepActionType.SELF_REPAIR) {
       targetStatusCode = 'IN_PROGRESS';
     }
-    const initialJobStatusId = await this.getStatusId('jobStatus', targetStatusCode);
+    const initialJobStatusId = await this.getStatusId(
+      'jobStatus',
+      targetStatusCode,
+    );
 
     const stepMasters = await this.prisma.stepMaster.findMany({
       where: { actionType: dto.stepActionType },
@@ -564,7 +654,9 @@ export class RepairsService {
     });
 
     if (stepMasters.length === 0) {
-      throw new NotFoundException(`No step templates found for step action type ${dto.stepActionType}`);
+      throw new NotFoundException(
+        `No step templates found for step action type ${dto.stepActionType}`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -590,7 +682,9 @@ export class RepairsService {
       });
 
       // 2. Ensure mechanic assignment is preserved from assignJob, or attach diagnosing user if unassigned
-      const assignedCount = await tx.mechanicRepair.count({ where: { jobId: id } });
+      const assignedCount = await tx.mechanicRepair.count({
+        where: { jobId: id },
+      });
       if (assignedCount === 0) {
         await tx.mechanicRepair.create({
           data: {
@@ -636,7 +730,8 @@ export class RepairsService {
       // 4. Clone Steps from StepMaster (Auto-complete initial steps 1-4, or 1-3 for SELF_REPAIR)
       await tx.repairJobStep.deleteMany({ where: { jobId: id } });
       const now = new Date();
-      const autoCompletedThreshold = dto.stepActionType === StepActionType.SELF_REPAIR ? 3 : 4;
+      const autoCompletedThreshold =
+        dto.stepActionType === StepActionType.SELF_REPAIR ? 3 : 4;
 
       for (const sm of stepMasters) {
         let completeAt: Date | null = null;
@@ -697,7 +792,9 @@ export class RepairsService {
 
     const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
     if (!currentStepActionType) {
-      throw new BadRequestException('Repair job must be diagnosed before updating steps');
+      throw new BadRequestException(
+        'Repair job must be diagnosed before updating steps',
+      );
     }
 
     const targetStep = job.repairJobSteps.find(
@@ -749,14 +846,16 @@ export class RepairsService {
         where: { id: dto.receiverId, deletedAt: null },
       });
       if (!receiver) {
-        throw new NotFoundException(`Receiver user #${dto.receiverId} not found`);
+        throw new NotFoundException(
+          `Receiver user #${dto.receiverId} not found`,
+        );
       }
 
       const isSameReporter = receiver.id === job.reporterId;
       const isSameSection = Boolean(
         receiver.section_id &&
-          (receiver.section_id === job.sectionId ||
-            (job.asset && receiver.section_id === job.asset.section_id)),
+        (receiver.section_id === job.sectionId ||
+          (job.asset && receiver.section_id === job.asset.section_id)),
       );
 
       if (!isSameReporter && !isSameSection) {
@@ -777,8 +876,13 @@ export class RepairsService {
       }
     }
 
-    if (dto.companyId && !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5)) {
-      throw new BadRequestException('companyId can only be specified on Step 5 of OUTSOURCE track');
+    if (
+      dto.companyId &&
+      !(currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5)
+    ) {
+      throw new BadRequestException(
+        'companyId can only be specified on Step 5 of OUTSOURCE track',
+      );
     }
 
     if (
@@ -790,8 +894,14 @@ export class RepairsService {
       );
     }
 
-    if (currentStepActionType === StepActionType.OUTSOURCE && stepNumber === 5 && dto.companyId) {
-      const comp = await this.prisma.company.findUnique({ where: { id: dto.companyId } });
+    if (
+      currentStepActionType === StepActionType.OUTSOURCE &&
+      stepNumber === 5 &&
+      dto.companyId
+    ) {
+      const comp = await this.prisma.company.findUnique({
+        where: { id: dto.companyId },
+      });
       if (!comp) {
         throw new NotFoundException(`Company #${dto.companyId} not found`);
       }
@@ -803,19 +913,26 @@ export class RepairsService {
       // Step-specific Dynamic JobStatus Transitions
       if (currentStepActionType === StepActionType.OUTSOURCE) {
         if (stepNumber === 5) {
-          const outsourcedStatusId = await this.getStatusId('jobStatus', 'OUTSOURCED');
+          const outsourcedStatusId = await this.getStatusId(
+            'jobStatus',
+            'OUTSOURCED',
+          );
           await tx.repairJob.update({
             where: { id: jobId },
             data: {
               jobStatusId: outsourcedStatusId,
               companyId: dto.companyId ?? job.companyId,
               billNo: dto.billNo ?? job.billNo,
-              repairCost: dto.repairCost !== undefined ? dto.repairCost : job.repairCost,
+              repairCost:
+                dto.repairCost !== undefined ? dto.repairCost : job.repairCost,
               updatedBy: user.id,
             },
           });
         } else if (stepNumber === 6) {
-          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          const inProgressStatusId = await this.getStatusId(
+            'jobStatus',
+            'IN_PROGRESS',
+          );
           await tx.repairJob.update({
             where: { id: jobId },
             data: {
@@ -859,7 +976,10 @@ export class RepairsService {
             });
           }
 
-          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          const inProgressStatusId = await this.getStatusId(
+            'jobStatus',
+            'IN_PROGRESS',
+          );
           await tx.repairJob.update({
             where: { id: jobId },
             data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
@@ -867,7 +987,10 @@ export class RepairsService {
         }
       } else if (currentStepActionType === StepActionType.SELF_REPAIR) {
         if (stepNumber === 4) {
-          const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+          const inProgressStatusId = await this.getStatusId(
+            'jobStatus',
+            'IN_PROGRESS',
+          );
           await tx.repairJob.update({
             where: { id: jobId },
             data: { jobStatusId: inProgressStatusId, updatedBy: user.id },
@@ -875,8 +998,14 @@ export class RepairsService {
         }
       }
 
-      if (isPenultimateStep && currentStepActionType !== StepActionType.UNREPAIRABLE) {
-        const waitingDeliveryStatusId = await this.getStatusId('jobStatus', 'WAITING_DELIVERY');
+      if (
+        isPenultimateStep &&
+        currentStepActionType !== StepActionType.UNREPAIRABLE
+      ) {
+        const waitingDeliveryStatusId = await this.getStatusId(
+          'jobStatus',
+          'WAITING_DELIVERY',
+        );
         await tx.repairJob.update({
           where: { id: jobId },
           data: { jobStatusId: waitingDeliveryStatusId, updatedBy: user.id },
@@ -884,11 +1013,26 @@ export class RepairsService {
       }
 
       if (isFinalStep) {
-        const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
-        const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
-        const waitDisposalAssetStatusId = await this.getStatusId('assetStatus', 'WAIT_DISPOSAL');
-        const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
-        const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+        const completedStatusId = await this.getStatusId(
+          'jobStatus',
+          'COMPLETED',
+        );
+        const normalAssetStatusId = await this.getStatusId(
+          'assetStatus',
+          'NORMAL',
+        );
+        const waitDisposalAssetStatusId = await this.getStatusId(
+          'assetStatus',
+          'WAIT_DISPOSAL',
+        );
+        const availableStatusId = await this.getStatusId(
+          'availabilityStatus',
+          'AVAILABLE',
+        );
+        const unavailableStatusId = await this.getStatusId(
+          'availabilityStatus',
+          'UNAVAILABLE',
+        );
 
         await tx.repairJob.update({
           where: { id: jobId },
@@ -925,7 +1069,9 @@ export class RepairsService {
         data: {
           completeAt: completionTime,
           completedBy: user.id,
-          note: dto.note ? `${targetStep.note ? targetStep.note + ' | ' : ''}${dto.note}` : targetStep.note,
+          note: dto.note
+            ? `${targetStep.note ? targetStep.note + ' | ' : ''}${dto.note}`
+            : targetStep.note,
         },
         include: { stepMaster: true, user: true },
       });
@@ -937,11 +1083,7 @@ export class RepairsService {
     });
   }
 
-  async advanceNextStep(
-    jobId: string,
-    dto: UpdateRepairStepDto,
-    user: any,
-  ) {
+  async advanceNextStep(jobId: string, dto: UpdateRepairStepDto, user: any) {
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: {
@@ -982,11 +1124,7 @@ export class RepairsService {
   // 6. Reject Step
   // ───────────────────────────────────────────────────────────────────────────
 
-  async rejectStep(
-    jobId: string,
-    dto: RejectRepairStepDto,
-    user: any,
-  ) {
+  async rejectStep(jobId: string, dto: RejectRepairStepDto, user: any) {
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: {
@@ -1000,22 +1138,34 @@ export class RepairsService {
 
     if (!job) throw new NotFoundException(`Repair job #${jobId} not found`);
 
-    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
-      throw new BadRequestException(`Cannot reject a completed or cancelled repair job`);
+    if (
+      job.jobStatus.code === 'COMPLETED' ||
+      job.jobStatus.code === 'CANCELLED'
+    ) {
+      throw new BadRequestException(
+        `Cannot reject a completed or cancelled repair job`,
+      );
     }
 
     if (!job.repairJobSteps || job.repairJobSteps.length === 0) {
-      throw new BadRequestException('Repair job must be diagnosed before rejecting steps');
+      throw new BadRequestException(
+        'Repair job must be diagnosed before rejecting steps',
+      );
     }
 
     const currentStepActionType = job.repairJobSteps[0]?.stepMaster?.actionType;
     const nextPendingStep = job.repairJobSteps.find((s) => !s.completeAt);
 
     if (!nextPendingStep) {
-      throw new BadRequestException('All repair steps have already been completed for this job');
+      throw new BadRequestException(
+        'All repair steps have already been completed for this job',
+      );
     }
 
-    if (nextPendingStep.note && nextPendingStep.note.startsWith(REJECTED_STEP_PREFIX)) {
+    if (
+      nextPendingStep.note &&
+      nextPendingStep.note.startsWith(REJECTED_STEP_PREFIX)
+    ) {
       throw new BadRequestException(
         'This repair job has already been rejected and is awaiting re-diagnosis by the technician',
       );
@@ -1030,7 +1180,9 @@ export class RepairsService {
       stepNumber === 5
     ) {
       if (user.role !== UserRole.PARCEL_STAFF) {
-        throw new ForbiddenException('Step #5 (Approval) rejection can only be performed by PARCEL_STAFF');
+        throw new ForbiddenException(
+          'Step #5 (Approval) rejection can only be performed by PARCEL_STAFF',
+        );
       }
       isApprovalStep = true;
     }
@@ -1041,7 +1193,10 @@ export class RepairsService {
       );
     }
 
-    const inProgressStatusId = await this.getStatusId('jobStatus', 'IN_PROGRESS');
+    const inProgressStatusId = await this.getStatusId(
+      'jobStatus',
+      'IN_PROGRESS',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updatedStep = await tx.repairJobStep.update({
@@ -1076,9 +1231,15 @@ export class RepairsService {
   // 7. Complete Unrepairable (Custody Handshake Flow)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async completeUnrepairable(jobId: string, dto: CompleteUnrepairableDto, user: any) {
+  async completeUnrepairable(
+    jobId: string,
+    dto: CompleteUnrepairableDto,
+    user: any,
+  ) {
     if (user.role !== UserRole.PARCEL_STAFF && user.role !== UserRole.MANAGER) {
-      throw new ForbiddenException('Only PARCEL_STAFF can confirm receipt of unrepairable equipment');
+      throw new ForbiddenException(
+        'Only PARCEL_STAFF can confirm receipt of unrepairable equipment',
+      );
     }
 
     const job = await this.prisma.repairJob.findUnique({
@@ -1101,8 +1262,14 @@ export class RepairsService {
     }
 
     const completedStatusId = await this.getStatusId('jobStatus', 'COMPLETED');
-    const waitDisposalAssetStatusId = await this.getStatusId('assetStatus', 'WAIT_DISPOSAL');
-    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+    const waitDisposalAssetStatusId = await this.getStatusId(
+      'assetStatus',
+      'WAIT_DISPOSAL',
+    );
+    const unavailableAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'UNAVAILABLE',
+    );
     const now = new Date();
 
     return this.prisma.$transaction(async (tx) => {
@@ -1135,7 +1302,9 @@ export class RepairsService {
             data: {
               completeAt: now,
               completedBy: user.id,
-              note: dto.note ? `${step.note ? step.note + ' | ' : ''}${dto.note}` : step.note,
+              note: dto.note
+                ? `${step.note ? step.note + ' | ' : ''}${dto.note}`
+                : step.note,
             },
           });
         }
@@ -1149,13 +1318,14 @@ export class RepairsService {
   // 8. Cancel Repair Job (ยกเลิกใบงานซ่อม)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async cancelRepairJob(
-    jobId: string,
-    dto: CancelRepairJobDto,
-    user: any,
-  ) {
-    if (user.role !== UserRole.MAINTENANCE_STAFF && user.role !== UserRole.MAINTENANCE_HEAD) {
-      throw new ForbiddenException('Only maintenance staff or head can cancel repair jobs');
+  async cancelRepairJob(jobId: string, dto: CancelRepairJobDto, user: any) {
+    if (
+      user.role !== UserRole.MAINTENANCE_STAFF &&
+      user.role !== UserRole.MAINTENANCE_HEAD
+    ) {
+      throw new ForbiddenException(
+        'Only maintenance staff or head can cancel repair jobs',
+      );
     }
 
     const job = await this.prisma.repairJob.findUnique({
@@ -1172,14 +1342,20 @@ export class RepairsService {
       throw new NotFoundException(`Repair job #${jobId} not found`);
     }
 
-    if (job.jobStatus.code === 'COMPLETED' || job.jobStatus.code === 'CANCELLED') {
-      throw new BadRequestException(`Cannot cancel a repair job that is already ${job.jobStatus.code}`);
+    if (
+      job.jobStatus.code === 'COMPLETED' ||
+      job.jobStatus.code === 'CANCELLED'
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel a repair job that is already ${job.jobStatus.code}`,
+      );
     }
 
     const hasProgressedPastApproval = job.repairJobSteps.some(
       (s) =>
-        ((s.stepMaster?.stepNumber >= 5) ||
-          (s.stepMaster?.actionType === StepActionType.SELF_REPAIR && s.stepMaster?.stepNumber >= 4)) &&
+        (s.stepMaster?.stepNumber >= 5 ||
+          (s.stepMaster?.actionType === StepActionType.SELF_REPAIR &&
+            s.stepMaster?.stepNumber >= 4)) &&
         s.completeAt !== null,
     );
 
@@ -1191,7 +1367,10 @@ export class RepairsService {
 
     const cancelledStatusId = await this.getStatusId('jobStatus', 'CANCELLED');
     const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
-    const availableAvailabilityId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+    const availableAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'AVAILABLE',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       await tx.repairJob.update({
@@ -1230,7 +1409,9 @@ export class RepairsService {
     user: any,
   ) {
     if (user.role !== UserRole.PARCEL_STAFF) {
-      throw new ForbiddenException('Only PARCEL_STAFF can process return of spare parts into stock');
+      throw new ForbiddenException(
+        'Only PARCEL_STAFF can process return of spare parts into stock',
+      );
     }
 
     const job = await this.prisma.repairJob.findUnique({
@@ -1240,13 +1421,16 @@ export class RepairsService {
     if (!job) throw new NotFoundException(`Repair job #${jobId} not found`);
 
     if (job.jobStatus.code === 'COMPLETED') {
-      throw new BadRequestException('Cannot return spare parts for completed repair jobs');
+      throw new BadRequestException(
+        'Cannot return spare parts for completed repair jobs',
+      );
     }
 
     const sp = await this.prisma.sparepart.findUnique({
       where: { id: dto.sparepartId, deletedAt: null },
     });
-    if (!sp) throw new NotFoundException(`Spare part #${dto.sparepartId} not found`);
+    if (!sp)
+      throw new NotFoundException(`Spare part #${dto.sparepartId} not found`);
 
     const withdrawnTxns = await this.prisma.sparepartTxn.findMany({
       where: { jobId, sparepartId: dto.sparepartId, txnType: 'WITHDRAW' },
@@ -1295,13 +1479,21 @@ export class RepairsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async getLookups() {
-    const [jobStatuses, causes, techCategories, jobTypes, stepMasters] = await Promise.all([
-      this.prisma.jobStatus.findMany({ where: { deletedAt: null }, orderBy: { id: 'asc' } }),
-      this.prisma.cause.findMany({ where: { deleteAt: null } }),
-      this.prisma.techCategory.findMany({ where: { isActive: true, deleteAt: null } }),
-      this.prisma.jobType.findMany({ where: { deletedAt: null } }),
-      this.prisma.stepMaster.findMany({ orderBy: [{ actionType: 'asc' }, { stepNumber: 'asc' }] }),
-    ]);
+    const [jobStatuses, causes, techCategories, jobTypes, stepMasters] =
+      await Promise.all([
+        this.prisma.jobStatus.findMany({
+          where: { deletedAt: null },
+          orderBy: { id: 'asc' },
+        }),
+        this.prisma.cause.findMany({ where: { deleteAt: null } }),
+        this.prisma.techCategory.findMany({
+          where: { isActive: true, deleteAt: null },
+        }),
+        this.prisma.jobType.findMany({ where: { deletedAt: null } }),
+        this.prisma.stepMaster.findMany({
+          orderBy: [{ actionType: 'asc' }, { stepNumber: 'asc' }],
+        }),
+      ]);
 
     return {
       jobStatuses,
@@ -1409,10 +1601,7 @@ export class RepairsService {
         { asset: { noid: { contains: search, mode: 'insensitive' as const } } },
       ];
       if (where.OR) {
-        where.AND = [
-          { OR: where.OR },
-          { OR: searchCondition },
-        ];
+        where.AND = [{ OR: where.OR }, { OR: searchCondition }];
         delete where.OR;
       } else {
         where.OR = searchCondition;
@@ -1437,7 +1626,9 @@ export class RepairsService {
             },
           },
           section: { select: { id: true, code: true, name: true } },
-          reporter: { select: { id: true, firstname: true, lastname: true, email: true } },
+          reporter: {
+            select: { id: true, firstname: true, lastname: true, email: true },
+          },
           jobStatus: true,
           jobType: true,
           cause: true,
@@ -1446,7 +1637,12 @@ export class RepairsService {
           mechanicRepairs: {
             include: {
               user: {
-                select: { id: true, firstname: true, lastname: true, email: true },
+                select: {
+                  id: true,
+                  firstname: true,
+                  lastname: true,
+                  email: true,
+                },
               },
             },
           },
@@ -1481,7 +1677,13 @@ export class RepairsService {
         },
         section: true,
         reporter: {
-          select: { id: true, firstname: true, lastname: true, email: true, employeeId: true },
+          select: {
+            id: true,
+            firstname: true,
+            lastname: true,
+            email: true,
+            employeeId: true,
+          },
         },
         jobStatus: true,
         jobType: true,
@@ -1500,7 +1702,12 @@ export class RepairsService {
         mechanicRepairs: {
           include: {
             user: {
-              select: { id: true, firstname: true, lastname: true, email: true },
+              select: {
+                id: true,
+                firstname: true,
+                lastname: true,
+                email: true,
+              },
             },
           },
         },
@@ -1508,7 +1715,12 @@ export class RepairsService {
           include: {
             stepMaster: true,
             user: {
-              select: { id: true, firstname: true, lastname: true, email: true },
+              select: {
+                id: true,
+                firstname: true,
+                lastname: true,
+                email: true,
+              },
             },
           },
           orderBy: { stepMaster: { stepNumber: 'asc' } },
@@ -1517,7 +1729,12 @@ export class RepairsService {
           include: {
             sparepart: true,
             user: {
-              select: { id: true, firstname: true, lastname: true, email: true },
+              select: {
+                id: true,
+                firstname: true,
+                lastname: true,
+                email: true,
+              },
             },
           },
           orderBy: { createdAt: 'desc' },
@@ -1545,7 +1762,10 @@ export class RepairsService {
     );
     const isRejected = Boolean(rejectedStep);
     const rejectReason = rejectedStep?.note
-      ? rejectedStep.note.replace(new RegExp(`^\\${REJECTED_STEP_PREFIX}\\s*`), '')
+      ? rejectedStep.note.replace(
+          new RegExp(`^\\${REJECTED_STEP_PREFIX}\\s*`),
+          '',
+        )
       : null;
 
     return {
@@ -1561,7 +1781,8 @@ export class RepairsService {
         totalSparePartsCost: Math.max(0, sparePartsCost),
         totalCost,
         totalSteps: job.repairJobSteps.length,
-        completedSteps: job.repairJobSteps.filter((s) => s.completeAt !== null).length,
+        completedSteps: job.repairJobSteps.filter((s) => s.completeAt !== null)
+          .length,
         isOverdue: overdueInfo.isOverdue,
         overdueDays: overdueInfo.overdueDays,
       },
@@ -1605,11 +1826,13 @@ export class RepairsService {
     stepNumber: number,
     role: UserRole,
   ) {
-    const isMaintenance = role === UserRole.MAINTENANCE_STAFF || role === UserRole.MAINTENANCE_HEAD;
+    const isMaintenance =
+      role === UserRole.MAINTENANCE_STAFF || role === UserRole.MAINTENANCE_HEAD;
 
     // Step 5 Approval / External Handling (PARCEL_STAFF only for WITH_PARTS and OUTSOURCE)
     if (
-      (actionType === StepActionType.WITH_PARTS || actionType === StepActionType.OUTSOURCE) &&
+      (actionType === StepActionType.WITH_PARTS ||
+        actionType === StepActionType.OUTSOURCE) &&
       stepNumber === 5
     ) {
       if (role !== UserRole.PARCEL_STAFF) {
@@ -1645,13 +1868,17 @@ export class RepairsService {
     if (actionType === StepActionType.UNREPAIRABLE) {
       if (stepNumber === 5) {
         if (!isMaintenance) {
-          throw new ForbiddenException(`Step #5 can only be performed by maintenance staff`);
+          throw new ForbiddenException(
+            `Step #5 can only be performed by maintenance staff`,
+          );
         }
         return;
       }
       if (stepNumber >= 6) {
         if (role !== UserRole.PARCEL_STAFF) {
-          throw new ForbiddenException(`Custody acceptance steps must be performed by PARCEL_STAFF`);
+          throw new ForbiddenException(
+            `Custody acceptance steps must be performed by PARCEL_STAFF`,
+          );
         }
         return;
       }

@@ -22,15 +22,18 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<{
+      user?: { role?: unknown };
+      session?: { user?: { role?: unknown } };
+    }>();
     // Support req.user or req.session.user from better-auth or custom auth guard
     const user = request.user || request.session?.user;
 
-    if (!user || !user.role) {
+    if (!user || typeof user.role !== 'string') {
       throw new ForbiddenException('Access denied: User role not found');
     }
 
-    const hasRole = requiredRoles.includes(user.role as UserRole);
+    const hasRole = requiredRoles.some((role) => role === user.role);
     if (!hasRole) {
       throw new ForbiddenException(
         `Access denied: Required role [${requiredRoles.join(', ')}]`,

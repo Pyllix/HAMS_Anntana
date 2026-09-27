@@ -1,0 +1,14 @@
+model PreAuthChallenge {
+  id                      String   @id @default(cuid())
+  userId                  String   @map("user_id")
+  tokenHash               String   @unique @map("token_hash")
+  state                   String
+  sessionTokenEncrypted   String   @map("session_token_encrypted")
+  sessionCookiesEncrypted String   @map("session_cookies_encrypted") @db.Text
+  expiresAt               DateTime @map("expires_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("pre_auth_challenges")
+}

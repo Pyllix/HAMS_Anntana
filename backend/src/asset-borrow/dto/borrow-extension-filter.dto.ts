@@ -1,4 +1,10 @@
-import { IsOptional, IsEnum, IsUUID, IsString, IsDateString } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsUUID,
+  IsString,
+  IsDateString,
+} from 'class-validator';
 import { BorrowExtensionStatus, BorrowExtensionType } from '@prisma/client';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -6,7 +12,8 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 export class BorrowExtensionFilterDto extends PaginationDto {
   @ApiPropertyOptional({
     enum: BorrowExtensionStatus,
-    description: 'Filter by extension status (PENDING, APPROVED, REJECTED, CANCELLED)',
+    description:
+      'Filter by extension status (PENDING, APPROVED, REJECTED, CANCELLED)',
   })
   @IsOptional()
   @IsEnum(BorrowExtensionStatus)
@@ -25,7 +32,9 @@ export class BorrowExtensionFilterDto extends PaginationDto {
   @IsUUID()
   sectionId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by borrower UUID or Employee Code' })
+  @ApiPropertyOptional({
+    description: 'Filter by borrower UUID or Employee Code',
+  })
   @IsOptional()
   @IsString()
   borrowerId?: string;
@@ -35,12 +44,18 @@ export class BorrowExtensionFilterDto extends PaginationDto {
   @IsUUID()
   borrowTransactionId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter requests created from date (YYYY-MM-DD)', example: '2026-08-01' })
+  @ApiPropertyOptional({
+    description: 'Filter requests created from date (YYYY-MM-DD)',
+    example: '2026-08-01',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'Filter requests created to date (YYYY-MM-DD)', example: '2026-08-31' })
+  @ApiPropertyOptional({
+    description: 'Filter requests created to date (YYYY-MM-DD)',
+    example: '2026-08-31',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   endDate?: string;

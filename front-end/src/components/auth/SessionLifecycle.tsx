@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
 import { refreshSessionWindow } from "../../services/authService";
-import { clearClientSessionState } from "../../services/clientSessionCleanup.js";
+import { clearClientSessionState } from "../../services/clientSessionCleanup";
 import {
   clearSessionDrafts,
   hasSessionDrafts,
   hasSessionDraftAccountChanged,
-} from "../../services/sessionDraftStorage.js";
+} from "../../services/sessionDraftStorage";
 import {
   publishAuthMessage,
   subscribeAuthMessages,
@@ -16,7 +16,7 @@ import type { AuthBroadcastMessage } from "../../services/authBroadcast";
 import {
   createSessionExpiryHandler,
   subscribeToSessionExpiry,
-} from "../../services/sessionExpiryFlow.js";
+} from "../../services/sessionExpiryFlow";
 
 const WARNING_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 const ACTIVITY_REFRESH_INTERVAL_MS = 15 * 1000;

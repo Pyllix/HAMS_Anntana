@@ -42,15 +42,23 @@ describe('JobTypeService', () => {
   });
 
   it('should return all job types', async () => {
-    mockPrisma.jobType.findMany.mockResolvedValue([{ id: 1, name: 'ตรวจเช็คและซ่อมทั่วไป' }]);
+    mockPrisma.jobType.findMany.mockResolvedValue([
+      { id: 1, name: 'ตรวจเช็คและซ่อมทั่วไป' },
+    ]);
 
     const result = await service.findAll();
     expect(result).toEqual([{ id: 1, name: 'ตรวจเช็คและซ่อมทั่วไป' }]);
   });
 
   it('should soft delete a job type', async () => {
-    mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1, name: 'ตรวจเช็คและซ่อมทั่วไป' });
-    mockPrisma.jobType.update.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.jobType.findFirst.mockResolvedValue({
+      id: 1,
+      name: 'ตรวจเช็คและซ่อมทั่วไป',
+    });
+    mockPrisma.jobType.update.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
 
     await service.remove(1);
     expect(mockPrisma.jobType.update).toHaveBeenCalledWith({
@@ -60,7 +68,10 @@ describe('JobTypeService', () => {
   });
 
   it('should restore a soft-deleted job type', async () => {
-    mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.jobType.findFirst.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
     mockPrisma.jobType.update.mockResolvedValue({ id: 1, deletedAt: null });
 
     const result = await service.restore(1);

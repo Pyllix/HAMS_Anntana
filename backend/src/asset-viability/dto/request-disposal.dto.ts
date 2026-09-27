@@ -5,7 +5,8 @@ export class RequestDisposalDto {
   @ApiPropertyOptional({
     example:
       'แทงจำหน่ายเนื่องจากประเมินแล้วซ่อมไม่คุ้มค่า: ค่าซ่อมสะสม (฿337,500.00) คิดเป็น 75.0% ของราคาจัดซื้อ ซึ่งเกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ',
-    description: 'เหตุผลประกอบการเสนอแทงจำหน่าย (ดึงมาจาก suggestedDisposalReason ใน prefillData)',
+    description:
+      'เหตุผลประกอบการเสนอแทงจำหน่าย (ดึงมาจาก suggestedDisposalReason ใน prefillData)',
   })
   @IsOptional()
   @IsString()

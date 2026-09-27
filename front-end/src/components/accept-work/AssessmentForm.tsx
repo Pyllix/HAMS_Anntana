@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
-import { clearSessionDraft } from "../../services/sessionDraftStorage.js";
+import { clearSessionDraft } from "../../services/sessionDraftStorage";
 import {
   ArrowLeft,
   Loader2,

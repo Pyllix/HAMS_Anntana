@@ -47,7 +47,7 @@ export class CreateUserDto {
   })
   @IsEnum(UserRole)
   @IsOptional()
-  role?: UserRole = UserRole.DEPARTMENT_STAFF;
+  role?: UserRole;
 
   @ApiPropertyOptional({
     example: 'https://example.com/avatar.png',

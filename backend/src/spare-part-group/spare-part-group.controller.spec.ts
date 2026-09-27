@@ -38,7 +38,10 @@ describe('SparePartGroupController', () => {
   });
 
   it('should create group', async () => {
-    mockSparePartGroupService.create.mockResolvedValue({ id: 1, name: 'Group A' });
+    mockSparePartGroupService.create.mockResolvedValue({
+      id: 1,
+      name: 'Group A',
+    });
 
     const res = await controller.create({ name: 'Group A' });
     expect(res).toEqual({ id: 1, name: 'Group A' });

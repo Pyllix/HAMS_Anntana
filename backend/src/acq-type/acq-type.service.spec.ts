@@ -76,7 +76,10 @@ describe('AcqTypeService', () => {
 
   it('should soft delete an acquisition type', async () => {
     mockPrisma.acqType.findFirst.mockResolvedValue({ id: 1, name: 'บริจาค' });
-    mockPrisma.acqType.update.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.acqType.update.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
 
     await service.remove(1);
     expect(mockPrisma.acqType.update).toHaveBeenCalledWith({
@@ -86,7 +89,10 @@ describe('AcqTypeService', () => {
   });
 
   it('should restore a soft-deleted acquisition type', async () => {
-    mockPrisma.acqType.findFirst.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.acqType.findFirst.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
     mockPrisma.acqType.update.mockResolvedValue({ id: 1, deletedAt: null });
 
     const result = await service.restore(1);

@@ -6,16 +6,28 @@ export class AssetViabilitySummaryDto {
   @ApiProperty({ example: 150, description: 'Total assets evaluated' })
   totalEvaluated: number;
 
-  @ApiProperty({ example: 118, description: 'Assets deemed economically viable to repair' })
+  @ApiProperty({
+    example: 118,
+    description: 'Assets deemed economically viable to repair',
+  })
   viableCount: number;
 
-  @ApiProperty({ example: 22, description: 'Assets requiring caution/monitoring' })
+  @ApiProperty({
+    example: 22,
+    description: 'Assets requiring caution/monitoring',
+  })
   warningCount: number;
 
-  @ApiProperty({ example: 10, description: 'Assets deemed unviable - recommended for disposal' })
+  @ApiProperty({
+    example: 10,
+    description: 'Assets deemed unviable - recommended for disposal',
+  })
   unviableCount: number;
 
-  @ApiProperty({ example: 1254000.0, description: 'Total cumulative repair cost across evaluated assets' })
+  @ApiProperty({
+    example: 1254000.0,
+    description: 'Total cumulative repair cost across evaluated assets',
+  })
   totalCumulativeRepairCost: number;
 }
 
@@ -26,19 +38,32 @@ export class AssetViabilityMetricsDto {
   @ApiProperty({ example: 5, description: 'Standard useful life in years' })
   usefulLifeYears: number;
 
-  @ApiProperty({ example: true, description: 'True if asset age exceeds useful life' })
+  @ApiProperty({
+    example: true,
+    description: 'True if asset age exceeds useful life',
+  })
   isUsefulLifeExceeded: boolean;
 
-  @ApiProperty({ example: 337500.0, description: 'Cumulative repair cost in THB' })
+  @ApiProperty({
+    example: 337500.0,
+    description: 'Cumulative repair cost in THB',
+  })
   cumulativeRepairCost: number;
 
-  @ApiProperty({ example: 75.0, nullable: true, description: 'Cumulative cost as percentage of purchase price' })
+  @ApiProperty({
+    example: 75.0,
+    nullable: true,
+    description: 'Cumulative cost as percentage of purchase price',
+  })
   costRatioPercentage: number | null;
 
   @ApiProperty({ example: 6, description: 'Lifetime total repair jobs count' })
   totalRepairCount: number;
 
-  @ApiProperty({ example: 2, description: 'Repair jobs within the past 365 days' })
+  @ApiProperty({
+    example: 2,
+    description: 'Repair jobs within the past 365 days',
+  })
   recentRepairCount: number;
 }
 
@@ -77,7 +102,9 @@ export class AssetViabilityItemDto {
     usefulLife: number;
   };
 
-  @ApiProperty({ example: { id: 'uuid-sec-icu', name: 'หอผู้ป่วยวิกฤต (ICU)' } })
+  @ApiProperty({
+    example: { id: 'uuid-sec-icu', name: 'หอผู้ป่วยวิกฤต (ICU)' },
+  })
   section: {
     id: string;
     name: string;
@@ -96,7 +123,10 @@ export class AssetViabilityItemDto {
   @ApiProperty({ example: 'UNVIABLE', enum: ['VIABLE', 'WARNING', 'UNVIABLE'] })
   viabilityStatus: ViabilityStatus;
 
-  @ApiProperty({ example: 'ค่าซ่อมสะสม (฿337,500.00) คิดเป็น 75.0% ของราคาจัดซื้อ ซึ่งเกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ' })
+  @ApiProperty({
+    example:
+      'ค่าซ่อมสะสม (฿337,500.00) คิดเป็น 75.0% ของราคาจัดซื้อ ซึ่งเกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ',
+  })
   viabilityReason: string;
 }
 
@@ -170,7 +200,10 @@ export class HistoricalRepairJobDto {
   @ApiProperty({ example: 'บอร์ดควบคุมแรงดันลมไม่จ่ายไฟ', nullable: true })
   symptom: string | null;
 
-  @ApiProperty({ example: 'ส่งซ่อมเปลี่ยนบอร์ดควบคุมหลักผ่านบริษัทตัวแทน', nullable: true })
+  @ApiProperty({
+    example: 'ส่งซ่อมเปลี่ยนบอร์ดควบคุมหลักผ่านบริษัทตัวแทน',
+    nullable: true,
+  })
   solution: string | null;
 
   @ApiProperty({ example: 45000.0 })
@@ -187,7 +220,10 @@ export class HistoricalRepairJobDto {
 }
 
 export class DisposalRecommendationDto {
-  @ApiProperty({ example: 'RECOMMEND_DISPOSAL', enum: ['PROCEED_REPAIR', 'CAUTION_REPAIR', 'RECOMMEND_DISPOSAL'] })
+  @ApiProperty({
+    example: 'RECOMMEND_DISPOSAL',
+    enum: ['PROCEED_REPAIR', 'CAUTION_REPAIR', 'RECOMMEND_DISPOSAL'],
+  })
   recommendedAction: 'PROCEED_REPAIR' | 'CAUTION_REPAIR' | 'RECOMMEND_DISPOSAL';
 
   @ApiProperty({ example: 'เสนอพิจารณาแทงจำหน่าย' })
@@ -207,7 +243,8 @@ export class DisposalRecommendationDto {
       price: 450000.0,
       cumulativeRepairCost: 337500.0,
       costRatioPercentage: 75.0,
-      suggestedDisposalReason: 'แทงจำหน่ายเนื่องจากประเมินแล้วซ่อมไม่คุ้มค่า: ค่าซ่อมสะสม (฿337,500.00) คิดเป็น 75.0% ของราคาจัดซื้อ ซึ่งเกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ',
+      suggestedDisposalReason:
+        'แทงจำหน่ายเนื่องจากประเมินแล้วซ่อมไม่คุ้มค่า: ค่าซ่อมสะสม (฿337,500.00) คิดเป็น 75.0% ของราคาจัดซื้อ ซึ่งเกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ',
       suggestedDocPrefix: 'DISP-2567-',
     },
   })

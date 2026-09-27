@@ -12,12 +12,14 @@ export class ForecastController {
   @Public()
   @Get('expenses')
   @ApiOperation({
-    summary: 'พยากรณ์งบประมาณและค่าใช้จ่ายซ่อมบำรุงครุภัณฑ์ผ่าน AI API (รองรับการกรองรายแผนก)',
+    summary:
+      'พยากรณ์งบประมาณและค่าใช้จ่ายซ่อมบำรุงครุภัณฑ์ผ่าน AI API (รองรับการกรองรายแผนก)',
     description:
       'ดึงข้อมูลจากตาราง sparepart_txns และ asset แล้วส่งไปประมวลผลผ่าน Google Gemini AI (Pure Numerical Time-Series) สามารถเลือกดูรายแผนก หรือภาพรวมโรงพยาบาลได้',
   })
   @ApiOkResponse({
-    description: 'ผลการพยากรณ์งบประมาณและประวัติค่าใช้จ่าย พร้อมการวิเคราะห์อายุขัยครุภัณฑ์',
+    description:
+      'ผลการพยากรณ์งบประมาณและประวัติค่าใช้จ่าย พร้อมการวิเคราะห์อายุขัยครุภัณฑ์',
     type: ForecastResponseDto,
   })
   async getExpenseForecast(
@@ -35,10 +37,14 @@ export class ForecastController {
     } else if (query) {
       sectionId = query.sectionId;
       months = query.months !== undefined ? Number(query.months) : 12;
-      historyMonths = query.historyMonths !== undefined ? Number(query.historyMonths) : 12;
+      historyMonths =
+        query.historyMonths !== undefined ? Number(query.historyMonths) : 12;
     }
 
-    return this.forecastService.getExpenseForecast(months, sectionId, historyMonths);
+    return this.forecastService.getExpenseForecast(
+      months,
+      sectionId,
+      historyMonths,
+    );
   }
 }
-

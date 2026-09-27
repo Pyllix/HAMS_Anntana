@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateCauseDto } from './dto/create-cause.dto';
 import { UpdateCauseDto } from './dto/update-cause.dto';
 import { PrismaService } from 'src/prisma.service';
@@ -12,7 +16,9 @@ export class CauseService {
       where: { code: dto.code, deleteAt: null },
     });
     if (existing) {
-      throw new ConflictException(`Cause with code "${dto.code}" already exists`);
+      throw new ConflictException(
+        `Cause with code "${dto.code}" already exists`,
+      );
     }
 
     return this.prisma.cause.create({
@@ -47,7 +53,9 @@ export class CauseService {
         where: { code: dto.code, id: { not: id }, deleteAt: null },
       });
       if (existing) {
-        throw new ConflictException(`Cause with code "${dto.code}" already exists`);
+        throw new ConflictException(
+          `Cause with code "${dto.code}" already exists`,
+        );
       }
     }
 

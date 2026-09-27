@@ -8,6 +8,18 @@ import { UsersService } from './users.service';
 import { PrismaService } from '../prisma.service';
 import { UserRole } from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { AdminStepUpService } from '../auth/admin-step-up.service';
+import { TwoFactorService } from '../auth/two-factor.service';
+import { plainToInstance } from 'class-transformer';
+import { UpdateUserDto } from './dto/update-user.dto';
+
+jest.mock('better-auth/crypto', () => ({
+  hashPassword: jest.fn().mockResolvedValue('hashed-password'),
+}));
+
+jest.mock('../common/mail/mail.service', () => ({
+  mailService: { sendTwoFactorResetNotice: jest.fn() },
+}));
 
 // ─── Mock better-auth ────────────────────────────────────────────────────────
 jest.mock('../auth/auth', () => ({
@@ -20,6 +32,7 @@ jest.mock('../auth/auth', () => ({
 }));
 
 import { auth } from '../auth/auth';
+import { mailService } from '../common/mail/mail.service';
 
 // ─── Mock PrismaService ───────────────────────────────────────────────────────
 const mockPrismaService = {
@@ -37,12 +50,21 @@ const mockPrismaService = {
   },
   account: {
     deleteMany: jest.fn(),
+    updateMany: jest.fn(),
   },
   session: {
     deleteMany: jest.fn(),
+    findFirst: jest.fn(),
   },
+  trustedDevice: { deleteMany: jest.fn() },
+  twoFactorAuth: { findUnique: jest.fn(), count: jest.fn(), delete: jest.fn() },
+  securityAuditLog: { create: jest.fn() },
+  $queryRawUnsafe: jest.fn(),
   $transaction: jest.fn(),
 };
+
+const mockAdminStepUpService = { requireActive: jest.fn() };
+const mockTwoFactorService = { requiresTwoFactor: jest.fn() };
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 const mockUser = {
@@ -67,6 +89,8 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: AdminStepUpService, useValue: mockAdminStepUpService },
+        { provide: TwoFactorService, useValue: mockTwoFactorService },
       ],
     }).compile();
 
@@ -74,6 +98,20 @@ describe('UsersService', () => {
 
     // Reset all mocks before each test
     jest.clearAllMocks();
+    mockAdminStepUpService.requireActive
+      .mockReset()
+      .mockResolvedValue(undefined);
+    mockPrismaService.$transaction.mockImplementation(
+      async (action: unknown) =>
+        typeof action === 'function'
+          ? (action as (tx: typeof mockPrismaService) => Promise<unknown>)(
+              mockPrismaService,
+            )
+          : Promise.all(action as Promise<unknown>[]),
+    );
+    mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue(null);
+    mockPrismaService.session.deleteMany.mockResolvedValue({ count: 0 });
+    mockPrismaService.trustedDevice.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   it('should be defined', () => {
@@ -124,7 +162,7 @@ describe('UsersService', () => {
       } as any);
       mockPrismaService.user.update.mockResolvedValue(mockUser);
 
-      const result = await service.create(createDto as any);
+      const result = await service.create(createDto as any, 'admin-1');
 
       expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
         where: { email: createDto.email },
@@ -164,7 +202,7 @@ describe('UsersService', () => {
       } as any);
       mockPrismaService.user.update.mockResolvedValue(mockUser);
 
-      await service.create(dtoWithoutRole as any);
+      await service.create(dtoWithoutRole as any, 'admin-1');
 
       expect(mockPrismaService.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -176,7 +214,7 @@ describe('UsersService', () => {
     it('should throw ConflictException if email already exists', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
 
-      await expect(service.create(createDto as any)).rejects.toThrow(
+      await expect(service.create(createDto as any, 'admin-1')).rejects.toThrow(
         new ConflictException(`Email ${createDto.email} is already in use`),
       );
 
@@ -187,8 +225,10 @@ describe('UsersService', () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.findFirst.mockResolvedValue({ id: 'existing-id' });
 
-      await expect(service.create(createDto as any)).rejects.toThrow(
-        new ConflictException(`Username ${createDto.userName} is already in use`),
+      await expect(service.create(createDto as any, 'admin-1')).rejects.toThrow(
+        new ConflictException(
+          `Username ${createDto.userName} is already in use`,
+        ),
       );
 
       expect(auth.api.signUpEmail).not.toHaveBeenCalled();
@@ -200,7 +240,10 @@ describe('UsersService', () => {
       mockPrismaService.section.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.create({ ...createDto, sectionId: 'nonexistent-sec' } as any),
+        service.create(
+          { ...createDto, sectionId: 'nonexistent-sec' } as any,
+          'admin-1',
+        ),
       ).rejects.toThrow(
         new BadRequestException('Section not found with ID: nonexistent-sec'),
       );
@@ -213,7 +256,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue({ user: {} } as any);
 
-      await expect(service.create(createDto as any)).rejects.toThrow(
+      await expect(service.create(createDto as any, 'admin-1')).rejects.toThrow(
         new ConflictException('Failed to create user'),
       );
 
@@ -225,7 +268,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
       jest.mocked(auth.api.signUpEmail).mockResolvedValue(null as any);
 
-      await expect(service.create(createDto as any)).rejects.toThrow(
+      await expect(service.create(createDto as any, 'admin-1')).rejects.toThrow(
         ConflictException,
       );
     });
@@ -236,9 +279,13 @@ describe('UsersService', () => {
       jest.mocked(auth.api.signUpEmail).mockResolvedValue({
         user: { id: 'user-uuid-1' },
       } as any);
-      mockPrismaService.user.update.mockRejectedValue(new Error('DB Update Error'));
+      mockPrismaService.user.update.mockRejectedValue(
+        new Error('DB Update Error'),
+      );
 
-      await expect(service.create(createDto as any)).rejects.toThrow('DB Update Error');
+      await expect(service.create(createDto as any, 'admin-1')).rejects.toThrow(
+        'DB Update Error',
+      );
 
       expect(mockPrismaService.account.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-uuid-1' },
@@ -363,10 +410,7 @@ describe('UsersService', () => {
       expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
         where: {
           deletedAt: null,
-          OR: [
-            { id: 'user-uuid-1' },
-            { employeeId: 'user-uuid-1' },
-          ],
+          OR: [{ id: 'user-uuid-1' }, { employeeId: 'user-uuid-1' }],
         },
         omit: { deletedAt: true },
       });
@@ -377,7 +421,9 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne('nonexistent-id')).rejects.toThrow(
-        new NotFoundException('User not found with ID or Employee Code: nonexistent-id'),
+        new NotFoundException(
+          'User not found with ID or Employee Code: nonexistent-id',
+        ),
       );
     });
   });
@@ -388,12 +434,74 @@ describe('UsersService', () => {
   describe('update()', () => {
     const updateDto = { firstname: 'Jane', lastname: 'Smith' };
 
+    it('does not inject a role into a profile-only DTO', () => {
+      const dto = plainToInstance(UpdateUserDto, { firstname: 'Jane' });
+      expect(dto.role).toBeUndefined();
+    });
+
+    it('does not demote an ADMIN or revoke sessions for a profile edit', async () => {
+      const admin = { ...mockUser, role: UserRole.ADMIN };
+      mockPrismaService.user.findFirst.mockResolvedValue(admin);
+      mockPrismaService.user.update.mockResolvedValue({
+        ...admin,
+        firstname: 'Jane',
+      });
+      const dto = plainToInstance(UpdateUserDto, { firstname: 'Jane' });
+
+      await service.update('user-uuid-1', dto, 'another-admin');
+
+      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
+        where: { id: admin.id },
+        data: { firstname: 'Jane' },
+        omit: { deletedAt: true },
+      });
+      expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.trustedDevice.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('prevents demoting the last active enrolled ADMIN', async () => {
+      const admin = { ...mockUser, role: UserRole.ADMIN, banned: false };
+      mockPrismaService.user.findFirst.mockResolvedValue(admin);
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockPrismaService.user.findMany.mockResolvedValue([{ id: admin.id }]);
+      mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
+
+      await expect(
+        service.update(
+          admin.id,
+          { role: UserRole.DEPARTMENT_STAFF },
+          'another-admin',
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('prevents disabling the last active enrolled ADMIN', async () => {
+      const admin = { ...mockUser, role: UserRole.ADMIN, banned: false };
+      mockPrismaService.user.findFirst.mockResolvedValue(admin);
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockPrismaService.user.findMany.mockResolvedValue([{ id: admin.id }]);
+      mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
+
+      await expect(
+        service.update(admin.id, { banned: true }, 'another-admin'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+      });
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+      expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
+    });
+
     it('should update and return the updated user', async () => {
       const updatedUser = { ...mockUser, ...updateDto };
       mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
       mockPrismaService.user.update.mockResolvedValue(updatedUser);
 
-      const result = await service.update('user-uuid-1', updateDto);
+      const result = await service.update('user-uuid-1', updateDto, 'admin-1');
 
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
@@ -408,10 +516,14 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
       mockPrismaService.user.update.mockResolvedValue(updatedUser);
 
-      await service.update('user-uuid-1', {
-        firstname: 'Jane',
-        employeeId: 'GOV-679999',
-      } as any);
+      await service.update(
+        'user-uuid-1',
+        {
+          firstname: 'Jane',
+          employeeId: 'GOV-679999',
+        } as any,
+        'admin-1',
+      );
 
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
@@ -423,11 +535,20 @@ describe('UsersService', () => {
     it('should throw ConflictException if new email is already in use by another user', async () => {
       mockPrismaService.user.findFirst
         .mockResolvedValueOnce(mockUser) // findOne
-        .mockResolvedValueOnce({ id: 'other-uuid', email: 'taken@hospital.go.th' }); // findFirst email check
+        .mockResolvedValueOnce({
+          id: 'other-uuid',
+          email: 'taken@hospital.go.th',
+        }); // findFirst email check
 
       await expect(
-        service.update('user-uuid-1', { email: 'taken@hospital.go.th' } as any),
-      ).rejects.toThrow(new ConflictException('Email taken@hospital.go.th is already in use'));
+        service.update(
+          'user-uuid-1',
+          { email: 'taken@hospital.go.th' } as any,
+          'admin-1',
+        ),
+      ).rejects.toThrow(
+        new ConflictException('Email taken@hospital.go.th is already in use'),
+      );
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
@@ -438,8 +559,14 @@ describe('UsersService', () => {
         .mockResolvedValueOnce({ id: 'other-uuid', userName: 'takenuser' }); // findFirst userName check
 
       await expect(
-        service.update('user-uuid-1', { userName: 'takenuser' } as any),
-      ).rejects.toThrow(new ConflictException('Username takenuser is already in use'));
+        service.update(
+          'user-uuid-1',
+          { userName: 'takenuser' } as any,
+          'admin-1',
+        ),
+      ).rejects.toThrow(
+        new ConflictException('Username takenuser is already in use'),
+      );
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
@@ -449,8 +576,14 @@ describe('UsersService', () => {
       mockPrismaService.section.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.update('user-uuid-1', { sectionId: 'invalid-sec' } as any),
-      ).rejects.toThrow(new BadRequestException('Section not found with ID: invalid-sec'));
+        service.update(
+          'user-uuid-1',
+          { sectionId: 'invalid-sec' } as any,
+          'admin-1',
+        ),
+      ).rejects.toThrow(
+        new BadRequestException('Section not found with ID: invalid-sec'),
+      );
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
@@ -459,7 +592,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update('nonexistent-id', updateDto as any),
+        service.update('nonexistent-id', updateDto as any, 'admin-1'),
       ).rejects.toThrow(NotFoundException);
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
@@ -470,23 +603,64 @@ describe('UsersService', () => {
   // adminResetPassword()
   // ───────────────────────────────────────────────────────────────────────────
   describe('adminResetPassword()', () => {
-    it('should reset user password via better-auth and delete existing sessions', async () => {
+    it('rejects an expired Step-up before changing credentials', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
-      mockPrismaService.session.deleteMany.mockResolvedValue({ count: 2 } as any);
-      jest.mocked(auth.api.setUserPassword).mockResolvedValue({} as any);
+      mockAdminStepUpService.requireActive.mockRejectedValue(
+        new Error('STEP_UP_REQUIRED'),
+      );
 
-      const result = await service.adminResetPassword('user-uuid-1', 'NewPassword123');
+      await expect(
+        service.adminResetPassword(
+          'user-uuid-1',
+          'NewPassword123',
+          'admin-1',
+          'session-1',
+        ),
+      ).rejects.toThrow('STEP_UP_REQUIRED');
+      expect(mockPrismaService.account.updateMany).not.toHaveBeenCalled();
+    });
+    it('updates the credential and revokes sessions in one transaction', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
+      mockPrismaService.user.findFirst
+        .mockResolvedValueOnce(mockUser)
+        .mockResolvedValueOnce({ id: 'admin-1' });
+      mockPrismaService.session.findFirst.mockResolvedValue({
+        adminStepUp: { expiresAt: new Date(Date.now() + 60_000) },
+      });
+      mockPrismaService.account.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.session.deleteMany.mockResolvedValue({
+        count: 2,
+      });
 
-      expect(auth.api.setUserPassword).toHaveBeenCalledWith({
-        headers: expect.any(Headers),
-        body: {
-          userId: 'user-uuid-1',
-          newPassword: 'NewPassword123',
-        },
+      const result = await service.adminResetPassword(
+        'user-uuid-1',
+        'NewPassword123',
+        'admin-1',
+        'session-1',
+      );
+
+      expect(mockAdminStepUpService.requireActive).toHaveBeenCalledWith(
+        'admin-1',
+        'session-1',
+      );
+      expect(mockPrismaService.account.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-1', providerId: 'credential' },
+        data: { password: 'hashed-password' },
       });
       expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-uuid-1' },
       });
+      expect(mockPrismaService.securityAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          targetUserId: 'user-uuid-1',
+          action: 'ADMIN_PASSWORD_RESET',
+          details: { revokedSessions: 2, revokedTrustedDevices: 0 },
+        }),
+      });
+      expect(JSON.stringify(mockPrismaService.securityAuditLog.create.mock.calls)).not.toContain(
+        'NewPassword123',
+      );
       expect(result).toEqual({
         message: 'Password for user jdoe has been successfully reset',
       });
@@ -496,11 +670,132 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.adminResetPassword('nonexistent-id', 'NewPassword123'),
+        service.adminResetPassword(
+          'nonexistent-id',
+          'NewPassword123',
+          'admin-1',
+          'session-1',
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
+  describe('adminResetTwoFactor()', () => {
+    const reason = 'Identity checked outside HAMS';
+
+    it('rejects an ADMIN resetting their own 2FA', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue({
+        ...mockUser,
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+      });
+
+      await expect(
+        service.adminResetTwoFactor(
+          'admin-1',
+          { reason, identityVerifiedOutsideHams: true },
+          'admin-1',
+          'session-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.twoFactorAuth.delete).not.toHaveBeenCalled();
+    });
+
+    it('destroys enrollment and access, records the reason, and notifies the owner', async () => {
+      const target = { ...mockUser, role: UserRole.MANAGER };
+      mockPrismaService.user.findFirst.mockResolvedValue(target);
+      mockPrismaService.session.findFirst.mockResolvedValue({
+        adminStepUp: { expiresAt: new Date(Date.now() + 60_000) },
+      });
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+
+      await service.adminResetTwoFactor(
+        target.id,
+        { reason, identityVerifiedOutsideHams: true },
+        'admin-1',
+        'session-1',
+      );
+
+      expect(mockPrismaService.twoFactorAuth.delete).toHaveBeenCalledWith({
+        where: { userId: target.id },
+      });
+      expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
+        where: { userId: target.id },
+      });
+      expect(mockPrismaService.trustedDevice.deleteMany).toHaveBeenCalledWith({
+        where: { userId: target.id },
+      });
+      expect(mockPrismaService.securityAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          targetUserId: target.id,
+          reason,
+        }),
+      });
+      expect(mailService.sendTwoFactorResetNotice).toHaveBeenCalledWith(
+        expect.objectContaining({ to: target.email }),
+      );
+    });
+
+    it('allows resetting one ADMIN while another active enrolled ADMIN remains', async () => {
+      const target = { ...mockUser, role: UserRole.ADMIN, banned: false };
+      mockPrismaService.user.findFirst.mockResolvedValue(target);
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: target.id },
+        { id: 'admin-2' },
+      ]);
+      mockPrismaService.session.findFirst.mockResolvedValue({
+        adminStepUp: { expiresAt: new Date(Date.now() + 60_000) },
+      });
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockPrismaService.twoFactorAuth.count.mockResolvedValue(2);
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+
+      await expect(
+        service.adminResetTwoFactor(
+          target.id,
+          { reason, identityVerifiedOutsideHams: true },
+          'admin-2',
+          'session-2',
+        ),
+      ).resolves.toMatchObject({ message: expect.stringContaining('must enroll') });
+      expect(mockPrismaService.twoFactorAuth.delete).toHaveBeenCalledWith({
+        where: { userId: target.id },
+      });
+    });
+
+    it('prevents resetting the last active enrolled ADMIN', async () => {
+      const target = { ...mockUser, role: UserRole.ADMIN, banned: false };
+      mockPrismaService.user.findFirst.mockResolvedValue(target);
+      mockPrismaService.user.findMany.mockResolvedValue([{ id: target.id }]);
+      mockPrismaService.session.findFirst.mockResolvedValue({
+        adminStepUp: { expiresAt: new Date(Date.now() + 60_000) },
+      });
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+
+      await expect(
+        service.adminResetTwoFactor(
+          target.id,
+          { reason, identityVerifiedOutsideHams: true },
+          'admin-2',
+          'session-2',
+        ),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+      });
+      expect(mockPrismaService.twoFactorAuth.delete).not.toHaveBeenCalled();
+      expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
+    });
+  });
 
   // ───────────────────────────────────────────────────────────────────────────
   // remove()
@@ -510,7 +805,7 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(mockUser);
       mockPrismaService.user.update.mockResolvedValue(undefined);
 
-      const result = await service.remove('user-uuid-1');
+      const result = await service.remove('user-uuid-1', 'admin-1');
 
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
@@ -524,11 +819,27 @@ describe('UsersService', () => {
     it('should throw NotFoundException when user does not exist or is already deleted', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove('nonexistent-id')).rejects.toThrow(
+      await expect(service.remove('nonexistent-id', 'admin-1')).rejects.toThrow(
         NotFoundException,
       );
 
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('prevents deleting the last active enrolled ADMIN', async () => {
+      const admin = { ...mockUser, role: UserRole.ADMIN, banned: false };
+      mockPrismaService.user.findFirst.mockResolvedValue(admin);
+      mockPrismaService.twoFactorAuth.findUnique.mockResolvedValue({
+        enrollmentComplete: true,
+      });
+      mockPrismaService.user.findMany.mockResolvedValue([{ id: admin.id }]);
+      mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
+
+      await expect(service.remove(admin.id, 'another-admin')).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+      });
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+      expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
     });
   });
 
@@ -543,15 +854,12 @@ describe('UsersService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(deletedUser);
       mockPrismaService.user.update.mockResolvedValue(restoredUser);
 
-      const result = await service.restore('user-uuid-1');
+      const result = await service.restore('user-uuid-1', 'admin-1');
 
       expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
         where: {
           deletedAt: { not: null },
-          OR: [
-            { id: 'user-uuid-1' },
-            { employeeId: 'user-uuid-1' },
-          ],
+          OR: [{ id: 'user-uuid-1' }, { employeeId: 'user-uuid-1' }],
         },
       });
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
@@ -565,7 +873,9 @@ describe('UsersService', () => {
     it('should throw NotFoundException when no soft-deleted user is found', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.restore('nonexistent-id')).rejects.toThrow(
+      await expect(
+        service.restore('nonexistent-id', 'admin-1'),
+      ).rejects.toThrow(
         new NotFoundException(
           'Deleted user not found with ID or Employee Code: nonexistent-id (may not exist or not deleted)',
         ),

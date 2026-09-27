@@ -10,7 +10,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
@@ -25,7 +30,7 @@ import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
 import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 
 @ApiTags('Spare Parts')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('spare-parts')
 export class SparePartsController {
@@ -33,13 +38,13 @@ export class SparePartsController {
 
   @Post()
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Create new Spare Part', description: 'ลงทะเบียนอะไหล่ใหม่เข้าระบบ' })
+  @ApiOperation({
+    summary: 'Create new Spare Part',
+    description: 'ลงทะเบียนอะไหล่ใหม่เข้าระบบ',
+  })
   @ApiResponse({ status: 201, description: 'Spare part created successfully' })
   @ApiResponse({ status: 409, description: 'Spare part code already exists' })
-  create(
-    @Body() dto: CreateSparepartDto,
-    @Session() session: UserSession,
-  ) {
+  create(@Body() dto: CreateSparepartDto, @Session() session: UserSession) {
     return this.sparePartsService.create(dto, session.user.id);
   }
 
@@ -51,7 +56,11 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Find all Spare Parts (paginated)', description: 'ดึงรายการอะไหล่พร้อม pagination, ค้นหารหัส/ชื่อ, กรองกลุ่ม หรือกรองเฉพาะที่สต็อกต่ำ' })
+  @ApiOperation({
+    summary: 'Find all Spare Parts (paginated)',
+    description:
+      'ดึงรายการอะไหล่พร้อม pagination, ค้นหารหัส/ชื่อ, กรองกลุ่ม หรือกรองเฉพาะที่สต็อกต่ำ',
+  })
   findAll(@Query() query: QuerySparepartDto) {
     return this.sparePartsService.findAll(query);
   }
@@ -64,7 +73,11 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Get Low Stock Summary', description: 'ดึงรายงานสรุปอะไหล่ที่สต็อกต่ำกว่าเกณฑ์ขั้นต่ำ พร้อมจำนวนที่ต้องสั่งซื้อเพิ่ม' })
+  @ApiOperation({
+    summary: 'Get Low Stock Summary',
+    description:
+      'ดึงรายงานสรุปอะไหล่ที่สต็อกต่ำกว่าเกณฑ์ขั้นต่ำ พร้อมจำนวนที่ต้องสั่งซื้อเพิ่ม',
+  })
   getLowStockSummary() {
     return this.sparePartsService.findLowStockSummary();
   }
@@ -77,7 +90,10 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Find all Spare Part Transactions (paginated)', description: 'ดึงสมุดรายการเบิก-จ่าย-คืนอะไหล่ทั้งหมด' })
+  @ApiOperation({
+    summary: 'Find all Spare Part Transactions (paginated)',
+    description: 'ดึงสมุดรายการเบิก-จ่าย-คืนอะไหล่ทั้งหมด',
+  })
   findAllTransactions(@Query() query: QuerySparepartTxnDto) {
     return this.sparePartsService.findAllTransactions(query);
   }
@@ -90,20 +106,25 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Find Stock-In History (paginated)', description: 'ดึงประวัติการรับเข้าอะไหล่/เติมสต็อก พร้อมฟิลเตอร์ค้นหาและแบ่งหน้า' })
+  @ApiOperation({
+    summary: 'Find Stock-In History (paginated)',
+    description:
+      'ดึงประวัติการรับเข้าอะไหล่/เติมสต็อก พร้อมฟิลเตอร์ค้นหาและแบ่งหน้า',
+  })
   findStockInHistory(@Query() query: QueryStockInHistoryDto) {
     return this.sparePartsService.findStockInHistory(query);
   }
 
   @Post('stock-in')
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Stock-in Spare Part', description: 'รับอะไหล่เข้าคลัง เพิ่มยอดสต็อกและบันทึกประวัติการสั่งซื้อ/รับของ' })
+  @ApiOperation({
+    summary: 'Stock-in Spare Part',
+    description:
+      'รับอะไหล่เข้าคลัง เพิ่มยอดสต็อกและบันทึกประวัติการสั่งซื้อ/รับของ',
+  })
   @ApiResponse({ status: 201, description: 'Stock-in recorded successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
-  stockIn(
-    @Body() dto: StockInSparepartDto,
-    @Session() session: UserSession,
-  ) {
+  stockIn(@Body() dto: StockInSparepartDto, @Session() session: UserSession) {
     return this.sparePartsService.stockIn(dto, session.user.id);
   }
 
@@ -115,7 +136,10 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Find one Spare Part', description: 'ดูข้อมูลรายละเอียดของอะไหล่' })
+  @ApiOperation({
+    summary: 'Find one Spare Part',
+    description: 'ดูข้อมูลรายละเอียดของอะไหล่',
+  })
   @ApiResponse({ status: 200, description: 'Spare part found successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -130,7 +154,11 @@ export class SparePartsController {
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
   )
-  @ApiOperation({ summary: 'Get Spare Part Timeline / History', description: 'ดึงประวัติกิจกรรมทั้งหมดของอะไหล่ (รับเข้าสต็อก, เบิกจ่าย, คืน)' })
+  @ApiOperation({
+    summary: 'Get Spare Part Timeline / History',
+    description:
+      'ดึงประวัติกิจกรรมทั้งหมดของอะไหล่ (รับเข้าสต็อก, เบิกจ่าย, คืน)',
+  })
   findHistory(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: PaginationDto,
@@ -140,7 +168,10 @@ export class SparePartsController {
 
   @Patch(':id')
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Update Spare Part', description: 'แก้ไขข้อมูลอะไหล่' })
+  @ApiOperation({
+    summary: 'Update Spare Part',
+    description: 'แก้ไขข้อมูลอะไหล่',
+  })
   @ApiResponse({ status: 200, description: 'Spare part updated successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
   update(
@@ -152,7 +183,10 @@ export class SparePartsController {
 
   @Delete(':id')
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Delete Spare Part', description: 'Soft-delete อะไหล่' })
+  @ApiOperation({
+    summary: 'Delete Spare Part',
+    description: 'Soft-delete อะไหล่',
+  })
   @ApiResponse({ status: 200, description: 'Spare part deleted successfully' })
   @ApiResponse({ status: 404, description: 'Spare part not found' })
   remove(@Param('id', ParseIntPipe) id: number) {

@@ -31,18 +31,15 @@ export class SessionLifetimeGuard implements CanActivate {
     const route = this.routeKey(request);
     if (SESSIONLESS_AUTH_ROUTES.has(route)) return true;
 
-    const bearerToken = this.readBearerToken(request);
     const cookieToken = SESSION_COOKIE_NAMES.map((name) =>
       this.readCookie(request, name),
     )
       .map((token) => token?.split('.', 1)[0])
       .find((token): token is string => Boolean(token));
-    const token = bearerToken ?? cookieToken;
+    const token = cookieToken;
     if (!token) return true;
 
-    const userActivity = Boolean(
-      !bearerToken && cookieToken && request.headers['x-user-activity'] === '1',
-    );
+    const userActivity = request.headers['x-user-activity'] === '1';
     const window = await this.sessionLifetimeService.enforceSession(
       token,
       userActivity,
@@ -76,12 +73,6 @@ export class SessionLifetimeGuard implements CanActivate {
     }
     return undefined;
   }
-  private readBearerToken(request: Request): string | undefined {
-    const match = request.headers.authorization?.match(/^Bearer\s+(.+)$/i);
-    const token = match?.[1]?.trim();
-    return token ? token.split('.', 1)[0] : undefined;
-  }
-
   private routeKey(request: Request): string {
     const path = (request.baseUrl ?? '') + (request.path ?? '');
     const normalized = path.replace(/\/+$/, '');

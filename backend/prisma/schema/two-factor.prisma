@@ -4,8 +4,10 @@ model TwoFactorAuth {
   id              String    @id @default(cuid())
   userId          String    @unique @map("user_id")
   secretEncrypted String    @map("secret_encrypted") // Encrypted TOTP secret
+  pendingSecretEncrypted String? @map("pending_secret_encrypted")
   backupCodes     String[]  @map("backup_codes") // Hashed recovery codes
   enrolledAt      DateTime  @default(now()) @map("enrolled_at")
+  enrollmentComplete Boolean @default(false) @map("enrollment_complete")
   lastUsedAt      DateTime? @map("last_used_at")
 
   failedAttempts Int       @default(0) @map("failed_attempts")
@@ -31,4 +33,15 @@ model TrustedDevice {
 
   @@index([userId])
   @@map("trusted_devices")
+}
+
+model AdminStepUp {
+  id        String   @id @default(cuid())
+  sessionId String   @unique @map("session_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("admin_step_ups")
 }

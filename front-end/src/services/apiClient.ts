@@ -5,11 +5,10 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 import { useAuthStore } from "../stores/authStore";
-import { canStartApiRequest } from "./sessionRequestPolicy.js";
-import { dispatchSessionExpiryIfNeeded } from "./sessionExpiryFlow.js";
+import { canStartApiRequest } from "./sessionRequestPolicy";
+import { dispatchSessionExpiryIfNeeded } from "./sessionExpiryFlow";
 
 export const API_BASE_PATH = "/api";
-const RENDER_API_HOST = "hams-anntana.onrender.com";
 
 declare module "axios" {
   interface AxiosRequestConfig {
@@ -48,23 +47,9 @@ export function invalidateCsrfToken(): void {
   csrfToken = null;
 }
 
-function rewriteLegacyApiUrl(config: InternalAxiosRequestConfig): void {
-  if (!config.url) return;
-
-  try {
-    const url = new URL(config.url);
-    if (url.hostname !== RENDER_API_HOST) return;
-
-    const path = url.pathname.replace(/^\/api(?=\/|$)/, "") || "/";
-    config.url = API_BASE_PATH + path + url.search;
-    config.baseURL = undefined;
-  } catch {
-    // Relative URLs already use the same origin.
-  }
-}
-
 function apiPath(config: InternalAxiosRequestConfig): string | null {
   const url = config.url ?? "";
+  if (/^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(url)) return null;
   if (config.baseURL === API_BASE_PATH) {
     return url.split("?", 1)[0] || "/";
   }
@@ -78,18 +63,17 @@ async function prepareRequest(
   config: InternalAxiosRequestConfig,
 ): Promise<InternalAxiosRequestConfig> {
   config.withCredentials = true;
-  rewriteLegacyApiUrl(config);
-
-  const authorization = config.headers.get("Authorization");
-  if (
-    typeof authorization === "string" &&
-    /^Bearer\s+(null|undefined)$/i.test(authorization)
-  ) {
-    config.headers.delete("Authorization");
-  }
 
   const method = (config.method ?? "get").toUpperCase();
   const path = apiPath(config);
+  if (path === null) {
+    throw new AxiosError(
+      "Browser API requests must use the same-origin /api path",
+      "ERR_BAD_REQUEST",
+      config,
+    );
+  }
+  config.headers.delete("Authorization");
   if (
     !canStartApiRequest(
       method,
@@ -130,8 +114,8 @@ function configureClient(client: AxiosInstance): AxiosInstance {
   return client;
 }
 
-// Legacy services still import Axios directly. Normalize their API URLs and
-// attach cookies/CSRF here until Ticket 11 removes those call-site tokens.
+// Keep legacy Axios imports on the same-origin cookie client while services
+// continue moving to this explicit API client.
 export function createApiClient(
   options: Omit<CreateAxiosDefaults, "baseURL" | "withCredentials"> = {},
 ): AxiosInstance {

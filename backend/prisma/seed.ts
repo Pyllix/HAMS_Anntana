@@ -1,8 +1,8 @@
 /**
  * Prisma Seed Script — Mock data ครอบคลุมทั้งระบบ
  *
- * Run with:
- *   pnpm tsx prisma/seed.ts
+ * Development/demo only. Run with:
+ *   pnpm run prisma:seed:demo
  */
 
 import 'dotenv/config';
@@ -391,6 +391,13 @@ const systemUsers = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Demo seed is disabled in production');
+  }
+  if (!process.argv.includes('--demo')) {
+    throw new Error('Pass --demo to run the development mock seed');
+  }
+
   console.log('🌱 Seeding database with enhanced test mockups...\n');
 
   // 1. AssetStatus

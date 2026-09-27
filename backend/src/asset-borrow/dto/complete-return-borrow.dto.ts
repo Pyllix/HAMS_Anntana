@@ -6,7 +6,8 @@ export class CompleteReturnBorrowDto {
   @ApiProperty({
     enum: ReturnCondition,
     example: ReturnCondition.Normal,
-    description: 'สภาพของครุภัณฑ์หลังตรวจรับเข้าคลัง (Normal=ปกติ, Damage=ชำรุด)',
+    description:
+      'สภาพของครุภัณฑ์หลังตรวจรับเข้าคลัง (Normal=ปกติ, Damage=ชำรุด)',
   })
   @IsEnum(ReturnCondition)
   @IsNotEmpty()

@@ -14,7 +14,7 @@ import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import {
-  ApiBearerAuth,
+  ApiCookieAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -25,11 +25,11 @@ import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Section')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('sections')
 export class SectionsController {
-  constructor(private readonly sectionsService: SectionsService) { }
+  constructor(private readonly sectionsService: SectionsService) {}
 
   // ─── Create ────────────────────────────────────────────────────────────────
 

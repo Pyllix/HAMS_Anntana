@@ -10,6 +10,7 @@ import {
   Banknote,
   ClipboardCheck,
   TrendingUp,
+  Shield,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../pages/AssetCenterBorrowReturn";
@@ -36,6 +37,7 @@ import SparePartApprovals from "../pages/SparePartApprovals";
 import OutsourceApprovals from "../pages/OutsourceApprovals";
 import ParcelRepairOperations from "../pages/ParcelRepairOperations";
 import ExpenseForecast from "../pages/ExpenseForecast";
+import AccountSecurity from "../pages/AccountSecurity";
 
 interface AppRote {
   path: string;
@@ -47,6 +49,22 @@ interface AppRote {
 }
 
 export const APP_ROUTE: AppRote[] = [
+  {
+    path: "account-security",
+    title: "ความปลอดภัยบัญชี",
+    element: <AccountSecurity />,
+    icon: Shield,
+    roles: [
+      ROLES.ADMIN,
+      ROLES.MANAGER,
+      ROLES.MAINTENANCE_HEAD,
+      ROLES.MAINTENANCE_STAFF,
+      ROLES.ASSET_CENTER_STAFF,
+      ROLES.PARCEL_STAFF,
+      ROLES.DEPARTMENT_STAFF,
+    ],
+    showInNav: true,
+  },
   // -------- สำหรับ แผนก/ผู้ใช้งานทั่วไป ------------
   {
     path: "borrow-request",

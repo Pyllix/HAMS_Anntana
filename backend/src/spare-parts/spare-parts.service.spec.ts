@@ -69,7 +69,10 @@ describe('SparePartsService', () => {
     });
 
     it('should create sparepart with initial stock and auto-generated code inside transaction', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 1, name: 'Electrical' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'Electrical',
+      });
       mockPrismaService.sparepart.findFirst.mockResolvedValue(null);
 
       const mockCreatedPart = {
@@ -107,7 +110,10 @@ describe('SparePartsService', () => {
     });
 
     it('should auto-generate code SP01-0001 when no existing items in group', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 1, name: 'Electrical' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 1,
+        name: 'Electrical',
+      });
 
       let capturedCode = '';
       mockPrismaService.$transaction.mockImplementation(async (cb) => {
@@ -137,7 +143,10 @@ describe('SparePartsService', () => {
     });
 
     it('should auto-generate next sequence code (e.g. SP02-0005) when previous codes exist in group', async () => {
-      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({ id: 2, name: 'Plumbing' });
+      mockPrismaService.sparepartGroup.findFirst.mockResolvedValue({
+        id: 2,
+        name: 'Plumbing',
+      });
 
       let capturedCode = '';
       mockPrismaService.$transaction.mockImplementation(async (cb) => {
@@ -213,7 +222,9 @@ describe('SparePartsService', () => {
 
       mockPrismaService.$transaction.mockImplementation(async (cb) => {
         return cb({
-          sparepartAdd: { create: jest.fn().mockResolvedValue(mockStockInRecord) },
+          sparepartAdd: {
+            create: jest.fn().mockResolvedValue(mockStockInRecord),
+          },
           sparepart: { update: jest.fn().mockResolvedValue(mockUpdatedPart) },
         });
       });
@@ -270,8 +281,18 @@ describe('SparePartsService', () => {
           sparepartAddDoc: 'PO-999',
           addBy: 'user-uuid-1',
           createdAt: new Date('2026-08-15T10:00:00.000Z'),
-          sparepart: { id: 10, code: 'SP01-0001', name: 'Fuse 10A', unit: 'ชิ้น' },
-          user: { id: 'user-uuid-1', firstname: 'John', lastname: 'Doe', email: 'john@example.com' },
+          sparepart: {
+            id: 10,
+            code: 'SP01-0001',
+            name: 'Fuse 10A',
+            unit: 'ชิ้น',
+          },
+          user: {
+            id: 'user-uuid-1',
+            firstname: 'John',
+            lastname: 'Doe',
+            email: 'john@example.com',
+          },
         },
       ];
       mockPrismaService.$transaction.mockResolvedValue([mockAdds, 1]);
@@ -300,8 +321,12 @@ describe('SparePartsService', () => {
             },
             OR: [
               { sparepartAddDoc: { contains: 'Fuse', mode: 'insensitive' } },
-              { sparepart: { code: { contains: 'Fuse', mode: 'insensitive' } } },
-              { sparepart: { name: { contains: 'Fuse', mode: 'insensitive' } } },
+              {
+                sparepart: { code: { contains: 'Fuse', mode: 'insensitive' } },
+              },
+              {
+                sparepart: { name: { contains: 'Fuse', mode: 'insensitive' } },
+              },
             ],
           }),
           skip: 0,
@@ -324,4 +349,3 @@ describe('SparePartsService', () => {
     });
   });
 });
-

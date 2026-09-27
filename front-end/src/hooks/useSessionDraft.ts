@@ -3,7 +3,7 @@ import {
   clearSessionDraft,
   loadSessionDraft,
   saveSessionDraft,
-} from "../services/sessionDraftStorage.js";
+} from "../services/sessionDraftStorage";
 
 interface UseSessionDraftOptions<T> {
   key: string;
@@ -37,7 +37,7 @@ export function useSessionDraft<T>({
       return;
     }
 
-    const savedDraft = loadSessionDraft(key, accountId);
+    const savedDraft = loadSessionDraft<T>(key, accountId);
     if (savedDraft !== null) restoreRef.current(savedDraft);
     setReadyIdentity(identity);
   }, [accountId, identity, key]);

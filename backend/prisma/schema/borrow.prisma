@@ -90,4 +90,3 @@ model BorrowExtension {
   @@index([createdAt])
   @@map("borrow_extension")
 }
-

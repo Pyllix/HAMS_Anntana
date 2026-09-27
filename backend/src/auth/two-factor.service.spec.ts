@@ -2,22 +2,30 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TwoFactorService } from './two-factor.service';
 import { sharedPrisma } from '../common/config/database.config';
 
-// Mock otplib with a deterministic secret
+// Mock otplib with a deterministic secret and token
 jest.mock('otplib', () => ({
-  authenticator: {
-    options: {},
-    generateSecret: jest.fn(() => 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'),
-    keyuri: jest.fn(
-      (email: string, issuer: string) =>
-        `otpauth://totp/${issuer}:${encodeURIComponent(email)}?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=${issuer}`,
-    ),
-    verify: jest.fn(({ token }: { token: string }) => {
-      // Simple mock: accept '123456' as valid for any secret
-      return token === '123456';
+  generateSecret: jest.fn(() => 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'),
+  generateURI: jest.fn(
+    ({
+      issuer,
+      label,
+      secret,
+    }: {
+      issuer: string;
+      label: string;
+      secret: string;
+    }) =>
+      `otpauth://totp/${issuer}:${encodeURIComponent(label)}?secret=${secret}&issuer=${issuer}`,
+  ),
+  verify: jest.fn(({ token }: { token: string }) =>
+    Promise.resolve({
+      valid: token === '123456',
+      delta: token === '123456' ? 0 : null,
     }),
-    generate: jest.fn(() => '123456'),
-  },
+  ),
 }));
+
+const TWO_FACTOR_TEST_USERS = ['user-123', 'test-user-id'];
 
 describe('TwoFactorService', () => {
   let service: TwoFactorService;
@@ -35,8 +43,8 @@ describe('TwoFactorService', () => {
 
   afterEach(async () => {
     // Clean up test data
-    await sharedPrisma.twoFactorAuth.deleteMany({});
-    await sharedPrisma.trustedDevice.deleteMany({});
+    await sharedPrisma.twoFactorAuth.deleteMany({ where: { userId: { in: TWO_FACTOR_TEST_USERS } } });
+    await sharedPrisma.trustedDevice.deleteMany({ where: { userId: { in: TWO_FACTOR_TEST_USERS } } });
   });
 
   afterAll(async () => {
@@ -67,6 +75,7 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       const result = await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       expect(result).toHaveProperty('backupCodes');
       expect(result.backupCodes).toHaveLength(10);
@@ -97,10 +106,11 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       const result = await service.verifyToken(userId, validToken);
       expect(result.success).toBe(true);
-      expect(result.usedRecoveryCode).toBeUndefined();
+      expect(result.usedRecoveryCode).toBe(false);
     });
 
     it('should reject an invalid TOTP token', async () => {
@@ -111,6 +121,7 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       const result = await service.verifyToken(userId, '000000');
       expect(result.success).toBe(false);
@@ -131,6 +142,7 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       // 5 failed attempts
       for (let i = 0; i < 5; i++) {
@@ -139,7 +151,7 @@ describe('TwoFactorService', () => {
 
       // Should be locked now
       await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
-        'Account temporarily locked',
+        'temporarily locked',
       );
     });
 
@@ -151,6 +163,7 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       // 3 failed attempts
       for (let i = 0; i < 3; i++) {
@@ -167,10 +180,32 @@ describe('TwoFactorService', () => {
       }
 
       await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
-        'Account temporarily locked',
+        'temporarily locked',
       );
     });
   });
+it('should allow verification after the lock expires', async () => {
+      const userId = 'test-user-id';
+      const { secret } = await service.generateSecret(userId, 'test@example.com');
+      await service.verifyAndEnroll(userId, secret, '123456');
+      await service.confirmBackupCodesSaved(userId);
+      await sharedPrisma.twoFactorAuth.update({
+        where: { userId },
+        data: {
+          failedAttempts: 5,
+          lockedUntil: new Date(Date.now() - 1000),
+        },
+      });
+
+      await expect(service.verifyToken(userId, '123456')).resolves.toMatchObject({
+        success: true,
+      });
+      const row = await sharedPrisma.twoFactorAuth.findUnique({
+        where: { userId },
+      });
+      expect(row?.failedAttempts).toBe(0);
+      expect(row?.lockedUntil).toBeNull();
+    });
 
   describe('hasCompletedEnrollment', () => {
     it('should return true for enrolled user', async () => {
@@ -180,6 +215,7 @@ describe('TwoFactorService', () => {
       const validToken = '123456';
 
       await service.verifyAndEnroll(userId, secret, validToken);
+      await service.confirmBackupCodesSaved(userId);
 
       const hasEnrolled = await service.hasCompletedEnrollment(userId);
       expect(hasEnrolled).toBe(true);
@@ -221,6 +257,7 @@ describe('TwoFactorService', () => {
         secret,
         '123456',
       );
+      await service.confirmBackupCodesSaved(userId);
 
       // Use first recovery code
       const result = await service.verifyToken(userId, backupCodes[0]);
@@ -238,6 +275,7 @@ describe('TwoFactorService', () => {
 
       const { secret } = await service.generateSecret(userId, email);
       await service.verifyAndEnroll(userId, secret, '123456');
+      await service.confirmBackupCodesSaved(userId);
 
       const result = await service.verifyToken(userId, 'DEADBEEF');
       expect(result.success).toBe(false);
@@ -249,6 +287,7 @@ describe('TwoFactorService', () => {
 
       const { secret } = await service.generateSecret(userId, email);
       await service.verifyAndEnroll(userId, secret, '123456');
+      await service.confirmBackupCodesSaved(userId);
 
       // 3 failed TOTP attempts
       for (let i = 0; i < 3; i++) {
@@ -262,7 +301,7 @@ describe('TwoFactorService', () => {
 
       // Should be locked now
       await expect(service.verifyToken(userId, '123456')).rejects.toThrow(
-        'Account temporarily locked',
+        'temporarily locked',
       );
     });
 
@@ -276,6 +315,7 @@ describe('TwoFactorService', () => {
         secret,
         '123456',
       );
+      await service.confirmBackupCodesSaved(userId);
 
       // Try to use same code concurrently
       const results = await Promise.all([
@@ -298,6 +338,7 @@ describe('TwoFactorService', () => {
         secret,
         '123456',
       );
+      await service.confirmBackupCodesSaved(userId);
 
       // Use lowercase version of uppercase code
       const result = await service.verifyToken(
@@ -318,6 +359,7 @@ describe('TwoFactorService', () => {
         secret,
         '123456',
       );
+      await service.confirmBackupCodesSaved(userId);
 
       // 3 failed attempts
       for (let i = 0; i < 3; i++) {
@@ -334,7 +376,7 @@ describe('TwoFactorService', () => {
       }
 
       await expect(service.verifyToken(userId, '000000')).rejects.toThrow(
-        'Account temporarily locked',
+        'temporarily locked',
       );
     });
   });

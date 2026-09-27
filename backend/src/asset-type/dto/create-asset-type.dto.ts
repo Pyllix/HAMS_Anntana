@@ -7,7 +7,10 @@ export class CreateAssetTypeDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 5, description: 'Useful life of the asset type in years' })
+  @ApiProperty({
+    example: 5,
+    description: 'Useful life of the asset type in years',
+  })
   @IsNotEmpty()
   @IsNumber()
   useful_life: number;

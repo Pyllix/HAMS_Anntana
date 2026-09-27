@@ -21,6 +21,7 @@ model User {
   //Auth relations
   sessions      Session[]
   accounts      Account[]
+  bootstrapCredentialDelivery BootstrapCredentialDelivery?
   section       Section?  @relation(fields: [section_id], references: [id])
   createdAssets Asset[]   @relation("CreatedBy")
   updatedAssets Asset[]   @relation("UpdatedBy")
@@ -42,16 +43,16 @@ model User {
   reviewedBorrowExtensions    BorrowExtension[]   @relation("ExtensionReviewedBy")
 
   //Spare parts relations
-  sparepartAdds               SparepartAdd[]
-  sparepartTxns               SparepartTxn[]
+  sparepartAdds SparepartAdd[]
+  sparepartTxns SparepartTxn[]
 
   //Repair relations
-  reportedRepairs             RepairJob[]      @relation("RepairReporter")
-  receivedRepairs             RepairJob[]      @relation("RepairReceiver")
-  createdRepairs              RepairJob[]      @relation("RepairCreatedBy")
-  updatedRepairs              RepairJob[]      @relation("RepairUpdatedBy")
-  mechanicRepairs             MechanicRepair[]
-  completedRepairSteps        RepairJobStep[]
+  reportedRepairs      RepairJob[]      @relation("RepairReporter")
+  receivedRepairs      RepairJob[]      @relation("RepairReceiver")
+  createdRepairs       RepairJob[]      @relation("RepairCreatedBy")
+  updatedRepairs       RepairJob[]      @relation("RepairUpdatedBy")
+  mechanicRepairs      MechanicRepair[]
+  completedRepairSteps RepairJobStep[]
 
   @@index([section_id])
   @@index([role])
@@ -60,16 +61,17 @@ model User {
 
 // This model is used for managing user sessions, including session tokens and expiration times.
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime
-  updatedAt DateTime
-  ipAddress String?
-  userAgent String?
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime
+  updatedAt      DateTime
+  ipAddress      String?
+  userAgent      String?
   userId         String
   impersonatedBy String?
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminStepUp    AdminStepUp?
 
   @@map("sessions")
 }

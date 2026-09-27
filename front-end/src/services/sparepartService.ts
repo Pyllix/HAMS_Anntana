@@ -1,5 +1,5 @@
 import { apiClient } from "./apiClient";
-import { isSessionExpiredApiError } from "./serviceErrorPolicy.js";
+import { isSessionExpiredApiError } from "./serviceErrorPolicy";
 import type {
   Sparepart,
   SparepartGroup,
@@ -11,7 +11,7 @@ import type {
 import {
   getAccountStorageKey,
   getCurrentSessionDraftAccountId,
-} from "./sessionDraftStorage.js";
+} from "./sessionDraftStorage";
 
 
 const STORAGE_KEY = "hams_spareparts_storage_v1";

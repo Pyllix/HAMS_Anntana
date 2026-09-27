@@ -127,7 +127,7 @@ interface UserTableProps {
 
 export default function UserTable({ search, role, status }: UserTableProps) {
   const { data: users } = useQuery({
-    queryKey: ["assets"],
+    queryKey: ["users"],
     queryFn: () => getAllUser(),
   });
 

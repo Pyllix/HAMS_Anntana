@@ -42,14 +42,18 @@ describe('BudgetTypeService', () => {
   });
 
   it('should return all active budget types', async () => {
-    mockPrisma.budgetType.findMany.mockResolvedValue([{ id: 1, name: 'งบปี 2567' }]);
+    mockPrisma.budgetType.findMany.mockResolvedValue([
+      { id: 1, name: 'งบปี 2567' },
+    ]);
 
     const result = await service.findAll();
     expect(result).toEqual([{ id: 1, name: 'งบปี 2567' }]);
   });
 
   it('should filter by fiscalYear and isActive', async () => {
-    mockPrisma.budgetType.findMany.mockResolvedValue([{ id: 1, fiscalYear: 2567, isActive: true }]);
+    mockPrisma.budgetType.findMany.mockResolvedValue([
+      { id: 1, fiscalYear: 2567, isActive: true },
+    ]);
 
     await service.findAll(2567, true);
     expect(mockPrisma.budgetType.findMany).toHaveBeenCalledWith({
@@ -59,8 +63,14 @@ describe('BudgetTypeService', () => {
   });
 
   it('should soft delete a budget type', async () => {
-    mockPrisma.budgetType.findFirst.mockResolvedValue({ id: 1, name: 'งบปี 2567' });
-    mockPrisma.budgetType.update.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.budgetType.findFirst.mockResolvedValue({
+      id: 1,
+      name: 'งบปี 2567',
+    });
+    mockPrisma.budgetType.update.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
 
     await service.remove(1);
     expect(mockPrisma.budgetType.update).toHaveBeenCalledWith({
@@ -70,7 +80,10 @@ describe('BudgetTypeService', () => {
   });
 
   it('should restore a soft-deleted budget type', async () => {
-    mockPrisma.budgetType.findFirst.mockResolvedValue({ id: 1, deletedAt: new Date() });
+    mockPrisma.budgetType.findFirst.mockResolvedValue({
+      id: 1,
+      deletedAt: new Date(),
+    });
     mockPrisma.budgetType.update.mockResolvedValue({ id: 1, deletedAt: null });
 
     const result = await service.restore(1);

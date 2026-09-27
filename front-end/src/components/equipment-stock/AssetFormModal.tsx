@@ -22,7 +22,7 @@ import { getCompanies } from "../../services/companyService";
 import { getAcqTypes } from "../../services/acqTypeService";
 import { useAuthStore } from "../../stores/authStore";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
-import { clearSessionDraft } from "../../services/sessionDraftStorage.js";
+import { clearSessionDraft } from "../../services/sessionDraftStorage";
 
 export default function AssetFormModal() {
   const { isOpen, mode, selectedAsset, closeModal } = useEquipmentModalStore();

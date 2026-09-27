@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, ValidateIf, IsNotEmpty } from 'class-validator';
+import { IsIn, IsString, ValidateIf, IsNotEmpty } from 'class-validator';
 import { BorrowExtensionStatus } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -17,9 +17,11 @@ export class ReviewBorrowExtensionDto {
     description: 'Reason for rejection (required if status is REJECTED)',
     example: 'มีคิวจองใช้งานจากหน่วยงานอื่นรออยู่',
   })
-  @ValidateIf((o) => o.status === BorrowExtensionStatus.REJECTED)
+  @ValidateIf(
+    (o: ReviewBorrowExtensionDto) =>
+      o.status === BorrowExtensionStatus.REJECTED,
+  )
   @IsNotEmpty({ message: 'กรุณาระบุเหตุผลการปฏิเสธคำขอต่อเวลา' })
   @IsString()
   rejectReason?: string;
 }
-

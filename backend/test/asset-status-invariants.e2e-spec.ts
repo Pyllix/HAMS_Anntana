@@ -128,7 +128,10 @@ describeWithDatabase(
     }
 
     beforeAll(async () => {
-      if (!testDatabaseUrl || !/test/i.test(new URL(testDatabaseUrl).pathname)) {
+      if (
+        !testDatabaseUrl ||
+        !/test/i.test(new URL(testDatabaseUrl).pathname)
+      ) {
         throw new Error(
           'TEST_DATABASE_URL must name a dedicated test database',
         );

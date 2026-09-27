@@ -1,28 +1,24 @@
-// Mock otplib for testing
-export const authenticator = {
-  generate: jest.fn((secret: string) => {
-    // Generate a deterministic mock token based on secret
-    const hash = secret
-      .split('')
-      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return String(hash % 1000000).padStart(6, '0');
-  }),
+// Mock otplib v13 for tests
+export const generateSecret = jest.fn(() => 'JBSWY3DPEHPK3PXP'.repeat(2));
 
-  verify: jest.fn((token: string, secret: string) => {
-    const expectedToken = authenticator.generate(secret);
-    return token === expectedToken;
-  }),
+export const generateURI = jest.fn(
+  ({
+    issuer,
+    label,
+    secret,
+  }: {
+    issuer: string;
+    label: string;
+    secret: string;
+  }) =>
+    `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(label)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`,
+);
 
-  generateSecret: jest.fn(() => {
-    return 'JBSWY3DPEHPK3PXP'.repeat(2); // 32 chars
-  }),
+export const generate = jest.fn(() => Promise.resolve('123456'));
 
-  keyuri: jest.fn((user: string, service: string, secret: string) => {
-    return `otpauth://totp/${encodeURIComponent(service)}:${encodeURIComponent(user)}?secret=${secret}&issuer=${encodeURIComponent(service)}`;
+export const verify = jest.fn(({ token }: { token: string }) =>
+  Promise.resolve({
+    valid: token === '123456',
+    delta: token === '123456' ? 0 : null,
   }),
-};
-
-export const totp = {
-  generate: authenticator.generate,
-  verify: authenticator.verify,
-};
+);

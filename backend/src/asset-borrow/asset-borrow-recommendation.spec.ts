@@ -75,7 +75,9 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
       expect(result.recommendedAssetId).toBe('asset-1');
       expect(result.candidates).toHaveLength(2);
       expect(result.candidates[0].isRecommended).toBe(true);
-      expect(result.candidates[0].recommendationReason).toContain('ผ่านการใช้งานเพียง 2.5 วัน');
+      expect(result.candidates[0].recommendationReason).toContain(
+        'ผ่านการใช้งานเพียง 2.5 วัน',
+      );
       expect(result.candidates[1].isRecommended).toBe(false);
       expect(result.candidates[1].recommendationReason).toBe('');
     });
@@ -118,7 +120,9 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       expect(result.recommendedAssetId).toBe('asset-rested');
       expect(result.candidates[0].idleDays).toBe(30.0);
-      expect(result.candidates[0].recommendationReason).toContain('จอดพักมาแล้ว 30 วัน');
+      expect(result.candidates[0].recommendationReason).toContain(
+        'จอดพักมาแล้ว 30 วัน',
+      );
     });
 
     it('TC-03: should tie-break by borrowCount90d ASC when usage and idle days are identical', async () => {
@@ -310,8 +314,12 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
       expect(result.recommendedAsset).toBeDefined();
       expect(result.recommendedAsset?.id).toBe('alt-id');
       expect(result.recommendedAsset?.daysUsageDifference).toBe(20.0);
-      expect(result.recommendedAsset?.nudgeReason).toContain('จอดพักมาแล้ว 40 วัน');
-      expect(result.recommendedAsset?.nudgeReason).toContain('ผ่านการใช้งานน้อยกว่าเครื่องนี้ 20 วัน');
+      expect(result.recommendedAsset?.nudgeReason).toContain(
+        'จอดพักมาแล้ว 40 วัน',
+      );
+      expect(result.recommendedAsset?.nudgeReason).toContain(
+        'ผ่านการใช้งานน้อยกว่าเครื่องนี้ 20 วัน',
+      );
     });
 
     it('TC-08: should return hasBetterAlternative=true when selected asset usage >= 7 and alternative rested >= 7 days longer', async () => {
@@ -360,7 +368,9 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       expect(result.hasBetterAlternative).toBe(true);
       expect(result.recommendedAsset?.id).toBe('alt-id');
-      expect(result.recommendedAsset?.nudgeReason).toContain('จอดพักมาแล้ว 15 วัน');
+      expect(result.recommendedAsset?.nudgeReason).toContain(
+        'จอดพักมาแล้ว 15 วัน',
+      );
     });
 
     it('TC-09: should return hasBetterAlternative=false when selected asset is already the optimal candidate', async () => {
@@ -467,9 +477,9 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
     it('TC-11: should throw NotFoundException when asset is not found', async () => {
       prisma.asset.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.checkSwapRecommendation('unknown-id')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.checkSwapRecommendation('unknown-id'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

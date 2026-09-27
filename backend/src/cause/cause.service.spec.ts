@@ -61,7 +61,10 @@ describe('CauseService', () => {
   });
 
   it('should restore a soft-deleted repair cause', async () => {
-    mockPrisma.cause.findFirst.mockResolvedValue({ id: 1, deleteAt: new Date() });
+    mockPrisma.cause.findFirst.mockResolvedValue({
+      id: 1,
+      deleteAt: new Date(),
+    });
     mockPrisma.cause.update.mockResolvedValue({ id: 1, deleteAt: null });
 
     const result = await service.restore(1);

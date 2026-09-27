@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { User } from "../../types/TypeUser";
 import { deleteUserById } from "../../services/userService";
 
@@ -20,20 +21,22 @@ export default function DialogDelUser({
   onClose: () => void;
   user: User | null;
 }) {
-  if (!isOpen) return null;
-
   const queryClient = useQueryClient();
+  const [error, setError] = useState("");
 
   const { mutate: deleteUser, isPending } = useMutation({
     mutationFn: (userId: string) => deleteUserById(userId),
-    onSuccess: (data) => {
-      // เมื่อลบสำเร็จ ให้สั่งอัปเดต/ดึงข้อมูลตารางผู้ใช้ใหม่ทันที
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      alert(data.message || "ลบผู้ใช้เรียบร้อยแล้ว");
+      onClose();
     },
     onError: (error) => {
-      console.error("เกิดข้อผิดพลาดในการลบ:", error);
-      alert("ไม่สามารถลบข้อมูลได้");
+      const data = (error as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+      if (data?.code === "LAST_ACTIVE_ENROLLED_ADMIN") {
+        setError("ลบไม่ได้ เพราะไม่สามารถลบ ADMIN คนสุดท้ายที่เปิดใช้ 2FA ได้");
+      } else {
+        setError(data?.message ?? "ลบข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      }
     },
   });
 
@@ -48,6 +51,8 @@ export default function DialogDelUser({
 
   const userRole = user?.role || "";
   const roleLabel = roleLabels[userRole] || userRole || "ผู้ใช้งานทั่วไป";
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-xs">
@@ -110,10 +115,13 @@ export default function DialogDelUser({
           )}
         </div>
 
-        {/* แผงปุ่มกด Cancel / Delete ด้านล่าง */}
+        {error && <p role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+
+        {/* แผงปุ่มยกเลิก / ลบ ด้านล่าง */}
         <div className="flex gap-4">
           <button
             type="button"
+            disabled={isPending}
             onClick={onClose}
             className="flex-1 rounded-xl border border-gray-300 bg-white py-3.5 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
           >
@@ -121,15 +129,16 @@ export default function DialogDelUser({
           </button>
           <button
             type="button"
+            disabled={isPending}
             onClick={() => {
+              setError("");
               if (user) {
                 deleteUser(user.id);
               }
-              onClose();
             }}
             className="flex-1 rounded-xl bg-red-500 py-3.5 text-sm font-semibold text-white shadow-xs hover:bg-red-600 transition-colors"
           >
-            Delete
+            {isPending ? "กำลังลบ..." : "ยืนยันลบ"}
           </button>
         </div>
       </div>

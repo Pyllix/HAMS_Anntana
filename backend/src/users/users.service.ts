@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,12 +11,38 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { auth } from '../auth/auth';
 import { PaginatedResult, paginate } from 'src/common/utils/paginate.util';
-import { Prisma } from '@prisma/client';
-import type { Request } from 'express';
+import { Prisma, UserRole } from '@prisma/client';
+import { hashPassword } from 'better-auth/crypto';
+import { AdminStepUpService } from '../auth/admin-step-up.service';
+import { TwoFactorService } from '../auth/two-factor.service';
+import { mailService } from '../common/mail/mail.service';
+import { AdminResetTwoFactorDto } from './dto/admin-reset-two-factor.dto';
+
+type SecurityAuditAction =
+  | 'USER_CREATED'
+  | 'USER_ROLE_CHANGED'
+  | 'USER_DISABLED'
+  | 'USER_ENABLED'
+  | 'USER_SOFT_DELETED'
+  | 'USER_RESTORED'
+  | 'ADMIN_PASSWORD_RESET'
+  | 'ADMIN_2FA_RESET';
+
+interface SecurityAuditInput {
+  actorUserId: string;
+  targetUserId: string;
+  action: SecurityAuditAction;
+  reason?: string;
+  details?: Prisma.InputJsonValue;
+}
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adminStepUpService: AdminStepUpService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
 
   // ─── Auto-generate Employee ID ───────────────────────────────────────────────
 
@@ -47,7 +74,7 @@ export class UsersService {
   // ─── Create ──────────────────────────────────────────────────────────────────
 
   /** Create a new user via better-auth with pre-validation and compensating rollback */
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorUserId: string) {
     // 1. Pre-validation: Email uniqueness
     const existingEmail = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -64,7 +91,9 @@ export class UsersService {
       });
 
       if (existingUserName) {
-        throw new ConflictException(`Username ${dto.userName} is already in use`);
+        throw new ConflictException(
+          `Username ${dto.userName} is already in use`,
+        );
       }
     }
 
@@ -75,7 +104,9 @@ export class UsersService {
       });
 
       if (!section) {
-        throw new BadRequestException(`Section not found with ID: ${dto.sectionId}`);
+        throw new BadRequestException(
+          `Section not found with ID: ${dto.sectionId}`,
+        );
       }
     }
 
@@ -97,18 +128,28 @@ export class UsersService {
 
     // 6. Update additional fields with compensating rollback on failure
     try {
-      const user = await this.prisma.user.update({
-        where: { id: result.user.id },
-        data: {
-          employeeId,
-          userName: dto.userName,
-          firstname: dto.firstname,
-          lastname: dto.lastname,
-          role: dto.role ?? 'DEPARTMENT_STAFF',
-          imageUrl: dto.imageUrl,
-          section_id: dto.sectionId,
-        },
-        omit: { deletedAt: true },
+      const user = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.update({
+          where: { id: result.user.id },
+          data: {
+            employeeId,
+            userName: dto.userName,
+            firstname: dto.firstname,
+            lastname: dto.lastname,
+            role: dto.role ?? UserRole.DEPARTMENT_STAFF,
+            imageUrl: dto.imageUrl,
+            section_id: dto.sectionId,
+          },
+          omit: { deletedAt: true },
+        });
+
+        await this.recordSecurityAudit(tx, {
+          actorUserId,
+          targetUserId: created.id,
+          action: 'USER_CREATED',
+          details: { role: created.role },
+        });
+        return created;
       });
 
       return user;
@@ -140,14 +181,14 @@ export class UsersService {
       ...(query.section_id ? { section_id: query.section_id } : {}),
       ...(query.search
         ? {
-          OR: [
-            { employeeId: { contains: query.search, mode: 'insensitive' } },
-            { userName: { contains: query.search, mode: 'insensitive' } },
-            { firstname: { contains: query.search, mode: 'insensitive' } },
-            { lastname: { contains: query.search, mode: 'insensitive' } },
-            { email: { contains: query.search, mode: 'insensitive' } },
-          ],
-        }
+            OR: [
+              { employeeId: { contains: query.search, mode: 'insensitive' } },
+              { userName: { contains: query.search, mode: 'insensitive' } },
+              { firstname: { contains: query.search, mode: 'insensitive' } },
+              { lastname: { contains: query.search, mode: 'insensitive' } },
+              { email: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
         : {}),
     };
 
@@ -162,7 +203,7 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return paginate(data as Record<string, unknown>[], total, page, limit);
+    return paginate(data, total, page, limit);
   }
 
   // ─── Read One ─────────────────────────────────────────────────────────────────
@@ -172,10 +213,7 @@ export class UsersService {
     const user = await this.prisma.user.findFirst({
       where: {
         deletedAt: null,
-        OR: [
-          { id: idOrEmployeeId },
-          { employeeId: idOrEmployeeId },
-        ],
+        OR: [{ id: idOrEmployeeId }, { employeeId: idOrEmployeeId }],
       },
       omit: { deletedAt: true },
     });
@@ -192,11 +230,14 @@ export class UsersService {
   // ─── Update ───────────────────────────────────────────────────────────────────
 
   /** Update user data (Admin only for email, password changed via dedicated endpoints) */
-  async update(idOrEmployeeId: string, dto: UpdateUserDto) {
+  async update(
+    idOrEmployeeId: string,
+    dto: UpdateUserDto,
+    actorUserId: string,
+  ) {
     const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found
 
-    const { sectionId, email, ...rest } = dto as any;
-    const userName = (dto as any).userName;
+    const { sectionId, email, userName } = dto;
 
     if (email && email !== user.email) {
       const emailExists = await this.prisma.user.findFirst({
@@ -211,7 +252,7 @@ export class UsersService {
       }
     }
 
-    if (userName && userName !== user.userName) {
+    if (userName !== undefined && userName !== user.userName) {
       const userNameExists = await this.prisma.user.findFirst({
         where: {
           userName,
@@ -230,55 +271,146 @@ export class UsersService {
       });
 
       if (!section) {
-        throw new BadRequestException(`Section not found with ID: ${sectionId}`);
+        throw new BadRequestException(
+          `Section not found with ID: ${sectionId}`,
+        );
       }
     }
 
-    // Exclude employeeId to ensure immutability
-    delete rest.employeeId;
+    // Employee IDs are immutable through profile updates.
+    const profileFields: Record<string, unknown> = { ...dto };
+    for (const field of [
+      'sectionId',
+      'email',
+      'userName',
+      'role',
+      'banned',
+      'employeeId',
+    ]) {
+      delete profileFields[field];
+    }
 
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        ...rest,
-        ...(email !== undefined && { email }),
-        ...(sectionId !== undefined && { section_id: sectionId }),
-      },
-      omit: { deletedAt: true },
+    return this.prisma.$transaction(async (tx) => {
+      // Lock all ADMIN rows before changes that can remove an active ADMIN.
+      // This serializes concurrent demotions/disables against the same count.
+      if (dto.role !== undefined || dto.banned !== undefined) {
+        await this.lockAdminRows(tx);
+      }
+
+      const current = await tx.user.findFirst({
+        where: { id: user.id, deletedAt: null },
+      });
+      if (!current) {
+        throw new NotFoundException(
+          `User not found with ID: ${idOrEmployeeId}`,
+        );
+      }
+
+      const roleChanged = dto.role !== undefined && dto.role !== current.role;
+      const accountStateChanged =
+        dto.banned !== undefined && dto.banned !== (current.banned === true);
+      const disabling = dto.banned === true && current.banned !== true;
+
+      if (
+        current.role === UserRole.ADMIN &&
+        ((roleChanged && dto.role !== UserRole.ADMIN) || disabling)
+      ) {
+        await this.assertNotLastActiveEnrolledAdmin(tx, current.id);
+      }
+
+      const updateData: Prisma.UserUncheckedUpdateInput = {
+        ...profileFields,
+        ...(email !== undefined ? { email } : {}),
+        ...(userName !== undefined ? { userName } : {}),
+        ...(dto.role !== undefined ? { role: dto.role } : {}),
+        ...(dto.banned !== undefined ? { banned: dto.banned } : {}),
+        ...(sectionId !== undefined ? { section_id: sectionId } : {}),
+      };
+
+      const updated = await tx.user.update({
+        where: { id: current.id },
+        data: updateData,
+        omit: { deletedAt: true },
+      });
+
+      if (roleChanged || accountStateChanged) {
+        const { revokedSessions, revokedTrustedDevices } =
+          await this.revokeAccess(tx, current.id);
+
+        if (roleChanged) {
+          await this.recordSecurityAudit(tx, {
+            actorUserId,
+            targetUserId: current.id,
+            action: 'USER_ROLE_CHANGED',
+            details: {
+              from: current.role,
+              to: updated.role,
+              revokedSessions: revokedSessions.count,
+              revokedTrustedDevices: revokedTrustedDevices.count,
+            },
+          });
+        }
+
+        if (dto.banned === true && current.banned !== true) {
+          await this.recordSecurityAudit(tx, {
+            actorUserId,
+            targetUserId: current.id,
+            action: 'USER_DISABLED',
+            details: {
+              revokedSessions: revokedSessions.count,
+              revokedTrustedDevices: revokedTrustedDevices.count,
+            },
+          });
+        } else if (dto.banned === false && current.banned === true) {
+          await this.recordSecurityAudit(tx, {
+            actorUserId,
+            targetUserId: current.id,
+            action: 'USER_ENABLED',
+          });
+        }
+      }
+
+      return updated;
     });
   }
 
   // ─── Admin Reset Password ──────────────────────────────────────────────────
 
-  /** Admin resets/sets a user's password and revokes all active sessions */
+  /** Admin resets/sets a user's password and revokes all active sessions and trusted browsers */
   async adminResetPassword(
     idOrEmployeeId: string,
     newPassword: string,
-    req?: Request,
+    actorUserId: string,
+    sessionId: string,
   ) {
     const user = await this.findOne(idOrEmployeeId);
-
-    // Forward headers so better-auth admin plugin can verify admin session
-    const headers = new Headers();
-    if (req?.headers) {
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (value)
-          headers.set(key, Array.isArray(value) ? value.join(', ') : value);
-      }
+    await this.adminStepUpService.requireActive(actorUserId, sessionId);
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      throw new BadRequestException('Password must be 8 to 128 characters');
     }
+    // BetterAuth's default credential hash and password length policy.
+    const passwordHash = await hashPassword(newPassword);
 
-    // Use better-auth admin API to update the user password
-    await auth.api.setUserPassword({
-      headers,
-      body: {
-        userId: user.id,
-        newPassword,
-      },
-    });
-
-    // Revoke all existing sessions for this user for security
-    await this.prisma.session.deleteMany({
-      where: { userId: user.id },
+    await this.prisma.$transaction(async (tx) => {
+      await this.assertStepUpStillActive(tx, actorUserId, sessionId);
+      const credentialAccounts = await tx.account.updateMany({
+        where: { userId: user.id, providerId: 'credential' },
+        data: { password: passwordHash },
+      });
+      if (credentialAccounts.count === 0) {
+        throw new ConflictException('The target has no password credential');
+      }
+      const { revokedSessions, revokedTrustedDevices } =
+        await this.revokeAccess(tx, user.id);
+      await this.recordSecurityAudit(tx, {
+        actorUserId,
+        targetUserId: user.id,
+        action: 'ADMIN_PASSWORD_RESET',
+        details: {
+          revokedSessions: revokedSessions.count,
+          revokedTrustedDevices: revokedTrustedDevices.count,
+        },
+      });
     });
 
     return {
@@ -286,15 +418,128 @@ export class UsersService {
     };
   }
 
+  async adminResetTwoFactor(
+    idOrEmployeeId: string,
+    dto: AdminResetTwoFactorDto,
+    actorUserId: string,
+    sessionId: string,
+  ) {
+    const target = await this.findOne(idOrEmployeeId);
+    if (target.id === actorUserId) {
+      throw new BadRequestException({
+        code: 'SELF_2FA_RESET_NOT_ALLOWED',
+        message: 'An ADMIN cannot use assisted recovery to reset their own 2FA',
+      });
+    }
+
+    await this.adminStepUpService.requireActive(actorUserId, sessionId);
+    const resetAt = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockAdminRows(tx);
+      await this.assertStepUpStillActive(tx, actorUserId, sessionId);
+
+      const current = await tx.user.findFirst({
+        where: { id: target.id, deletedAt: null },
+        select: {
+          id: true,
+          email: true,
+          firstname: true,
+          lastname: true,
+          role: true,
+        },
+      });
+      if (!current) {
+        throw new NotFoundException(
+          `User not found with ID: ${idOrEmployeeId}`,
+        );
+      }
+      if (!this.twoFactorService.requiresTwoFactor(current.role)) {
+        throw new ConflictException({
+          code: 'TWO_FACTOR_NOT_REQUIRED',
+          message:
+            'Assisted 2FA reset is available only for roles with enforced 2FA enrollment',
+        });
+      }
+
+      const existingTwoFactor = await tx.twoFactorAuth.findUnique({
+        where: { userId: current.id },
+        select: { enrollmentComplete: true },
+      });
+      if (!existingTwoFactor) {
+        throw new ConflictException({
+          code: 'TWO_FACTOR_NOT_ENROLLED',
+          message: 'The target user has no 2FA enrollment to reset',
+        });
+      }
+
+      if (
+        current.role === UserRole.ADMIN &&
+        existingTwoFactor.enrollmentComplete
+      ) {
+        await this.assertNotLastActiveEnrolledAdmin(tx, current.id);
+      }
+
+      await tx.twoFactorAuth.delete({ where: { userId: current.id } });
+      const { revokedSessions, revokedTrustedDevices } =
+        await this.revokeAccess(tx, current.id);
+      await this.recordSecurityAudit(tx, {
+        actorUserId,
+        targetUserId: current.id,
+        action: 'ADMIN_2FA_RESET',
+        reason: dto.reason,
+        details: {
+          identityVerifiedOutsideHams: dto.identityVerifiedOutsideHams,
+          revokedSessions: revokedSessions.count,
+          revokedTrustedDevices: revokedTrustedDevices.count,
+        },
+      });
+    });
+
+    await mailService.sendTwoFactorResetNotice({
+      to: target.email,
+      name: `${target.firstname} ${target.lastname}`,
+      resetAt,
+    });
+
+    return {
+      message: '2FA was reset; the user must enroll an authenticator again',
+    };
+  }
+
   // ─── Soft Delete ──────────────────────────────────────────────────────────────
 
   /** Soft delete: sets deletedAt instead of actual deletion */
-  async remove(idOrEmployeeId: string) {
+  async remove(idOrEmployeeId: string, actorUserId: string) {
     const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found or already deleted
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockAdminRows(tx);
+      const current = await tx.user.findFirst({
+        where: { id: user.id, deletedAt: null },
+      });
+      if (!current) {
+        throw new NotFoundException(
+          `User not found with ID: ${idOrEmployeeId}`,
+        );
+      }
+      await this.assertNotLastActiveEnrolledAdmin(tx, current.id);
+
+      await tx.user.update({
+        where: { id: current.id },
+        data: { deletedAt: new Date() },
+      });
+      const { revokedSessions, revokedTrustedDevices } =
+        await this.revokeAccess(tx, current.id);
+      await this.recordSecurityAudit(tx, {
+        actorUserId,
+        targetUserId: current.id,
+        action: 'USER_SOFT_DELETED',
+        details: {
+          revokedSessions: revokedSessions.count,
+          revokedTrustedDevices: revokedTrustedDevices.count,
+        },
+      });
     });
 
     return { message: `User ID: ${user.id} successfully deleted` };
@@ -303,14 +548,11 @@ export class UsersService {
   // ─── Restore ──────────────────────────────────────────────────────────────────
 
   /** Restore a soft-deleted user */
-  async restore(idOrEmployeeId: string) {
+  async restore(idOrEmployeeId: string, actorUserId: string) {
     const user = await this.prisma.user.findFirst({
       where: {
         deletedAt: { not: null },
-        OR: [
-          { id: idOrEmployeeId },
-          { employeeId: idOrEmployeeId },
-        ],
+        OR: [{ id: idOrEmployeeId }, { employeeId: idOrEmployeeId }],
       },
     });
 
@@ -320,10 +562,121 @@ export class UsersService {
       );
     }
 
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: { deletedAt: null },
-      omit: { deletedAt: true },
+    return this.prisma.$transaction(async (tx) => {
+      const restored = await tx.user.update({
+        where: { id: user.id },
+        data: { deletedAt: null },
+        omit: { deletedAt: true },
+      });
+      const { revokedSessions, revokedTrustedDevices } =
+        await this.revokeAccess(tx, user.id);
+      await this.recordSecurityAudit(tx, {
+        actorUserId,
+        targetUserId: user.id,
+        action: 'USER_RESTORED',
+        details: {
+          role: restored.role,
+          revokedSessions: revokedSessions.count,
+          revokedTrustedDevices: revokedTrustedDevices.count,
+        },
+      });
+      return restored;
+    });
+  }
+
+  private async revokeAccess(tx: Prisma.TransactionClient, userId: string) {
+    const revokedSessions = await tx.session.deleteMany({ where: { userId } });
+    const revokedTrustedDevices = await tx.trustedDevice.deleteMany({
+      where: { userId },
+    });
+    return { revokedSessions, revokedTrustedDevices };
+  }
+
+  private async lockAdminRows(tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      'SELECT id FROM users WHERE role::text = $1 FOR UPDATE',
+      UserRole.ADMIN,
+    );
+  }
+
+  private async assertNotLastActiveEnrolledAdmin(
+    tx: Prisma.TransactionClient,
+    targetUserId: string,
+  ): Promise<void> {
+    const targetEnrollment = await tx.twoFactorAuth.findUnique({
+      where: { userId: targetUserId },
+      select: { enrollmentComplete: true },
+    });
+    if (!targetEnrollment?.enrollmentComplete) return;
+
+    const activeAdmins = await tx.user.findMany({
+      where: {
+        role: UserRole.ADMIN,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    if (!activeAdmins.some(({ id }) => id === targetUserId)) return;
+
+    const enrolledAdminCount = await tx.twoFactorAuth.count({
+      where: {
+        userId: { in: activeAdmins.map(({ id }) => id) },
+        enrollmentComplete: true,
+      },
+    });
+    if (enrolledAdminCount <= 1) {
+      throw new ConflictException({
+        code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        message:
+          'The last active enrolled ADMIN cannot be disabled, deleted, or demoted',
+      });
+    }
+  }
+
+  private async assertStepUpStillActive(
+    tx: Prisma.TransactionClient,
+    actorUserId: string,
+    sessionId: string,
+  ): Promise<void> {
+    const now = new Date();
+    const actor = await tx.user.findFirst({
+      where: {
+        id: actorUserId,
+        role: UserRole.ADMIN,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    const session = await tx.session.findFirst({
+      where: { id: sessionId, userId: actorUserId, expiresAt: { gt: now } },
+      select: { adminStepUp: { select: { expiresAt: true } } },
+    });
+    if (
+      !actor ||
+      !session?.adminStepUp ||
+      session.adminStepUp.expiresAt <= now
+    ) {
+      throw new ForbiddenException({
+        code: 'STEP_UP_REQUIRED',
+        message: 'Fresh ADMIN TOTP verification is required',
+      });
+    }
+  }
+
+  private async recordSecurityAudit(
+    tx: Prisma.TransactionClient,
+    input: SecurityAuditInput,
+  ): Promise<void> {
+    await tx.securityAuditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        targetUserId: input.targetUserId,
+        action: input.action,
+        ...(input.reason !== undefined ? { reason: input.reason } : {}),
+        ...(input.details !== undefined ? { details: input.details } : {}),
+      },
     });
   }
 }

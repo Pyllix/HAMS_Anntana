@@ -4,7 +4,7 @@ import { useAuthStore } from "../stores/authStore";
 import { clearSessionDrafts } from "../services/sessionDraftStorage";
 import { publishAuthMessage } from "../services/authBroadcast";
 import { revokeCurrentSession } from "../services/authService";
-import { revokeBeforeClearingSession } from "../services/signOutFlow.js";
+import { revokeBeforeClearingSession } from "../services/signOutFlow";
 
 export default function useSignOut() {
   const queryClient = useQueryClient();

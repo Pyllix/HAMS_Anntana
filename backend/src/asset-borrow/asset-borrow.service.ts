@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
@@ -16,7 +21,15 @@ import {
   SwapCheckResponseDto,
 } from './dto/borrow-recommendation-response.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
-import { ReturnCondition, ReturnMethod, UserRole, RequestSource, BorrowExtensionType, BorrowExtensionStatus, Prisma } from '@prisma/client';
+import {
+  ReturnCondition,
+  ReturnMethod,
+  UserRole,
+  RequestSource,
+  BorrowExtensionType,
+  BorrowExtensionStatus,
+  Prisma,
+} from '@prisma/client';
 
 /** Shared selection projection for Asset within BorrowTransaction */
 export const BORROW_ASSET_SELECT = {
@@ -39,28 +52,56 @@ export const BORROW_ASSET_SELECT = {
 export const BORROW_TRANSACTION_INCLUDE = {
   asset: { select: BORROW_ASSET_SELECT },
   borrower: {
-    select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true },
+    select: {
+      id: true,
+      employeeId: true,
+      firstname: true,
+      lastname: true,
+      section_id: true,
+    },
   },
   borrowStatus: { select: { id: true, code: true, name: true } },
-  createdByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  approvedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  handoverByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  returnedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  receivedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  rejectedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-  cancelledByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  createdByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  approvedByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  handoverByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  returnedByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  receivedByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  rejectedByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
+  cancelledByUser: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
   extensions: {
     orderBy: { roundNumber: 'desc' as const },
     take: 3,
-    select: { id: true, status: true, roundNumber: true, requestedReturnDate: true, reason: true },
+    select: {
+      id: true,
+      status: true,
+      roundNumber: true,
+      requestedReturnDate: true,
+      reason: true,
+    },
   },
 };
 
 @Injectable()
 export class AssetBorrowService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
-  private async generateBorrowNo(tx?: Prisma.TransactionClient): Promise<string> {
+  private async generateBorrowNo(
+    tx?: Prisma.TransactionClient,
+  ): Promise<string> {
     const client = tx || this.prisma;
     const now = new Date();
     const year = now.getFullYear();
@@ -85,7 +126,10 @@ export class AssetBorrowService {
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   }
 
-  private async getStatusId(model: 'availabilityStatus' | 'borrowStatus' | 'assetStatus', code: string): Promise<number> {
+  private async getStatusId(
+    model: 'availabilityStatus' | 'borrowStatus' | 'assetStatus',
+    code: string,
+  ): Promise<number> {
     const status = await (this.prisma[model] as any).findUnique({
       where: { code },
     });
@@ -95,7 +139,10 @@ export class AssetBorrowService {
     return status.id;
   }
 
-  private async getCallerSectionId(user: any, tx?: any): Promise<string | null> {
+  private async getCallerSectionId(
+    user: any,
+    tx?: any,
+  ): Promise<string | null> {
     if (user?.section_id) return user.section_id;
     if (user?.id) {
       const client = tx || this.prisma;
@@ -108,7 +155,10 @@ export class AssetBorrowService {
     return null;
   }
 
-  private async getBorrowTransactionWithIncludes(id: string, tx?: Prisma.TransactionClient) {
+  private async getBorrowTransactionWithIncludes(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ) {
     const client = tx || this.prisma;
     const item = await client.borrowTransaction.findUnique({
       where: { id },
@@ -120,12 +170,17 @@ export class AssetBorrowService {
   async createBorrow(dto: CreateAssetBorrowDto, user: any) {
     // Determine RequestSource from user role
     let requestSource: RequestSource;
-    if (user.role === UserRole.PARCEL_STAFF || user.role === UserRole.DEPARTMENT_STAFF) {
+    if (
+      user.role === UserRole.PARCEL_STAFF ||
+      user.role === UserRole.DEPARTMENT_STAFF
+    ) {
       requestSource = RequestSource.SELF_SERVICE;
     } else if (user.role === UserRole.ASSET_CENTER_STAFF) {
       requestSource = RequestSource.CENTER_SERVICE;
     } else {
-      throw new BadRequestException('Only Parcel/Department Staff or Asset Center Staff can create a borrow transaction');
+      throw new BadRequestException(
+        'Only Parcel/Department Staff or Asset Center Staff can create a borrow transaction',
+      );
     }
 
     const now = new Date();
@@ -138,7 +193,9 @@ export class AssetBorrowService {
         throw new BadRequestException('Invalid expected return date format');
       }
       if (parsedExpectedReturnDate <= now) {
-        throw new BadRequestException('Expected return date must be in the future');
+        throw new BadRequestException(
+          'Expected return date must be in the future',
+        );
       }
     }
 
@@ -150,30 +207,46 @@ export class AssetBorrowService {
     } else {
       // Center service (Asset Center Staff): allow borrowing on behalf of someone else
       if (!dto.borrowerId) {
-        throw new BadRequestException('Borrower ID is required when Asset Center Staff creates a transaction for someone else');
+        throw new BadRequestException(
+          'Borrower ID is required when Asset Center Staff creates a transaction for someone else',
+        );
       }
       const targetUser = await this.prisma.user.findFirst({
         where: {
           deletedAt: null,
-          OR: [
-            { id: dto.borrowerId },
-            { employeeId: dto.borrowerId },
-          ],
+          OR: [{ id: dto.borrowerId }, { employeeId: dto.borrowerId }],
         },
       });
       if (!targetUser) {
-        throw new NotFoundException(`Borrower not found with ID or Employee Code: ${dto.borrowerId}`);
+        throw new NotFoundException(
+          `Borrower not found with ID or Employee Code: ${dto.borrowerId}`,
+        );
       }
       borrowerId = targetUser.id;
     }
 
     const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
-    const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
-    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+    const availableStatusId = await this.getStatusId(
+      'availabilityStatus',
+      'AVAILABLE',
+    );
+    const reservedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'RESERVED',
+    );
+    const borrowedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'BORROWED',
+    );
 
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const pendingTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_APPROVE',
+    );
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
 
     const targetAvailabilityId =
       requestSource === RequestSource.SELF_SERVICE
@@ -199,7 +272,7 @@ export class AssetBorrowService {
       if (existingAsset.section?.code !== 'CENTER') {
         const sectionName = existingAsset.section?.name || 'Unknown Section';
         throw new BadRequestException(
-          `Cannot borrow asset: Asset belongs to department '${sectionName}'. Only assets belonging to the Asset Center (CENTER) can be borrowed.`
+          `Cannot borrow asset: Asset belongs to department '${sectionName}'. Only assets belonging to the Asset Center (CENTER) can be borrowed.`,
         );
       }
 
@@ -207,10 +280,11 @@ export class AssetBorrowService {
         existingAsset.asset_status_id !== normalAssetStatusId ||
         existingAsset.availability_status_id !== availableStatusId
       ) {
-        const availName = existingAsset.availabilityStatus?.name || 'Not Available';
+        const availName =
+          existingAsset.availabilityStatus?.name || 'Not Available';
         const statusName = existingAsset.status?.name || 'Unknown';
         throw new ConflictException(
-          `Asset with ID ${dto.assetId} is not available for borrowing (Current Availability: '${availName}', Physical Status: '${statusName}'). Must be in NORMAL condition and AVAILABLE.`
+          `Asset with ID ${dto.assetId} is not available for borrowing (Current Availability: '${availName}', Physical Status: '${statusName}'). Must be in NORMAL condition and AVAILABLE.`,
         );
       }
 
@@ -226,7 +300,7 @@ export class AssetBorrowService {
 
       if (assetUpdate.count === 0) {
         throw new ConflictException(
-          `Asset with ID ${dto.assetId} has just been borrowed or reserved by another transaction.`
+          `Asset with ID ${dto.assetId} has just been borrowed or reserved by another transaction.`,
         );
       }
 
@@ -243,34 +317,47 @@ export class AssetBorrowService {
           delivery_method: dto.deliveryMethod,
           expectedReturnDate: parsedExpectedReturnDate,
           extensionCount: 0,
-          approved_at: requestSource === RequestSource.CENTER_SERVICE ? now : null,
-          approved_by_user_id: requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
-          handover_date: requestSource === RequestSource.CENTER_SERVICE ? now : null,
-          handover_by_user_id: requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
-        }
+          approved_at:
+            requestSource === RequestSource.CENTER_SERVICE ? now : null,
+          approved_by_user_id:
+            requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
+          handover_date:
+            requestSource === RequestSource.CENTER_SERVICE ? now : null,
+          handover_by_user_id:
+            requestSource === RequestSource.CENTER_SERVICE ? user.id : null,
+        },
       });
 
       return this.getBorrowTransactionWithIncludes(transaction.id, tx);
     });
   }
 
-
   async approveBorrow(id: string, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
-    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
+    const pendingTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_APPROVE',
+    );
+    const approvedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'APPROVED',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true }
+        select: { id: true, asset_id: true, borrow_status_id: true },
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== pendingTxStatusId) {
-        throw new BadRequestException(`Only transactions in PENDING_APPROVE status can be approved`);
+        throw new BadRequestException(
+          `Only transactions in PENDING_APPROVE status can be approved`,
+        );
       }
 
       // Optimistic lock on BorrowTransaction update to APPROVED
@@ -280,11 +367,13 @@ export class AssetBorrowService {
           borrow_status_id: approvedTxStatusId,
           approved_at: new Date(),
           approved_by_user_id: user.id,
-        }
+        },
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       return this.getBorrowTransactionWithIncludes(id, tx);
@@ -292,23 +381,39 @@ export class AssetBorrowService {
   }
 
   async handoverAsset(id: string, user: any) {
-    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
-    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+    const approvedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'APPROVED',
+    );
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
+    const reservedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'RESERVED',
+    );
+    const borrowedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'BORROWED',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true }
+        select: { id: true, asset_id: true, borrow_status_id: true },
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== approvedTxStatusId) {
-        throw new BadRequestException(`Only transactions in APPROVED status can be handed over (marked as BORROWED)`);
+        throw new BadRequestException(
+          `Only transactions in APPROVED status can be handed over (marked as BORROWED)`,
+        );
       }
 
       // Optimistic lock on BorrowTransaction update to BORROWED
@@ -318,21 +423,28 @@ export class AssetBorrowService {
           borrow_status_id: borrowedTxStatusId,
           handover_date: new Date(),
           handover_by_user_id: user.id,
-        }
+        },
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // Optimistic lock on Asset update: RESERVED -> BORROWED
       const assetUpdate = await tx.asset.updateMany({
-        where: { id: transaction.asset_id, availability_status_id: reservedAvailabilityId },
-        data: { availability_status_id: borrowedAvailabilityId }
+        where: {
+          id: transaction.asset_id,
+          availability_status_id: reservedAvailabilityId,
+        },
+        data: { availability_status_id: borrowedAvailabilityId },
       });
 
       if (assetUpdate.count === 0) {
-        throw new ConflictException(`Asset availability for ID ${transaction.asset_id} has already changed`);
+        throw new ConflictException(
+          `Asset availability for ID ${transaction.asset_id} has already changed`,
+        );
       }
 
       return this.getBorrowTransactionWithIncludes(id, tx);
@@ -340,23 +452,39 @@ export class AssetBorrowService {
   }
 
   async rejectBorrow(id: string, reason: string | undefined, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
-    const rejectedTxStatusId = await this.getStatusId('borrowStatus', 'REJECTED');
-    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+    const pendingTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_APPROVE',
+    );
+    const rejectedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'REJECTED',
+    );
+    const reservedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'RESERVED',
+    );
+    const availableStatusId = await this.getStatusId(
+      'availabilityStatus',
+      'AVAILABLE',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true }
+        select: { id: true, asset_id: true, borrow_status_id: true },
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== pendingTxStatusId) {
-        throw new BadRequestException(`Only transactions in PENDING_APPROVE status can be rejected`);
+        throw new BadRequestException(
+          `Only transactions in PENDING_APPROVE status can be rejected`,
+        );
       }
 
       // Optimistic lock on BorrowTransaction update
@@ -367,22 +495,27 @@ export class AssetBorrowService {
           reject_remark: reason,
           rejected_at: new Date(),
           rejected_by_user_id: user.id,
-        }
+        },
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // Optimistic lock on Asset update
       const assetUpdate = await tx.asset.updateMany({
-        where: { id: transaction.asset_id, availability_status_id: reservedAvailabilityId },
-        data: { availability_status_id: availableStatusId }
+        where: {
+          id: transaction.asset_id,
+          availability_status_id: reservedAvailabilityId,
+        },
+        data: { availability_status_id: availableStatusId },
       });
 
       if (assetUpdate.count === 0) {
         throw new ConflictException(
-          `Failed to restore asset availability for asset ${transaction.asset_id}: asset availability has already changed`
+          `Failed to restore asset availability for asset ${transaction.asset_id}: asset availability has already changed`,
         );
       }
 
@@ -391,10 +524,22 @@ export class AssetBorrowService {
   }
 
   async requestReturn(id: string, dto: RequestReturnBorrowDto, user: any) {
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
-    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
-    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
+    const pendingReturnTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_RETURN',
+    );
+    const borrowedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'BORROWED',
+    );
+    const unavailableAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'UNAVAILABLE',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -410,13 +555,16 @@ export class AssetBorrowService {
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== borrowedTxStatusId) {
-        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        const currentStatusCode =
+          transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Cannot request return: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`
+          `Cannot request return: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`,
         );
       }
 
@@ -434,7 +582,7 @@ export class AssetBorrowService {
 
       if (!isStaffOverride && !isBorrower && !isSameDepartment) {
         throw new BadRequestException(
-          'You do not have permission to request return for this transaction (must be the borrower or belong to the same department)'
+          'You do not have permission to request return for this transaction (must be the borrower or belong to the same department)',
         );
       }
 
@@ -458,18 +606,23 @@ export class AssetBorrowService {
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // 2. Lock Asset availability to UNAVAILABLE
       const assetUpdate = await tx.asset.updateMany({
-        where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
+        where: {
+          id: transaction.asset_id,
+          availability_status_id: borrowedAvailabilityId,
+        },
         data: { availability_status_id: unavailableAvailabilityId },
       });
 
       if (assetUpdate.count === 0) {
         throw new ConflictException(
-          `Failed to lock asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`
+          `Failed to lock asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`,
         );
       }
 
@@ -478,8 +631,14 @@ export class AssetBorrowService {
   }
 
   async claimPickup(id: string, user: any) {
-    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
-    const inPickupTxStatusId = await this.getStatusId('borrowStatus', 'IN_PICKUP');
+    const pendingReturnTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_RETURN',
+    );
+    const inPickupTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'IN_PICKUP',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -493,13 +652,16 @@ export class AssetBorrowService {
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== pendingReturnTxStatusId) {
-        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        const currentStatusCode =
+          transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Cannot claim pickup: transaction is currently in '${currentStatusCode}' status (expected PENDING_RETURN).`
+          `Cannot claim pickup: transaction is currently in '${currentStatusCode}' status (expected PENDING_RETURN).`,
         );
       }
 
@@ -514,7 +676,7 @@ export class AssetBorrowService {
 
       if (txUpdate.count === 0) {
         throw new ConflictException(
-          `Transaction with ID ${id} has already been claimed or status changed`
+          `Transaction with ID ${id} has already been claimed or status changed`,
         );
       }
 
@@ -523,10 +685,22 @@ export class AssetBorrowService {
   }
 
   async completeReturn(id: string, dto: CompleteReturnBorrowDto, user: any) {
-    const inPickupTxStatusId = await this.getStatusId('borrowStatus', 'IN_PICKUP');
-    const pendingReturnTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_RETURN');
-    const returnedTxStatusId = await this.getStatusId('borrowStatus', 'RETURNED');
-    const unavailableAvailabilityId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
+    const inPickupTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'IN_PICKUP',
+    );
+    const pendingReturnTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_RETURN',
+    );
+    const returnedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'RETURNED',
+    );
+    const unavailableAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'UNAVAILABLE',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -541,16 +715,19 @@ export class AssetBorrowService {
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (
         transaction.borrow_status_id !== inPickupTxStatusId &&
         transaction.borrow_status_id !== pendingReturnTxStatusId
       ) {
-        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        const currentStatusCode =
+          transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Cannot complete return: transaction is currently in '${currentStatusCode}' status (expected IN_PICKUP or PENDING_RETURN).`
+          `Cannot complete return: transaction is currently in '${currentStatusCode}' status (expected IN_PICKUP or PENDING_RETURN).`,
         );
       }
 
@@ -576,13 +753,21 @@ export class AssetBorrowService {
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // 2. Update Asset Availability and Status
       if (dto.returnCondition === ReturnCondition.Normal) {
-        const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
-        const normalAssetStatusId = await this.getStatusId('assetStatus', 'NORMAL');
+        const availableStatusId = await this.getStatusId(
+          'availabilityStatus',
+          'AVAILABLE',
+        );
+        const normalAssetStatusId = await this.getStatusId(
+          'assetStatus',
+          'NORMAL',
+        );
 
         const assetUpdate = await tx.asset.updateMany({
           where: { id: transaction.asset_id },
@@ -594,11 +779,14 @@ export class AssetBorrowService {
 
         if (assetUpdate.count === 0) {
           throw new ConflictException(
-            `Failed to update asset availability for asset ${transaction.asset_id}`
+            `Failed to update asset availability for asset ${transaction.asset_id}`,
           );
         }
       } else if (dto.returnCondition === ReturnCondition.Damage) {
-        const damagedStatusId = await this.getStatusId('assetStatus', 'DAMAGED');
+        const damagedStatusId = await this.getStatusId(
+          'assetStatus',
+          'DAMAGED',
+        );
 
         const assetUpdate = await tx.asset.updateMany({
           where: { id: transaction.asset_id },
@@ -610,7 +798,7 @@ export class AssetBorrowService {
 
         if (assetUpdate.count === 0) {
           throw new ConflictException(
-            `Failed to update asset availability and status for asset ${transaction.asset_id}`
+            `Failed to update asset availability and status for asset ${transaction.asset_id}`,
           );
         }
       }
@@ -620,9 +808,18 @@ export class AssetBorrowService {
   }
 
   async returnAsset(id: string, dto: ReturnAssetBorrowDto, user: any) {
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
-    const returnedTxStatusId = await this.getStatusId('borrowStatus', 'RETURNED');
-    const borrowedAvailabilityId = await this.getStatusId('availabilityStatus', 'BORROWED');
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
+    const returnedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'RETURNED',
+    );
+    const borrowedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'BORROWED',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -642,13 +839,16 @@ export class AssetBorrowService {
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== borrowedTxStatusId) {
-        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        const currentStatusCode =
+          transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Cannot return asset: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`
+          `Cannot return asset: transaction is currently in '${currentStatusCode}' status (expected BORROWED).`,
         );
       }
 
@@ -659,13 +859,15 @@ export class AssetBorrowService {
 
       if (!isStaffOverride) {
         throw new BadRequestException(
-          'Desk return can only be performed by Asset Center Staff or Admins'
+          'Desk return can only be performed by Asset Center Staff or Admins',
         );
       }
 
       // Validate returnedByUserId
       if (!dto.returnedByUserId) {
-        throw new BadRequestException('Returned by user ID or Employee Code is required for desk return');
+        throw new BadRequestException(
+          'Returned by user ID or Employee Code is required for desk return',
+        );
       }
 
       const retUser = await tx.user.findFirst({
@@ -680,7 +882,9 @@ export class AssetBorrowService {
       });
 
       if (!retUser) {
-        throw new NotFoundException(`Returned by user not found with ID or Employee Code: ${dto.returnedByUserId}`);
+        throw new NotFoundException(
+          `Returned by user not found with ID or Employee Code: ${dto.returnedByUserId}`,
+        );
       }
 
       const isOwner = retUser.id === transaction.borrower_id;
@@ -691,7 +895,7 @@ export class AssetBorrowService {
 
       if (!isOwner && !isSameDept) {
         throw new BadRequestException(
-          'The person returning the asset must be the borrower or belong to the same department as the borrower'
+          'The person returning the asset must be the borrower or belong to the same department as the borrower',
         );
       }
 
@@ -710,28 +914,45 @@ export class AssetBorrowService {
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // Update Asset Availability and Status
       if (dto.returnCondition === ReturnCondition.Normal) {
-        const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+        const availableStatusId = await this.getStatusId(
+          'availabilityStatus',
+          'AVAILABLE',
+        );
         const assetUpdate = await tx.asset.updateMany({
-          where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
+          where: {
+            id: transaction.asset_id,
+            availability_status_id: borrowedAvailabilityId,
+          },
           data: { availability_status_id: availableStatusId },
         });
 
         if (assetUpdate.count === 0) {
           throw new ConflictException(
-            `Failed to update asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`
+            `Failed to update asset availability for asset ${transaction.asset_id}: asset is not in BORROWED status`,
           );
         }
       } else if (dto.returnCondition === ReturnCondition.Damage) {
-        const unavailableStatusId = await this.getStatusId('availabilityStatus', 'UNAVAILABLE');
-        const damagedStatusId = await this.getStatusId('assetStatus', 'DAMAGED');
+        const unavailableStatusId = await this.getStatusId(
+          'availabilityStatus',
+          'UNAVAILABLE',
+        );
+        const damagedStatusId = await this.getStatusId(
+          'assetStatus',
+          'DAMAGED',
+        );
 
         const assetUpdate = await tx.asset.updateMany({
-          where: { id: transaction.asset_id, availability_status_id: borrowedAvailabilityId },
+          where: {
+            id: transaction.asset_id,
+            availability_status_id: borrowedAvailabilityId,
+          },
           data: {
             availability_status_id: unavailableStatusId,
             asset_status_id: damagedStatusId,
@@ -740,7 +961,7 @@ export class AssetBorrowService {
 
         if (assetUpdate.count === 0) {
           throw new ConflictException(
-            `Failed to update asset availability and status for asset ${transaction.asset_id}: asset is not in BORROWED status`
+            `Failed to update asset availability and status for asset ${transaction.asset_id}: asset is not in BORROWED status`,
           );
         }
       }
@@ -750,12 +971,30 @@ export class AssetBorrowService {
   }
 
   async cancelBorrow(id: string, dto: CancelBorrowDto, user: any) {
-    const pendingTxStatusId = await this.getStatusId('borrowStatus', 'PENDING_APPROVE');
-    const approvedTxStatusId = await this.getStatusId('borrowStatus', 'APPROVED');
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
-    const cancelledTxStatusId = await this.getStatusId('borrowStatus', 'CANCELLED');
-    const reservedAvailabilityId = await this.getStatusId('availabilityStatus', 'RESERVED');
-    const availableStatusId = await this.getStatusId('availabilityStatus', 'AVAILABLE');
+    const pendingTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'PENDING_APPROVE',
+    );
+    const approvedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'APPROVED',
+    );
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
+    const cancelledTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'CANCELLED',
+    );
+    const reservedAvailabilityId = await this.getStatusId(
+      'availabilityStatus',
+      'RESERVED',
+    );
+    const availableStatusId = await this.getStatusId(
+      'availabilityStatus',
+      'AVAILABLE',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -766,16 +1005,18 @@ export class AssetBorrowService {
           borrow_status_id: true,
           borrower_id: true,
           borrower: {
-            select: { section_id: true }
+            select: { section_id: true },
           },
           borrowStatus: {
-            select: { code: true, name: true }
-          }
-        }
+            select: { code: true, name: true },
+          },
+        },
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${id} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${id} not found`,
+        );
       }
 
       const isStaffOverride =
@@ -786,14 +1027,17 @@ export class AssetBorrowService {
       // Business Rule: BORROWED status cannot be cancelled by anyone (must use returnAsset)
       if (transaction.borrow_status_id === borrowedTxStatusId) {
         throw new BadRequestException(
-          'Cannot cancel a transaction that has already been dispatched (BORROWED). The asset must be returned via return flow.'
+          'Cannot cancel a transaction that has already been dispatched (BORROWED). The asset must be returned via return flow.',
         );
       }
 
       // Business Rule: Department Staff / Borrower can only cancel PENDING_APPROVE transactions
-      if (!isStaffOverride && transaction.borrow_status_id === approvedTxStatusId) {
+      if (
+        !isStaffOverride &&
+        transaction.borrow_status_id === approvedTxStatusId
+      ) {
         throw new BadRequestException(
-          'Department staff can only cancel transactions that are pending approval. Please contact Asset Center Staff to cancel an approved request.'
+          'Department staff can only cancel transactions that are pending approval. Please contact Asset Center Staff to cancel an approved request.',
         );
       }
 
@@ -801,9 +1045,10 @@ export class AssetBorrowService {
         transaction.borrow_status_id !== approvedTxStatusId &&
         transaction.borrow_status_id !== pendingTxStatusId
       ) {
-        const currentStatusCode = transaction.borrowStatus?.code || transaction.borrow_status_id;
+        const currentStatusCode =
+          transaction.borrowStatus?.code || transaction.borrow_status_id;
         throw new BadRequestException(
-          `Only pending (PENDING_APPROVE) or approved (APPROVED) transactions can be cancelled. Current status is '${currentStatusCode}'.`
+          `Only pending (PENDING_APPROVE) or approved (APPROVED) transactions can be cancelled. Current status is '${currentStatusCode}'.`,
         );
       }
 
@@ -817,25 +1062,29 @@ export class AssetBorrowService {
       const isBorrower = user.id === transaction.borrower_id;
 
       if (!isStaffOverride && !isBorrower && !isSameDepartment) {
-        throw new BadRequestException('You do not have permission to cancel this transaction (must be borrower or in the same department)');
+        throw new BadRequestException(
+          'You do not have permission to cancel this transaction (must be borrower or in the same department)',
+        );
       }
 
       // Optimistic lock on BorrowTransaction update
       const txUpdate = await tx.borrowTransaction.updateMany({
         where: {
           id,
-          borrow_status_id: transaction.borrow_status_id // ensure status hasn't changed since read
+          borrow_status_id: transaction.borrow_status_id, // ensure status hasn't changed since read
         },
         data: {
           borrow_status_id: cancelledTxStatusId,
           cancelled_at: new Date(),
           cancelled_by_user_id: user.id,
           cancel_reason: dto?.cancelReason || null,
-        }
+        },
       });
 
       if (txUpdate.count === 0) {
-        throw new ConflictException(`Transaction with ID ${id} has already been processed or status changed`);
+        throw new ConflictException(
+          `Transaction with ID ${id} has already been processed or status changed`,
+        );
       }
 
       // Optimistic lock on Asset update: return RESERVED -> AVAILABLE
@@ -844,12 +1093,12 @@ export class AssetBorrowService {
           id: transaction.asset_id,
           availability_status_id: reservedAvailabilityId,
         },
-        data: { availability_status_id: availableStatusId }
+        data: { availability_status_id: availableStatusId },
       });
 
       if (assetUpdate.count === 0) {
         throw new ConflictException(
-          `Failed to restore asset availability for asset ${transaction.asset_id}: asset is not in RESERVED status`
+          `Failed to restore asset availability for asset ${transaction.asset_id}: asset is not in RESERVED status`,
         );
       }
 
@@ -862,13 +1111,15 @@ export class AssetBorrowService {
     const now = new Date();
     const isBorrowed = item.borrowStatus?.code === 'BORROWED';
     const hasExpectedDate = !!item.expectedReturnDate;
-    const isOverdue = isBorrowed && hasExpectedDate && now > new Date(item.expectedReturnDate);
+    const isOverdue =
+      isBorrowed && hasExpectedDate && now > new Date(item.expectedReturnDate);
 
     let remainingDays: number | null = null;
     let overdueDays: number | null = null;
 
     if (hasExpectedDate) {
-      const diffMs = new Date(item.expectedReturnDate).getTime() - now.getTime();
+      const diffMs =
+        new Date(item.expectedReturnDate).getTime() - now.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       if (diffDays >= 0) {
         remainingDays = diffDays;
@@ -879,7 +1130,10 @@ export class AssetBorrowService {
       }
     }
 
-    const pendingExtension = item.extensions?.find?.((e: any) => e.status === BorrowExtensionStatus.PENDING) || null;
+    const pendingExtension =
+      item.extensions?.find?.(
+        (e: any) => e.status === BorrowExtensionStatus.PENDING,
+      ) || null;
 
     return {
       ...item,
@@ -891,7 +1145,10 @@ export class AssetBorrowService {
     };
   }
 
-  async findAll(query: BorrowFilterDto, user?: any): Promise<PaginatedResult<any>> {
+  async findAll(
+    query: BorrowFilterDto,
+    user?: any,
+  ): Promise<PaginatedResult<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -917,23 +1174,26 @@ export class AssetBorrowService {
       const callerSectionId = await this.getCallerSectionId(user);
       // Department staff can view borrowings in their department (or their own)
       if (callerSectionId) {
-        where.borrower = { ...(where.borrower || {}), section_id: callerSectionId };
+        where.borrower = {
+          ...(where.borrower || {}),
+          section_id: callerSectionId,
+        };
       } else {
         where.borrower_id = user.id;
       }
     } else {
       if (query.sectionId) {
-        where.borrower = { ...(where.borrower || {}), section_id: query.sectionId };
+        where.borrower = {
+          ...(where.borrower || {}),
+          section_id: query.sectionId,
+        };
       }
       if (query.borrowerId) {
         const targetUser = await this.prisma.user.findFirst({
           where: {
             deletedAt: null,
-            OR: [
-              { id: query.borrowerId },
-              { employeeId: query.borrowerId }
-            ]
-          }
+            OR: [{ id: query.borrowerId }, { employeeId: query.borrowerId }],
+          },
         });
         where.borrower_id = targetUser ? targetUser.id : query.borrowerId;
       }
@@ -943,23 +1203,37 @@ export class AssetBorrowService {
 
     if (query.startDate || query.endDate) {
       where.createdAt = {
-        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
-        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+        ...(query.startDate
+          ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+          : {}),
+        ...(query.endDate
+          ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+          : {}),
       };
     }
 
     if (query.expectedReturnStartDate || query.expectedReturnEndDate) {
       where.expectedReturnDate = {
-        ...(query.expectedReturnStartDate ? { gte: new Date(`${query.expectedReturnStartDate}T00:00:00.000Z`) } : {}),
-        ...(query.expectedReturnEndDate ? { lte: new Date(`${query.expectedReturnEndDate}T23:59:59.999Z`) } : {}),
+        ...(query.expectedReturnStartDate
+          ? { gte: new Date(`${query.expectedReturnStartDate}T00:00:00.000Z`) }
+          : {}),
+        ...(query.expectedReturnEndDate
+          ? { lte: new Date(`${query.expectedReturnEndDate}T23:59:59.999Z`) }
+          : {}),
       };
     }
 
-    if (query.minExtensionCount !== undefined && query.minExtensionCount !== null) {
+    if (
+      query.minExtensionCount !== undefined &&
+      query.minExtensionCount !== null
+    ) {
       where.extensionCount = { gte: query.minExtensionCount };
     }
 
-    if (query.hasPendingExtension !== undefined && query.hasPendingExtension !== null) {
+    if (
+      query.hasPendingExtension !== undefined &&
+      query.hasPendingExtension !== null
+    ) {
       if (query.hasPendingExtension) {
         where.extensions = { some: { status: BorrowExtensionStatus.PENDING } };
       } else {
@@ -968,7 +1242,10 @@ export class AssetBorrowService {
     }
 
     if (query.isOverdue !== undefined && query.isOverdue !== null) {
-      const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+      const borrowedTxStatusId = await this.getStatusId(
+        'borrowStatus',
+        'BORROWED',
+      );
       where.borrow_status_id = borrowedTxStatusId;
       if (query.isOverdue) {
         where.expectedReturnDate = { lt: new Date() };
@@ -976,7 +1253,6 @@ export class AssetBorrowService {
         where.expectedReturnDate = { gte: new Date() };
       }
     }
-
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.borrowTransaction.findMany({
@@ -994,7 +1270,10 @@ export class AssetBorrowService {
   }
 
   async findOne(idOrBorrowNo: string, user?: any) {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrBorrowNo);
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        idOrBorrowNo,
+      );
 
     const transaction = await this.prisma.borrowTransaction.findUnique({
       where: isUuid ? { id: idOrBorrowNo } : { borrowNo: idOrBorrowNo },
@@ -1003,15 +1282,31 @@ export class AssetBorrowService {
         extensions: {
           orderBy: { roundNumber: 'asc' as const },
           include: {
-            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          }
-        }
+            requestedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
+            reviewedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
+          },
+        },
       },
     });
 
     if (!transaction) {
-      throw new NotFoundException(`Borrow transaction with ID or Code '${idOrBorrowNo}' not found`);
+      throw new NotFoundException(
+        `Borrow transaction with ID or Code '${idOrBorrowNo}' not found`,
+      );
     }
     // [AuthZ] Check Permission
     if (user?.role === UserRole.DEPARTMENT_STAFF) {
@@ -1023,28 +1318,40 @@ export class AssetBorrowService {
         callerSectionId === transaction.borrower.section_id;
 
       if (!isOwner && !isSameDept) {
-        throw new NotFoundException(`Borrow transaction with ID ${idOrBorrowNo} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${idOrBorrowNo} not found`,
+        );
       }
     }
-
 
     return this.enrichBorrowItem(transaction);
   }
 
-  async createExtension(borrowTransactionId: string, dto: CreateBorrowExtensionDto, user: any) {
+  async createExtension(
+    borrowTransactionId: string,
+    dto: CreateBorrowExtensionDto,
+    user: any,
+  ) {
     const { requestedReturnDate, reason } = dto;
     const newReturnDate = new Date(requestedReturnDate);
     if (isNaN(newReturnDate.getTime())) {
       throw new BadRequestException('Invalid requested return date format');
     }
     if (newReturnDate <= new Date()) {
-      throw new BadRequestException('Requested return date must be in the future');
+      throw new BadRequestException(
+        'Requested return date must be in the future',
+      );
     }
 
     const isDesk = user.role === UserRole.ASSET_CENTER_STAFF;
-    const extensionType = isDesk ? BorrowExtensionType.DESK : BorrowExtensionType.ONLINE;
+    const extensionType = isDesk
+      ? BorrowExtensionType.DESK
+      : BorrowExtensionType.ONLINE;
 
-    const borrowedTxStatusId = await this.getStatusId('borrowStatus', 'BORROWED');
+    const borrowedTxStatusId = await this.getStatusId(
+      'borrowStatus',
+      'BORROWED',
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
@@ -1059,19 +1366,28 @@ export class AssetBorrowService {
       });
 
       if (!transaction) {
-        throw new NotFoundException(`Borrow transaction with ID ${borrowTransactionId} not found`);
+        throw new NotFoundException(
+          `Borrow transaction with ID ${borrowTransactionId} not found`,
+        );
       }
 
       if (transaction.borrow_status_id !== borrowedTxStatusId) {
-        throw new BadRequestException('Cannot request extension: Transaction must be in BORROWED status');
+        throw new BadRequestException(
+          'Cannot request extension: Transaction must be in BORROWED status',
+        );
       }
 
       if (transaction.extensions.length > 0) {
-        throw new ConflictException('There is already a pending extension request for this borrowing');
+        throw new ConflictException(
+          'There is already a pending extension request for this borrowing',
+        );
       }
 
       // Current return date benchmark
-      const currentReturnDate = transaction.expectedReturnDate || transaction.handover_date || transaction.createdAt;
+      const currentReturnDate =
+        transaction.expectedReturnDate ||
+        transaction.handover_date ||
+        transaction.createdAt;
       if (newReturnDate <= currentReturnDate) {
         throw new BadRequestException(
           `Requested return date (${newReturnDate.toISOString()}) must be after current return date (${currentReturnDate.toISOString()})`,
@@ -1096,8 +1412,22 @@ export class AssetBorrowService {
             reviewedAt: new Date(),
           },
           include: {
-            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            requestedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
+            reviewedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
           },
         });
 
@@ -1121,7 +1451,9 @@ export class AssetBorrowService {
             callerSectionId === transaction.borrower.section_id;
 
           if (!isOwner && !isSameDept) {
-            throw new BadRequestException('You do not have permission to request an extension for this borrowing');
+            throw new BadRequestException(
+              'You do not have permission to request an extension for this borrowing',
+            );
           }
         }
 
@@ -1137,7 +1469,14 @@ export class AssetBorrowService {
             requestedByUserId: user.id,
           },
           include: {
-            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            requestedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
           },
         });
 
@@ -1146,10 +1485,20 @@ export class AssetBorrowService {
     });
   }
 
-  async reviewExtension(extensionId: string, dto: ReviewBorrowExtensionDto, user: any) {
-    const allowedRoles = [UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER];
+  async reviewExtension(
+    extensionId: string,
+    dto: ReviewBorrowExtensionDto,
+    user: any,
+  ) {
+    const allowedRoles = [
+      UserRole.ASSET_CENTER_STAFF,
+      UserRole.ADMIN,
+      UserRole.MANAGER,
+    ];
     if (!allowedRoles.includes(user.role)) {
-      throw new BadRequestException('Only Asset Center Staff, Admin, or Manager can review extension requests');
+      throw new BadRequestException(
+        'Only Asset Center Staff, Admin, or Manager can review extension requests',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -1159,7 +1508,9 @@ export class AssetBorrowService {
       });
 
       if (!extension) {
-        throw new NotFoundException(`Borrow extension with ID ${extensionId} not found`);
+        throw new NotFoundException(
+          `Borrow extension with ID ${extensionId} not found`,
+        );
       }
 
       if (extension.status !== BorrowExtensionStatus.PENDING) {
@@ -1179,8 +1530,22 @@ export class AssetBorrowService {
             reviewedAt: now,
           },
           include: {
-            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            requestedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
+            reviewedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
           },
         });
 
@@ -1195,7 +1560,9 @@ export class AssetBorrowService {
         return updatedExtension;
       } else {
         if (!dto.rejectReason) {
-          throw new BadRequestException('Rejection reason is required when rejecting an extension request');
+          throw new BadRequestException(
+            'Rejection reason is required when rejecting an extension request',
+          );
         }
 
         const updatedExtension = await tx.borrowExtension.update({
@@ -1207,8 +1574,22 @@ export class AssetBorrowService {
             reviewedAt: now,
           },
           include: {
-            requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-            reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+            requestedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
+            reviewedByUser: {
+              select: {
+                id: true,
+                employeeId: true,
+                firstname: true,
+                lastname: true,
+              },
+            },
           },
         });
 
@@ -1227,7 +1608,9 @@ export class AssetBorrowService {
       });
 
       if (!extension) {
-        throw new NotFoundException(`Borrow extension with ID ${extensionId} not found`);
+        throw new NotFoundException(
+          `Borrow extension with ID ${extensionId} not found`,
+        );
       }
 
       if (extension.status !== BorrowExtensionStatus.PENDING) {
@@ -1236,10 +1619,17 @@ export class AssetBorrowService {
         );
       }
 
-      if (user.role === UserRole.DEPARTMENT_STAFF || user.role === UserRole.PARCEL_STAFF) {
-        const isOwner = extension.requestedByUserId === user.id || extension.borrowTransaction?.borrower_id === user.id;
+      if (
+        user.role === UserRole.DEPARTMENT_STAFF ||
+        user.role === UserRole.PARCEL_STAFF
+      ) {
+        const isOwner =
+          extension.requestedByUserId === user.id ||
+          extension.borrowTransaction?.borrower_id === user.id;
         if (!isOwner) {
-          throw new BadRequestException('You do not have permission to cancel this extension request');
+          throw new BadRequestException(
+            'You do not have permission to cancel this extension request',
+          );
         }
       }
 
@@ -1257,13 +1647,30 @@ export class AssetBorrowService {
       where: { borrowTransactionId },
       orderBy: { roundNumber: 'asc' },
       include: {
-        requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-        reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        requestedByUser: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstname: true,
+            lastname: true,
+          },
+        },
+        reviewedByUser: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstname: true,
+            lastname: true,
+          },
+        },
       },
     });
   }
 
-  async findAllExtensions(query: BorrowExtensionFilterDto, user?: any): Promise<PaginatedResult<any>> {
+  async findAllExtensions(
+    query: BorrowExtensionFilterDto,
+    user?: any,
+  ): Promise<PaginatedResult<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -1272,12 +1679,17 @@ export class AssetBorrowService {
 
     if (query.status) where.status = query.status;
     if (query.extensionType) where.extensionType = query.extensionType;
-    if (query.borrowTransactionId) where.borrowTransactionId = query.borrowTransactionId;
+    if (query.borrowTransactionId)
+      where.borrowTransactionId = query.borrowTransactionId;
 
     if (query.startDate || query.endDate) {
       where.createdAt = {
-        ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
-        ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+        ...(query.startDate
+          ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+          : {}),
+        ...(query.endDate
+          ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+          : {}),
       };
     }
 
@@ -1301,10 +1713,7 @@ export class AssetBorrowService {
         const targetUser = await this.prisma.user.findFirst({
           where: {
             deletedAt: null,
-            OR: [
-              { id: query.borrowerId },
-              { employeeId: query.borrowerId },
-            ],
+            OR: [{ id: query.borrowerId }, { employeeId: query.borrowerId }],
           },
         });
         where.borrowTransaction = {
@@ -1318,11 +1727,31 @@ export class AssetBorrowService {
       const search = query.search.trim();
       where.OR = [
         { reason: { contains: search, mode: 'insensitive' } },
-        { requestedByUser: { firstname: { contains: search, mode: 'insensitive' } } },
-        { requestedByUser: { lastname: { contains: search, mode: 'insensitive' } } },
-        { requestedByUser: { employeeId: { contains: search, mode: 'insensitive' } } },
-        { borrowTransaction: { borrowNo: { contains: search, mode: 'insensitive' } } },
-        { borrowTransaction: { asset: { name: { contains: search, mode: 'insensitive' } } } },
+        {
+          requestedByUser: {
+            firstname: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          requestedByUser: {
+            lastname: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          requestedByUser: {
+            employeeId: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          borrowTransaction: {
+            borrowNo: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          borrowTransaction: {
+            asset: { name: { contains: search, mode: 'insensitive' } },
+          },
+        },
       ];
     }
 
@@ -1333,15 +1762,37 @@ export class AssetBorrowService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          requestedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
-          reviewedByUser: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          requestedByUser: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstname: true,
+              lastname: true,
+            },
+          },
+          reviewedByUser: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstname: true,
+              lastname: true,
+            },
+          },
           borrowTransaction: {
             select: {
               id: true,
               borrowNo: true,
               expectedReturnDate: true,
               asset: { select: BORROW_ASSET_SELECT },
-              borrower: { select: { id: true, employeeId: true, firstname: true, lastname: true, section_id: true } },
+              borrower: {
+                select: {
+                  id: true,
+                  employeeId: true,
+                  firstname: true,
+                  lastname: true,
+                  section_id: true,
+                },
+              },
             },
           },
         },
@@ -1369,7 +1820,10 @@ export class AssetBorrowService {
       });
       if (refAsset) {
         if (!model) model = refAsset.model;
-        if (equipmentTypeId === undefined && refAsset.equipment_type_id !== null) {
+        if (
+          equipmentTypeId === undefined &&
+          refAsset.equipment_type_id !== null
+        ) {
           equipmentTypeId = refAsset.equipment_type_id;
         }
       }
@@ -1457,36 +1911,39 @@ export class AssetBorrowService {
         ca.noid ASC;
     `);
 
-    const candidates: BorrowRecommendationCandidateDto[] = rawRows.slice(0, limit).map((row, index) => {
-      const usageDays = Number(row.usage_days_90d) || 0;
-      const idleDays = Number(row.idle_days) || 0;
-      const borrowCount = Number(row.borrow_count_90d) || 0;
-      const isRecommended = index === 0;
+    const candidates: BorrowRecommendationCandidateDto[] = rawRows
+      .slice(0, limit)
+      .map((row, index) => {
+        const usageDays = Number(row.usage_days_90d) || 0;
+        const idleDays = Number(row.idle_days) || 0;
+        const borrowCount = Number(row.borrow_count_90d) || 0;
+        const isRecommended = index === 0;
 
-      let recommendationReason = '';
-      if (isRecommended) {
-        if (usageDays === 0 && borrowCount === 0) {
-          recommendationReason = '🌟 แนะนำเครื่องนี้: ครุภัณฑ์ใหม่พร้อมใช้งาน ยังไม่มีประวัติการยืมในรอบ 90 วัน';
-        } else {
-          recommendationReason = `🌟 แนะนำเครื่องนี้: ผ่านการใช้งานเพียง ${usageDays.toFixed(1)} วันในรอบ 90 วัน และจอดพักมาแล้ว ${Math.floor(idleDays)} วัน เหมาะสำหรับการหมุนเวียนใช้งาน`;
+        let recommendationReason = '';
+        if (isRecommended) {
+          if (usageDays === 0 && borrowCount === 0) {
+            recommendationReason =
+              '🌟 แนะนำเครื่องนี้: ครุภัณฑ์ใหม่พร้อมใช้งาน ยังไม่มีประวัติการยืมในรอบ 90 วัน';
+          } else {
+            recommendationReason = `🌟 แนะนำเครื่องนี้: ผ่านการใช้งานเพียง ${usageDays.toFixed(1)} วันในรอบ 90 วัน และจอดพักมาแล้ว ${Math.floor(idleDays)} วัน เหมาะสำหรับการหมุนเวียนใช้งาน`;
+          }
         }
-      }
 
-      return {
-        assetId: row.asset_id,
-        noid: row.noid,
-        name: row.name,
-        model: row.model,
-        serialNo: row.serial_no,
-        sectionName: row.section_name,
-        imageUrl: row.image_url,
-        usageDays90d: Number(usageDays.toFixed(1)),
-        idleDays: Number(idleDays.toFixed(1)),
-        borrowCount90d: borrowCount,
-        isRecommended,
-        recommendationReason,
-      };
-    });
+        return {
+          assetId: row.asset_id,
+          noid: row.noid,
+          name: row.name,
+          model: row.model,
+          serialNo: row.serial_no,
+          sectionName: row.section_name,
+          imageUrl: row.image_url,
+          usageDays90d: Number(usageDays.toFixed(1)),
+          idleDays: Number(idleDays.toFixed(1)),
+          borrowCount90d: borrowCount,
+          isRecommended,
+          recommendationReason,
+        };
+      });
 
     return {
       model,
@@ -1500,7 +1957,9 @@ export class AssetBorrowService {
   /**
    * Check if a significantly better alternative asset exists for Smart Swap Nudge.
    */
-  async checkSwapRecommendation(assetId: string): Promise<SwapCheckResponseDto> {
+  async checkSwapRecommendation(
+    assetId: string,
+  ): Promise<SwapCheckResponseDto> {
     const asset = await this.prisma.asset.findUnique({
       where: { id: assetId },
       include: {
@@ -1534,8 +1993,12 @@ export class AssetBorrowService {
          OR bt.created_at >= NOW() - INTERVAL '90 days');
     `);
 
-    const selectedUsageDays = Number(Number(selectedMetricsRows[0]?.usage_days_90d || 0).toFixed(1));
-    const selectedIdleDays = Number(Number(selectedMetricsRows[0]?.idle_days || 0).toFixed(1));
+    const selectedUsageDays = Number(
+      Number(selectedMetricsRows[0]?.usage_days_90d || 0).toFixed(1),
+    );
+    const selectedIdleDays = Number(
+      Number(selectedMetricsRows[0]?.idle_days || 0).toFixed(1),
+    );
 
     const selectedAssetSummary = {
       id: asset.id,
@@ -1565,7 +2028,9 @@ export class AssetBorrowService {
     }
 
     const bestAlternative = alternatives[0];
-    const daysDiff = Number((selectedUsageDays - bestAlternative.usageDays90d).toFixed(1));
+    const daysDiff = Number(
+      (selectedUsageDays - bestAlternative.usageDays90d).toFixed(1),
+    );
     const idleDiff = bestAlternative.idleDays - selectedIdleDays;
 
     // Swap Condition:
@@ -1600,4 +2065,3 @@ export class AssetBorrowService {
     };
   }
 }
-

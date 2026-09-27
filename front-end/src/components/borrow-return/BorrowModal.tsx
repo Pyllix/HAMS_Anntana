@@ -9,7 +9,7 @@ import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
 import { useAuthStore } from "../../stores/authStore";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
-import { clearSessionDraft } from "../../services/sessionDraftStorage.js";
+import { clearSessionDraft } from "../../services/sessionDraftStorage";
 
 export default function BorrowModal() {
   const queryClient = useQueryClient();

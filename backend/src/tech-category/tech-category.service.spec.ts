@@ -50,8 +50,14 @@ describe('TechCategoryService', () => {
   });
 
   it('should soft delete a tech category', async () => {
-    mockPrisma.techCategory.findFirst.mockResolvedValue({ id: 1, code: 'AIR_CON' });
-    mockPrisma.techCategory.update.mockResolvedValue({ id: 1, deleteAt: new Date() });
+    mockPrisma.techCategory.findFirst.mockResolvedValue({
+      id: 1,
+      code: 'AIR_CON',
+    });
+    mockPrisma.techCategory.update.mockResolvedValue({
+      id: 1,
+      deleteAt: new Date(),
+    });
 
     await service.remove(1);
     expect(mockPrisma.techCategory.update).toHaveBeenCalledWith({
@@ -61,7 +67,10 @@ describe('TechCategoryService', () => {
   });
 
   it('should restore a soft-deleted tech category', async () => {
-    mockPrisma.techCategory.findFirst.mockResolvedValue({ id: 1, deleteAt: new Date() });
+    mockPrisma.techCategory.findFirst.mockResolvedValue({
+      id: 1,
+      deleteAt: new Date(),
+    });
     mockPrisma.techCategory.update.mockResolvedValue({ id: 1, deleteAt: null });
 
     const result = await service.restore(1);

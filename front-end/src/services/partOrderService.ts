@@ -1,5 +1,5 @@
 import { apiClient } from "./apiClient";
-import { isSessionExpiredApiError } from "./serviceErrorPolicy.js";
+import { isSessionExpiredApiError } from "./serviceErrorPolicy";
 import type {
   PartOrder,
   UpdatePurchasingInfoDto,
@@ -8,7 +8,7 @@ import type {
 import {
   getAccountStorageKey,
   getCurrentSessionDraftAccountId,
-} from "./sessionDraftStorage.js";
+} from "./sessionDraftStorage";
 
 
 // ─── Initial Part Orders ──────────────────────────────────────────────────────

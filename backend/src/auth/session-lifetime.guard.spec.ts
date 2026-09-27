@@ -40,7 +40,7 @@ describe('SessionLifetimeGuard', () => {
     expect(service.enforceSession).toHaveBeenCalledWith('cookie-session', true);
   });
 
-  it('does not count bearer requests or requests without the activity marker', async () => {
+  it('uses cookie sessions only and counts activity only with the marker', async () => {
     service.enforceSession.mockResolvedValue({
       expiresAt: new Date('2026-09-25T01:00:00.000Z'),
       idleExpiresAt: new Date('2026-09-25T01:00:00.000Z'),
@@ -63,7 +63,6 @@ describe('SessionLifetimeGuard', () => {
     );
 
     expect(service.enforceSession.mock.calls).toEqual([
-      ['bearer-session', false],
       ['cookie-session', false],
     ]);
   });

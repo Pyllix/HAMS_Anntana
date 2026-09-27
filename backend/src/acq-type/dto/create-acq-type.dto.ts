@@ -2,7 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateAcqTypeDto {
-  @ApiProperty({ description: 'Name of the acquisition type', example: 'จัดซื้อจัดจ้าง e-bidding' })
+  @ApiProperty({
+    description: 'Name of the acquisition type',
+    example: 'จัดซื้อจัดจ้าง e-bidding',
+  })
   @IsString()
   @IsNotEmpty()
   name: string;

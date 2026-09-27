@@ -67,12 +67,42 @@ describe('ForecastService', () => {
 
     it('should calculate forecast and return response when historical data is sufficient', async () => {
       jest.spyOn(service as any, 'generateGeminiForecasts').mockResolvedValue([
-        { date: '2026-09', forecast: 40000, lower_bound: 35000, upper_bound: 45000 },
-        { date: '2026-10', forecast: 42000, lower_bound: 37000, upper_bound: 47000 },
-        { date: '2026-11', forecast: 44000, lower_bound: 39000, upper_bound: 49000 },
-        { date: '2026-12', forecast: 46000, lower_bound: 41000, upper_bound: 51000 },
-        { date: '2027-01', forecast: 48000, lower_bound: 43000, upper_bound: 53000 },
-        { date: '2027-02', forecast: 50000, lower_bound: 45000, upper_bound: 55000 },
+        {
+          date: '2026-09',
+          forecast: 40000,
+          lower_bound: 35000,
+          upper_bound: 45000,
+        },
+        {
+          date: '2026-10',
+          forecast: 42000,
+          lower_bound: 37000,
+          upper_bound: 47000,
+        },
+        {
+          date: '2026-11',
+          forecast: 44000,
+          lower_bound: 39000,
+          upper_bound: 49000,
+        },
+        {
+          date: '2026-12',
+          forecast: 46000,
+          lower_bound: 41000,
+          upper_bound: 51000,
+        },
+        {
+          date: '2027-01',
+          forecast: 48000,
+          lower_bound: 43000,
+          upper_bound: 53000,
+        },
+        {
+          date: '2027-02',
+          forecast: 50000,
+          lower_bound: 45000,
+          upper_bound: 55000,
+        },
       ]);
 
       mockPrismaService.section.findMany.mockResolvedValue([

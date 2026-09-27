@@ -2,7 +2,7 @@ import type { AxiosError } from "axios";
 import type { User } from "../types/TypeUser";
 import type { PreAuthStep } from "../types/AuthFlow";
 import { apiClient, invalidateCsrfToken } from "./apiClient";
-import { restoreServerSession } from "./sessionBootstrap.js";
+import { restoreServerSession } from "./sessionBootstrap";
 
 export interface SessionDeadlines {
   id: string;

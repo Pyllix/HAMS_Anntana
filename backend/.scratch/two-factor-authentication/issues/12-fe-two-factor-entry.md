@@ -32,3 +32,11 @@
 - Frontend `npm run lint` — passed.
 - Frontend `npm run build` — passed.
 - Edge browser flow against a local API stub — enrollment, recovery-code acknowledgement, direct-URL guard, TOTP and recovery login, trusted repeat login, expired trust, account switch, password-only role, reload secrecy, and pre-auth sign-out.
+
+## ทางเลือกปรับปรุงภายหลัง: ลดขนาด Frontend bundle
+
+- Build ปัจจุบันผ่าน แต่ Vite เตือนว่า JavaScript chunk ใหญ่กว่า 500 kB; ไฟล์ `dist/assets/index-B4faSg6a.js` มีขนาด 1,463,855 bytes ก่อนบีบอัด คำเตือนนี้ไม่ทำให้ระบบทำงานผิด แต่การเปิดแอปครั้งแรกอาจช้าบนเครือข่ายหรืออุปกรณ์ที่ช้า
+- จุดที่ควรเริ่ม: `front-end/src/router/routes.config.tsx` import หน้าธุรกิจทั้งหมดทันที และ `front-end/src/router/AppRouter.tsx` import หน้า Login/2FA ทันที จึงรวมโค้ดของหลายหน้าที่ผู้ใช้ยังไม่เปิดไว้ใน chunk แรก
+- แนวทาง: เปลี่ยน page imports เป็น `React.lazy(() => import(...))` หรือ route-level lazy loading และเพิ่ม `Suspense` พร้อม loading fallback จากนั้น build เพื่อเทียบขนาด initial chunk ก่อนและหลัง
+- ตรวจซ้ำด้วย browser flow: เปิดหน้า Login, enrollment/2FA, เข้าหน้าธุรกิจแต่ละ role, เปิด URL ตรง, refresh และเปลี่ยนหน้า เพื่อยืนยันว่า guard และ loading state ยังทำงานถูกต้อง
+- การเพิ่ม `build.chunkSizeWarningLimit` เปลี่ยนเพียงเกณฑ์แสดงคำเตือน ไม่ลดขนาดไฟล์หรือเวลาโหลด

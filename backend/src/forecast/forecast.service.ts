@@ -23,7 +23,6 @@ export type {
   ForecastResponse,
 };
 
-
 @Injectable()
 export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
@@ -169,10 +168,17 @@ export class ForecastService {
     const recentRows = rows.filter((r) => targetMonths.has(r.month));
 
     // คำนวณ Top Sections จากยอดรวมจริงในช่วง 1 ปีย้อนหลัง
-    const sectionTotals = new Map<string, { id: string; name: string; total_cost: number }>();
+    const sectionTotals = new Map<
+      string,
+      { id: string; name: string; total_cost: number }
+    >();
     for (const r of recentRows) {
       if (!sectionTotals.has(r.section_id)) {
-        sectionTotals.set(r.section_id, { id: r.section_id, name: r.section_name, total_cost: 0 });
+        sectionTotals.set(r.section_id, {
+          id: r.section_id,
+          name: r.section_name,
+          total_cost: 0,
+        });
       }
       sectionTotals.get(r.section_id)!.total_cost += r.total_cost;
     }
@@ -252,8 +258,9 @@ export class ForecastService {
     };
 
     try {
-      const assetRows = (!sectionId || sectionId === 'all')
-        ? await this.prisma.$queryRaw<AssetExpiryRow[]>`
+      const assetRows =
+        !sectionId || sectionId === 'all'
+          ? await this.prisma.$queryRaw<AssetExpiryRow[]>`
             SELECT 
               a.asset_id,
               a.name,
@@ -279,7 +286,7 @@ export class ForecastService {
               AND at.useful_life > 0
             ORDER BY a.price DESC;
           `
-        : await this.prisma.$queryRaw<AssetExpiryRow[]>`
+          : await this.prisma.$queryRaw<AssetExpiryRow[]>`
             SELECT 
               a.asset_id,
               a.name,
@@ -310,8 +317,12 @@ export class ForecastService {
       const totalActive = assetRows.length;
       const exceededRows = assetRows.filter((r) => r.is_exceeded);
       const exceededCount = exceededRows.length;
-      const exceededPct = totalActive > 0 ? Math.round((exceededCount / totalActive) * 100) : 0;
-      const totalReplacement = exceededRows.reduce((sum, r) => sum + r.price, 0);
+      const exceededPct =
+        totalActive > 0 ? Math.round((exceededCount / totalActive) * 100) : 0;
+      const totalReplacement = exceededRows.reduce(
+        (sum, r) => sum + r.price,
+        0,
+      );
 
       // จัดกลุ่มตามประเภทครุภัณฑ์ (types_summary)
       const typeMap = new Map<number, AssetTypeLifespanSummary>();
@@ -336,7 +347,11 @@ export class ForecastService {
 
       const typesSummary = Array.from(typeMap.values())
         .filter((t) => t.active_count > 0)
-        .sort((a, b) => b.replacement_value - a.replacement_value || b.exceeded_count - a.exceeded_count);
+        .sort(
+          (a, b) =>
+            b.replacement_value - a.replacement_value ||
+            b.exceeded_count - a.exceeded_count,
+        );
 
       // รายการเครื่องเด่นที่มีมูลค่าสูงหรือถึงอายุขัย (critical_assets)
       const criticalAssets: ExpiringAssetItem[] = assetRows
@@ -358,7 +373,8 @@ export class ForecastService {
         }));
 
       // ตัวคูณความเสี่ยงค่าซ่อมบำรุงตามความเสื่อมสภาพ (ครุภัณฑ์เกินอายุขัยมีสถิติค่าซ่อมสูงกว่าเครื่องปกติ +40.6%)
-      const riskFactor = Math.round((1.0 + (exceededPct / 100) * 0.20) * 100) / 100;
+      const riskFactor =
+        Math.round((1.0 + (exceededPct / 100) * 0.2) * 100) / 100;
 
       assetLifespan = {
         total_active_assets: totalActive,
@@ -448,7 +464,9 @@ export class ForecastService {
   ): Promise<ForecastItem[]> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.trim() === '') {
-      throw new Error('กรุณาระบุ GEMINI_API_KEY ในไฟล์ .env เพื่อใช้งานการพยากรณ์งบประมาณด้วย Google Gemini AI');
+      throw new Error(
+        'กรุณาระบุ GEMINI_API_KEY ในไฟล์ .env เพื่อใช้งานการพยากรณ์งบประมาณด้วย Google Gemini AI',
+      );
     }
 
     const configuredModel = process.env.GEMINI_MODEL?.trim();
@@ -459,7 +477,10 @@ export class ForecastService {
       'gemini-flash-latest',
     ];
     const candidateModels = configuredModel
-      ? [configuredModel, ...fallbackModels.filter((m) => m !== configuredModel)]
+      ? [
+          configuredModel,
+          ...fallbackModels.filter((m) => m !== configuredModel),
+        ]
       : fallbackModels;
 
     const multiHistory = history.map((h) => ({
@@ -477,7 +498,8 @@ export class ForecastService {
       : '';
 
     // คำนวณรายชื่อเดือนเป้าหมายที่ต้องการพยากรณ์ให้แน่นอนล่วงหน้า
-    const lastHistDate = history.length > 0 ? history[history.length - 1].date : '2026-09';
+    const lastHistDate =
+      history.length > 0 ? history[history.length - 1].date : '2026-09';
     const [lastYear, lastMonth] = lastHistDate.split('-').map(Number);
     const targetMonths: string[] = [];
     let curY = lastYear;
@@ -542,7 +564,10 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
           }),
           signal: AbortSignal.timeout(30000),
         });
@@ -559,22 +584,36 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
         }
 
         const parsed = JSON.parse(rawText);
-        if (!parsed.forecasts || !Array.isArray(parsed.forecasts) || parsed.forecasts.length === 0) {
-          throw new Error('รูปแบบข้อมูลที่ตอบกลับจาก Google Gemini AI ไม่ถูกต้อง');
+        if (
+          !parsed.forecasts ||
+          !Array.isArray(parsed.forecasts) ||
+          parsed.forecasts.length === 0
+        ) {
+          throw new Error(
+            'รูปแบบข้อมูลที่ตอบกลับจาก Google Gemini AI ไม่ถูกต้อง',
+          );
         }
 
         geminiForecasts = parsed.forecasts;
-        this.logger.log(`Gemini forecast successfully generated using model: ${model}`);
+        this.logger.log(
+          `Gemini forecast successfully generated using model: ${model}`,
+        );
         break; // สำเร็จแล้ว ออกจาก candidate loop
       } catch (err) {
         lastError = err;
-        this.logger.warn(`Gemini model ${model} failed (${err.message}). Trying fallback model...`);
+        this.logger.warn(
+          `Gemini model ${model} failed (${err.message}). Trying fallback model...`,
+        );
       }
     }
 
     if (geminiForecasts.length === 0) {
-      this.logger.error(`All Gemini candidate models failed. Last error: ${lastError?.message}`);
-      throw new Error(`การพยากรณ์ล้มเหลว: ${lastError?.message || 'ไม่สามารถติดต่อโมเดลใดๆ ได้'}`);
+      this.logger.error(
+        `All Gemini candidate models failed. Last error: ${lastError?.message}`,
+      );
+      throw new Error(
+        `การพยากรณ์ล้มเหลว: ${lastError?.message || 'ไม่สามารถติดต่อโมเดลใดๆ ได้'}`,
+      );
     }
 
     // สร้าง Map เพื่อตรวจเช็คว่า AI ส่งมาครบทุก targetMonth หรือไม่
@@ -589,7 +628,10 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
         return resultMap.get(m);
       }
       // หาก AI ข้ามเดือน ให้ประมาณการต่อเนื่องจากเดือนก่อนหน้า
-      const prev = idx > 0 ? resultMap.get(targetMonths[idx - 1]) : history[history.length - 1];
+      const prev =
+        idx > 0
+          ? resultMap.get(targetMonths[idx - 1])
+          : history[history.length - 1];
       const prevRepairs = prev?.repairs || prev?.repairs_cost || 50000;
       const prevAcq = prev?.acquisitions || prev?.acquisitions_cost || 30000;
       return {
@@ -618,7 +660,8 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
       })
       .sort((a, b) => b.amount - a.amount);
 
-    const totalDeptSpend = rankedDepts.reduce((sum, d) => sum + d.amount, 0) || 1;
+    const totalDeptSpend =
+      rankedDepts.reduce((sum, d) => sum + d.amount, 0) || 1;
     const deptWeights = rankedDepts.slice(0, 10).map((d) => ({
       id: d.id,
       name: d.name,
@@ -626,8 +669,11 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
     }));
 
     // คำนวณขอบเขตความสมเหตุสมผลของ acquisitions จากข้อมูลประวัติจริง เพื่อป้องกันไม่ให้ AI ใส่ยอดผิดสเกล (เช่น เอา 80 ล้านมาใส่)
-    const histAcqValues = history.map((h) => h.acquisitions_cost).filter((v) => v > 0);
-    const maxHistAcq = histAcqValues.length > 0 ? Math.max(...histAcqValues) : 70000;
+    const histAcqValues = history
+      .map((h) => h.acquisitions_cost)
+      .filter((v) => v > 0);
+    const maxHistAcq =
+      histAcqValues.length > 0 ? Math.max(...histAcqValues) : 70000;
     const maxAllowedAcq = Math.max(maxHistAcq * 2.5, 120000);
 
     // แปลงผลลัพธ์จาก Gemini AI 100% ให้เป็น ForecastItem
@@ -637,11 +683,19 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
       if (projectedAcquisitions > maxAllowedAcq) {
         projectedAcquisitions = Math.round(maxHistAcq * 1.1);
       }
-      const projectedTotal = Math.round(projectedRepairs + projectedAcquisitions);
-      const lowerBound = g.lower_bound && g.lower_bound < projectedTotal ? Math.round(g.lower_bound) : Math.round(projectedTotal * 0.88);
-      const upperBound = g.upper_bound && g.upper_bound > projectedTotal ? Math.round(g.upper_bound) : Math.round(projectedTotal * 1.14);
+      const projectedTotal = Math.round(
+        projectedRepairs + projectedAcquisitions,
+      );
+      const lowerBound =
+        g.lower_bound && g.lower_bound < projectedTotal
+          ? Math.round(g.lower_bound)
+          : Math.round(projectedTotal * 0.88);
+      const upperBound =
+        g.upper_bound && g.upper_bound > projectedTotal
+          ? Math.round(g.upper_bound)
+          : Math.round(projectedTotal * 1.14);
 
-      const nextMonth = parseInt(g.date.split('-')[1], 10) || (idx + 1);
+      const nextMonth = parseInt(g.date.split('-')[1], 10) || idx + 1;
 
       // กระจายงบประมาณที่ Gemini ทำนายลงสู่ระดับแผนก
       const futureRankings = deptWeights.slice(0, 7).map((dept, dIdx) => {
@@ -650,11 +704,15 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
         return { ...dept, effectiveWeight };
       });
 
-      const weightSum = futureRankings.reduce((sum, d) => sum + d.effectiveWeight, 0) || 1;
-      const deptRepairRatio = projectedTotal > 0 ? projectedRepairs / projectedTotal : 0.8;
+      const weightSum =
+        futureRankings.reduce((sum, d) => sum + d.effectiveWeight, 0) || 1;
+      const deptRepairRatio =
+        projectedTotal > 0 ? projectedRepairs / projectedTotal : 0.8;
 
       const rankings = futureRankings.map((dept) => {
-        const amount = Math.round(projectedTotal * (dept.effectiveWeight / weightSum));
+        const amount = Math.round(
+          projectedTotal * (dept.effectiveWeight / weightSum),
+        );
         const deptRepair = Math.round(amount * deptRepairRatio);
         return {
           id: dept.id,
@@ -666,11 +724,16 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
       });
 
       rankings.sort((a, b) => b.amount - a.amount);
-      const finalRankings: MonthlySectionRanking[] = rankings.map((r, rIdx) => ({
-        ...r,
-        rank: rIdx + 1,
-        percentage: projectedTotal > 0 ? Math.round((r.amount / projectedTotal) * 100) : 0,
-      }));
+      const finalRankings: MonthlySectionRanking[] = rankings.map(
+        (r, rIdx) => ({
+          ...r,
+          rank: rIdx + 1,
+          percentage:
+            projectedTotal > 0
+              ? Math.round((r.amount / projectedTotal) * 100)
+              : 0,
+        }),
+      );
 
       return {
         date: g.date,
