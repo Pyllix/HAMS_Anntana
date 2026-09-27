@@ -1,21 +1,10 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 import type {
   CreateRepairDto,
   AssetApiResponse,
   AssetInfo,
 } from "../types/TypeRepair";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-
-// Helper Function สำหรับสร้าง Authorization Header
-function getHeaders() {
-  const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 // Helper Function สำหรับแปลง Raw API Data เข้าสู่ UI Model
 const mapAssetApiToInfo = (data: AssetApiResponse): AssetInfo => {
@@ -36,9 +25,8 @@ const mapAssetApiToInfo = (data: AssetApiResponse): AssetInfo => {
 
 export async function getAssetByCode(assetCode: string): Promise<AssetInfo> {
   try {
-    const res = await axios.get(
-      `${BASE_URL}/asset?search=${encodeURIComponent(assetCode.trim())}&limit=10`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/asset?search=${encodeURIComponent(assetCode.trim())}&limit=10`,
     );
 
     const assetList: AssetApiResponse[] = res.data?.data ?? [];
@@ -66,7 +54,7 @@ export async function getAssetByCode(assetCode: string): Promise<AssetInfo> {
 
 export async function createRepairTicket(dto: CreateRepairDto): Promise<any> {
   try {
-    const res = await axios.post(`${BASE_URL}/repairs`, dto, getHeaders());
+    const res = await apiClient.post(`/repairs`, dto);
     return res.data;
   } catch (error: any) {
     if (error.response?.data?.message) {

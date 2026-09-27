@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 
 // แปล error message ดิบจาก API ของ borrow ให้เป็นข้อความที่อ่านเข้าใจง่ายขึ้น
 // (ครอบคลุมเคสที่พบได้บ่อย เช่น สถานะเปลี่ยนไปแล้ว/ถูกดำเนินการไปก่อนหน้า)
@@ -177,11 +177,9 @@ export interface ApproveBorrow {
 
 // ใข้ในการอนุมัติการยืม
 export async function approveBorrow(id: string): Promise<ApproveBorrow> {
-  const token = localStorage.getItem("token");
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/approve`,
+  const res = await apiClient.patch(
+    `/borrowings/${id}/approve`,
     {},
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   return res.data;
 }
@@ -191,33 +189,27 @@ export async function rejectBorrow(
   id: string,
   reason?: string,
 ): Promise<ApproveBorrow> {
-  const token = localStorage.getItem("token");
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/reject`,
+  const res = await apiClient.patch(
+    `/borrowings/${id}/reject`,
     { reason },
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   return res.data;
 }
 
 // ใช้ในการยืนยันส่งมอบครุภัณฑ์ให้ผู้ยืม (APPROVED -> BORROWED)
 export async function handoverAsset(id: string): Promise<ApproveBorrow> {
-  const token = localStorage.getItem("token");
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/handover`,
+  const res = await apiClient.patch(
+    `/borrowings/${id}/handover`,
     {},
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   return res.data;
 }
 
 // ใช้ในการรับงานไปเก็บครุภัณฑ์ที่แจ้งคืนแบบ online (PENDING_RETURN -> IN_PICKUP)
 export async function claimPickup(id: string): Promise<ApproveBorrow> {
-  const token = localStorage.getItem("token");
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/claim-pickup`,
+  const res = await apiClient.patch(
+    `/borrowings/${id}/claim-pickup`,
     {},
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   return res.data;
 }
@@ -232,27 +224,16 @@ export async function completeReturn(
   id: string,
   data: CompleteReturnReq,
 ): Promise<ApproveBorrow> {
-  const token = localStorage.getItem("token");
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/complete-return`,
+  const res = await apiClient.patch(
+    `/borrowings/${id}/complete-return`,
     data,
-    { headers: { Authorization: `Bearer ${token}` } },
   );
   return res.data;
 }
 
 export async function postBorrow(borrow: BorrowReq): Promise<BorrowRes> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.post(
-    `https://hams-anntana.onrender.com/borrowings`,
-    borrow,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.post(`/borrowings`, borrow);
 
   return res.data;
 }
@@ -261,17 +242,8 @@ export async function returnAsset(
   id: string,
   data: ReturnReq,
 ): Promise<ReturnRes> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/borrowings/${id}/return`,
-    data,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.patch(`/borrowings/${id}/return`, data);
 
   return res.data;
 }
@@ -280,12 +252,9 @@ export async function getAllBorrowHistory(params?: {
   limit?: number;
   page?: number;
 }): Promise<BorrowHistory[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(`https://hams-anntana.onrender.com/borrowings`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const res = await apiClient.get(`/borrowings`, {
+
     params,
   });
 

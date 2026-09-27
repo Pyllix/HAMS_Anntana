@@ -1,4 +1,5 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
+import { isSessionExpiredApiError } from "./serviceErrorPolicy.js";
 import type {
   PartOrder,
   UpdatePurchasingInfoDto,
@@ -9,16 +10,6 @@ import {
   getCurrentSessionDraftAccountId,
 } from "./sessionDraftStorage.js";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-
-function getHeaders() {
-  const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 // ─── Initial Part Orders ──────────────────────────────────────────────────────
 const defaultFallbackOrders: PartOrder[] = [
@@ -146,9 +137,8 @@ export async function getPartOrders(): Promise<PartOrder[]> {
   ensureLocalOrdersForCurrentAccount();
   try {
     // 1. ลองดึงข้อมูลประวัติการสั่งซื้อ/รับเข้าอะไหล่จริงจาก Backend
-    const res = await axios.get(
-      `${BASE_URL}/spare-parts/stock-in-history?limit=100`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/spare-parts/stock-in-history?limit=100`,
     );
     const data = res.data;
     const historyList = Array.isArray(data) ? data : (data?.data ?? []);
@@ -198,9 +188,8 @@ export async function getPartOrders(): Promise<PartOrder[]> {
 export async function getPartOrderById(id: number): Promise<PartOrder> {
   ensureLocalOrdersForCurrentAccount();
   try {
-    const res = await axios.get(
-      `${BASE_URL}/part-orders/${id}`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/part-orders/${id}`,
     );
     return res.data;
   } catch {
@@ -216,15 +205,15 @@ export async function updatePurchasingInfo(
 ): Promise<PartOrder> {
   ensureLocalOrdersForCurrentAccount();
   try {
-    const res = await axios.patch(
-      `${BASE_URL}/part-orders/${id}/purchasing-info`,
+    const res = await apiClient.patch(
+      `/part-orders/${id}/purchasing-info`,
       dto,
-      getHeaders(),
     );
     const updated = res.data;
     localOrders = localOrders.map((o) => (o.id === id ? { ...o, ...updated } : o));
     return updated;
-  } catch {
+  } catch (err) {
+    if (isSessionExpiredApiError(err)) throw err;
     localOrders = localOrders.map((o) =>
       o.id === id
         ? {
@@ -246,15 +235,15 @@ export async function updateOrderStatus(
   ensureLocalOrdersForCurrentAccount();
   const today = new Date().toISOString().split("T")[0];
   try {
-    const res = await axios.patch(
-      `${BASE_URL}/part-orders/${id}/status`,
+    const res = await apiClient.patch(
+      `/part-orders/${id}/status`,
       { status, orderDate: today },
-      getHeaders(),
     );
     const updated = res.data;
     localOrders = localOrders.map((o) => (o.id === id ? { ...o, ...updated } : o));
     return updated;
-  } catch {
+  } catch (err) {
+    if (isSessionExpiredApiError(err)) throw err;
     localOrders = localOrders.map((o) =>
       o.id === id
         ? {

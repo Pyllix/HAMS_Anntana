@@ -1,4 +1,5 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
+import { isSessionExpiredApiError } from "./serviceErrorPolicy.js";
 import type {
   Sparepart,
   SparepartGroup,
@@ -12,16 +13,6 @@ import {
   getCurrentSessionDraftAccountId,
 } from "./sessionDraftStorage.js";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-
-function getHeaders() {
-  const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 const STORAGE_KEY = "hams_spareparts_storage_v1";
 
@@ -67,9 +58,8 @@ const defaultGroups: SparepartGroup[] = [
 
 export async function getSparepartGroups(): Promise<SparepartGroup[]> {
   try {
-    const res = await axios.get(
-      `${BASE_URL}/spare-part-groups?limit=100`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/spare-part-groups?limit=100`,
     );
     const data = res.data;
     const items = Array.isArray(data) ? data : (data?.data ?? []);
@@ -85,9 +75,8 @@ export async function getSparepartGroups(): Promise<SparepartGroup[]> {
 export async function getSpareParts(): Promise<Sparepart[]> {
   ensureLocalSparepartsForCurrentAccount();
   try {
-    const res = await axios.get(
-      `${BASE_URL}/spare-parts?limit=100`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/spare-parts?limit=100`,
     );
     const data = res.data;
     const items: Sparepart[] = Array.isArray(data) ? data : (data?.data ?? []);
@@ -112,9 +101,8 @@ export async function getSpareParts(): Promise<Sparepart[]> {
 export async function getSparepartById(id: number): Promise<Sparepart> {
   ensureLocalSparepartsForCurrentAccount();
   try {
-    const res = await axios.get(
-      `${BASE_URL}/spare-parts/${id}`,
-      getHeaders(),
+    const res = await apiClient.get(
+      `/spare-parts/${id}`,
     );
     return res.data;
   } catch {
@@ -141,10 +129,9 @@ export async function createSparepart(
   }
 
   try {
-    const res = await axios.post(
-      `${BASE_URL}/spare-parts`,
+    const res = await apiClient.post(
+      `/spare-parts`,
       payload,
-      getHeaders(),
     );
     const saved: Sparepart = {
       ...res.data,
@@ -154,6 +141,7 @@ export async function createSparepart(
     saveSparepartsToStorage(localSpareparts);
     return saved;
   } catch (err) {
+    if (isSessionExpiredApiError(err)) throw err;
     console.warn("Backend create spare part failed, saving locally:", err);
     const fallbackItem: Sparepart = {
       id: Date.now(),
@@ -187,10 +175,9 @@ export async function updateSparepart(
   if (dto.groupId !== undefined) payload.groupId = Number(dto.groupId);
 
   try {
-    const res = await axios.patch(
-      `${BASE_URL}/spare-parts/${id}`,
+    const res = await apiClient.patch(
+      `/spare-parts/${id}`,
       payload,
-      getHeaders(),
     );
     const updated: Sparepart = {
       ...res.data,
@@ -205,6 +192,7 @@ export async function updateSparepart(
     saveSparepartsToStorage(localSpareparts);
     return updated;
   } catch (err) {
+    if (isSessionExpiredApiError(err)) throw err;
     console.warn("Backend update failed, updating locally:", err);
     const exists = localSpareparts.some((i) => i.id === id);
     const fallback = { id, ...dto } as Sparepart;
@@ -224,11 +212,11 @@ export async function updateSparepart(
 export async function deleteSparepart(id: number): Promise<void> {
   ensureLocalSparepartsForCurrentAccount();
   try {
-    await axios.delete(
-      `${BASE_URL}/spare-parts/${id}`,
-      getHeaders(),
+    await apiClient.delete(
+      `/spare-parts/${id}`,
     );
   } catch (err) {
+    if (isSessionExpiredApiError(err)) throw err;
     console.warn("Backend delete failed, removing locally:", err);
   }
   localSpareparts = localSpareparts.filter((i) => i.id !== id);
@@ -240,26 +228,23 @@ export async function deleteSparepart(id: number): Promise<void> {
 export async function stockInSparepart(
   dto: StockInSparepartDto,
 ): Promise<any> {
-  const res = await axios.post(
-    `${BASE_URL}/spare-parts/stock-in`,
+  const res = await apiClient.post(
+    `/spare-parts/stock-in`,
     dto,
-    getHeaders(),
   );
   return res.data;
 }
 
 export async function getLowStockSummary(): Promise<any> {
-  const res = await axios.get(
-    `${BASE_URL}/spare-parts/low-stock`,
-    getHeaders(),
+  const res = await apiClient.get(
+    `/spare-parts/low-stock`,
   );
   return res.data;
 }
 
 export async function getSparepartTransactions(id: number): Promise<any[]> {
-  const res = await axios.get(
-    `${BASE_URL}/spare-parts/${id}/transactions`,
-    getHeaders(),
+  const res = await apiClient.get(
+    `/spare-parts/${id}/transactions`,
   );
   const data = res.data;
   return Array.isArray(data) ? data : (data?.data ?? []);
@@ -273,7 +258,7 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
   const query = jobNo.trim();
 
   try {
-    const res = await axios.get(`${BASE_URL}/repairs?limit=100`, getHeaders());
+    const res = await apiClient.get(`/repairs?limit=100`);
     const data = res.data;
     const items = Array.isArray(data) ? data : (data?.data ?? []);
 
@@ -292,9 +277,8 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
     // ดึงรายละเอียดข้อมูลเต็ม
     let repairData = found;
     try {
-      const fullDetailRes = await axios.get(
-        `${BASE_URL}/repairs/${found.id}`,
-        getHeaders(),
+      const fullDetailRes = await apiClient.get(
+        `/repairs/${found.id}`,
       );
       repairData = fullDetailRes.data || found;
     } catch (err) {
@@ -312,7 +296,7 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
 
     return {
       ...repairData,
-      isCompleted: isAlreadyCompleted, 
+      isCompleted: isAlreadyCompleted,
     };
   } catch (err) {
     console.warn("Error fetching repair data:", err);
@@ -351,10 +335,9 @@ export async function returnSparepart(
     qty: parsedQty,
   };
 
-  const res = await axios.post(
-    `${BASE_URL}/repairs/${repairId}/spare-parts/return`,
+  const res = await apiClient.post(
+    `/repairs/${repairId}/spare-parts/return`,
     payload,
-    getHeaders(),
   );
   return res.data;
 }
