@@ -1,23 +1,24 @@
+import { useEffect, useState } from "react";
 import {
   createBrowserRouter,
   Navigate,
   RouterProvider,
 } from "react-router-dom";
 import Login from "../pages/Login";
-import ProtectedRoute from "../router/ProtectedRoute";
+import TwoFactorEnrollment from "../pages/TwoFactorEnrollment";
+import TwoFactorLogin from "../pages/TwoFactorLogin";
+import ProtectedRoute, {
+  AuthEntryRoute,
+  PreAuthRoute,
+} from "../router/ProtectedRoute";
 import AppLayout from "../layout/AppLayout";
-import AdminBorrowReturn from "../pages/AssetCenterBorrowReturn";
-import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
-import UserBorrowReturn from "../pages/DepartMentBorrowReturn";
+
 import { APP_ROUTE } from "../router/routes.config";
 import Spinner from "../components/loader/Spinner";
-import {
-  associateSessionDraftAccount,
-  initializeSessionDraftTab,
-} from "../services/sessionDraftStorage";
-import { getCurrentSession } from "../services/authService";
-import { publishAuthMessage } from "../services/authBroadcast";
+import { initializeSessionDraftTab } from "../services/sessionDraftStorage";
+import { getCurrentAuthState } from "../services/authService";
+import { establishClientSession } from "../services/clientAuthState";
 import SessionLifecycle from "../components/auth/SessionLifecycle";
 
 function RootRedirect() {
@@ -34,7 +35,30 @@ function RootRedirect() {
 }
 
 const router = createBrowserRouter([
-  { path: "/login", element: <Login /> },
+  {
+    path: "/login",
+    element: (
+      <AuthEntryRoute>
+        <Login />
+      </AuthEntryRoute>
+    ),
+  },
+  {
+    path: "/2fa/enroll",
+    element: (
+      <PreAuthRoute requiredStep="ENROLLMENT">
+        <TwoFactorEnrollment />
+      </PreAuthRoute>
+    ),
+  },
+  {
+    path: "/2fa/verify",
+    element: (
+      <PreAuthRoute requiredStep="TOTP">
+        <TwoFactorLogin />
+      </PreAuthRoute>
+    ),
+  },
   {
     element: <ProtectedRoute />,
     children: [
@@ -59,8 +83,9 @@ const router = createBrowserRouter([
 
 export default function AppRouter() {
   const [isInitializing, setIsInitializing] = useState(true);
-  const login = useAuthStore((state) => state.login);
+
   const logout = useAuthStore((state) => state.logout);
+  const enterPreAuth = useAuthStore((state) => state.enterPreAuth);
 
   useEffect(() => {
     let active = true;
@@ -68,18 +93,13 @@ export default function AppRouter() {
     const initializeAuth = async () => {
       try {
         await initializeSessionDraftTab();
-        const current = await getCurrentSession();
+        const current = await getCurrentAuthState();
         if (!active) return;
 
-        if (current) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("userId");
-          associateSessionDraftAccount(current.user.id);
-          login(current.user, current.session);
-          publishAuthMessage({
-            type: "ACCOUNT_CHANGED",
-            userId: current.user.id,
-          });
+        if (current.kind === "authenticated") {
+          establishClientSession(current);
+        } else if (current.kind === "pre-auth") {
+          enterPreAuth(current.step);
         } else {
           logout();
         }
@@ -95,7 +115,7 @@ export default function AppRouter() {
     return () => {
       active = false;
     };
-  }, [login, logout]);
+  }, [logout, enterPreAuth]);
 
   if (isInitializing) {
     return (

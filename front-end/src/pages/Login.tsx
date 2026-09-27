@@ -2,12 +2,12 @@ import { Box, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { authLogin, getLoginErrorMessage } from "../services/authService";
 import { useAuthStore } from "../stores/authStore";
+import { routeForPreAuthStep } from "../types/AuthFlow";
 import { useNavigate } from "react-router-dom";
 import Spinner from "../components/loader/Spinner";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useToastStore } from "../stores/useToastStore";
-import { associateSessionDraftAccount } from "../services/sessionDraftStorage";
-import { publishAuthMessage } from "../services/authBroadcast";
+import { establishClientSession } from "../services/clientAuthState";
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -15,7 +15,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
-  const login = useAuthStore((state) => state.login);
+  const enterPreAuth = useAuthStore((state) => state.enterPreAuth);
   const showToast = useToastStore((state) => state.showToast);
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -27,15 +27,14 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const current = await authLogin(formData.email, formData.password);
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-      associateSessionDraftAccount(current.user.id);
-      login(current.user, current.session);
-      publishAuthMessage({
-        type: "ACCOUNT_CHANGED",
-        userId: current.user.id,
-      });
+      const result = await authLogin(formData.email, formData.password);
+      if (result.kind === "pre-auth") {
+        enterPreAuth(result.step);
+        navigate(routeForPreAuthStep(result.step), { replace: true });
+        return;
+      }
+
+      establishClientSession(result);
       showToast("success", "เข้าสู่ระบบสำเร็จ");
       navigate("/", { replace: true });
     } catch (error) {
