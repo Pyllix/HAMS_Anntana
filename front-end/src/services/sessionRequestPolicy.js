@@ -15,3 +15,7 @@ export function canStartApiRequest(
   const requestKey = method.toUpperCase() + " " + path;
   return PUBLIC_SESSION_REQUESTS.has(requestKey) || isAuthenticated;
 }
+
+export function isSessionExpiredResponse(status, code) {
+  return status === 401 && code === "SESSION_EXPIRED";
+}

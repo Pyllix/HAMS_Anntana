@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canStartApiRequest } from "./sessionRequestPolicy.js";
+import { canStartApiRequest, isSessionExpiredResponse } from "./sessionRequestPolicy.js";
 
 test("protected API reads and writes require a confirmed session", () => {
   assert.equal(canStartApiRequest("GET", "/assets", false), false);
@@ -17,4 +17,9 @@ test("session bootstrap and explicit user lookup can run before authentication",
 
 test("sign-out can clear a stale server session", () => {
   assert.equal(canStartApiRequest("POST", "/auth/sign-out", false), true);
+});
+test("only the server session-expired response triggers expiry handling", () => {
+  assert.equal(isSessionExpiredResponse(401, "SESSION_EXPIRED"), true);
+  assert.equal(isSessionExpiredResponse(401, "INVALID_CREDENTIALS"), false);
+  assert.equal(isSessionExpiredResponse(403, "SESSION_EXPIRED"), false);
 });

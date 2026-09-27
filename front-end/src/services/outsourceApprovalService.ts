@@ -1,4 +1,4 @@
-import axios from "axios";
+import { createApiClient } from "./apiClient";
 import type {
   OutsourceApprovalDecision,
   OutsourceApprovalRequest,
@@ -6,14 +6,7 @@ import type {
 } from "../types/TypeOutsourceApproval";
 import type { ApiRepairJob } from "./repairApiService";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-const api = axios.create({ baseURL: BASE_URL, timeout: 30000 });
-
-function config(signal?: AbortSignal) {
-  const token = localStorage.getItem("token");
-  if (!token) throw new Error("กรุณาเข้าสู่ระบบใหม่ก่อนทำรายการ");
-  return { signal, headers: { Authorization: `Bearer ${token}` } };
-}
+const api = createApiClient({ timeout: 30000 });
 
 function requestNo(jobNo: string): string {
   return `OUT-${jobNo.replace(/^[A-Z]+-/, "")}`;
@@ -66,7 +59,7 @@ async function getOutsourceJobIds(signal?: AbortSignal): Promise<string[]> {
       data: Array<{ id: string }>;
       meta: { totalPages: number };
     }>("/repairs", {
-      ...config(signal),
+      signal,
       params: { page, limit: 100, stepActionType: "OUTSOURCE" },
     });
     if (!Array.isArray(data.data)) {
@@ -89,7 +82,7 @@ export async function getOutsourceApprovalRequests(
       ids.slice(offset, offset + 6).map(async (id) => {
         const { data } = await api.get<ApiRepairJob>(
           `/repairs/${encodeURIComponent(id)}`,
-          config(signal),
+          { signal },
         );
         return mapRequest(data);
       }),
@@ -126,7 +119,7 @@ export async function approveOutsourceRequest(
         decision.note?.trim() ||
         "เจ้าหน้าที่พัสดุอนุมัติส่งซ่อมบริษัทภายนอกแล้ว",
     },
-    config(),
+    {},
   );
 }
 
@@ -139,7 +132,7 @@ export async function rejectOutsourceRequest(
   await api.patch(
     `/repairs/${encodeURIComponent(id)}/steps/reject`,
     { reason },
-    config(),
+    {},
   );
 }
 

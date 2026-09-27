@@ -1,6 +1,7 @@
 import type { AxiosError } from "axios";
 import type { User } from "../types/TypeUser";
 import { apiClient, invalidateCsrfToken } from "./apiClient";
+import { restoreServerSession } from "./sessionBootstrap.js";
 
 export interface SessionDeadlines {
   id: string;
@@ -94,15 +95,10 @@ export async function authLogin(
 }
 
 export async function getCurrentSession(): Promise<AuthenticatedSession | null> {
-  const response = await apiClient.get<SessionResponse>("/auth/session");
-  const { session, user: sessionUser } = response.data;
-  if (!session || !sessionUser?.id || session.userId !== sessionUser.id) return null;
-
-  const user = await loadUser(session.userId);
-  return {
-    user,
-    session,
-  };
+  return (await restoreServerSession(
+    () => apiClient.get<SessionResponse>("/auth/session"),
+    loadUser,
+  )) as AuthenticatedSession | null;
 }
 
 export async function refreshSessionWindow(

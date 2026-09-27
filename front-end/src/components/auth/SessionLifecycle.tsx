@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
 import { refreshSessionWindow } from "../../services/authService";
+import { clearClientSessionState } from "../../services/clientSessionCleanup.js";
 import {
   clearSessionDrafts,
   hasSessionDrafts,
@@ -12,6 +13,10 @@ import {
   subscribeAuthMessages,
 } from "../../services/authBroadcast";
 import type { AuthBroadcastMessage } from "../../services/authBroadcast";
+import {
+  createSessionExpiryHandler,
+  subscribeToSessionExpiry,
+} from "../../services/sessionExpiryFlow.js";
 
 const WARNING_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 const ACTIVITY_REFRESH_INTERVAL_MS = 15 * 1000;
@@ -33,11 +38,12 @@ function clearClientSession(
   queryClient: QueryClient,
   options: ClearSessionOptions = {},
 ): void {
-  if (options.clearDrafts) clearSessionDrafts();
-  queryClient.clear();
-  useAuthStore.getState().logout();
-  if (options.broadcast) publishAuthMessage(options.broadcast);
-  redirectToLogin();
+  clearClientSessionState(queryClient, options, {
+    clearDrafts: clearSessionDrafts,
+    logout: () => useAuthStore.getState().logout(),
+    publish: publishAuthMessage,
+    redirectToLogin,
+  });
 }
 
 export default function SessionLifecycle() {
@@ -53,13 +59,12 @@ export default function SessionLifecycle() {
   const pendingActivityRefresh = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const handleWindowExpiry = () => {
-      if (!useAuthStore.getState().isAuthenticated) return;
-      setShowWarning(false);
-      clearClientSession(queryClient, {
-        broadcast: { type: "SESSION_EXPIRED" },
-      });
-    };
+    const handleWindowExpiry = createSessionExpiryHandler({
+      isAuthenticated: () => useAuthStore.getState().isAuthenticated,
+      hideWarning: () => setShowWarning(false),
+      clearSession: (options) => clearClientSession(queryClient, options),
+    });
+    const unsubscribeExpiry = subscribeToSessionExpiry(window, handleWindowExpiry);
 
     const unsubscribe = subscribeAuthMessages((message) => {
       const currentUserId = useAuthStore.getState().user?.id;
@@ -75,9 +80,8 @@ export default function SessionLifecycle() {
       }
     });
 
-    window.addEventListener("hams:session-expired", handleWindowExpiry);
     return () => {
-      window.removeEventListener("hams:session-expired", handleWindowExpiry);
+      unsubscribeExpiry();
       unsubscribe();
     };
   }, [queryClient]);

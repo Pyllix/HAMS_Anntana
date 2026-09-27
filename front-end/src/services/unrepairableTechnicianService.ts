@@ -1,4 +1,4 @@
-import axios from "axios";
+import { createApiClient } from "./apiClient";
 import type { UnrepairableJobDto } from "../types/TypeUnrepairableReceipt";
 
 export interface TechnicianUnrepairableJob extends UnrepairableJobDto {
@@ -11,15 +11,10 @@ export interface TechnicianUnrepairableJob extends UnrepairableJobDto {
   mechanicRepairs?: { user?: { id: string; firstname?: string; lastname?: string } }[];
 }
 
-const api = axios.create({ baseURL: "https://hams-anntana.onrender.com", timeout: 30000 });
-function config(signal?: AbortSignal) {
-  const token = localStorage.getItem("token");
-  if (!token) throw new Error("กรุณาเข้าสู่ระบบใหม่");
-  return { signal, headers: { Authorization: `Bearer ${token}` } };
-}
+const api = createApiClient({ timeout: 30000 });
 
 export async function getTechnicianUnrepairableJob(id: string, signal?: AbortSignal): Promise<TechnicianUnrepairableJob> {
-  const { data } = await api.get<TechnicianUnrepairableJob>(`/repairs/${encodeURIComponent(id)}`, config(signal));
+  const { data } = await api.get<TechnicianUnrepairableJob>(`/repairs/${encodeURIComponent(id)}`, { signal });
   return data;
 }
 
@@ -34,5 +29,5 @@ export function canHandOverUnrepairable(job: TechnicianUnrepairableJob): boolean
 export async function handOverUnrepairable(id: string, note: string): Promise<void> {
   const job = await getTechnicianUnrepairableJob(id);
   if (!canHandOverUnrepairable(job)) throw new Error("งานนี้ไม่อยู่ในขั้นรอช่างส่งคืน อาจส่งคืนแล้วหรือสถานะเปลี่ยนไป กรุณาโหลดข้อมูลใหม่");
-  await api.patch(`/repairs/${encodeURIComponent(id)}/steps/next`, { note: note.trim() || "ช่างนำส่งครุภัณฑ์ให้พัสดุเรียบร้อย" }, config());
+  await api.patch(`/repairs/${encodeURIComponent(id)}/steps/next`, { note: note.trim() || "ช่างนำส่งครุภัณฑ์ให้พัสดุเรียบร้อย" }, {});
 }

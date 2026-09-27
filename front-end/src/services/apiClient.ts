@@ -1,10 +1,12 @@
 import axios, {
   AxiosError,
   type AxiosInstance,
+  type CreateAxiosDefaults,
   type InternalAxiosRequestConfig,
 } from "axios";
 import { useAuthStore } from "../stores/authStore";
 import { canStartApiRequest } from "./sessionRequestPolicy.js";
+import { dispatchSessionExpiryIfNeeded } from "./sessionExpiryFlow.js";
 
 export const API_BASE_PATH = "/api";
 const RENDER_API_HOST = "hams-anntana.onrender.com";
@@ -112,12 +114,12 @@ async function prepareRequest(
 
 function handleResponseError(error: AxiosError): Promise<never> {
   const responseData = error.response?.data as { code?: string } | undefined;
-  if (
-    error.response?.status === 401 &&
-    responseData?.code === "SESSION_EXPIRED" &&
-    typeof window !== "undefined"
-  ) {
-    window.dispatchEvent(new Event("hams:session-expired"));
+  if (typeof window !== "undefined") {
+    dispatchSessionExpiryIfNeeded(
+      window,
+      error.response?.status,
+      responseData?.code,
+    );
   }
   return Promise.reject(error);
 }
@@ -130,7 +132,15 @@ function configureClient(client: AxiosInstance): AxiosInstance {
 
 // Legacy services still import Axios directly. Normalize their API URLs and
 // attach cookies/CSRF here until Ticket 11 removes those call-site tokens.
+export function createApiClient(
+  options: Omit<CreateAxiosDefaults, "baseURL" | "withCredentials"> = {},
+): AxiosInstance {
+  return configureClient(
+    axios.create({ ...options, baseURL: API_BASE_PATH, withCredentials: true }),
+  );
+}
+
+// Existing services using the default Axios export inherit the same transition
+// rules while Ticket 11 moves their call sites to this explicit factory.
 configureClient(axios);
-export const apiClient = configureClient(
-  axios.create({ baseURL: API_BASE_PATH, withCredentials: true }),
-);
+export const apiClient = createApiClient();

@@ -1,19 +1,14 @@
-import { useState } from "react";
 import { LogOut } from "lucide-react";
 import NotificationBell from "../components/notifications/NotificationBell";
 import { matchPath, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
-import { revokeCurrentSession } from "../services/authService";
-import { clearSessionDrafts } from "../services/sessionDraftStorage";
-import { publishAuthMessage } from "../services/authBroadcast";
+import useSignOut from "../hooks/useSignOut";
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
+  const { signOut, isSigningOut, signOutError } = useSignOut();
   const { pathname } = useLocation();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState("");
 
   const currentRoute = APP_ROUTE.find((route) => {
     const routePattern = route.path.startsWith("/")
@@ -23,22 +18,6 @@ export default function Header() {
   });
   const headerTitle = currentRoute?.title ?? "ระบบการจัดการ";
   const isRepairWorkPage = pathname === "/accept-work";
-
-  const handleSignOut = async () => {
-    setIsSigningOut(true);
-    setSignOutError("");
-    try {
-      await revokeCurrentSession();
-      clearSessionDrafts();
-      logout();
-      publishAuthMessage({ type: "SIGNED_OUT" });
-      window.location.replace("/login");
-    } catch {
-      setSignOutError("ออกจากระบบไม่สำเร็จ กรุณาลองอีกครั้ง");
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
 
   return (
     <header className="sticky top-0 z-20 flex w-full shrink-0 items-center justify-between bg-bg-component px-4 py-3 shadow-sm md:px-6 lg:px-8">
@@ -67,7 +46,7 @@ export default function Header() {
           <div className="flex flex-col items-end">
             <button
               type="button"
-              onClick={() => void handleSignOut()}
+              onClick={() => void signOut()}
               disabled={isSigningOut}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
