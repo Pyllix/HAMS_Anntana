@@ -61,7 +61,7 @@ function TextField({
         maxLength={maxLength}
         autoComplete={autoComplete}
         inputMode={inputMode}
-        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
       />
     </label>
   );
@@ -191,7 +191,7 @@ export default function AccountSecurity() {
     <div className="mx-auto flex max-w-4xl flex-col gap-5">
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-indigo-600" />
+          <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-emerald-600" />
           <div>
             <h2 className="text-xl font-bold text-slate-900">ความปลอดภัยบัญชี</h2>
             <p className="mt-1 text-sm text-slate-600">
@@ -207,7 +207,7 @@ export default function AccountSecurity() {
               </p>
             )}
             {status?.required && (
-              <p className="mt-2 text-sm text-indigo-800">
+              <p className="mt-2 text-sm text-emerald-800">
                 Role นี้ต้องใช้ 2FA เพื่อเข้าใช้งาน และไม่มีตัวเลือกปิด 2FA
               </p>
             )}
@@ -226,7 +226,7 @@ export default function AccountSecurity() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-indigo-600" />
+          <KeyRound className="h-5 w-5 text-emerald-600" />
           <h3 className="text-lg font-semibold text-slate-900">เปลี่ยน Authenticator</h3>
         </div>
         {!status?.enrolled || loadingStatus ? (
@@ -240,7 +240,7 @@ export default function AccountSecurity() {
             </div>
             <TextField label="รหัส 6 หลักจาก Authenticator ใหม่" value={replacementCode} onChange={setReplacementCode} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
             <div className="flex flex-wrap gap-3">
-              <button disabled={busy || replacementCode.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังยืนยัน..." : "ยืนยัน Authenticator ใหม่"}</button>
+              <button disabled={busy || replacementCode.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังยืนยัน..." : "ยืนยัน Authenticator ใหม่"}</button>
               <button type="button" disabled={busy} onClick={() => { setReplacementUri(""); setReplacementCode(""); setNotice(""); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">ยกเลิกและซ่อน Secret</button>
             </div>
           </form>
@@ -249,7 +249,7 @@ export default function AccountSecurity() {
             <p className="text-sm text-slate-600">ต้องยืนยันรหัสผ่านและ TOTP ปัจจุบันก่อน ระบบจะใช้ Authenticator ใหม่หลังยืนยันรหัสจากแอปใหม่แล้วเท่านั้น</p>
             <TextField label="รหัสผ่านปัจจุบัน" value={currentPassword} onChange={setCurrentPassword} type="password" autoComplete="current-password" />
             <TextField label="TOTP ปัจจุบัน" value={currentTotp} onChange={setCurrentTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            <button disabled={busy || currentPassword.length === 0 || currentTotp.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังตรวจสอบ..." : "เริ่มเปลี่ยน Authenticator"}</button>
+            <button disabled={busy || currentPassword.length === 0 || currentTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังตรวจสอบ..." : "เริ่มเปลี่ยน Authenticator"}</button>
           </form>
         )}
       </section>
@@ -270,7 +270,7 @@ export default function AccountSecurity() {
           <form onSubmit={handleRegenerateCodes} className="mt-3 space-y-4">
             <p className="text-sm text-slate-600">ต้องยืนยัน TOTP ปัจจุบันทุกครั้ง แม้ Browser นี้จะถูกเชื่อถือสำหรับการ Login</p>
             <TextField label="TOTP ปัจจุบัน" value={recoveryTotp} onChange={setRecoveryTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            <button disabled={busy || recoveryTotp.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังออก Recovery Codes..." : "ยืนยันและออกชุดใหม่"}</button>
+            <button disabled={busy || recoveryTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังออก Recovery Codes..." : "ยืนยันและออกชุดใหม่"}</button>
           </form>
         )}
       </section>
@@ -282,7 +282,7 @@ export default function AccountSecurity() {
           <TextField label="รหัสผ่านเดิม" value={oldPassword} onChange={setOldPassword} type="password" autoComplete="current-password" />
           <TextField label="รหัสผ่านใหม่" value={newPassword} onChange={setNewPassword} type="password" autoComplete="new-password" />
           <TextField label="ยืนยันรหัสผ่านใหม่" value={confirmPassword} onChange={setConfirmPassword} type="password" autoComplete="new-password" />
-          <button disabled={busy || !oldPassword || newPassword.length < 8 || confirmPassword.length < 8} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังเปลี่ยนรหัสผ่าน..." : "เปลี่ยนรหัสผ่าน"}</button>
+          <button disabled={busy || !oldPassword || newPassword.length < 8 || confirmPassword.length < 8} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังเปลี่ยนรหัสผ่าน..." : "เปลี่ยนรหัสผ่าน"}</button>
         </form>
       </section>
     </div>
