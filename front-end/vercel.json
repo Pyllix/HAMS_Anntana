@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://hams-anntana.onrender.com/:path*"
+      "destination": "https://hams-anntana-test.onrender.com/:path*"
     },
     {
       "source": "/(.*)",

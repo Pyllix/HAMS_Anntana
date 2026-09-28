@@ -21,7 +21,7 @@ test("routes the API through the backend before the SPA fallback", () => {
   );
   assert.equal(
     new URL(config.rewrites[0].destination).host,
-    "hams-anntana.onrender.com",
+    "hams-anntana-test.onrender.com",
   );
 });
 
