@@ -2,7 +2,7 @@
 
 ## Use the Render test backend during local frontend development
 
-Create `front-end/.env.local` with:
+Copy `front-end/.env.local.example` to `front-end/.env.local`. The example contains:
 
 ```env
 DEV_API_PROXY_TARGET=https://hams-anntana-test.onrender.com
