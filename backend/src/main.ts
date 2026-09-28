@@ -1,10 +1,37 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { trustedOrigins } from './auth/csrf-protection';
+import { sharedPrisma } from './common/config/database.config';
+
+async function logAuthDatabaseVisibility() {
+  if (process.env.AUTH_DB_DIAGNOSTICS !== '1') return;
+
+  try {
+    const [identity] = await sharedPrisma.$queryRaw<
+      Array<{ database: string; schema: string }>
+    >`SELECT current_database() AS database, current_schema() AS schema`;
+    const adminExists = Boolean(
+      await sharedPrisma.user.findUnique({
+        where: { email: 'admin@hospital.go.th' },
+        select: { id: true },
+      }),
+    );
+    Logger.log(
+      `database=${identity.database} schema=${identity.schema} adminExists=${adminExists}`,
+      'AuthDbDiagnostics',
+    );
+  } catch (error) {
+    Logger.error(
+      `Database visibility check failed (${error instanceof Error ? error.name : 'unknown error'})`,
+      undefined,
+      'AuthDbDiagnostics',
+    );
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -40,6 +67,8 @@ async function bootstrap() {
       transform: true, // แปลง primitive types อัตโนมัติ
     }),
   );
+
+  await logAuthDatabaseVisibility();
 
   // Swagger configuration
   const config = new DocumentBuilder()
