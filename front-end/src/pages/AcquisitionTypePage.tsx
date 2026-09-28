@@ -380,6 +380,7 @@ export default function AcquisitionTypePage() {
       <AcqTypeFormModal
         isOpen={isFormOpen}
         item={formItem}
+        existingList={acqTypes}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleFormSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}

@@ -23,8 +23,6 @@ export function CompanyDetailModal({
       ? item.name.trim().charAt(0).toUpperCase()
       : "C";
 
-  const isActive = item.isActive !== false;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
@@ -60,20 +58,6 @@ export function CompanyDetailModal({
             <p className="text-xs text-slate-400 font-mono">
               ID: {String(item.id).padStart(3, "0")} | รหัส: {item.code}
             </p>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                isActive
-                  ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                  : "bg-slate-100 text-slate-600 border border-slate-200"
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isActive ? "bg-emerald-500" : "bg-slate-400"
-                }`}
-              />
-              {isActive ? "ใช้งานปกติ" : "ระงับการใช้งาน"}
-            </span>
           </div>
         </div>
 
@@ -155,6 +139,7 @@ export function CompanyDetailModal({
 interface FormModalProps {
   isOpen: boolean;
   item: Company | null; // null = Add, non-null = Edit
+  existingList?: Company[];
   onClose: () => void;
   onSubmit: (formData: {
     code: string;
@@ -164,7 +149,6 @@ interface FormModalProps {
     group: string;
     address: string;
     remark: string;
-    isActive: boolean;
   }) => Promise<void>;
   isLoading?: boolean;
   availableGroups?: string[];
@@ -173,6 +157,7 @@ interface FormModalProps {
 export function CompanyFormModal({
   isOpen,
   item,
+  existingList = [],
   onClose,
   onSubmit,
   isLoading = false,
@@ -185,7 +170,13 @@ export function CompanyFormModal({
   const [group, setGroup] = useState("");
   const [address, setAddress] = useState("");
   const [remark, setRemark] = useState("");
-  const [isActive, setIsActive] = useState(true);
+
+  // Error States
+  const [codeError, setCodeError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [telError, setTelError] = useState("");
+  const [faxError, setFaxError] = useState("");
+  const [serverError, setServerError] = useState("");
 
   useEffect(() => {
     if (item) {
@@ -196,7 +187,6 @@ export function CompanyFormModal({
       setGroup(item.group || availableGroups[0] || "");
       setAddress(item.address || "");
       setRemark(item.remark || "");
-      setIsActive(item.isActive !== false);
     } else {
       setCode("");
       setName("");
@@ -205,8 +195,12 @@ export function CompanyFormModal({
       setGroup(availableGroups[0] || "");
       setAddress("");
       setRemark("");
-      setIsActive(true);
     }
+    setCodeError("");
+    setNameError("");
+    setTelError("");
+    setFaxError("");
+    setServerError("");
   }, [item, isOpen, availableGroups]);
 
   // Merge unique available groups strictly from backend + current item's group
@@ -223,22 +217,127 @@ export function CompanyFormModal({
 
   if (!isOpen) return null;
 
-  const isFormValid = Boolean(code.trim() && name.trim() && tel.trim());
+  const handleCodeChange = (val: string) => {
+    setCode(val);
+    if (codeError) setCodeError("");
+    if (serverError) setServerError("");
+  };
+
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (nameError) setNameError("");
+  };
+
+  const handleTelChange = (val: string) => {
+    // Only accept numeric digits and hyphens, max 12 characters
+    const filtered = val.replace(/[^\d-]/g, "").slice(0, 12);
+    setTel(filtered);
+    if (telError) setTelError("");
+  };
+
+  const handleFaxChange = (val: string) => {
+    // Only accept numeric digits and hyphens, max 12 characters
+    const filtered = val.replace(/[^\d-]/g, "").slice(0, 12);
+    setFax(filtered);
+    if (faxError) setFaxError("");
+  };
+
+  const validate = (): boolean => {
+    let isValid = true;
+
+    // 1. Code Validation
+    const trimmedCode = code.trim();
+    if (!trimmedCode) {
+      setCodeError("กรุณากรอกรหัสบริษัท");
+      isValid = false;
+    } else {
+      const isDuplicate = existingList.some((existing) => {
+        if (item && String(existing.id) === String(item.id)) return false;
+        return (
+          existing.code?.trim().toLowerCase() === trimmedCode.toLowerCase()
+        );
+      });
+
+      if (isDuplicate) {
+        setCodeError("รหัสบริษัทนี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น");
+        isValid = false;
+      }
+    }
+
+    // 2. Name Validation
+    if (!name.trim()) {
+      setNameError("กรุณากรอกชื่อผู้ผลิต/บริษัท");
+      isValid = false;
+    }
+
+    // 3. Phone Validation (Required, 9-10 digits, starts with 0)
+    const trimmedTel = tel.trim();
+    const telDigits = trimmedTel.replace(/\D/g, "");
+    if (!trimmedTel) {
+      setTelError("กรุณากรอกเบอร์โทรศัพท์");
+      isValid = false;
+    } else if (
+      telDigits.length < 9 ||
+      telDigits.length > 10 ||
+      !telDigits.startsWith("0")
+    ) {
+      setTelError(
+        "กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (9-10 หลัก เช่น 02-123-4567 หรือ 081-234-5678)"
+      );
+      isValid = false;
+    }
+
+    // 4. Fax Validation (Optional, if provided must be 9-10 digits, starts with 0)
+    const trimmedFax = fax.trim();
+    if (trimmedFax) {
+      const faxDigits = trimmedFax.replace(/\D/g, "");
+      if (
+        faxDigits.length < 9 ||
+        faxDigits.length > 10 ||
+        !faxDigits.startsWith("0")
+      ) {
+        setFaxError("กรุณากรอกเบอร์แฟกซ์ให้ถูกต้อง (9-10 หลัก เช่น 02-123-4567)");
+        isValid = false;
+      }
+    }
+
+    return isValid;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    setServerError("");
+    if (!validate()) return;
 
-    await onSubmit({
-      code: code.trim(),
-      name: name.trim(),
-      tel: tel.trim(),
-      fax: fax.trim(),
-      group: group.trim(),
-      address: address.trim(),
-      remark: remark.trim(),
-      isActive,
-    });
+    try {
+      await onSubmit({
+        code: code.trim(),
+        name: name.trim(),
+        tel: tel.trim(),
+        fax: fax.trim(),
+        group: group.trim(),
+        address: address.trim(),
+        remark: remark.trim(),
+      });
+    } catch (err: any) {
+      console.error("Submit Company Error:", err);
+      const status = err?.response?.status;
+      const dataMsg = err?.response?.data?.message;
+      const errorText = Array.isArray(dataMsg) ? dataMsg.join(", ") : dataMsg;
+
+      if (
+        status === 409 ||
+        (errorText && String(errorText).toLowerCase().includes("conflict")) ||
+        (errorText && String(errorText).toLowerCase().includes("already exists"))
+      ) {
+        setCodeError("รหัสบริษัทนี้มีอยู่ในระบบแล้ว (409 Conflict)");
+        setServerError("รหัสบริษัทซ้ำกับข้อมูลเดิมในระบบ กรุณาใช้รหัสอื่น");
+      } else {
+        setServerError(
+          errorText || "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง"
+        );
+      }
+    }
   };
 
   return (
@@ -264,8 +363,16 @@ export function CompanyFormModal({
           </button>
         </div>
 
+        {/* Server Error Alert Banner */}
+        {serverError && (
+          <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+            <span>{serverError}</span>
+          </div>
+        )}
+
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* Row 1: ID (disabled) + Code */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -289,12 +396,18 @@ export function CompanyFormModal({
               </label>
               <input
                 type="text"
-                required
                 placeholder="เช่น 001, C001"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all font-mono"
+                onChange={(e) => handleCodeChange(e.target.value)}
+                className={`w-full rounded-xl border px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all font-mono ${
+                  codeError
+                    ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                    : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                }`}
               />
+              {codeError && (
+                <p className="text-xs text-rose-500 mt-1 font-medium">{codeError}</p>
+              )}
             </div>
           </div>
 
@@ -305,12 +418,18 @@ export function CompanyFormModal({
             </label>
             <input
               type="text"
-              required
               placeholder="เช่น บริษัท เอ็ม บี ดี เซอร์จิคอล ซัพพลาย จำกัด"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all font-medium"
+              onChange={(e) => handleNameChange(e.target.value)}
+              className={`w-full rounded-xl border px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all font-medium ${
+                nameError
+                  ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                  : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+              }`}
             />
+            {nameError && (
+              <p className="text-xs text-rose-500 mt-1 font-medium">{nameError}</p>
+            )}
           </div>
 
           {/* Row 3: Phone & Fax */}
@@ -321,25 +440,42 @@ export function CompanyFormModal({
               </label>
               <input
                 type="text"
-                required
-                placeholder="เช่น 012-345-6789"
+                inputMode="tel"
+                maxLength={12}
+                placeholder="เช่น 02-123-4567 หรือ 081-234-5678"
                 value={tel}
-                onChange={(e) => setTel(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={(e) => handleTelChange(e.target.value)}
+                className={`w-full rounded-xl border px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all ${
+                  telError
+                    ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                    : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                }`}
               />
+              {telError && (
+                <p className="text-xs text-rose-500 mt-1 font-medium">{telError}</p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                เบอร์แฟกซ์
+                เบอร์แฟกซ์ <span className="text-slate-400 font-normal text-xs">(ไม่บังคับ)</span>
               </label>
               <input
                 type="text"
-                placeholder="เช่น 038-123-4567"
+                inputMode="tel"
+                maxLength={12}
+                placeholder="เช่น 02-123-4567"
                 value={fax}
-                onChange={(e) => setFax(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={(e) => handleFaxChange(e.target.value)}
+                className={`w-full rounded-xl border px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all ${
+                  faxError
+                    ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                    : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                }`}
               />
+              {faxError && (
+                <p className="text-xs text-rose-500 mt-1 font-medium">{faxError}</p>
+              )}
             </div>
           </div>
 
@@ -367,7 +503,7 @@ export function CompanyFormModal({
           {/* Row 5: Address */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              ที่อยู่ของบริษัท
+              ที่อยู่ของบริษัท <span className="text-slate-400 font-normal text-xs">(ไม่บังคับ)</span>
             </label>
             <textarea
               rows={2}
@@ -381,7 +517,7 @@ export function CompanyFormModal({
           {/* Row 6: Remark */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              หมายเหตุ
+              หมายเหตุ <span className="text-slate-400 font-normal text-xs">(ไม่บังคับ)</span>
             </label>
             <input
               type="text"
@@ -390,39 +526,6 @@ export function CompanyFormModal({
               onChange={(e) => setRemark(e.target.value)}
               className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
             />
-          </div>
-
-          {/* Row 7: Account Status Radio buttons */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              สถานะบัญชี
-            </label>
-            <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <input
-                  type="radio"
-                  name="isActive"
-                  checked={isActive === true}
-                  onChange={() => setIsActive(true)}
-                  className="accent-emerald-600 h-4 w-4 cursor-pointer"
-                />
-                <span className="text-slate-700 font-medium text-xs sm:text-sm">
-                  ใช้งานปกติ (Active)
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm">
-                <input
-                  type="radio"
-                  name="isActive"
-                  checked={isActive === false}
-                  onChange={() => setIsActive(false)}
-                  className="accent-emerald-600 h-4 w-4 cursor-pointer"
-                />
-                <span className="text-slate-700 font-medium text-xs sm:text-sm">
-                  ระงับการใช้งาน (Suspend)
-                </span>
-              </label>
-            </div>
           </div>
 
           {/* Footer Buttons */}
@@ -437,7 +540,7 @@ export function CompanyFormModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !isFormValid}
+              disabled={isLoading}
               className="rounded-xl bg-emerald-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {isLoading
