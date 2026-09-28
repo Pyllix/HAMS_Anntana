@@ -23,14 +23,25 @@ interface BootstrapAdmin {
 
 const BOOTSTRAP_LOCK_ID = 90260927;
 
+class BootstrapConfigurationError extends Error {}
+
 function requiredValue(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing required setting: ${name}`);
+  if (!value) {
+    throw new BootstrapConfigurationError(`Missing required setting: ${name}`);
+  }
   return value;
 }
 
 function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
-  const emails = loadBootstrapAdminEmails();
+  let emails: [string, string];
+  try {
+    emails = loadBootstrapAdminEmails();
+  } catch (error) {
+    throw new BootstrapConfigurationError(
+      error instanceof Error ? error.message : 'Invalid bootstrap ADMIN emails',
+    );
+  }
   const admins = [1, 2].map((index) => {
     const prefix = `BOOTSTRAP_ADMIN_${index}`;
     return {
@@ -47,7 +58,9 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
     admins.map(({ employeeId }) => employeeId.toLowerCase()),
   ];
   if (normalizedValues.some(([first, second]) => first === second)) {
-    throw new Error('The two bootstrap ADMIN identities must be distinct');
+    throw new BootstrapConfigurationError(
+      'The two bootstrap ADMIN identities must be distinct',
+    );
   }
 
   for (const [index, admin] of admins.entries()) {
@@ -58,7 +71,7 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
       admin.lastname.length > 100 ||
       admin.employeeId.length > 50
     ) {
-      throw new Error(
+      throw new BootstrapConfigurationError(
         `Bootstrap ADMIN ${index + 1} has invalid identity fields`,
       );
     }
@@ -69,22 +82,34 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
 
 function validateProductionConfiguration(): void {
   if (process.env.NODE_ENV !== 'production') {
-    throw new Error('ADMIN bootstrap requires NODE_ENV=production');
+    throw new BootstrapConfigurationError('ADMIN bootstrap requires NODE_ENV=production');
   }
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
+  if (!process.env.DATABASE_URL) {
+    throw new BootstrapConfigurationError('DATABASE_URL is required');
+  }
   if ((process.env.BETTER_AUTH_SECRET ?? '').length < 32) {
-    throw new Error('BETTER_AUTH_SECRET must contain at least 32 characters');
+    throw new BootstrapConfigurationError(
+      'BETTER_AUTH_SECRET must contain at least 32 characters',
+    );
   }
   if (!/^[a-f0-9]{64}$/i.test(process.env.TWO_FACTOR_ENCRYPTION_KEY ?? '')) {
-    throw new Error(
+    throw new BootstrapConfigurationError(
       'TWO_FACTOR_ENCRYPTION_KEY must be 64 hexadecimal characters',
     );
   }
 
   for (const key of ['BETTER_AUTH_URL', 'FRONTEND_URL']) {
     const value = requiredValue(key);
-    if (new URL(value).protocol !== 'https:') {
-      throw new Error(`${key} must use HTTPS for production bootstrap`);
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new BootstrapConfigurationError(`${key} must be a valid HTTPS URL`);
+    }
+    if (url.protocol !== 'https:') {
+      throw new BootstrapConfigurationError(
+        `${key} must use HTTPS for production bootstrap`,
+      );
     }
   }
 
@@ -93,7 +118,7 @@ function validateProductionConfiguration(): void {
     process.env.SMTP_SECURE !== 'true' &&
     process.env.SMTP_REQUIRE_TLS !== 'true'
   ) {
-    throw new Error(
+    throw new BootstrapConfigurationError(
       'Credential delivery requires SMTP_SECURE=true or SMTP_REQUIRE_TLS=true',
     );
   }
@@ -327,9 +352,11 @@ async function main(): Promise<void> {
 }
 
 if (require.main === module) {
-  main().catch(() => {
+  main().catch((error: unknown) => {
     console.error(
-      'ADMIN bootstrap stopped. No password values were written to application logs.',
+      error instanceof BootstrapConfigurationError
+        ? `ADMIN bootstrap configuration error: ${error.message}`
+        : 'ADMIN bootstrap stopped. No password values were written to application logs.',
     );
     process.exitCode = 1;
   });
