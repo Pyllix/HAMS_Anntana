@@ -1,6 +1,6 @@
-import { LogOut } from "lucide-react";
+import { LogOut, Shield } from "lucide-react";
 import NotificationBell from "../components/notifications/NotificationBell";
-import { matchPath, useLocation } from "react-router-dom";
+import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
 import useSignOut from "../hooks/useSignOut";
@@ -43,6 +43,21 @@ export default function Header() {
               {user?.role}
             </span>
           </div>
+          <NavLink
+            to="/account-security"
+            aria-label="ความปลอดภัยบัญชี"
+            title="ความปลอดภัยบัญชี"
+            className={({ isActive }) =>
+              `inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                isActive
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`
+            }
+          >
+            <Shield className="h-4 w-4" />
+            <span className="hidden lg:inline">ความปลอดภัยบัญชี</span>
+          </NavLink>
           <div className="flex flex-col items-end">
             <button
               type="button"

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -28,6 +29,7 @@ export default function TwoFactorEnrollment() {
   const location = useLocation();
   const { signOut, isSigningOut, signOutError } = useSignOut();
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [totpUri, setTotpUri] = useState("");
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
@@ -44,6 +46,7 @@ export default function TwoFactorEnrollment() {
     if (lastLocationKey.current === location.key) return;
     lastLocationKey.current = location.key;
     setPassword("");
+    setShowPassword(false);
     setTotpUri("");
     setSecret("");
     setCode("");
@@ -65,6 +68,7 @@ export default function TwoFactorEnrollment() {
       setTotpUri(uri);
       setSecret(secretValue);
       setPassword("");
+      setShowPassword(false);
     } catch (error) {
       setErrorMessage(getTwoFactorErrorMessage(error));
     } finally {
@@ -228,15 +232,26 @@ export default function TwoFactorEnrollment() {
             <label htmlFor="enrollment-password" className="block text-sm font-semibold text-slate-700">
               ยืนยันรหัสผ่านปัจจุบัน
             </label>
-            <input
-              id="enrollment-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200"
-            />
+            <div className="relative">
+              <input
+                id="enrollment-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-4 pr-12 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                aria-pressed={showPassword}
+                className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={isBusy || isSigningOut}

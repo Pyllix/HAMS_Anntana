@@ -63,7 +63,7 @@ export const APP_ROUTE: AppRote[] = [
       ROLES.PARCEL_STAFF,
       ROLES.DEPARTMENT_STAFF,
     ],
-    showInNav: true,
+    showInNav: false,
   },
   // -------- สำหรับ แผนก/ผู้ใช้งานทั่วไป ------------
   {
