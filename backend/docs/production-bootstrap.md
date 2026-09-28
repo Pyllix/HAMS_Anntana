@@ -15,6 +15,14 @@ Production bootstrap uses the reference seed and a separate one-time ADMIN boots
 
 Do not configure or store bootstrap passwords. The script generates each initial password from a separate cryptographic random value.
 
+## Test real email delivery without a project domain
+
+For an isolated test database, Brevo SMTP can use an individually verified sender address while the customer's domain is not yet available. In Brevo, add a sender in Settings > Senders, Domains, IPs > Senders and complete the email verification. Activate transactional email sending if the account requires it. In Settings > SMTP & API, copy the SMTP login and create an SMTP key (not an API key).
+
+Set `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=2525`, `SMTP_SECURE=false`, `SMTP_REQUIRE_TLS=true`, `SMTP_USER` to the Brevo SMTP login, `SMTP_PASS` to the SMTP key, and `SMTP_FROM` to the verified sender address. Port 2525 avoids the standard SMTP ports blocked by Render Free. Keep SMTP credentials only in the local ignored `.env` or the deployment secret store. A sender address on a free email domain may be rewritten by Brevo and has limited deliverability; use a domain owned by the customer for the real deployment.
+
+If an earlier bootstrap attempt created an ADMIN but email delivery failed, rerun the command after changing SMTP settings. It resumes the pending credential delivery without generating a new password. Do not change `TWO_FACTOR_ENCRYPTION_KEY` while delivery is pending.
+
 ## Provision and verify
 
 Run `pnpm run prisma:bootstrap-admins` once the Production environment is loaded. For each new account, the owner receives an individual email containing the initial password and a separate email-verification message. The owner verifies their email, signs in, then enrolls an authenticator and saves recovery codes. The application does not force a password change. Keep the credential email private and delete it after placing the password in the approved password manager.
