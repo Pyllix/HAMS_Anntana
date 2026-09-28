@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { betterAuth } from 'better-auth';
+import { betterAuth, getCurrentAdapter } from 'better-auth';
+import { createAuthMiddleware } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { openAPI, admin } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
@@ -78,6 +79,37 @@ export const auth = betterAuth({
         verificationUrl: targetUrl.toString(),
       });
     },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (
+        process.env.AUTH_DB_DIAGNOSTICS !== '1' ||
+        ctx.path !== '/sign-in/email'
+      ) {
+        return;
+      }
+
+      const body = ctx.body as { email?: unknown } | undefined;
+      const email = typeof body?.email === 'string' ? body.email : '';
+      const currentAdapter = await getCurrentAdapter(ctx.context.adapter);
+      let userFound = 'false';
+      try {
+        userFound = String(
+          Boolean(
+            await ctx.context.internalAdapter.findUserByEmail(email, {
+              includeAccounts: true,
+            }),
+          ),
+        );
+      } catch (error) {
+        userFound = `error:${error instanceof Error ? error.name : 'unknown'}`;
+      }
+      console.warn(
+        `[AuthSignInContext] emailIsDemoAdmin=${email === 'admin@hospital.go.th'} ` +
+          `adapterIsConfigured=${currentAdapter === ctx.context.adapter} ` +
+          `internalUserExists=${userFound}`,
+      );
+    }),
   },
   trustedOrigins: trustedOrigins(),
   session: {
