@@ -30,7 +30,6 @@ export default function CompanySupplierPage() {
   const [inputSearch, setInputSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,15 +119,9 @@ export default function CompanySupplierPage() {
         groupFilter === "ALL" ||
         item.group?.toLowerCase() === groupFilter.toLowerCase();
 
-      const itemActive = !item.deletedAt && item.isActive !== false;
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        (statusFilter === "ACTIVE" && itemActive) ||
-        (statusFilter === "INACTIVE" && !itemActive);
-
-      return matchesSearch && matchesGroup && matchesStatus;
+      return matchesSearch && matchesGroup;
     });
-  }, [companies, debouncedSearch, groupFilter, statusFilter]);
+  }, [companies, debouncedSearch, groupFilter]);
 
   // Pagination calculation
   const totalItems = filteredList.length;
@@ -181,16 +174,14 @@ export default function CompanySupplierPage() {
     group: string;
     address: string;
     remark: string;
-    isActive: boolean;
   }) => {
     console.log("📝 [UI Submit] Form Data:", formData);
-    const { isActive, ...dto } = formData;
     if (formItem) {
       console.log(`✏️ [UI Action] Updating Company ID: ${formItem.id}`);
-      await updateMutation.mutateAsync({ id: formItem.id, dto });
+      await updateMutation.mutateAsync({ id: formItem.id, dto: formData });
     } else {
       console.log("➕ [UI Action] Creating New Company");
-      await createMutation.mutateAsync(dto);
+      await createMutation.mutateAsync(formData);
     }
   };
 
@@ -198,12 +189,6 @@ export default function CompanySupplierPage() {
     console.log(`❌ [UI Action] Confirm Delete Company ID: ${id}`);
     await deleteMutation.mutateAsync(id);
   };
-
-  const statusLabel = useMemo(() => {
-    if (statusFilter === "ACTIVE") return "ใช้งานปกติ";
-    if (statusFilter === "INACTIVE") return "ระงับการใช้งาน";
-    return "ทั้งหมด";
-  }, [statusFilter]);
 
   const groupLabel = useMemo(() => {
     if (groupFilter === "ALL") return "ทั้งหมด";
@@ -263,29 +248,6 @@ export default function CompanySupplierPage() {
             ))}
           </select>
         </div>
-
-        {/* Dropdown: สถานะ */}
-        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-48 shrink-0 justify-between">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
-            <span className="text-slate-500 shrink-0">สถานะ:</span>
-            <span className="font-semibold text-emerald-600 truncate">
-              {statusLabel}
-            </span>
-          </div>
-          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as any);
-              setCurrentPage(1);
-            }}
-          >
-            <option value="ALL">ทั้งหมด</option>
-            <option value="ACTIVE">ใช้งานปกติ</option>
-            <option value="INACTIVE">ระงับการใช้งาน</option>
-          </select>
-        </div>
       </div>
 
       {/* Table Container */}
@@ -309,9 +271,6 @@ export default function CompanySupplierPage() {
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
                   หมวดหมู่
                 </th>
-                <th className="py-3.5 px-6 font-bold text-slate-800 text-sm">
-                  สถานะ
-                </th>
                 <th className="py-3.5 px-6 font-bold text-slate-800 text-sm text-center">
                   จัดการ
                 </th>
@@ -321,7 +280,7 @@ export default function CompanySupplierPage() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-12 text-center text-slate-400 text-base"
                   >
                     กำลังโหลดข้อมูลผู้ผลิต/บริษัท...
@@ -330,82 +289,63 @@ export default function CompanySupplierPage() {
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-12 text-center text-slate-400 text-base"
                   >
                     ไม่พบข้อมูลผู้ผลิต/บริษัท
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item) => {
-                  const isActive = !item.deletedAt && item.isActive !== false;
-                  return (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-50/60 transition-colors"
-                    >
-                      <td className="py-4 px-6 align-middle font-mono text-sm text-slate-500">
-                        {String(item.id).padStart(3, "0")}
-                      </td>
-                      <td className="py-4 px-6 align-middle font-mono font-bold text-sm text-slate-800">
-                        {item.code}
-                      </td>
-                      <td className="py-4 px-6 align-middle font-bold text-sm text-slate-900 max-w-xs truncate">
-                        {item.name}
-                      </td>
-                      <td className="py-4 px-6 align-middle font-mono text-sm text-slate-600 whitespace-nowrap">
-                        {item.tel || "-"}
-                      </td>
-                      <td className="py-4 px-6 align-middle text-sm text-slate-600">
-                        {item.group || "-"}
-                      </td>
-                      <td className="py-4 px-6 align-middle">
-                        <span className="inline-flex items-center gap-2 text-sm font-medium">
-                          <span
-                            className={`h-2.5 w-2.5 rounded-full ${
-                              isActive ? "bg-emerald-500" : "bg-slate-400"
-                            }`}
-                          />
-                          <span
-                            className={
-                              isActive ? "text-slate-800 font-medium" : "text-slate-500"
-                            }
-                          >
-                            {isActive ? "ใช้งานปกติ" : "ระงับการใช้งาน"}
-                          </span>
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 align-middle">
-                        <div className="flex items-center justify-center gap-4 text-slate-400">
-                          <button
-                            type="button"
-                            title="ดูรายละเอียด"
-                            onClick={() => handleOpenDetail(item)}
-                            className="hover:text-sky-600 transition-colors cursor-pointer p-1"
-                          >
-                            <Eye className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            title="แก้ไข"
-                            onClick={() => handleOpenEdit(item)}
-                            className="hover:text-amber-600 transition-colors cursor-pointer p-1"
-                          >
-                            <Pencil className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            title="ลบ"
-                            onClick={() => handleOpenDelete(item)}
-                            className="hover:text-rose-600 transition-colors cursor-pointer p-1"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                paginatedData.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="hover:bg-slate-50/60 transition-colors"
+                  >
+                    <td className="py-4 px-6 align-middle font-mono text-sm text-slate-500">
+                      {String(item.id).padStart(3, "0")}
+                    </td>
+                    <td className="py-4 px-6 align-middle font-mono font-bold text-sm text-slate-800">
+                      {item.code}
+                    </td>
+                    <td className="py-4 px-6 align-middle font-bold text-sm text-slate-900 max-w-xs truncate">
+                      {item.name}
+                    </td>
+                    <td className="py-4 px-6 align-middle font-mono text-sm text-slate-600 whitespace-nowrap">
+                      {item.tel || "-"}
+                    </td>
+                    <td className="py-4 px-6 align-middle text-sm text-slate-600">
+                      {item.group || "-"}
+                    </td>
+                    <td className="py-4 px-6 align-middle">
+                      <div className="flex items-center justify-center gap-4 text-slate-400">
+                        <button
+                          type="button"
+                          title="ดูรายละเอียด"
+                          onClick={() => handleOpenDetail(item)}
+                          className="hover:text-sky-600 transition-colors cursor-pointer p-1"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="แก้ไข"
+                          onClick={() => handleOpenEdit(item)}
+                          className="hover:text-amber-600 transition-colors cursor-pointer p-1"
+                        >
+                          <Pencil className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="ลบ"
+                          onClick={() => handleOpenDelete(item)}
+                          className="hover:text-rose-600 transition-colors cursor-pointer p-1"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -465,6 +405,7 @@ export default function CompanySupplierPage() {
       <CompanyFormModal
         isOpen={isFormOpen}
         item={formItem}
+        existingList={companies}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleFormSubmit}
         isLoading={createMutation.isPending || updateMutation.isPending}
