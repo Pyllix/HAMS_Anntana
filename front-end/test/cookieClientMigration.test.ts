@@ -80,7 +80,7 @@ function getRequestPath(config: AxiosRequestConfig): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
 }
 
-function responseFor(path: string, method: string) {
+function responseFor(path: string, method: string, params?: unknown) {
   if (path === "/api/auth/csrf") return { csrfToken: "csrf-test-token" };
   if (path === "/api/auth/sign-in" && method === "POST") {
     return { user: { id: "cookie-user", role: "DEPARTMENT_STAFF" } };
@@ -113,7 +113,10 @@ function responseFor(path: string, method: string) {
     return { data: [], meta: { hasNextPage: false } };
   }
   if (path === "/api/users" && method === "GET") {
-    return { data: [{ id: "user-1", firstname: "Test" }] };
+    const page = (params as { page?: number } | undefined)?.page ?? 1;
+    return page === 1
+      ? { data: [{ id: "user-1", firstname: "Test" }], meta: { hasNextPage: true } }
+      : { data: [{ id: "user-2", firstname: "Second" }], meta: { hasNextPage: false } };
   }
   if (path === "/api/budget-types" && method === "GET") {
     return [{ id: 1, name: "Annual" }];
@@ -181,7 +184,7 @@ before(async () => {
     }
 
     return {
-      data: responseFor(path, method),
+      data: responseFor(path, method, config.params),
       status: 200,
       statusText: "OK",
       headers: {},
@@ -349,6 +352,11 @@ test("asset and borrowing requests use the shared cookie client for reads and wr
   const borrowReturn = requests.find((request) => request.method === "PATCH" && request.path === "/api/borrowings/borrow-1/return");
   assertCookieRequest(borrowReturn, "PATCH", "/borrowings/borrow-1/return");
   assert.equal(borrowReturn.csrf, "csrf-test-token");
+
+  await borrowService.requestReturn("borrow-2", { pickupLocation: "Ward" });
+  const returnRequest = requests.find((request) => request.method === "PATCH" && request.path === "/api/borrowings/borrow-2/request-return");
+  assertCookieRequest(returnRequest, "PATCH", "/borrowings/borrow-2/request-return");
+  assert.equal(returnRequest.csrf, "csrf-test-token");
 });
 
 test("repair and spare-part requests use the shared client and attach CSRF to updates", async () => {
@@ -383,9 +391,16 @@ test("repair and spare-part requests use the shared client and attach CSRF to up
 
 test("user-management and reference requests use the shared cookie client", async () => {
   requests.length = 0;
-  assert.deepEqual(await userService.getAllUser(), [{ id: "user-1", firstname: "Test" }]);
-  const usersRead = requests.find((request) => request.method === "GET" && request.path === "/api/users");
-  assertCookieRequest(usersRead, "GET", "/users/");
+  assert.deepEqual(await userService.getAllUser(), [
+    { id: "user-1", firstname: "Test" },
+    { id: "user-2", firstname: "Second" },
+  ]);
+  const usersReads = requests.filter((request) => request.method === "GET" && request.path === "/api/users");
+  assert.equal(usersReads.length, 2);
+  usersReads.forEach((request, index) => {
+    assertCookieRequest(request, "GET", "/users/");
+    assert.deepEqual(request.params, { page: index + 1, limit: 100 });
+  });
   assert.equal((await userService.getUserById("user-1")).id, "user-1");
   const userDetail = requests.find((request) => request.method === "GET" && request.path === "/api/users/user-1");
   assertCookieRequest(userDetail, "GET", "/users/user-1");

@@ -4,6 +4,7 @@ import { ROLES, RoleType } from "../../router/roles";
 const ROLE_LABELS: Record<RoleType, string> = {
   [ROLES.ADMIN]: "ผู้ดูแลระบบ",
   [ROLES.MANAGER]: "ผู้จัดการ / หัวหน้างาน",
+  [ROLES.MAINTENANCE_HEAD]: "หัวหน้าช่างซ่อมบำรุง",
   [ROLES.MAINTENANCE_STAFF]: "ช่างซ่อมบำรุง",
   [ROLES.ASSET_CENTER_STAFF]: "เจ้าหน้าที่ครุภัณฑ์",
   [ROLES.PARCEL_STAFF]: "เจ้าหน้าที่พัสดุ",

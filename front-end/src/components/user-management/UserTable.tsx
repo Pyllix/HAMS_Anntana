@@ -66,6 +66,7 @@ const columns: Array<ColumnDef<typeof features, User>> = [
       const roleLabels: Record<string, string> = {
         [ROLES.ADMIN]: "ผู้ดูแลระบบ",
         [ROLES.MANAGER]: "ผู้จัดการ / หัวหน้างาน",
+        [ROLES.MAINTENANCE_HEAD]: "หัวหน้าช่างซ่อมบำรุง",
         [ROLES.MAINTENANCE_STAFF]: "ช่างซ่อมบำรุง",
         [ROLES.ASSET_CENTER_STAFF]: "เจ้าหน้าที่ศูนย์สินทรัพย์",
         [ROLES.PARCEL_STAFF]: "เจ้าหน้าที่พัสดุ",

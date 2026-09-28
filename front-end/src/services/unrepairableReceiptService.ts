@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { createApiClient } from "./apiClient";
 import type { ConfirmUnrepairableReceiptDto, UnrepairableJobDto, UnrepairableReceipt } from "../types/TypeUnrepairableReceipt";
 import { mapUnrepairableReceipt } from "./unrepairableReceiptMapper";
@@ -48,7 +49,7 @@ export async function confirmUnrepairableReceipt(id: string, dto: ConfirmUnrepai
 }
 
 export function receiptError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     if (error.response?.status === 401) return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่";
     if (error.response?.status === 403) return "บัญชีนี้ไม่มีสิทธิ์รับคืนครุภัณฑ์ กรุณาใช้บัญชีเจ้าหน้าที่พัสดุ";
     const message: unknown = error.response?.data?.message;

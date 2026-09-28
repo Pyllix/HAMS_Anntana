@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
 import { clearSessionDraft } from "../../services/sessionDraftStorage";
 import {
@@ -10,6 +10,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import AssetInfoCard from "./AssetInfoCard";
@@ -120,6 +121,10 @@ export default function AssessmentForm() {
   >([]);
   const [selectedSpares, setSelectedSpares] = useState<SelectedSpareItem[]>([]);
 
+  // Custom Dropdown State สำหรับ หมวดช่าง
+  const [isTechCategoryOpen, setIsTechCategoryOpen] = useState(false);
+  const techCategoryDropdownRef = useRef<HTMLDivElement>(null);
+
   // Cancel Dialog
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -147,15 +152,25 @@ export default function AssessmentForm() {
     queryFn: getRepairMetaLookups,
   });
 
-  const {
-    data: jobDetail,
-    isLoading: isDetailLoading,
-    isError: isDetailError,
-  } = useQuery<RepairDetail>({
+  const { data: jobDetail } = useQuery<RepairDetail>({
     queryKey: ["assessmentJobDetail", currentJobId],
     queryFn: () => getRepairJobById(String(currentJobId)),
     enabled: Boolean(currentJobId),
   });
+
+  // ปิด Custom Dropdown เมื่อคลิกภายนอก
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        techCategoryDropdownRef.current &&
+        !techCategoryDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTechCategoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // ตรวจสอบว่างานนี้มีการมอบหมายให้ผู้ใช้งานนี้แล้วหรือไม่
   const isAssignedToMe = useMemo(() => {
@@ -279,7 +294,7 @@ export default function AssessmentForm() {
     }
   }, [jobDetail, isAssignMode, isReassessment]);
 
-  // Mutation สำหรับการประเมิน (สำหรับช่างทั่วไป หรือ หัวหน้าช่างที่รับซ่อมเอง)
+  // Mutation สำหรับการประเมิน
   const diagnoseMutation = useMutation({
     mutationFn: async (dto: DiagnoseDto) => {
       if (!currentJobId) return;
@@ -348,7 +363,7 @@ export default function AssessmentForm() {
     },
   });
 
-  // Mutation สำหรับการยกเลิกใบแจ้งซ่อม (สำหรับช่าง และ หัวหน้าช่าง)
+  // Mutation สำหรับการยกเลิกใบแจ้งซ่อม
   const cancelMutation = useMutation({
     mutationFn: async (reason: string) => {
       if (!currentJobId) return;
@@ -360,7 +375,6 @@ export default function AssessmentForm() {
       setShowCancelDialog(false);
       setCancelReason("");
 
-      // บังคับ Refetch และล้าง Cache รายการทุกตารางที่เกี่ยวข้อง
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
       await queryClient.invalidateQueries({ queryKey: ["repairList"] });
       await queryClient.invalidateQueries({ queryKey: ["repairJobs"] });
@@ -414,13 +428,11 @@ export default function AssessmentForm() {
 
   const isFormValid = useMemo(() => {
     if (isAssignMode) {
-      // หัวหน้าช่างจ่ายงาน ต้องการหมวดงาน + ช่างผู้รับผิดชอบอย่างน้อย 1 คน
       return (
         Boolean(formState.techCategoryId) && selectedMechanicIds.length > 0
       );
     }
 
-    // ช่างซ่อมประเมินงาน
     const hasCommonFields =
       Boolean(actionStatus) &&
       Boolean(formState.symptomCause?.trim() || formState.diagnosis?.trim()) &&
@@ -473,7 +485,6 @@ export default function AssessmentForm() {
       return;
     }
 
-    // Process Diagnose DTO for Technicians
     const stepActionType = ACTION_TYPE_MAP[actionStatus];
     const selectedDetail = jobDetail;
     if (!selectedDetail) return;
@@ -522,6 +533,13 @@ export default function AssessmentForm() {
     diagnoseMutation.mutate(dto);
   };
 
+  const selectedTechCategoryLabel = useMemo(() => {
+    const found = (metaLookups?.techCategories || []).find(
+      (cat: any) => String(cat.id) === String(formState.techCategoryId),
+    );
+    return found ? found.name : "-- เลือกหมวดช่าง --";
+  }, [metaLookups, formState.techCategoryId]);
+
   if (!selectedJob) return null;
 
   return (
@@ -565,16 +583,18 @@ export default function AssessmentForm() {
 
       {/* Main Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch h-[calc(100vh-170px)] min-h-[500px]">
-        {/* Left Side: Asset Details Card */}
+        {/* Left Side: Asset Details Card (ไม่มี Scrollbar) */}
         <div className="lg:col-span-5 flex flex-col h-full overflow-hidden">
-          <div className="h-full overflow-y-auto pr-1">
+          <div className="h-full">
             <AssetInfoCard jobData={jobDetail || selectedJob} />
           </div>
         </div>
 
-        {/* Right Side: Action Form */}
-        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 space-y-4 flex flex-col justify-between">
-          <div className="space-y-4">
+        {/* Right Side: Action Form (มี Scrollbar ฝั่งเดียว) */}
+        <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 flex flex-col justify-between overflow-hidden">
+
+          {/* Locked Form Header Section */}
+          <div className="shrink-0 space-y-4 mb-4">
             {isReassessment && (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
                 <p className="font-bold">เจ้าหน้าที่พัสดุปฏิเสธการขอเบิกอะไหล่</p>
@@ -602,33 +622,70 @@ export default function AssessmentForm() {
                   : "บันทึกผลการประเมินและงานซ่อม"}
               </div>
             </div>
+          </div>
 
+          {/* Scrollable Content Container (มี Scrollbar ที่นี่ที่เดียว) */}
+          <div className="overflow-y-auto pr-1.5 space-y-4 flex-1">
             {isAssignMode ? (
               /* ฟอร์มมอบหมายงานสำหรับหัวหน้าช่าง */
               <div className="space-y-4">
-                <div>
+                {/* Custom Dropdown สำหรับหมวดช่าง */}
+                <div ref={techCategoryDropdownRef} className="relative">
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     หมวดช่าง <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={formState.techCategoryId}
-                    onChange={(e) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        techCategoryId: e.target.value,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden bg-white"
+                  <button
+                    type="button"
+                    onClick={() => setIsTechCategoryOpen((prev) => !prev)}
+                    className="w-full flex items-center justify-between rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 bg-white hover:border-slate-300 focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
                   >
-                    <option value="" disabled>
-                      -- เลือกหมวดช่าง --
-                    </option>
-                    {(metaLookups?.techCategories || []).map((cat: any) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
+                    <span
+                      className={
+                        formState.techCategoryId
+                          ? "text-slate-800 font-medium"
+                          : "text-slate-400"
+                      }
+                    >
+                      {selectedTechCategoryLabel}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                        isTechCategoryOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isTechCategoryOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-xl bg-white border border-slate-100 shadow-xl py-1 text-xs max-h-56 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                      {(metaLookups?.techCategories || []).map((cat: any) => {
+                        const isSelected =
+                          String(cat.id) === String(formState.techCategoryId);
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setFormState((prev) => ({
+                                ...prev,
+                                techCategoryId: cat.id,
+                              }));
+                              setIsTechCategoryOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                              isSelected
+                                ? "bg-blue-50/60 font-semibold text-blue-600"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            <span>{cat.name}</span>
+                            {isSelected && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <MechanicSelector
@@ -640,23 +697,17 @@ export default function AssessmentForm() {
             ) : (
               /* ฟอร์มประเมินสำหรับช่างปฏิบัติงาน */
               <>
-                {/* 1. ย้าย หมวดช่าง (Disabled / Read-only) ขึ้นมาไว้บนสุด */}
+                {/* 1. หมวดช่าง (Disabled / Read-only) */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     หมวดช่าง <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={formState.techCategoryId}
-                    disabled
-                    className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-500 bg-slate-100 cursor-not-allowed"
-                  >
-                    <option value="">
-                      {(metaLookups?.techCategories || []).find(
-                        (cat: any) =>
-                          String(cat.id) === String(formState.techCategoryId),
-                      )?.name || "งานเครื่องมือแพทย์"}
-                    </option>
-                  </select>
+                  <div className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-500 bg-slate-100 cursor-not-allowed">
+                    {(metaLookups?.techCategories || []).find(
+                      (cat: any) =>
+                        String(cat.id) === String(formState.techCategoryId),
+                    )?.name || "งานเครื่องมือแพทย์"}
+                  </div>
                 </div>
 
                 {/* 2. ผู้รับผิดชอบงาน (Read-only) */}
@@ -693,7 +744,7 @@ export default function AssessmentForm() {
           </div>
 
           {/* Action Buttons Footer */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100 shrink-0 mt-4">
             <div>
               <button
                 type="button"
@@ -742,7 +793,6 @@ export default function AssessmentForm() {
       {/* Modal ยกเลิกใบแจ้งซ่อม */}
       {showCancelDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* 1. Backdrop ฉากหลัง (ถอดแบบสีและความเบลอจากที่คุณส่งมาเป๊ะๆ) */}
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
             onClick={() => {
@@ -754,7 +804,6 @@ export default function AssessmentForm() {
             }}
           />
 
-          {/* 2. กล่อง Modal (ใส่ relative z-10 เพื่อลอยอยู่เหนือฉากหลัง และกดปุ่มได้ 100%) */}
           <div className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100 overflow-hidden transition-all duration-300 animate-in fade-in zoom-in-95">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -785,7 +834,6 @@ export default function AssessmentForm() {
                 </div>
               )}
 
-              {/* ไอคอนและข้อความเตือนด้านบน */}
               <div className="flex items-center gap-3 p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700">
                 <div className="p-2 bg-rose-100 rounded-lg shrink-0 text-rose-600">
                   <XCircle className="w-6 h-6" />
@@ -800,7 +848,6 @@ export default function AssessmentForm() {
                 </div>
               </div>
 
-              {/* กล่องแสดงรายละเอียด Job */}
               <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3.5 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-slate-500">
@@ -810,116 +857,94 @@ export default function AssessmentForm() {
                     {displayJobNo}
                   </span>
                 </div>
-                <div className="pt-1 font-semibold text-slate-800 flex items-start gap-1">
-                  <span className="text-slate-400 font-normal">ครุภัณฑ์:</span>
-                  <span>
-                    {selectedJob?.asset?.noid || jobDetail?.asset?.noid} ·{" "}
-                    {selectedJob?.asset?.name || jobDetail?.asset?.name}
-                  </span>
-                </div>
               </div>
 
-              {/* ช่องกรอกเหตุผล */}
-              <div className="space-y-1.5 text-xs">
-                <label className="block font-semibold text-slate-700">
-                  เหตุผลการยกเลิกใบแจ้งซ่อม{" "}
-                  <span className="text-rose-500">*</span>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  เหตุผลในการยกเลิก <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="กรอกเหตุผลที่ต้องการยกเลิกใบแจ้งซ่อมฉบับนี้..."
-                  className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 focus:outline-none placeholder:text-slate-400"
+                  placeholder="กรอกเหตุผลในการยกเลิกใบแจ้งซ่อม..."
+                  className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none transition-colors"
                 />
               </div>
+            </div>
 
-              {/* Dialog Footer */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  disabled={cancelMutation.isPending}
-                  onClick={() => {
-                    if (!cancelMutation.isPending) {
-                      cancelMutation.reset();
-                      setShowCancelDialog(false);
-                      setCancelReason("");
-                    }
-                  }}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="button"
-                  disabled={cancelMutation.isPending}
-                  onClick={() => {
-                    if (!cancelReason.trim()) {
-                      setNoticeModal({
-                        open: true,
-                        type: "error",
-                        title: "แจ้งเตือน",
-                        message: "กรุณาระบุเหตุผลการยกเลิกใบแจ้งซ่อม",
-                      });
-                      return;
-                    }
-                    cancelMutation.mutate(cancelReason.trim());
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {cancelMutation.isPending && (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  )}
-                  ยืนยันยกเลิกใบแจ้งซ่อม
-                </button>
-              </div>
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 bg-slate-50/50 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={cancelMutation.isPending}
+                onClick={() => {
+                  cancelMutation.reset();
+                  setShowCancelDialog(false);
+                  setCancelReason("");
+                }}
+                className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={!cancelReason.trim() || cancelMutation.isPending}
+                onClick={() => cancelMutation.mutate(cancelReason)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                {cancelMutation.isPending && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
+                ยืนยันยกเลิก
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal แจ้งเตือนสถานะสำเร็จ / ข้อผิดพลาด (มาแทนที่ alert เดิม) */}
+      {/* Notice Modal */}
       {noticeModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl overflow-hidden text-center p-6 space-y-4">
-            <div className="flex justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            onClick={() => {
+              setNoticeModal((prev) => ({ ...prev, open: false }));
+              if (noticeModal.onClose) noticeModal.onClose();
+            }}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-100 p-5 text-center animate-in fade-in zoom-in-95">
+            <div className="flex justify-center mb-3">
               {noticeModal.type === "success" ? (
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
-                  <CheckCircle2 className="w-10 h-10" />
+                <div className="p-3 bg-emerald-100 rounded-full text-emerald-600">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
               ) : (
-                <div className="p-3 bg-rose-100 text-rose-600 rounded-full">
-                  <AlertCircle className="w-10 h-10" />
+                <div className="p-3 bg-rose-100 rounded-full text-rose-600">
+                  <AlertCircle className="w-8 h-8" />
                 </div>
               )}
             </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-800">
-                {noticeModal.title}
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {noticeModal.message}
-              </p>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const cb = noticeModal.onClose;
-                  setNoticeModal((prev) => ({ ...prev, open: false }));
-                  if (cb) cb();
-                }}
-                className={`w-full py-2.5 rounded-xl text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer ${
-                  noticeModal.type === "success"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-rose-600 hover:bg-rose-700"
-                }`}
-              >
-                ตกลง
-              </button>
-            </div>
+            <h3 className="text-base font-bold text-slate-800 mb-1">
+              {noticeModal.title}
+            </h3>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              {noticeModal.message}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setNoticeModal((prev) => ({ ...prev, open: false }));
+                if (noticeModal.onClose) noticeModal.onClose();
+              }}
+              className={`w-full py-2.5 rounded-lg text-xs font-semibold text-white transition-colors cursor-pointer ${
+                noticeModal.type === "success"
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-rose-600 hover:bg-rose-700"
+              }`}
+            >
+              ตกลง
+            </button>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import NotificationBell from "../components/notifications/NotificationBell";
 import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
+import { ROLE_LABELS } from "../router/roles";
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -38,7 +39,7 @@ export default function Header() {
               {user?.firstname} {user?.lastname}
             </span>
             <span className="mt-1 text-xs font-medium tracking-wide text-slate-500">
-              {user?.role}
+              {user?.role ? (ROLE_LABELS[user.role] ?? user.role) : ""}
             </span>
           </div>
           <NavLink

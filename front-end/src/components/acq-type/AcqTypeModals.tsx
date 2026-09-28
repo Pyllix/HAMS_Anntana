@@ -77,7 +77,7 @@ export function AcqTypeDetailModal({ isOpen, item, onClose }: DetailModalProps) 
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">
-              รายละเอียด *
+              รายละเอียด
             </label>
             <div className="w-full min-h-24 rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-700 whitespace-pre-wrap">
               {item.description || "-"}
@@ -104,6 +104,7 @@ export function AcqTypeDetailModal({ isOpen, item, onClose }: DetailModalProps) 
 interface FormModalProps {
   isOpen: boolean;
   item: AcqType | null; // null = Add, non-null = Edit
+  existingList?: AcqType[];
   onClose: () => void;
   onSubmit: (formData: {
     name: string;
@@ -116,6 +117,7 @@ interface FormModalProps {
 export function AcqTypeFormModal({
   isOpen,
   item,
+  existingList = [],
   onClose,
   onSubmit,
   isLoading = false,
@@ -123,6 +125,7 @@ export function AcqTypeFormModal({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [nameError, setNameError] = useState("");
 
   useEffect(() => {
     if (item) {
@@ -134,13 +137,42 @@ export function AcqTypeFormModal({
       setDescription("");
       setIsActive(true);
     }
+    setNameError("");
   }, [item, isOpen]);
 
   if (!isOpen) return null;
 
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (nameError) setNameError("");
+  };
+
+  const validate = (): boolean => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setNameError("กรุณากรอกชื่อวิธีการได้มา");
+      return false;
+    }
+
+    const isDuplicate = existingList.some((existing) => {
+      if (item && existing.id === item.id) return false;
+      return (
+        existing.name?.trim().toLowerCase() === trimmedName.toLowerCase()
+      );
+    });
+
+    if (isDuplicate) {
+      setNameError("ชื่อวิธีการได้มานี้มีอยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!validate()) return;
+
     await onSubmit({
       name: name.trim(),
       description: description.trim(),
@@ -172,7 +204,7 @@ export function AcqTypeFormModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {item && (
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -190,17 +222,23 @@ export function AcqTypeFormModal({
             </label>
             <input
               type="text"
-              required
               placeholder="เช่น ซื้อ, รับโอน, บริจาค..."
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+              onChange={(e) => handleNameChange(e.target.value)}
+              className={`w-full rounded-xl border px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all ${
+                nameError
+                  ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                  : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+              }`}
             />
+            {nameError && (
+              <p className="text-xs text-rose-500 mt-1 font-medium">{nameError}</p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">
-              รายละเอียด
+              รายละเอียด <span className="text-slate-400 text-xs font-normal">(ไม่บังคับ)</span>
             </label>
             <textarea
               rows={3}
@@ -251,7 +289,7 @@ export function AcqTypeFormModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !name.trim()}
+              disabled={isLoading}
               className="rounded-xl bg-emerald-600 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? "กำลังบันทึก..." : "บันทึกข้อมูล"}

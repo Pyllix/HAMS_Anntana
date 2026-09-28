@@ -27,5 +27,5 @@ export interface UserDto {
   email: string;
   password?: string;
   role: RoleType;
-  sectionId: string;
+  sectionId?: string;
 }

@@ -53,7 +53,7 @@ export default function PendingEvaluationsPage() {
 
   if (viewMode === "form" && selectedJob) {
     return (
-      <div className="p-1">
+      <div className="p-1 h-full overflow-hidden">
         <AssessmentForm />
       </div>
     );

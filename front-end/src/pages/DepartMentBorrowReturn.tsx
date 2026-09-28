@@ -3,14 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getAssetTypes } from "../services/assetService";
 import AvailableAssetsTable from "../components/borrow-return/AvailableAssetsTable";
+import DepartmentBorrowingsTable from "../components/borrow-return/DepartmentBorrowingsTable";
+import RequestReturnModal from "../components/borrow-return/RequestReturnModal";
 import SelfBorrowModal from "../components/borrow-return/SelfBorrowModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
+import { useRequestReturnModalStore } from "../stores/useRequestReturnModalStore";
 import { useSelfBorrowModalStore } from "../stores/useSelfBorrowModalStore";
 
 export default function DepartMentBorrowReturn() {
   const [inputSearch, setInputSearch] = useState("");
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useSelfBorrowModalStore();
+  const isRequestReturnOpen = useRequestReturnModalStore((s) => s.isFormOpen);
 
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
@@ -19,6 +23,11 @@ export default function DepartMentBorrowReturn() {
 
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      {/* ครุภัณฑ์ที่แผนกยืมอยู่ และใครเป็นผู้ยืม */}
+      <div className="shrink-0">
+        <DepartmentBorrowingsTable />
+      </div>
+
       {/* Search & Filter Bar */}
       <div className="shrink-0 flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4 bg-bg-component shadow-sm w-full rounded-lg p-4">
         {/* กรอกคำค้นหา */}
@@ -64,6 +73,7 @@ export default function DepartMentBorrowReturn() {
 
       {/* Modal */}
       {isFormOpen && <SelfBorrowModal />}
+      {isRequestReturnOpen && <RequestReturnModal />}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />

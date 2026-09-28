@@ -72,8 +72,10 @@ export default function RepairHistory() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    // ล็อกความสูงเต็มความสูงที่เหลือของจอภาพ และห้าม scroll ระดับเพจ (overflow-hidden)
+    <div className="flex flex-col h-[calc(100vh-6rem)] overflow-hidden space-y-4">
+      {/* Summary Cards */}
+      <div className="shrink-0 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           label="ประเมินแล้วทั้งหมด"
           value={summary.all}
@@ -100,8 +102,9 @@ export default function RepairHistory() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-100 bg-white p-3.5 shadow-2xs">
-        <div className="relative min-w-[240px] flex-1">
+      {/* Search & Filter Bar */}
+      <div className="shrink-0 flex w-full flex-col flex-wrap items-start gap-4 rounded-lg bg-white p-4 shadow-2xs border border-slate-100 md:flex-row md:items-center">
+        <div className="relative w-full flex-1 md:max-w-md">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -125,7 +128,8 @@ export default function RepairHistory() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-2xs">
+      {/* Table Section: ขยายเต็มพื้นที่ที่เหลือ (flex-1) */}
+      <div className="flex-1 overflow-hidden border-none">
         <RepairHistoryTable
           search={search}
           actionType={actionType}
@@ -153,7 +157,7 @@ function SummaryCard({ label, value, icon: Icon, color }: SummaryCardProps) {
     violet: "bg-violet-50 text-violet-600",
   };
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs">
+    <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-2xs">
       <span
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${colorClasses[color]}`}
       >

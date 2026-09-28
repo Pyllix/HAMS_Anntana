@@ -1,124 +1,302 @@
-import { FormEvent, useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "../../types/TypeUser";
-import { ROLES, type RoleType } from "../../router/roles";
-import { updateUserById } from "../../services/userService";
+import { updateUserById, type UserUpdateDto } from "../../services/userService";
 import { getSections } from "../../services/assetService";
+import { ROLES, ROLE_LABELS, type RoleType } from "../../router/roles";
+import { ROLE_OPTIONS } from "./DialogAddUser";
 
-const ROLE_LABELS: Record<RoleType, string> = {
-  [ROLES.ADMIN]: "ผู้ดูแลระบบ",
-  [ROLES.MANAGER]: "ผู้จัดการ / หัวหน้างาน",
-  [ROLES.MAINTENANCE_HEAD]: "หัวหน้าช่าง",
-  [ROLES.MAINTENANCE_STAFF]: "ช่างซ่อมบำรุง",
-  [ROLES.ASSET_CENTER_STAFF]: "เจ้าหน้าที่ศูนย์สินทรัพย์",
-  [ROLES.PARCEL_STAFF]: "เจ้าหน้าที่พัสดุ",
-  [ROLES.DEPARTMENT_STAFF]: "เจ้าหน้าที่ประจำแผนก",
-};
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  user: User;
+}
 
-function friendlyError(error: unknown): string {
-  const data = (error as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+const EDIT_ROLE_OPTIONS = [
+  ...ROLE_OPTIONS,
+  {
+    value: ROLES.MAINTENANCE_HEAD,
+    label: ROLE_LABELS.MAINTENANCE_HEAD,
+    description: "สิทธิ์การใช้งาน: มอบหมายและกำกับดูแลงานซ่อมบำรุง",
+  },
+];
+
+function editErrorMessage(error: unknown): string {
+  const data = (error as { response?: { data?: { code?: string; message?: string } } })
+    .response?.data;
   if (data?.code === "LAST_ACTIVE_ENROLLED_ADMIN") {
     return "บันทึกไม่ได้ เพราะไม่สามารถลดสิทธิ์หรือระงับ ADMIN คนสุดท้ายที่เปิดใช้ 2FA ได้";
   }
-  if (data?.message && typeof data.message === "string") return data.message;
-  return "บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองอีกครั้ง";
+  return typeof data?.message === "string"
+    ? data.message
+    : "บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองอีกครั้ง";
 }
 
-export default function DialogEditUser({
-  isOpen,
-  onClose,
-  user,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  user: User | null;
-}) {
-  const queryClient = useQueryClient();
-  const [firstname, setFirstname] = useState("");
-  const [lastname, setLastname] = useState("");
-  const [email, setEmail] = useState("");
-  const [userName, setUserName] = useState("");
-  const [sectionId, setSectionId] = useState("");
-  const [role, setRole] = useState<RoleType>(ROLES.DEPARTMENT_STAFF);
-  const [banned, setBanned] = useState(false);
+const toForm = (user: User) => ({
+  firstname: user.firstname ?? "",
+  lastname: user.lastname ?? "",
+  userName: user.userName ?? "",
+  email: user.email ?? "",
+  sectionId: user.section_id ?? "",
+  role: user.role as RoleType,
+  banned: user.banned === true,
+});
+
+export default function DialogEditUser({ isOpen, onClose, user }: Props) {
+  const [form, setForm] = useState(() => toForm(user));
   const [error, setError] = useState("");
 
+  const queryClient = useQueryClient();
+
+  // รีเซ็ตฟอร์มให้ตรงกับข้อมูลผู้ใช้ล่าสุดทุกครั้งที่เปิด dialog
   useEffect(() => {
-    if (!isOpen || !user) return;
-    setFirstname(user.firstname ?? "");
-    setLastname(user.lastname ?? "");
-    setEmail(user.email ?? "");
-    setUserName(user.userName ?? "");
-    setSectionId(user.section_id ?? "");
-    setRole(user.role);
-    setBanned(user.banned === true);
-    setError("");
+    if (isOpen) {
+      setForm(toForm(user));
+      setError("");
+    }
   }, [isOpen, user]);
 
   const { data: sections } = useQuery({
     queryKey: ["sections"],
-    queryFn: getSections,
+    queryFn: () => getSections(),
     enabled: isOpen,
   });
 
-  const mutation = useMutation({
-    mutationFn: () => {
-      if (!user) throw new Error("No user selected");
-      return updateUserById(user.id, {
-        firstname,
-        lastname,
-        email,
-        userName,
-        sectionId,
-        role,
-        banned,
-      });
-    },
+  const { mutate: editUser, isPending } = useMutation({
+    mutationFn: (payload: UserUpdateDto) =>
+      updateUserById(user.id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       onClose();
     },
-    onError: (cause) => setError(friendlyError(cause)),
+    onError: (cause) => setError(editErrorMessage(cause)),
   });
 
-  if (!isOpen || !user) return null;
+  if (!isOpen) return null;
 
-  const securityChange = role !== user.role || banned !== (user.banned === true);
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError("");
-    mutation.mutate();
+  const selectedRole =
+    EDIT_ROLE_OPTIONS.find((option) => option.value === form.role) ?? EDIT_ROLE_OPTIONS[0];
+
+  // ผู้ดูแลระบบไม่จำเป็นต้องสังกัดหน่วยงาน
+  const isSectionRequired = form.role !== ROLES.ADMIN;
+  const securityChange =
+    form.role !== user.role || form.banned !== (user.banned === true);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    editUser({
+      firstname: form.firstname.trim(),
+      lastname: form.lastname.trim(),
+      userName: form.userName.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      banned: form.banned,
+      ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
+    });
+  };
+
+  const inputClass =
+    "w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm text-gray-900 placeholder-gray-400";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="edit-user-title" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1F2937]/60 backdrop-blur-sm transition-opacity">
+      <div className="relative w-full max-w-[600px] bg-white rounded-[24px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-start justify-between px-8 py-6 border-b border-[#E5E7EB]">
           <div>
-            <h2 id="edit-user-title" className="text-xl font-bold text-slate-900">แก้ไขบัญชีผู้ใช้</h2>
-            <p className="mt-1 text-sm text-slate-500">{user.employeeId} · {user.email}</p>
+            <h3 className="text-2xl font-bold text-[#1F2937]">
+              แก้ไขข้อมูลผู้ใช้งาน
+            </h3>
+            <p className="mt-1 text-sm text-[#1F2937]/60">
+              รหัสพนักงาน{" "}
+              <span className="font-mono font-semibold">
+                {user.employeeId || "-"}
+              </span>
+            </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="ปิด" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
+            aria-label="Close dialog"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
         </div>
-        <form onSubmit={submit} className="space-y-4 p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">ชื่อ<input required value={firstname} onChange={(event) => setFirstname(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-            <label className="text-sm font-medium text-slate-700">นามสกุล<input required value={lastname} onChange={(event) => setLastname(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-            <label className="text-sm font-medium text-slate-700">อีเมล<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-            <label className="text-sm font-medium text-slate-700">ชื่อผู้ใช้<input value={userName} onChange={(event) => setUserName(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-            <label className="text-sm font-medium text-slate-700">หน่วยงาน<select required value={sectionId} onChange={(event) => setSectionId(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="">เลือกหน่วยงาน</option>{sections?.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}</select></label>
-            <label className="text-sm font-medium text-slate-700">Role<select value={role} onChange={(event) => setRole(event.target.value as RoleType)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5">{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+
+        {/* Form Body */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-8 space-y-5"
+        >
+          <div className="grid grid-cols-2 gap-5">
+            {/* ชื่อ */}
+            <div>
+              <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+                ชื่อ <span className="text-emerald-600">*</span>
+              </label>
+              <input
+                type="text"
+                name="firstname"
+                required
+                value={form.firstname}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+
+            {/* นามสกุล */}
+            <div>
+              <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+                นามสกุล
+              </label>
+              <input
+                type="text"
+                name="lastname"
+                value={form.lastname}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
           </div>
-          <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
-            <input type="checkbox" checked={banned} onChange={(event) => setBanned(event.target.checked)} className="mt-0.5 h-4 w-4 accent-rose-600" />
-            <span><strong>ระงับบัญชี</strong><span className="mt-0.5 block text-slate-500">ผู้ใช้จะเข้าใช้งานไม่ได้</span></span>
+
+          <div className="grid grid-cols-2 gap-5">
+            {/* ชื่อผู้ใช้ */}
+            <div>
+              <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+                ชื่อผู้ใช้ (Username) <span className="text-emerald-600">*</span>
+              </label>
+              <input
+                type="text"
+                name="userName"
+                required
+                value={form.userName}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+
+            {/* อีเมล */}
+            <div>
+              <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+                อีเมล (Email) <span className="text-emerald-600">*</span>
+              </label>
+              <input
+                type="email"
+                name="email"
+                required
+                value={form.email}
+                onChange={handleChange}
+                placeholder="email@company.com"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* หน่วยงาน/แผนก */}
+          <div>
+            <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+              หน่วยงาน/แผนก{" "}
+              {isSectionRequired ? (
+                <span className="text-emerald-600">*</span>
+              ) : (
+                <span className="text-xs font-normal text-gray-400">
+                  (ไม่ต้องระบุ)
+                </span>
+              )}
+            </label>
+            <select
+              name="sectionId"
+              required={isSectionRequired}
+              disabled={!isSectionRequired}
+              value={isSectionRequired ? form.sectionId : ""}
+              onChange={handleChange}
+              className={`${inputClass} bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
+            >
+              <option value="" disabled={isSectionRequired}>
+                {isSectionRequired
+                  ? "-- โปรดเลือกหน่วยงาน --"
+                  : "-- ผู้ดูแลระบบไม่ต้องระบุหน่วยงาน --"}
+              </option>
+              {sections?.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* ระดับผู้ใช้งาน (Role) */}
+          <div>
+            <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
+              ระดับผู้ใช้งาน (Role) <span className="text-emerald-600">*</span>
+            </label>
+            <select
+              name="role"
+              value={form.role}
+              onChange={handleChange}
+              className="w-full px-4 py-2.5 rounded-lg border-2 border-emerald-500 bg-emerald-50/40 focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-emerald-700"
+            >
+              {EDIT_ROLE_OPTIONS.map((option, index) => (
+                <option key={option.value} value={option.value}>
+                  {`${index + 1}. ${option.label}`}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-[#1F2937]/70">
+              {selectedRole.description}
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.banned}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, banned: event.target.checked }))
+              }
+              className="h-4 w-4 accent-emerald-600"
+            />
+            <span>ระงับบัญชีผู้ใช้นี้</span>
           </label>
-          {securityChange && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">การเปลี่ยน Role หรือสถานะจะออกจากระบบทุกอุปกรณ์และเพิกถอน Trusted Browser ของบัญชีนี้ การสร้างบัญชีและเปลี่ยน Role ไม่ต้องยืนยัน TOTP เพิ่ม</p>}
-          {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-            <button type="button" disabled={mutation.isPending} onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">ยกเลิก</button>
-            <button disabled={mutation.isPending} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{mutation.isPending ? "กำลังบันทึก..." : "บันทึกบัญชี"}</button>
+
+          {securityChange && (
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              การเปลี่ยน Role หรือสถานะจะออกจากระบบทุกอุปกรณ์และเพิกถอน Trusted Browser ของบัญชีนี้
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
+              {error}
+            </p>
+          )}
+
+          {/* Footer Buttons */}
+          <div className="pt-6 flex items-center justify-end gap-3 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700/70 text-sm font-bold hover:bg-gray-50 transition-colors"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isPending ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+            </button>
           </div>
         </form>
       </div>

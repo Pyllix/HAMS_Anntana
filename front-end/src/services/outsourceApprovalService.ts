@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { createApiClient } from "./apiClient";
 import type {
   OutsourceApprovalDecision,
@@ -137,7 +138,7 @@ export async function rejectOutsourceRequest(
 }
 
 export function outsourceApprovalError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     if (error.response?.status === 401) return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่";
     if (error.response?.status === 403) {
       return "บัญชีนี้ไม่มีสิทธิ์อนุมัติส่งซ่อมภายนอก กรุณาใช้บัญชีเจ้าหน้าที่พัสดุ";

@@ -53,14 +53,15 @@ export default function Actions({ row }: { row: User }) {
         user={row}
       />
 
-      <DialogDetailUser
-        isOpen={isOpenView}
-        onClose={() => setIsOpenView(false)}
-        user={row}
-      />
       <DialogEditUser
         isOpen={isOpenEdit}
         onClose={() => setIsOpenEdit(false)}
+        user={row}
+      />
+
+      <DialogDetailUser
+        isOpen={isOpenView}
+        onClose={() => setIsOpenView(false)}
         user={row}
       />
       <DialogAdminSecurityActions

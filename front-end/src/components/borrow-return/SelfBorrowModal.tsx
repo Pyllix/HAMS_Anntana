@@ -34,6 +34,7 @@ export default function SelfBorrowModal() {
           "ส่งคำขอยืมครุภัณฑ์เรียบร้อยแล้ว รอเจ้าหน้าที่ศูนย์ครุภัณฑ์อนุมัติ",
         );
         queryClient.invalidateQueries({ queryKey: ["assets"] });
+        queryClient.invalidateQueries({ queryKey: ["borrowHistory"] });
         closeForm();
       },
       onError: (err: any) => {
