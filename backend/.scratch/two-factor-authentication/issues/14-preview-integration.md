@@ -40,3 +40,5 @@
 4. ตรวจ response จาก `/api` ผ่าน Vercel Preview ว่าถูก proxy และไม่ถูก cache จริง รวมถึงทดสอบ public sign-up และ Bearer fallback หลังผ่านข้อ 3 หรือด้วย Preview ที่เข้าถึงได้
 
 **การตัดสินใจ:** ยังไม่อนุมัติ Production และยังไม่ปิด Ticket 14
+
+**ติดตามผล 2026-09-29:** เพิ่ม ADMIN สำรองใน demo seed แล้ว แต่ยังไม่ได้รันกับฐาน Preview หรือ enroll 2FA บัญชีนี้ การเพิ่มบัญชีจาก seed ไม่ทำให้ handover check ผ่านอัตโนมัติ เพราะ check ตรวจอีเมลสองบัญชีที่กำหนดใน `BOOTSTRAP_ADMIN_1_EMAIL` และ `BOOTSTRAP_ADMIN_2_EMAIL` รวมถึงสถานะ 2FA ของแต่ละบัญชี
