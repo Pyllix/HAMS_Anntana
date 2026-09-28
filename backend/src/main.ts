@@ -4,7 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { trustedOrigins } from './auth/csrf-protection';
+import { isTrustedOrigin } from './auth/csrf-protection';
 import { sharedPrisma } from './common/config/database.config';
 
 async function logAuthDatabaseVisibility() {
@@ -42,13 +42,11 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // Enable CORS with explicit trusted origins
-  const allowedOrigins = trustedOrigins();
-
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (isTrustedOrigin(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

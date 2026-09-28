@@ -57,11 +57,11 @@ GET /auth/csrf
 Response 200: { "csrfToken": "<token>" }
 ```
 
-GET /auth/csrf is available before sign-in, during pre-auth, and with a full Session. It sets a host-only, HttpOnly, SameSite=Strict CSRF Cookie (`hams.csrf`, or `__Host-hams.csrf` in production) with a 12-hour lifetime and returns the matching proof in JSON for in-memory use by the client. The proof contains a random nonce signed with `BETTER_AUTH_SECRET` and is bound to the current BetterAuth Session or `hams.pre_auth` Cookie context. Requests with an `Origin` header must come from the exact trusted-origin allowlist and include both the matching Cookie and `X-CSRF-Token`; missing, mismatched, forged, or stale proofs are rejected with `403 CSRF_INVALID`. The proof rotates when the auth Cookie context changes. Fetch it before the first mutation and after each auth-state transition.
+GET /auth/csrf is available before sign-in, during pre-auth, and with a full Session. It sets a host-only, HttpOnly, SameSite=Strict CSRF Cookie (`hams.csrf`, or `__Host-hams.csrf` in production) with a 12-hour lifetime and returns the matching proof in JSON for in-memory use by the client. The proof contains a random nonce signed with `BETTER_AUTH_SECRET` and is bound to the current BetterAuth Session or `hams.pre_auth` Cookie context. Requests with an `Origin` header must come from a trusted origin and include both the matching Cookie and `X-CSRF-Token`; missing, mismatched, forged, or stale proofs are rejected with `403 CSRF_INVALID`. The proof rotates when the auth Cookie context changes. Fetch it before the first mutation and after each auth-state transition.
 
-Originless non-Browser API clients do not use the Browser CSRF check; they must be isolated by deployment policy and must not receive a Browser Session Cookie. CORS is restricted to exact frontend origins specified in `trustedOrigins`. Cross-origin credentialed requests from unlisted origins are rejected.
+Originless non-Browser API clients do not use the Browser CSRF check; they must be isolated by deployment policy and must not receive a Browser Session Cookie.
 
-CORS is restricted to exact frontend origins specified in `trustedOrigins`. Cross-origin credentialed requests from unlisted origins are rejected.
+CORS is restricted to frontend origins specified in `trustedOrigins`. An isolated test backend can additionally set `VERCEL_PREVIEW_ORIGIN_PATTERN` (for example, `https://hams-anntana-test-*-pyllix.vercel.app`) to accept commit and branch Preview URLs from that one Vercel project and account. The same pattern applies to Better Auth and the signed CSRF origin check. Cross-origin credentialed requests from unlisted origins are rejected.
 
 Personalized/authenticated responses include `Cache-Control: no-store`. The Vercel `/api` proxy must not cache these responses.
 

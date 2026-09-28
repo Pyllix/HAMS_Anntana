@@ -45,7 +45,31 @@ export function trustedOrigins(): string[] {
     'http://localhost:5173',
   ];
 
-  return [...new Set(candidates.map(normalizeOrigin).filter(isString))];
+  const origins = [
+    ...new Set(candidates.map(normalizeOrigin).filter(isString)),
+  ];
+  const previewPattern = configuredPreviewPattern();
+  if (previewPattern) origins.push(previewPattern[0]);
+  return origins;
+}
+
+export function isTrustedOrigin(value: string): boolean {
+  const origin = normalizeOrigin(value);
+  if (!origin || origin !== value) return false;
+  if (trustedOrigins().includes(origin)) return true;
+
+  const previewPattern = configuredPreviewPattern();
+  if (!previewPattern) return false;
+
+  const hostname = new URL(origin).hostname;
+  const prefix = `${previewPattern[1]}-`;
+  const suffix = `-${previewPattern[2]}.vercel.app`;
+  if (!hostname.startsWith(prefix) || !hostname.endsWith(suffix)) {
+    return false;
+  }
+
+  const previewId = hostname.slice(prefix.length, -suffix.length);
+  return /^[a-z0-9-]+$/.test(previewId);
 }
 
 export function isValidCsrfRequest(input: {
@@ -58,12 +82,7 @@ export function isValidCsrfRequest(input: {
   // Browser requests include Origin; originless clients keep the existing API contract.
   if (!input.origin) return true;
 
-  const origin = normalizeOrigin(input.origin);
-  if (
-    !origin ||
-    origin !== input.origin ||
-    !trustedOrigins().includes(origin)
-  ) {
+  if (!isTrustedOrigin(input.origin)) {
     return false;
   }
 
@@ -79,6 +98,14 @@ export function isValidCsrfRequest(input: {
   const cookie = Buffer.from(csrfCookie);
   return (
     submitted.length === cookie.length && timingSafeEqual(submitted, cookie)
+  );
+}
+
+function configuredPreviewPattern(): RegExpMatchArray | null {
+  return (
+    process.env.VERCEL_PREVIEW_ORIGIN_PATTERN?.match(
+      /^https:\/\/([a-z0-9][a-z0-9-]*)-\*-([a-z0-9][a-z0-9-]*)\.vercel\.app$/,
+    ) ?? null
   );
 }
 

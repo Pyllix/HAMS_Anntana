@@ -1,6 +1,11 @@
 import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
 import { CsrfGuard } from './csrf.guard';
-import { createCsrfToken, csrfCookieName } from './csrf-protection';
+import {
+  createCsrfToken,
+  csrfCookieName,
+  isTrustedOrigin,
+  trustedOrigins,
+} from './csrf-protection';
 
 describe('CsrfGuard', () => {
   const guard = new CsrfGuard();
@@ -96,5 +101,67 @@ describe('CsrfGuard', () => {
     expect(guard.canActivate(contextFor({ method: 'POST', headers: {} }))).toBe(
       true,
     );
+  });
+
+  describe('Vercel preview origins', () => {
+    const pattern = 'https://hams-anntana-test-*-pyllix.vercel.app';
+    const previousPattern = process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+
+    beforeEach(() => {
+      process.env.VERCEL_PREVIEW_ORIGIN_PATTERN = pattern;
+    });
+
+    afterAll(() => {
+      if (previousPattern === undefined) {
+        delete process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+      } else {
+        process.env.VERCEL_PREVIEW_ORIGIN_PATTERN = previousPattern;
+      }
+    });
+
+    it('accepts commit and branch previews from the configured project', () => {
+      const token = createCsrfToken();
+      for (const origin of [
+        'https://hams-anntana-test-b3uz0a5qy-pyllix.vercel.app',
+        'https://hams-anntana-test-git-feat-2fa-auth-pyllix.vercel.app',
+      ]) {
+        expect(isTrustedOrigin(origin)).toBe(true);
+        expect(
+          guard.canActivate(
+            contextFor({
+              method: 'POST',
+              headers: {
+                origin,
+                cookie: `${csrfCookieName()}=${token}`,
+                'x-csrf-token': token,
+              },
+            }),
+          ),
+        ).toBe(true);
+      }
+      expect(trustedOrigins()).toContain(pattern);
+    });
+
+    it('rejects previews from another project or Vercel account', () => {
+      expect(
+        isTrustedOrigin('https://other-project-b3uz0a5qy-pyllix.vercel.app'),
+      ).toBe(false);
+      expect(
+        isTrustedOrigin('https://hams-anntana-test-b3uz0a5qy-other.vercel.app'),
+      ).toBe(false);
+    });
+
+    it('still requires a CSRF proof on preview requests', () => {
+      expect(() =>
+        guard.canActivate(
+          contextFor({
+            method: 'POST',
+            headers: {
+              origin: 'https://hams-anntana-test-b3uz0a5qy-pyllix.vercel.app',
+            },
+          }),
+        ),
+      ).toThrow(ForbiddenException);
+    });
   });
 });
