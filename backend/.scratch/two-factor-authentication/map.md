@@ -1,8 +1,8 @@
 # 2FA implementation ticket map
 
 **Source spec:** [2FA, Trusted Browser และ Web Session](spec.md)
-**Status:** tickets 01–13 done; ticket 14 is the remaining Preview integration and Production release gate
-**Release rule:** อย่าเปิดใช้ Production จน ticket 14 ผ่าน Preview ครบ
+**Status:** tickets 01–14 closed for the test deployment; Production release checks remain open
+**Release rule:** อย่าเปิดใช้ Production จนรายการที่ย้ายไปตรวจใน [ticket 14](issues/14-preview-integration.md) ผ่านครบ รวมถึง Preview browser flows และ ADMIN handover บนฐานหลัก
 
 ## วิธีทำงาน
 
@@ -30,7 +30,7 @@
 | 11 | FE | [ย้าย service ทั้งหมดไป Cookie client](issues/11-fe-cookie-client-migration.md) | 10 |
 | 12 | FE | [Enrollment และ Login ด้วย 2FA](issues/12-fe-two-factor-entry.md) | 03, 04, 05, 10 |
 | 13 | FE + BE | [ปิด Browser token แบบเดิม](issues/13-browser-token-cutover.md) | 07, 08, 11, 12 |
-| 14 | FE + BE | [ตรวจ Preview และเตรียมส่งมอบ](issues/14-preview-integration.md) | 06, 08, 09, 12, 13 |
+| 14 | FE + BE | [ตรวจ Preview และเตรียมส่งมอบ](issues/14-preview-integration.md) — **Closed for test deployment; Production checks pending** | 06, 08, 09, 12, 13 |
 
 ## ลำดับที่เริ่มได้
 
@@ -38,7 +38,7 @@
 2. หลัง 10: เริ่ม 11 และ 12; เริ่มงาน Frontend ใน 06 และ 07 ได้
 3. หลัง Step-up ฝั่ง Backend ของ 07 พร้อม: เริ่ม recovery และ ADMIN reset password ใน 08; หน้าจอ ADMIN ใช้ service จาก 11
 4. หลัง 07, 08, 11 และ 12: ทำ 13 โดยย้าย Browser ก่อนปิดทาง token เดิมฝั่ง Backend
-5. หลัง release gates ทั้งหมด: ทำ 14 บน Preview ก่อนพิจารณา Production
+5. ก่อนพิจารณา Production: ทำรายการตรวจที่ยังค้างใน ticket 14 ให้ผ่านและบันทึกผล
 
 ## มติที่ห้ามตีความกลับ
 

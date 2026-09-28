@@ -6,11 +6,13 @@
 
 **Owner / change boundary:** Frontend นำการตรวจ Preview ร่วมกับ Backend owner เพื่อตรวจ API, database และ deployment
 
-**Status:** in-progress — ตรวจอัตโนมัติและ Render แล้ว; ยังไม่ผ่าน release gate
+**Status:** closed by owner for the test deployment — Production release checks remain open
 
 **Delivery order:** ทำหลัง ticket ที่เป็น release gate เสร็จทั้งหมด; บันทึกผลและข้อบกพร่องก่อนอนุมัติ Production
 
-## เกณฑ์ส่งมอบ
+## เกณฑ์เดิมและสถานะก่อนปิดรอบทดสอบ
+
+รายการที่ยังไม่ทำเครื่องหมายถูกถูกย้ายไปเป็น Production release gate ด้านล่าง; การปิด ticket ไม่ใช่ผลทดสอบผ่าน
 
 - [ ] Preview บน Vercel–Render ใช้ same-origin API proxy และ rewrite ก่อน SPA fallback; personalized response ไม่ถูก cache
 - [ ] ตรวจ Set-Cookie, Secure/HttpOnly/SameSite, Sign-in, Sign-out, CSRF และ Browser ที่บล็อก third-party Cookies
@@ -32,13 +34,15 @@
 | ADMIN handover | พบ active ADMIN 2 บัญชี | มีเพียง 1 บัญชีที่ email verified และ enroll 2FA สำเร็จ; **ไม่ผ่านเกณฑ์ ADMIN พร้อมใช้ 2 คน** |
 | ปิดทางเข้าเดิม | โค้ดปฏิเสธ public sign-up; frontend เรียก same-origin `/api` และไม่แนบ Authorization | ยังไม่ยืนยัน public sign-up และ bearer fallback ด้วยการทดสอบ integration บน Preview |
 
-### ข้อจำกัดและงานที่ต้องทำก่อนปิด Ticket
+### รายการที่ย้ายไปตรวจใน Production release gate
 
-1. ให้เจ้าของ ADMIN คนที่สองยืนยันอีเมลและ enroll 2FA ด้วยตนเอง แล้วตรวจอีกครั้งว่ามี ADMIN พร้อมใช้ 2 คน; ห้ามบันทึก TOTP secret หรือ recovery code ในรายงานนี้
+1. ให้เจ้าของ ADMIN ทั้งสองบัญชีบนฐานหลักยืนยันอีเมลและ enroll 2FA ด้วยตนเอง แล้วรัน handover check จนผ่าน; ห้ามบันทึก TOTP secret หรือ recovery code ในรายงานนี้
 2. เปิด Preview ที่ผ่าน Vercel Authentication แล้วเดิน flow ใน browser ทั้ง cookie, 2FA, recovery, trusted browser, สลับบัญชี, role change, warning/draft และ reset/revoke; บันทึกผลพร้อม browser/เวลา
 3. จัดฐาน PostgreSQL สำหรับ integration tests ที่แยกจากฐานใช้งานและมี schema ล่าสุดก่อนรันชุด DB-backed; ค่า `TEST_DATABASE_URL` ในเครื่องขณะตรวจชี้ฐานเดียวกับ `DATABASE_URL` จึงไม่รันชุดนี้ต่อ
 4. ตรวจ response จาก `/api` ผ่าน Vercel Preview ว่าถูก proxy และไม่ถูก cache จริง รวมถึงทดสอบ public sign-up และ Bearer fallback หลังผ่านข้อ 3 หรือด้วย Preview ที่เข้าถึงได้
 
-**การตัดสินใจ:** ยังไม่อนุมัติ Production และยังไม่ปิด Ticket 14
+**การตัดสินใจ 2026-09-29:** เจ้าของงานปิด Ticket 14 สำหรับรอบทดสอบบนฐานแยก โดยย้ายรายการที่ยังไม่ผ่านข้างต้นไปตรวจอีกครั้งก่อนเปิดใช้ Production การปิด Ticket นี้ไม่ได้หมายความว่า Preview browser flows หรือ Production handover ผ่านแล้ว และยังไม่อนุมัติเปิด Production
+
+**ผล handover check ล่าสุดบน `hams_db_test`:** ADMIN 1 ยืนยันอีเมลแล้ว แต่ยังไม่ enroll 2FA; ADMIN 2 ยังไม่ยืนยันอีเมลและยังไม่ enroll 2FA คำสั่ง `pnpm run prisma:handover-check` ยัง exit 1 ทั้งสองบัญชีอยู่ในฐานทดสอบ ไม่ใช่ฐานหลักของลูกค้า
 
 **ติดตามผล 2026-09-29:** เพิ่ม ADMIN สำรองใน demo seed แล้ว แต่ยังไม่ได้รันกับฐาน Preview หรือ enroll 2FA บัญชีนี้ การเพิ่มบัญชีจาก seed ไม่ทำให้ handover check ผ่านอัตโนมัติ เพราะ check ตรวจอีเมลสองบัญชีที่กำหนดใน `BOOTSTRAP_ADMIN_1_EMAIL` และ `BOOTSTRAP_ADMIN_2_EMAIL` รวมถึงสถานะ 2FA ของแต่ละบัญชี
