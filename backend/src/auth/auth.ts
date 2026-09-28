@@ -105,7 +105,8 @@ export const auth = betterAuth({
         userFound = `error:${error instanceof Error ? error.name : 'unknown'}`;
       }
       console.warn(
-        `[AuthSignInContext] emailIsDemoAdmin=${email === 'admin@hospital.go.th'} ` +
+        `[AuthSignInContext] authVersion=${ctx.context.version} ` +
+          `emailIsDemoAdmin=${email === 'admin@hospital.go.th'} ` +
           `adapterIsConfigured=${currentAdapter === ctx.context.adapter} ` +
           `internalUserExists=${userFound}`,
       );
