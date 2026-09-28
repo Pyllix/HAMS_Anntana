@@ -96,6 +96,7 @@ export const auth = betterAuth({
     // Redirect better-auth's 'name' field to our 'firstname' column
     fields: {
       name: 'firstname',
+      image: 'imageUrl',
     },
     additionalFields: {
       userName: { type: 'string', required: false, defaultValue: '' },
@@ -107,7 +108,6 @@ export const auth = betterAuth({
         input: false,
       },
       section_id: { type: 'string', required: false },
-      imageUrl: { type: 'string', required: false },
     },
   },
   plugins: [
