@@ -14,14 +14,14 @@ const config = JSON.parse(
   readFileSync(new URL("../vercel.json", import.meta.url), "utf8"),
 ) as VercelConfig;
 
-test("routes the API through the backend before the SPA fallback", () => {
+test("routes the API through the production backend before the SPA fallback", () => {
   assert.deepEqual(
     config.rewrites.map(({ source }) => source),
     ["/api/:path*", "/(.*)"],
   );
   assert.equal(
     new URL(config.rewrites[0].destination).host,
-    "hams-anntana-test.onrender.com",
+    "hams-anntana.onrender.com",
   );
 });
 
