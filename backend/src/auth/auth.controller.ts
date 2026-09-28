@@ -31,6 +31,7 @@ import {
   isCsrfToken,
 } from './csrf-protection';
 import { auth } from './auth';
+import { sharedPrisma } from '../common/config/database.config';
 import type { SessionExpiryWindow } from './session-lifetime.service';
 import { AdminStepUpService } from './admin-step-up.service';
 import { SignInDto } from './dto/sign-in.dto';
@@ -210,6 +211,7 @@ export class AuthController {
         body.code === 'INVALID_EMAIL_OR_PASSWORD' ||
         details.code === 'INVALID_EMAIL_OR_PASSWORD'
       ) {
+        await this.logSignInLookup(dto.email);
         throw new UnauthorizedException('Invalid email or password');
       }
 
@@ -223,6 +225,35 @@ export class AuthController {
             }),
       );
       throw new InternalServerErrorException('Sign-in could not be completed');
+    }
+  }
+
+  private async logSignInLookup(email: string): Promise<void> {
+    if (process.env.AUTH_DB_DIAGNOSTICS !== '1') return;
+
+    try {
+      const [identity] = await sharedPrisma.$queryRaw<
+        Array<{ database: string; schema: string }>
+      >`SELECT current_database() AS database, current_schema() AS schema`;
+      const [submittedUser, demoAdmin] = await Promise.all([
+        sharedPrisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        }),
+        sharedPrisma.user.findUnique({
+          where: { email: 'admin@hospital.go.th' },
+          select: { id: true },
+        }),
+      ]);
+      this.logger.warn(
+        `[AuthDbDiagnostics] database=${identity.database} schema=${identity.schema} ` +
+          `submittedEmailIsDemoAdmin=${email === 'admin@hospital.go.th'} ` +
+          `submittedUserExists=${Boolean(submittedUser)} demoAdminExists=${Boolean(demoAdmin)}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `[AuthDbDiagnostics] lookup failed (${error instanceof Error ? error.name : 'unknown error'})`,
+      );
     }
   }
   // ─── Send Verification Email (Resend) ──────────────────────────────────────

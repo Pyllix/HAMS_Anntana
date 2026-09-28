@@ -20,7 +20,7 @@ async function logAuthDatabaseVisibility() {
         select: { id: true },
       }),
     );
-    Logger.log(
+    Logger.warn(
       `database=${identity.database} schema=${identity.schema} adminExists=${adminExists}`,
       'AuthDbDiagnostics',
     );
