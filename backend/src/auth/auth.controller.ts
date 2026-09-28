@@ -25,6 +25,7 @@ import { Public, Session, Optional } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Request, Response } from 'express';
 import type { Session as BetterAuthSession } from 'better-auth/types';
+import { verifyPassword } from 'better-auth/crypto';
 import {
   createCsrfToken,
   csrfCookieName,
@@ -211,7 +212,7 @@ export class AuthController {
         body.code === 'INVALID_EMAIL_OR_PASSWORD' ||
         details.code === 'INVALID_EMAIL_OR_PASSWORD'
       ) {
-        await this.logSignInLookup(dto.email);
+        await this.logSignInLookup(dto.email, dto.password);
         throw new UnauthorizedException('Invalid email or password');
       }
 
@@ -228,7 +229,10 @@ export class AuthController {
     }
   }
 
-  private async logSignInLookup(email: string): Promise<void> {
+  private async logSignInLookup(
+    email: string,
+    password: string,
+  ): Promise<void> {
     if (process.env.AUTH_DB_DIAGNOSTICS !== '1') return;
 
     try {
@@ -245,10 +249,49 @@ export class AuthController {
           select: { id: true },
         }),
       ]);
+      const probe = async (run: () => Promise<unknown>): Promise<string> => {
+        try {
+          return String(Boolean(await run()));
+        } catch (error) {
+          return `error:${error instanceof Error ? error.name : 'unknown'}`;
+        }
+      };
+      const prismaFindFirst = await probe(() =>
+        sharedPrisma.user.findFirst({
+          where: { email: { equals: email.toLowerCase() } },
+          select: { id: true, accounts: { take: 1, select: { id: true } } },
+        }),
+      );
+      const authContext = await auth.$context;
+      const adapterUser = await probe(() =>
+        authContext.adapter.findOne({
+          model: 'user',
+          where: [{ field: 'email', value: email.toLowerCase() }],
+          join: { account: true },
+        }),
+      );
+      const internalUser = await probe(() =>
+        authContext.internalAdapter.findUserByEmail(email, {
+          includeAccounts: true,
+        }),
+      );
+      const credentialAccount = submittedUser
+        ? await sharedPrisma.account.findFirst({
+            where: { userId: submittedUser.id, providerId: 'credential' },
+            select: { password: true },
+          })
+        : null;
+      const credentialHash = credentialAccount?.password;
+      const passwordMatches = credentialHash
+        ? await probe(() => verifyPassword({ hash: credentialHash, password }))
+        : 'false';
       this.logger.warn(
         `[AuthDbDiagnostics] database=${identity.database} schema=${identity.schema} ` +
           `submittedEmailIsDemoAdmin=${email === 'admin@hospital.go.th'} ` +
-          `submittedUserExists=${Boolean(submittedUser)} demoAdminExists=${Boolean(demoAdmin)}`,
+          `submittedUserExists=${Boolean(submittedUser)} demoAdminExists=${Boolean(demoAdmin)} ` +
+          `prismaFindFirstExists=${prismaFindFirst} ` +
+          `adapterFindOneExists=${adapterUser} internalUserExists=${internalUser} ` +
+          `credentialAccountExists=${Boolean(credentialAccount)} passwordMatches=${passwordMatches}`,
       );
     } catch (error) {
       this.logger.warn(
