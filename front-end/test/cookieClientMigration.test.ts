@@ -29,6 +29,7 @@ const sessionStorageValues = new Map([
   ["protected-draft:other-account", "session-draft-that-must-survive"],
 ]);
 let expiredRoute: string | null = null;
+let usersResponseOverride: unknown;
 let sessionExpiryEvents = 0;
 let vite: ViteDevServer | undefined;
 let apiClient: any;
@@ -113,6 +114,7 @@ function responseFor(path: string, method: string, params?: unknown) {
     return { data: [], meta: { hasNextPage: false } };
   }
   if (path === "/api/users" && method === "GET") {
+    if (usersResponseOverride !== undefined) return usersResponseOverride;
     const page = (params as { page?: number } | undefined)?.page ?? 1;
     return page === 1
       ? { data: [{ id: "user-1", firstname: "Test" }], meta: { hasNextPage: true } }
@@ -398,7 +400,7 @@ test("user-management and reference requests use the shared cookie client", asyn
   const usersReads = requests.filter((request) => request.method === "GET" && request.path === "/api/users");
   assert.equal(usersReads.length, 2);
   usersReads.forEach((request, index) => {
-    assertCookieRequest(request, "GET", "/users/");
+    assertCookieRequest(request, "GET", "/users");
     assert.deepEqual(request.params, { page: index + 1, limit: 100 });
   });
   assert.equal((await userService.getUserById("user-1")).id, "user-1");
@@ -437,6 +439,15 @@ test("user-management and reference requests use the shared cookie client", asyn
   const departmentDelete = requests.find((request) => request.method === "DELETE" && request.path === "/api/sections/section-1");
   assertCookieRequest(departmentDelete, "DELETE", "/sections/section-1");
   assert.equal(departmentDelete.csrf, "csrf-test-token");
+});
+
+test("user-management reports a non-list API response instead of treating it as an empty list", async () => {
+  usersResponseOverride = "<html>Preview access page</html>";
+  try {
+    await assert.rejects(userService.getAllUser(), /User list API returned an invalid response/);
+  } finally {
+    usersResponseOverride = undefined;
+  }
 });
 
 test("expired sessions reach the central flow and reject fallback writes", async () => {

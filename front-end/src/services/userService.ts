@@ -19,9 +19,13 @@ export async function getAllUser(): Promise<User[]> {
   let hasNextPage = true;
 
   while (hasNextPage) {
-    const res = await apiClient.get<{ data: User[]; meta?: { hasNextPage?: boolean } }>("/users/", {
+    const res = await apiClient.get<{ data: User[]; meta?: { hasNextPage?: boolean } }>("/users", {
       params: { page, limit: 100 },
     });
+
+    if (!res.data || !Array.isArray(res.data.data)) {
+      throw new Error("User list API returned an invalid response");
+    }
 
     users.push(...res.data.data);
     hasNextPage = res.data.meta?.hasNextPage ?? false;

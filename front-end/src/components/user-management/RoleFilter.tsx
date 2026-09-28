@@ -19,11 +19,15 @@ interface Props {
 export default function RoleFilter({ value, onChange }: Props) {
   return (
     <div className="relative flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/50 pl-4 pr-9 text-sm text-slate-700">
-      <span>ระดับผู้ใช้:</span>
+      <span className="pointer-events-none">ระดับผู้ใช้:</span>
+      <span className="pointer-events-none font-bold text-emerald-600">
+        {value ? ROLE_LABELS[value] : "ทั้งหมด"}
+      </span>
       <select
+        aria-label="กรองระดับผู้ใช้"
         value={value}
         onChange={(e) => onChange(e.target.value as RoleType | "")}
-        className="appearance-none bg-transparent font-bold text-emerald-600 outline-none cursor-pointer"
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
       >
         <option value="">ทั้งหมด</option>
         {Object.entries(ROLE_LABELS).map(([role, label]) => (
