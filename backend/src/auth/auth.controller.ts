@@ -212,6 +212,12 @@ export class AuthController {
         body.code === 'INVALID_EMAIL_OR_PASSWORD' ||
         details.code === 'INVALID_EMAIL_OR_PASSWORD'
       ) {
+        if (process.env.AUTH_DB_DIAGNOSTICS === '1') {
+          const code = body.code ?? details.code;
+          this.logger.warn(
+            `[AuthSignInRejected] code=${typeof code === 'string' ? code : 'unknown'}`,
+          );
+        }
         await this.logSignInLookup(dto.email, dto.password);
         throw new UnauthorizedException('Invalid email or password');
       }

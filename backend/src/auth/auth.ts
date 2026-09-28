@@ -109,6 +109,33 @@ export const auth = betterAuth({
           `adapterIsConfigured=${currentAdapter === ctx.context.adapter} ` +
           `internalUserExists=${userFound}`,
       );
+
+      const internalAdapter = ctx.context.internalAdapter;
+      ctx.context.internalAdapter = {
+        ...internalAdapter,
+        async findUserByEmail(lookedUpEmail, options) {
+          const activeAdapter = await getCurrentAdapter(ctx.context.adapter);
+          const logLookup = (outcome: string) =>
+            console.warn(
+              `[AuthSignInLookup] emailIsDemoAdmin=${lookedUpEmail === 'admin@hospital.go.th'} ` +
+                `adapterIsConfigured=${activeAdapter === ctx.context.adapter} ` +
+                `outcome=${outcome}`,
+            );
+          try {
+            const result = await internalAdapter.findUserByEmail(
+              lookedUpEmail,
+              options,
+            );
+            logLookup(result ? 'found' : 'missing');
+            return result;
+          } catch (error) {
+            logLookup(
+              `error:${error instanceof Error ? error.name : 'unknown'}`,
+            );
+            throw error;
+          }
+        },
+      };
     }),
   },
   trustedOrigins: trustedOrigins(),
