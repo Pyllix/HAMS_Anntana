@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  InternalServerErrorException,
+  Logger,
   Post,
   Req,
   Res,
@@ -60,6 +62,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly twoFactorService: TwoFactorService,
     private readonly trustedBrowserService: TrustedBrowserService,
@@ -187,8 +191,6 @@ export class AuthController {
       const details = isRecord(error) ? error : {};
       const body = isRecord(details.body) ? details.body : {};
       if (
-        details.status === 403 ||
-        details.statusCode === 403 ||
         body.code === 'EMAIL_NOT_VERIFIED' ||
         details.code === 'EMAIL_NOT_VERIFIED' ||
         details.message === 'Email not verified' ||
@@ -201,7 +203,26 @@ export class AuthController {
         });
       }
       if (error instanceof HttpException) throw error;
-      throw new UnauthorizedException('Invalid email or password');
+      if (
+        details.status === 401 ||
+        details.status === 'UNAUTHORIZED' ||
+        details.statusCode === 401 ||
+        body.code === 'INVALID_EMAIL_OR_PASSWORD' ||
+        details.code === 'INVALID_EMAIL_OR_PASSWORD'
+      ) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      this.logger.error(
+        'Sign-in failed unexpectedly',
+        error instanceof Error
+          ? error.stack
+          : JSON.stringify({
+              code: details.code,
+              status: details.status ?? details.statusCode,
+            }),
+      );
+      throw new InternalServerErrorException('Sign-in could not be completed');
     }
   }
   // ─── Send Verification Email (Resend) ──────────────────────────────────────

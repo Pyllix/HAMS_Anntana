@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -189,13 +190,47 @@ describe('AuthController', () => {
       }
     });
 
-    it('should throw UnauthorizedException when sign-in fails with generic error', async () => {
-      mockSignInEmail.mockRejectedValue(new Error('Invalid email or password'));
+    it('should throw UnauthorizedException when Better Auth rejects credentials', async () => {
+      mockSignInEmail.mockRejectedValue({
+        status: 'UNAUTHORIZED',
+        statusCode: 401,
+        body: { code: 'INVALID_EMAIL_OR_PASSWORD' },
+      });
 
       const dto = { email: 'wrong@hospital.go.th', password: 'wrong' };
       await expect(controller.signIn(dto, mockRequest)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('does not report a post-password server failure as wrong credentials', async () => {
+      mockSignInEmail.mockResolvedValue({
+        response: {
+          token: 'pending-session',
+          user: {
+            id: 'admin-1',
+            email: 'admin@hospital.go.th',
+            role: 'ADMIN',
+          },
+        },
+        headers: {
+          getSetCookie: () => [
+            'better-auth.session_token=pending-session; Path=/; HttpOnly',
+          ],
+        },
+      });
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+      mockTwoFactorService.hasCompletedEnrollment.mockResolvedValue(false);
+      mockPreAuthService.createChallenge.mockRejectedValue(
+        new Error('Pre-auth storage failed'),
+      );
+
+      await expect(
+        controller.signIn(
+          { email: 'admin@hospital.go.th', password: 'Password@1234' },
+          mockRequest,
+        ),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 
