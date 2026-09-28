@@ -407,6 +407,7 @@ export default function BudgetTypePage() {
       <BudgetTypeFormModal
         isOpen={isFormOpen}
         item={formItem}
+        existingList={budgetTypes}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleFormSubmit}
         isSubmitting={createMutation.isPending || updateMutation.isPending}

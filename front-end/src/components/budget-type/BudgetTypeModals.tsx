@@ -121,6 +121,7 @@ export function BudgetTypeDetailModal({
 interface FormModalProps {
   isOpen: boolean;
   item: BudgetType | null; // null = Add mode, object = Edit mode
+  existingList?: BudgetType[];
   onClose: () => void;
   onSubmit: (formData: {
     name: string;
@@ -134,6 +135,7 @@ interface FormModalProps {
 export function BudgetTypeFormModal({
   isOpen,
   item,
+  existingList = [],
   onClose,
   onSubmit,
   isSubmitting = false,
@@ -142,6 +144,10 @@ export function BudgetTypeFormModal({
   const [fiscalYear, setFiscalYear] = useState("");
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
+
+  // Validation Error States
+  const [nameError, setNameError] = useState("");
+  const [fiscalYearError, setFiscalYearError] = useState("");
 
   const isEdit = Boolean(item);
 
@@ -157,19 +163,83 @@ export function BudgetTypeFormModal({
       setDescription("");
       setIsActive(true);
     }
+    setNameError("");
+    setFiscalYearError("");
   }, [item, isOpen]);
 
   if (!isOpen) return null;
 
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (nameError) setNameError("");
+  };
+
+  const handleFiscalYearChange = (val: string) => {
+    // Only accept numeric digits, max 4 characters
+    const numericOnly = val.replace(/\D/g, "").slice(0, 4);
+    setFiscalYear(numericOnly);
+    if (fiscalYearError) setFiscalYearError("");
+  };
+
+  const validate = (): boolean => {
+    let isValid = true;
+    const trimmedName = name.trim();
+    const trimmedYear = fiscalYear.trim();
+
+    // 1. Validate Fiscal Year
+    let yearNum: number | undefined = undefined;
+    if (!trimmedYear) {
+      setFiscalYearError("กรุณาระบุปีงบประมาณ");
+      isValid = false;
+    } else if (!/^\d{4}$/.test(trimmedYear)) {
+      setFiscalYearError("กรุณากรอกปีงบประมาณเป็นตัวเลข พ.ศ. 4 หลัก (เช่น 2567)");
+      isValid = false;
+    } else {
+      const parsed = Number(trimmedYear);
+      if (parsed < 2400 || parsed > 2700) {
+        setFiscalYearError("ปีงบประมาณต้องอยู่ในช่วง พ.ศ. 2400 - 2700");
+        isValid = false;
+      } else {
+        yearNum = parsed;
+      }
+    }
+
+    // 2. Validate Name
+    if (!trimmedName) {
+      setNameError("กรุณากรอกชื่อประเภทเงิน");
+      isValid = false;
+    } else if (yearNum) {
+      // Check duplicate: Same name and same fiscal year
+      const isDuplicate = existingList.some((existing) => {
+        if (item && existing.id === item.id) return false;
+        const isSameName =
+          existing.name?.trim().toLowerCase() === trimmedName.toLowerCase();
+        const isSameYear =
+          existing.fiscalYear ? Number(existing.fiscalYear) === yearNum : false;
+        return isSameName && isSameYear;
+      });
+
+      if (isDuplicate) {
+        setNameError(`ชื่อประเภทเงินนี้มีอยู่แล้วในปีงบประมาณ ${trimmedYear}`);
+        isValid = false;
+      }
+    }
+
+    return isValid;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
 
-    const parsedYear = fiscalYear.trim() ? Number(fiscalYear.trim()) : undefined;
+    if (!validate()) {
+      return;
+    }
+
+    const parsedYear = Number(fiscalYear.trim());
 
     onSubmit({
       name: name.trim(),
-      fiscalYear: Number.isNaN(parsedYear) ? undefined : parsedYear,
+      fiscalYear: parsedYear,
       description: description.trim() || undefined,
       isActive,
     });
@@ -206,7 +276,7 @@ export function BudgetTypeFormModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs sm:text-sm">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 text-xs sm:text-sm">
           {/* Edit Mode: Locked Code */}
           {isEdit && item && (
             <div className="space-y-1.5">
@@ -229,12 +299,18 @@ export function BudgetTypeFormModal({
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="เช่น เงินบำรุง"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
+                    nameError
+                      ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                      : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                  }`}
                 />
+                {nameError && (
+                  <p className="text-xs text-rose-500 font-medium">{nameError}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -243,11 +319,22 @@ export function BudgetTypeFormModal({
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={4}
                   placeholder="พ.ศ.XXXX"
                   value={fiscalYear}
-                  onChange={(e) => setFiscalYear(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                  onChange={(e) => handleFiscalYearChange(e.target.value)}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 transition-all ${
+                    fiscalYearError
+                      ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                      : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                  }`}
                 />
+                {fiscalYearError && (
+                  <p className="text-xs text-rose-500 font-medium">
+                    {fiscalYearError}
+                  </p>
+                )}
               </div>
             </div>
           ) : (
@@ -259,11 +346,17 @@ export function BudgetTypeFormModal({
                 </label>
                 <input
                   type="text"
-                  required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-emerald-500 px-3.5 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all ${
+                    nameError
+                      ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                      : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                  }`}
                 />
+                {nameError && (
+                  <p className="text-xs text-rose-500 font-medium">{nameError}</p>
+                )}
               </div>
 
               {/* Edit Mode: FiscalYear */}
@@ -273,10 +366,22 @@ export function BudgetTypeFormModal({
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="พ.ศ.XXXX"
                   value={fiscalYear}
-                  onChange={(e) => setFiscalYear(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                  onChange={(e) => handleFiscalYearChange(e.target.value)}
+                  className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-1 transition-all ${
+                    fiscalYearError
+                      ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500"
+                      : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
+                  }`}
                 />
+                {fiscalYearError && (
+                  <p className="text-xs text-rose-500 font-medium">
+                    {fiscalYearError}
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -315,7 +420,7 @@ export function BudgetTypeFormModal({
           {/* Description */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700">
-              รายละเอียด <span className="text-rose-500">*</span>
+              รายละเอียด <span className="text-slate-400 font-normal">(ไม่บังคับ)</span>
             </label>
             <textarea
               rows={4}
@@ -369,7 +474,7 @@ export function BudgetTypeFormModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !name.trim()}
+              disabled={isSubmitting}
               className="rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
             >
               {isSubmitting
