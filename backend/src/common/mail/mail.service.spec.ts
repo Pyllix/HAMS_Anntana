@@ -10,7 +10,9 @@ describe('MailService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockSendMail = jest.fn().mockResolvedValue({ messageId: 'mock-message-id' });
+    mockSendMail = jest
+      .fn()
+      .mockResolvedValue({ messageId: 'mock-message-id' });
     (nodemailer.createTransport as jest.Mock).mockReturnValue({
       sendMail: mockSendMail,
     });
@@ -27,7 +29,8 @@ describe('MailService', () => {
       const params = {
         to: 'test@hospital.go.th',
         name: 'ดร.สมชาย ใจดี',
-        verificationUrl: 'http://localhost:3000/api/auth/verify-email?token=token123&callbackURL=http%3A%2F%2Flocalhost%3A5173%2Flogin',
+        verificationUrl:
+          'http://localhost:3000/api/auth/verify-email?token=token123&callbackURL=http%3A%2F%2Flocalhost%3A5173%2Flogin',
       };
 
       await mailService.sendVerificationEmail(params);
@@ -46,7 +49,8 @@ describe('MailService', () => {
     it('should fallback to email when name is not provided', async () => {
       const params = {
         to: 'anonymous@hospital.go.th',
-        verificationUrl: 'http://localhost:3000/api/auth/verify-email?token=abc',
+        verificationUrl:
+          'http://localhost:3000/api/auth/verify-email?token=abc',
       };
 
       await mailService.sendVerificationEmail(params);
@@ -64,7 +68,8 @@ describe('MailService', () => {
       const params = {
         to: 'fail@hospital.go.th',
         name: 'Fail User',
-        verificationUrl: 'http://localhost:3000/api/auth/verify-email?token=fail',
+        verificationUrl:
+          'http://localhost:3000/api/auth/verify-email?token=fail',
       };
 
       await expect(mailService.sendVerificationEmail(params)).rejects.toThrow(

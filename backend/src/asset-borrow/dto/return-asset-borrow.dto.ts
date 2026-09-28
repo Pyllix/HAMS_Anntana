@@ -4,7 +4,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ReturnAssetBorrowDto {
   @ApiProperty({
-    description: 'UUID หรือรหัสพนักงานของผู้ที่นำของมาส่งคืนที่เคาน์เตอร์ (ต้องเป็นผู้ยืมหรือคนในแผนกเดียวกัน)',
+    description:
+      'UUID หรือรหัสพนักงานของผู้ที่นำของมาส่งคืนที่เคาน์เตอร์ (ต้องเป็นผู้ยืมหรือคนในแผนกเดียวกัน)',
     example: 'GOV-670005',
   })
   @IsNotEmpty()
@@ -14,7 +15,8 @@ export class ReturnAssetBorrowDto {
   @ApiProperty({
     enum: ReturnCondition,
     example: ReturnCondition.Normal,
-    description: 'สภาพของครุภัณฑ์ตอนส่งคืนที่เคาน์เตอร์ (Normal=ปกติ, Damage=ชำรุด)',
+    description:
+      'สภาพของครุภัณฑ์ตอนส่งคืนที่เคาน์เตอร์ (Normal=ปกติ, Damage=ชำรุด)',
   })
   @IsEnum(ReturnCondition)
   @IsNotEmpty()

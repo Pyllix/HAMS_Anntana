@@ -1,0 +1,15 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts", "mjs"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": "\\.auth-integration\\.e2e-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j|mj)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/../src/$1"
+  },
+  "setupFiles": [
+    "<rootDir>/auth-integration-setup.ts"
+  ]
+}

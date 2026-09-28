@@ -1,17 +1,36 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { User, UserDto } from "../../types/TypeUser";
-import { updateUserById } from "../../services/userService";
+import type { User } from "../../types/TypeUser";
+import { updateUserById, type UserUpdateDto } from "../../services/userService";
 import { getSections } from "../../services/assetService";
-import { ROLES, RoleType } from "../../router/roles";
+import { ROLES, ROLE_LABELS, type RoleType } from "../../router/roles";
 import { ROLE_OPTIONS } from "./DialogAddUser";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   user: User;
+}
+
+const EDIT_ROLE_OPTIONS = [
+  ...ROLE_OPTIONS,
+  {
+    value: ROLES.MAINTENANCE_HEAD,
+    label: ROLE_LABELS.MAINTENANCE_HEAD,
+    description: "สิทธิ์การใช้งาน: มอบหมายและกำกับดูแลงานซ่อมบำรุง",
+  },
+];
+
+function editErrorMessage(error: unknown): string {
+  const data = (error as { response?: { data?: { code?: string; message?: string } } })
+    .response?.data;
+  if (data?.code === "LAST_ACTIVE_ENROLLED_ADMIN") {
+    return "บันทึกไม่ได้ เพราะไม่สามารถลดสิทธิ์หรือระงับ ADMIN คนสุดท้ายที่เปิดใช้ 2FA ได้";
+  }
+  return typeof data?.message === "string"
+    ? data.message
+    : "บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองอีกครั้ง";
 }
 
 const toForm = (user: User) => ({
@@ -21,16 +40,21 @@ const toForm = (user: User) => ({
   email: user.email ?? "",
   sectionId: user.section_id ?? "",
   role: user.role as RoleType,
+  banned: user.banned === true,
 });
 
 export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   const [form, setForm] = useState(() => toForm(user));
+  const [error, setError] = useState("");
 
   const queryClient = useQueryClient();
 
   // รีเซ็ตฟอร์มให้ตรงกับข้อมูลผู้ใช้ล่าสุดทุกครั้งที่เปิด dialog
   useEffect(() => {
-    if (isOpen) setForm(toForm(user));
+    if (isOpen) {
+      setForm(toForm(user));
+      setError("");
+    }
   }, [isOpen, user]);
 
   const { data: sections } = useQuery({
@@ -40,30 +64,24 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   });
 
   const { mutate: editUser, isPending } = useMutation({
-    mutationFn: (payload: Partial<Omit<UserDto, "password">>) =>
+    mutationFn: (payload: UserUpdateDto) =>
       updateUserById(user.id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assets"] });
-      alert("แก้ไขข้อมูลผู้ใช้งานเรียบร้อยแล้ว");
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
       onClose();
     },
-    onError: (error) => {
-      console.error("เกิดข้อผิดพลาดในการแก้ไขผู้ใช้งาน:", error);
-      if (axios.isAxiosError(error) && error.response?.status === 409) {
-        alert("อีเมลหรือชื่อผู้ใช้นี้ถูกใช้งานแล้ว");
-        return;
-      }
-      alert("ไม่สามารถแก้ไขข้อมูลผู้ใช้งานได้");
-    },
+    onError: (cause) => setError(editErrorMessage(cause)),
   });
 
   if (!isOpen) return null;
 
   const selectedRole =
-    ROLE_OPTIONS.find((option) => option.value === form.role) ?? ROLE_OPTIONS[0];
+    EDIT_ROLE_OPTIONS.find((option) => option.value === form.role) ?? EDIT_ROLE_OPTIONS[0];
 
   // ผู้ดูแลระบบไม่จำเป็นต้องสังกัดหน่วยงาน
   const isSectionRequired = form.role !== ROLES.ADMIN;
+  const securityChange =
+    form.role !== user.role || form.banned !== (user.banned === true);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -74,6 +92,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
     editUser({
       firstname: form.firstname.trim(),
@@ -81,6 +100,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       userName: form.userName.trim(),
       email: form.email.trim(),
       role: form.role,
+      banned: form.banned,
       ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
     });
   };
@@ -227,7 +247,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
               onChange={handleChange}
               className="w-full px-4 py-2.5 rounded-lg border-2 border-emerald-500 bg-emerald-50/40 focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-emerald-700"
             >
-              {ROLE_OPTIONS.map((option, index) => (
+              {EDIT_ROLE_OPTIONS.map((option, index) => (
                 <option key={option.value} value={option.value}>
                   {`${index + 1}. ${option.label}`}
                 </option>
@@ -237,6 +257,29 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
               {selectedRole.description}
             </p>
           </div>
+
+          <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.banned}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, banned: event.target.checked }))
+              }
+              className="h-4 w-4 accent-emerald-600"
+            />
+            <span>ระงับบัญชีผู้ใช้นี้</span>
+          </label>
+
+          {securityChange && (
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              การเปลี่ยน Role หรือสถานะจะออกจากระบบทุกอุปกรณ์และเพิกถอน Trusted Browser ของบัญชีนี้
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
+              {error}
+            </p>
+          )}
 
           {/* Footer Buttons */}
           <div className="pt-6 flex items-center justify-end gap-3 border-t border-[#E5E7EB]">

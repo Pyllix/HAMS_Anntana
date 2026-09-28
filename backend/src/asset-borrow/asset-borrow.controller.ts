@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AssetBorrowService } from './asset-borrow.service';
 import { CreateAssetBorrowDto } from './dto/create-asset-borrow.dto';
 import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
@@ -18,16 +27,22 @@ import {
 } from './dto/borrow-recommendation-response.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiCookieAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Borrowings')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('borrowings')
 export class AssetBorrowController {
-  constructor(private readonly assetBorrowService: AssetBorrowService) { }
+  constructor(private readonly assetBorrowService: AssetBorrowService) {}
   // Create Borrowing
   @Post()
   @Roles(
@@ -38,7 +53,10 @@ export class AssetBorrowController {
   @ApiOperation({ summary: 'Create a new borrow transaction' })
   @ApiResponse({ status: 201, description: 'Borrow transaction created' })
   @ApiResponse({ status: 409, description: 'Asset not available' })
-  async createBorrow(@Body() dto: CreateAssetBorrowDto, @Session() session: UserSession) {
+  async createBorrow(
+    @Body() dto: CreateAssetBorrowDto,
+    @Session() session: UserSession,
+  ) {
     return this.assetBorrowService.createBorrow(dto, session.user);
   }
   // Approve Borrowing
@@ -46,7 +64,10 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Approve a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request approved' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not PENDING_APPROVE',
+  })
   async approveBorrow(
     @Param('id') id: string,
     @Session() session: UserSession,
@@ -59,7 +80,10 @@ export class AssetBorrowController {
   @Roles(UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Reject a borrow request' })
   @ApiResponse({ status: 200, description: 'Borrow request rejected' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_APPROVE' })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not PENDING_APPROVE',
+  })
   async rejectBorrow(
     @Param('id') id: string,
     @Body() dto: RejectBorrowDto,
@@ -71,9 +95,14 @@ export class AssetBorrowController {
   // Handover / Dispatch Asset (APPROVED -> BORROWED)
   @Patch(':id/handover')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Handover/dispatch asset to borrower (APPROVED -> BORROWED)' })
+  @ApiOperation({
+    summary: 'Handover/dispatch asset to borrower (APPROVED -> BORROWED)',
+  })
   @ApiResponse({ status: 200, description: 'Asset handed over successfully' })
-  @ApiResponse({ status: 400, description: 'Transaction is not in APPROVED status' })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not in APPROVED status',
+  })
   async handoverAsset(
     @Param('id') id: string,
     @Session() session: UserSession,
@@ -90,9 +119,18 @@ export class AssetBorrowController {
     UserRole.ADMIN,
     UserRole.MANAGER,
   )
-  @ApiOperation({ summary: 'Ward requests pickup return for borrowed asset (BORROWED -> PENDING_RETURN)' })
-  @ApiResponse({ status: 200, description: 'Return request submitted successfully' })
-  @ApiResponse({ status: 400, description: 'Transaction is not BORROWED or no permission' })
+  @ApiOperation({
+    summary:
+      'Ward requests pickup return for borrowed asset (BORROWED -> PENDING_RETURN)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Return request submitted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not BORROWED or no permission',
+  })
   async requestReturn(
     @Param('id') id: string,
     @Body() dto: RequestReturnBorrowDto,
@@ -104,22 +142,34 @@ export class AssetBorrowController {
   // Claim Pickup Job (PENDING_RETURN -> IN_PICKUP) by Asset Center Staff
   @Patch(':id/claim-pickup')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Asset Center Staff claims pickup job (PENDING_RETURN -> IN_PICKUP)' })
+  @ApiOperation({
+    summary:
+      'Asset Center Staff claims pickup job (PENDING_RETURN -> IN_PICKUP)',
+  })
   @ApiResponse({ status: 200, description: 'Pickup job claimed successfully' })
-  @ApiResponse({ status: 400, description: 'Transaction is not PENDING_RETURN' })
-  async claimPickup(
-    @Param('id') id: string,
-    @Session() session: UserSession,
-  ) {
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not PENDING_RETURN',
+  })
+  async claimPickup(@Param('id') id: string, @Session() session: UserSession) {
     return this.assetBorrowService.claimPickup(id, session.user);
   }
 
   // Complete Return / Receive in Warehouse (IN_PICKUP / PENDING_RETURN -> RETURNED) by Asset Center Staff
   @Patch(':id/complete-return')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Asset Center Staff inspects and completes return in warehouse (IN_PICKUP -> RETURNED)' })
-  @ApiResponse({ status: 200, description: 'Asset return completed and verified' })
-  @ApiResponse({ status: 400, description: 'Transaction is not in IN_PICKUP status' })
+  @ApiOperation({
+    summary:
+      'Asset Center Staff inspects and completes return in warehouse (IN_PICKUP -> RETURNED)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset return completed and verified',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not in IN_PICKUP status',
+  })
   async completeReturn(
     @Param('id') id: string,
     @Body() dto: CompleteReturnBorrowDto,
@@ -131,9 +181,18 @@ export class AssetBorrowController {
   // Walk-in Desk Return (BORROWED -> RETURNED) by Asset Center Staff
   @Patch(':id/return')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Walk-in desk return at Asset Center (BORROWED -> RETURNED in 1 step)' })
-  @ApiResponse({ status: 200, description: 'Asset returned successfully at desk' })
-  @ApiResponse({ status: 400, description: 'Transaction is not BORROWED or cross-department invalid' })
+  @ApiOperation({
+    summary:
+      'Walk-in desk return at Asset Center (BORROWED -> RETURNED in 1 step)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset returned successfully at desk',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction is not BORROWED or cross-department invalid',
+  })
   async returnAsset(
     @Param('id') id: string,
     @Body() dto: ReturnAssetBorrowDto,
@@ -149,9 +208,15 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.ASSET_CENTER_STAFF,
   )
-  @ApiOperation({ summary: 'Create borrow extension (auto DESK if ASSET_CENTER_STAFF, ONLINE request if DEPARTMENT_STAFF)' })
+  @ApiOperation({
+    summary:
+      'Create borrow extension (auto DESK if ASSET_CENTER_STAFF, ONLINE request if DEPARTMENT_STAFF)',
+  })
   @ApiResponse({ status: 201, description: 'Extension created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or invalid status' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or invalid status',
+  })
   @ApiResponse({ status: 409, description: 'Pending extension already exists' })
   async createExtension(
     @Param('id') id: string,
@@ -168,7 +233,9 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.ASSET_CENTER_STAFF,
   )
-  @ApiOperation({ summary: 'Get all extension records for a borrow transaction' })
+  @ApiOperation({
+    summary: 'Get all extension records for a borrow transaction',
+  })
   @ApiResponse({ status: 200, description: 'List of extensions returned' })
   async findExtensionsByBorrowId(
     @Param('id') id: string,
@@ -184,8 +251,13 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'List all extension requests with pagination and filters' })
-  @ApiResponse({ status: 200, description: 'Paginated list of extension requests' })
+  @ApiOperation({
+    summary: 'List all extension requests with pagination and filters',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of extension requests',
+  })
   async findAllExtensions(
     @Query() query: BorrowExtensionFilterDto,
     @Session() session: UserSession,
@@ -197,25 +269,36 @@ export class AssetBorrowController {
   @Patch('extensions/:extensionId/review')
   @Roles(UserRole.ASSET_CENTER_STAFF, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Review (APPROVE or REJECT) an extension request' })
-  @ApiResponse({ status: 200, description: 'Extension review recorded and transaction updated if approved' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Extension review recorded and transaction updated if approved',
+  })
   @ApiResponse({ status: 400, description: 'Invalid status or missing reason' })
   async reviewExtension(
     @Param('extensionId') extensionId: string,
     @Body() dto: ReviewBorrowExtensionDto,
     @Session() session: UserSession,
   ) {
-    return this.assetBorrowService.reviewExtension(extensionId, dto, session.user);
+    return this.assetBorrowService.reviewExtension(
+      extensionId,
+      dto,
+      session.user,
+    );
   }
 
   // Cancel a pending extension request by borrower
   @Patch('extensions/:extensionId/cancel')
-  @Roles(
-    UserRole.DEPARTMENT_STAFF,
-    UserRole.ASSET_CENTER_STAFF,
-  )
+  @Roles(UserRole.DEPARTMENT_STAFF, UserRole.ASSET_CENTER_STAFF)
   @ApiOperation({ summary: 'Cancel a pending extension request' })
-  @ApiResponse({ status: 200, description: 'Extension request cancelled successfully' })
-  @ApiResponse({ status: 400, description: 'Extension is not in PENDING status or no permission' })
+  @ApiResponse({
+    status: 200,
+    description: 'Extension request cancelled successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Extension is not in PENDING status or no permission',
+  })
   async cancelExtension(
     @Param('extensionId') extensionId: string,
     @Session() session: UserSession,
@@ -231,12 +314,18 @@ export class AssetBorrowController {
     UserRole.DEPARTMENT_STAFF,
   )
   @ApiOperation({ summary: 'Cancel a borrow transaction' })
-  @ApiResponse({ status: 200, description: 'Transaction cancelled successfully' })
-  @ApiResponse({ status: 400, description: 'Transaction cannot be cancelled or no permission' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction cancelled successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction cannot be cancelled or no permission',
+  })
   async cancelBorrow(
     @Param('id') id: string,
     @Body() dto: CancelBorrowDto,
-    @Session() session: UserSession
+    @Session() session: UserSession,
   ) {
     return this.assetBorrowService.cancelBorrow(id, dto, session.user);
   }
@@ -250,8 +339,15 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Check if a significantly more rested alternative exists for swap nudge' })
-  @ApiResponse({ status: 200, description: 'Swap recommendation evaluation result', type: SwapCheckResponseDto })
+  @ApiOperation({
+    summary:
+      'Check if a significantly more rested alternative exists for swap nudge',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Swap recommendation evaluation result',
+    type: SwapCheckResponseDto,
+  })
   async checkSwap(@Query() query: CheckSwapDto) {
     return this.assetBorrowService.checkSwapRecommendation(query.assetId);
   }
@@ -265,8 +361,15 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'Get smart asset borrow recommendations based on balanced usage rotation' })
-  @ApiResponse({ status: 200, description: 'List of recommended assets sorted by usage and rest days', type: BorrowRecommendationsResponseDto })
+  @ApiOperation({
+    summary:
+      'Get smart asset borrow recommendations based on balanced usage rotation',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of recommended assets sorted by usage and rest days',
+    type: BorrowRecommendationsResponseDto,
+  })
   async getRecommendations(@Query() query: QueryBorrowRecommendationsDto) {
     return this.assetBorrowService.getBorrowRecommendations(query);
   }
@@ -280,7 +383,9 @@ export class AssetBorrowController {
     UserRole.PARCEL_STAFF,
     UserRole.DEPARTMENT_STAFF,
   )
-  @ApiOperation({ summary: 'List borrow transactions with pagination and filtering' })
+  @ApiOperation({
+    summary: 'List borrow transactions with pagination and filtering',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'borrowNo', required: false, type: String })
@@ -288,7 +393,10 @@ export class AssetBorrowController {
   @ApiQuery({ name: 'assetId', required: false, type: String })
   @ApiQuery({ name: 'borrowerId', required: false, type: String })
   @ApiQuery({ name: 'borrowStatusId', required: false, type: Number })
-  async findAll(@Query() query: BorrowFilterDto, @Session() session: UserSession) {
+  async findAll(
+    @Query() query: BorrowFilterDto,
+    @Session() session: UserSession,
+  ) {
     return this.assetBorrowService.findAll(query, session.user);
   }
 
@@ -308,4 +416,3 @@ export class AssetBorrowController {
     return this.assetBorrowService.findOne(id, session.user);
   }
 }
-

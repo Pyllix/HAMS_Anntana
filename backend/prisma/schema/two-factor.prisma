@@ -1,0 +1,47 @@
+// This file defines 2FA-related models for TOTP and Recovery Codes
+
+model TwoFactorAuth {
+  id              String    @id @default(cuid())
+  userId          String    @unique @map("user_id")
+  secretEncrypted String    @map("secret_encrypted") // Encrypted TOTP secret
+  pendingSecretEncrypted String? @map("pending_secret_encrypted")
+  backupCodes     String[]  @map("backup_codes") // Hashed recovery codes
+  enrolledAt      DateTime  @default(now()) @map("enrolled_at")
+  enrollmentComplete Boolean @default(false) @map("enrollment_complete")
+  lastUsedAt      DateTime? @map("last_used_at")
+
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("two_factor_auth")
+}
+
+model TrustedDevice {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address")
+  grantedAt DateTime @default(now()) @map("granted_at")
+  expiresAt DateTime @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("trusted_devices")
+}
+
+model AdminStepUp {
+  id        String   @id @default(cuid())
+  sessionId String   @unique @map("session_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("admin_step_ups")
+}

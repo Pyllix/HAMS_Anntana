@@ -19,4 +19,3 @@ export class QueryUserDto extends PaginationDto {
   @IsOptional()
   section_id?: string;
 }
-

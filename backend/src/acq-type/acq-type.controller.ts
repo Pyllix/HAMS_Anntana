@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -18,7 +18,7 @@ import { CreateAcqTypeDto } from './dto/create-acq-type.dto';
 import { UpdateAcqTypeDto } from './dto/update-acq-type.dto';
 
 @ApiTags('Acquisition Types')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('acq-types')
 export class AcqTypeController {

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { PrismaService } from 'src/prisma.service';
@@ -34,7 +38,9 @@ export class AvailabilitiesService {
     });
 
     if (!availabilityStatus) {
-      throw new NotFoundException(`AvailabilityStatus not found with ID: ${id}`);
+      throw new NotFoundException(
+        `AvailabilityStatus not found with ID: ${id}`,
+      );
     }
 
     return availabilityStatus;

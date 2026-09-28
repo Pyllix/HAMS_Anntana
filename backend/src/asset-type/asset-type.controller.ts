@@ -1,18 +1,34 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpStatus, HttpCode, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  HttpStatus,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
 import { AssetTypeService } from './asset-type.service';
 import { CreateAssetTypeDto } from './dto/create-asset-type.dto';
 import { UpdateAssetTypeDto } from './dto/update-asset-type.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Asset Type')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('asset-type')
 export class AssetTypeController {
-  constructor(private readonly assetTypeService: AssetTypeService) { }
+  constructor(private readonly assetTypeService: AssetTypeService) {}
 
   // ─── Create ────────────────────────────────────────────────────────────────
   @Post()
@@ -55,7 +71,10 @@ export class AssetTypeController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Asset Type not found' })
-  update(@Param('id') id: string, @Body() updateAssetTypeDto: UpdateAssetTypeDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateAssetTypeDto: UpdateAssetTypeDto,
+  ) {
     return this.assetTypeService.update(+id, updateAssetTypeDto);
   }
 
@@ -64,7 +83,10 @@ export class AssetTypeController {
   @HttpCode(HttpStatus.OK)
   @Roles(UserRole.ADMIN, UserRole.PARCEL_STAFF)
   @ApiOperation({ summary: 'Soft Delete Asset Type by ID' })
-  @ApiResponse({ status: 200, description: 'Asset Type deleted successfully (soft delete)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset Type deleted successfully (soft delete)',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Asset Type not found' })

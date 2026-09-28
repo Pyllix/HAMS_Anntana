@@ -94,7 +94,11 @@ describe('AssetService', () => {
       ];
       mockPrismaService.$transaction.mockResolvedValue([mockAssets, 1]);
 
-      const result = await service.findAll({ page: 1, limit: 10, section_id: 'sec-1' });
+      const result = await service.findAll({
+        page: 1,
+        limit: 10,
+        section_id: 'sec-1',
+      });
 
       expect(mockPrismaService.$transaction).toHaveBeenCalled();
       expect(result.data).toHaveLength(1);
@@ -142,7 +146,10 @@ describe('AssetService', () => {
       });
       mockPrismaService.$transaction.mockResolvedValue([[], 0]);
 
-      const result = await service.findBySection('sec-1', { page: 1, limit: 10 });
+      const result = await service.findBySection('sec-1', {
+        page: 1,
+        limit: 10,
+      });
       expect(result.meta.total).toBe(0);
     });
   });
@@ -176,7 +183,10 @@ describe('AssetService', () => {
         1,
       ]);
 
-      const result = await service.findMySectionAssets('user-1', { page: 1, limit: 10 });
+      const result = await service.findMySectionAssets('user-1', {
+        page: 1,
+        limit: 10,
+      });
       expect(result.data).toHaveLength(1);
       expect(result.meta.total).toBe(1);
     });
@@ -213,8 +223,14 @@ describe('AssetService', () => {
     describe('createTransfer', () => {
       it('TC-1: should successfully create transfer record and update asset section', async () => {
         mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-        mockPrismaService.section.findUnique.mockResolvedValue({ id: 'sec-to', name: 'ICU' });
-        mockPrismaService.asset.update.mockResolvedValue({ ...mockAsset, section_id: 'sec-to' });
+        mockPrismaService.section.findUnique.mockResolvedValue({
+          id: 'sec-to',
+          name: 'ICU',
+        });
+        mockPrismaService.asset.update.mockResolvedValue({
+          ...mockAsset,
+          section_id: 'sec-to',
+        });
         mockPrismaService.transfer.create.mockResolvedValue({
           id: 'transfer-1',
           asset_id: 'asset-1',
@@ -222,7 +238,11 @@ describe('AssetService', () => {
           to_section_id: 'sec-to',
         });
 
-        const result = await service.createTransfer('asset-1', validTransferDto, 'user-1');
+        const result = await service.createTransfer(
+          'asset-1',
+          validTransferDto,
+          'user-1',
+        );
 
         expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
           where: expect.objectContaining({ id: 'asset-1' }),
@@ -278,27 +298,41 @@ describe('AssetService', () => {
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.createTransfer('asset-1', validTransferDto, 'user-1'),
-        ).rejects.toThrow('Cannot transfer an asset that is currently under repair');
+        ).rejects.toThrow(
+          'Cannot transfer an asset that is currently under repair',
+        );
       });
 
       it('rejects a transfer if repair starts before the section write', async () => {
         mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-        mockPrismaService.section.findUnique.mockResolvedValue({ id: 'sec-to' });
-        mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
-          if (where.asset_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
-          return {};
+        mockPrismaService.section.findUnique.mockResolvedValue({
+          id: 'sec-to',
         });
-        mockPrismaService.transfer.create.mockResolvedValue({ id: 'transfer-1' });
+        mockPrismaService.asset.update.mockImplementation(
+          async ({ where }: any) => {
+            if (where.asset_status_id === 1)
+              throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+            return {};
+          },
+        );
+        mockPrismaService.transfer.create.mockResolvedValue({
+          id: 'transfer-1',
+        });
 
-        await expect(service.createTransfer('asset-1', validTransferDto, 'user-1'))
-          .rejects.toThrow(BadRequestException);
+        await expect(
+          service.createTransfer('asset-1', validTransferDto, 'user-1'),
+        ).rejects.toThrow(BadRequestException);
       });
 
       it('TC-4: should throw BadRequestException if target section is identical to current section', async () => {
         mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
 
         await expect(
-          service.createTransfer('asset-1', { ...validTransferDto, to_section_id: 'sec-from' }, 'user-1'),
+          service.createTransfer(
+            'asset-1',
+            { ...validTransferDto, to_section_id: 'sec-from' },
+            'user-1',
+          ),
         ).rejects.toThrow(BadRequestException);
       });
 
@@ -332,10 +366,16 @@ describe('AssetService', () => {
 
     describe('findAllTransferRecords', () => {
       it('TC-7: should return paginated transfer records across all assets', async () => {
-        const mockTransfers = [{ id: 'transfer-1', transferDocNo: 'TF-2026-001' }];
+        const mockTransfers = [
+          { id: 'transfer-1', transferDocNo: 'TF-2026-001' },
+        ];
         mockPrismaService.$transaction.mockResolvedValue([mockTransfers, 1]);
 
-        const result = await service.findAllTransferRecords({ page: 1, limit: 10, search: 'TF-2026' });
+        const result = await service.findAllTransferRecords({
+          page: 1,
+          limit: 10,
+          search: 'TF-2026',
+        });
 
         expect(mockPrismaService.$transaction).toHaveBeenCalled();
         expect(result.data).toHaveLength(1);
@@ -357,7 +397,10 @@ describe('AssetService', () => {
           },
         ],
       };
-      mockPrismaService.$transaction.mockResolvedValue([[mockAssetWithApprovedBorrow], 1]);
+      mockPrismaService.$transaction.mockResolvedValue([
+        [mockAssetWithApprovedBorrow],
+        1,
+      ]);
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
@@ -378,7 +421,10 @@ describe('AssetService', () => {
         name: 'Defibrillator',
         borrowTransactions: [],
       };
-      mockPrismaService.$transaction.mockResolvedValue([[mockAssetWithoutBorrow], 1]);
+      mockPrismaService.$transaction.mockResolvedValue([
+        [mockAssetWithoutBorrow],
+        1,
+      ]);
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
@@ -441,22 +487,38 @@ describe('AssetService', () => {
 
     it('rejects disposal if the asset becomes reserved before the write', async () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'DISPOSAL' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
-      mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
-        if (where.availability_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
-        return {};
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 4,
+        code: 'DISPOSAL',
       });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+      });
+      mockPrismaService.asset.update.mockImplementation(
+        async ({ where }: any) => {
+          if (where.availability_status_id === 1)
+            throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+          return {};
+        },
+      );
       mockPrismaService.disposal.create.mockResolvedValue({ id: 'disp-rec-1' });
 
-      await expect(service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.createDisposal('asset-disp-1', validDisposalDto, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('TC-DISP-3: should successfully create disposal record when asset is AVAILABLE', async () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'DISPOSAL' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 4,
+        code: 'DISPOSAL',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+      });
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockAsset,
         status: { id: 4, code: 'DISPOSAL' },
@@ -470,7 +532,11 @@ describe('AssetService', () => {
         asset: mockAsset,
       });
 
-      const result = await service.createDisposal('asset-disp-1', validDisposalDto, 'user-1');
+      const result = await service.createDisposal(
+        'asset-disp-1',
+        validDisposalDto,
+        'user-1',
+      );
 
       expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
         where: expect.objectContaining({ id: 'asset-disp-1' }),
@@ -515,14 +581,19 @@ describe('AssetService', () => {
           ...mockAsset,
           availabilityStatus: { id: 2, code: 'BORROWED', name: 'ถูกยืม' },
         });
-        mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: targetId, code: targetCode });
+        mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+          id: targetId,
+          code: targetCode,
+        });
 
         await expect(
           service.updateStatus('asset-status-1', targetId, 'user-1'),
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.updateStatus('asset-status-1', targetId, 'user-1'),
-        ).rejects.toThrow(`Cannot update asset status to ${targetCode} while asset is BORROWED`);
+        ).rejects.toThrow(
+          `Cannot update asset status to ${targetCode} while asset is BORROWED`,
+        );
       });
 
       it(`TC-STATUS-RESERVED: should throw BadRequestException when updating RESERVED asset to ${targetCode}`, async () => {
@@ -530,27 +601,41 @@ describe('AssetService', () => {
           ...mockAsset,
           availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
         });
-        mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: targetId, code: targetCode });
+        mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+          id: targetId,
+          code: targetCode,
+        });
 
         await expect(
           service.updateStatus('asset-status-1', targetId, 'user-1'),
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.updateStatus('asset-status-1', targetId, 'user-1'),
-        ).rejects.toThrow(`Cannot update asset status to ${targetCode} while asset is RESERVED`);
+        ).rejects.toThrow(
+          `Cannot update asset status to ${targetCode} while asset is RESERVED`,
+        );
       });
     });
 
     it('keeps a borrowed asset borrowed when NORMAL status is submitted again', async () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(mockAsset);
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 1, code: 'NORMAL' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'AVAILABLE' });
-      mockPrismaService.asset.update.mockImplementation(async ({ data }: any) => ({
-        ...mockAsset,
-        availabilityStatus: data.availability_status_id === 10
-          ? { id: 10, code: 'AVAILABLE' }
-          : mockAsset.availabilityStatus,
-      }));
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 1,
+        code: 'NORMAL',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'AVAILABLE',
+      });
+      mockPrismaService.asset.update.mockImplementation(
+        async ({ data }: any) => ({
+          ...mockAsset,
+          availabilityStatus:
+            data.availability_status_id === 10
+              ? { id: 10, code: 'AVAILABLE' }
+              : mockAsset.availabilityStatus,
+        }),
+      );
 
       const result = await service.updateStatus('asset-status-1', 1, 'user-1');
 
@@ -562,15 +647,25 @@ describe('AssetService', () => {
         ...mockAsset,
         availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
       });
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 2, code: 'DAMAGED' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
-      mockPrismaService.asset.update.mockImplementation(async ({ where }: any) => {
-        if (where.availability_status_id === 1) throw Object.assign(new Error('stale asset'), { code: 'P2025' });
-        return {};
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'DAMAGED',
       });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+      });
+      mockPrismaService.asset.update.mockImplementation(
+        async ({ where }: any) => {
+          if (where.availability_status_id === 1)
+            throw Object.assign(new Error('stale asset'), { code: 'P2025' });
+          return {};
+        },
+      );
 
-      await expect(service.updateStatus('asset-status-1', 2, 'user-1'))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.updateStatus('asset-status-1', 2, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('TC-STATUS-AVAILABLE: should allow updating status to DAMAGED when asset is AVAILABLE', async () => {
@@ -578,8 +673,14 @@ describe('AssetService', () => {
         ...mockAsset,
         availabilityStatus: { id: 1, code: 'AVAILABLE', name: 'พร้อมใช้งาน' },
       });
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 2, code: 'DAMAGED' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE' });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 2,
+        code: 'DAMAGED',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+      });
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockAsset,
         status: { id: 2, code: 'DAMAGED' },
@@ -636,7 +737,11 @@ describe('AssetService', () => {
         ...updatePayload,
       });
 
-      const result = await service.update('asset-edit-1', updatePayload as any, 'user-1');
+      const result = await service.update(
+        'asset-edit-1',
+        updatePayload,
+        'user-1',
+      );
 
       expect(mockPrismaService.asset.update).toHaveBeenCalledWith({
         where: { id: 'asset-edit-1' },
@@ -648,12 +753,13 @@ describe('AssetService', () => {
       });
 
       // Ensure availability_status_id was NOT modified in the update data payload
-      const updateCallData = mockPrismaService.asset.update.mock.calls[0][0].data;
+      const updateCallData =
+        mockPrismaService.asset.update.mock.calls[0][0].data;
       expect(updateCallData.availability_status_id).toBeUndefined();
 
       // Ensure borrow state and availabilityStatus are intact in returned result
       expect(result).toHaveProperty('currentBorrowing');
-      expect((result as any).currentBorrowing.id).toBe('borrow-tx-1');
+      expect(result.currentBorrowing.id).toBe('borrow-tx-1');
       expect(result.availabilityStatus.code).toBe('BORROWED');
       expect(result.name).toBe('Patient Monitor B40 Plus');
     });
@@ -662,21 +768,30 @@ describe('AssetService', () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
 
       await expect(
-        service.update('asset-edit-1', { availability_status_id: 1 } as any, 'user-1'),
+        service.update(
+          'asset-edit-1',
+          { availability_status_id: 1 } as any,
+          'user-1',
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(mockPrismaService.asset.update).not.toHaveBeenCalled();
     });
 
     it('TC-UPDATE-STATUS-FORBIDDEN: should throw BadRequestException when updating asset_status_id to DISPOSAL on BORROWED asset', async () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(mockBorrowedAsset);
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 5, code: 'DISPOSAL' });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 5,
+        code: 'DISPOSAL',
+      });
 
       await expect(
         service.update('asset-edit-1', { asset_status_id: 5 } as any, 'user-1'),
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.update('asset-edit-1', { asset_status_id: 5 } as any, 'user-1'),
-      ).rejects.toThrow('Cannot update asset status to DISPOSAL while asset is BORROWED');
+      ).rejects.toThrow(
+        'Cannot update asset status to DISPOSAL while asset is BORROWED',
+      );
     });
 
     it('TC-UPDATE-STATUS-FORBIDDEN: should throw BadRequestException when updating asset_status_id to WAIT_DISPOSAL on RESERVED asset', async () => {
@@ -684,14 +799,19 @@ describe('AssetService', () => {
         ...mockBorrowedAsset,
         availabilityStatus: { id: 3, code: 'RESERVED', name: 'ถูกจอง' },
       });
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 4, code: 'WAIT_DISPOSAL' });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 4,
+        code: 'WAIT_DISPOSAL',
+      });
 
       await expect(
         service.update('asset-edit-1', { asset_status_id: 4 } as any, 'user-1'),
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.update('asset-edit-1', { asset_status_id: 4 } as any, 'user-1'),
-      ).rejects.toThrow('Cannot update asset status to WAIT_DISPOSAL while asset is RESERVED');
+      ).rejects.toThrow(
+        'Cannot update asset status to WAIT_DISPOSAL while asset is RESERVED',
+      );
     });
   });
 
@@ -718,15 +838,28 @@ describe('AssetService', () => {
     };
 
     beforeEach(() => {
-      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
+      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({
+        id: 99,
+        code: 'CANCELLED',
+      });
       mockPrismaService.borrowStatus.findMany.mockResolvedValue([
         { id: 90, code: 'RETURNED' },
         { id: 91, code: 'REJECTED' },
         { id: 99, code: 'CANCELLED' },
       ]);
-      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 6, code: 'LOST', name: 'สูญหาย' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' });
+      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({
+        count: 1,
+      });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 6,
+        code: 'LOST',
+        name: 'สูญหาย',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+        name: 'ไม่พร้อมใช้งาน',
+      });
     });
 
     it('TC-LOST-1: updateStatus to LOST on a BORROWED asset auto-cancels active borrow and sets status to LOST / UNAVAILABLE', async () => {
@@ -734,14 +867,24 @@ describe('AssetService', () => {
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockBorrowedAsset,
         status: { id: 6, code: 'LOST', name: 'สูญหาย' },
-        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        availabilityStatus: {
+          id: 10,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
         borrowTransactions: [],
       });
 
-      const result = await service.updateStatus('asset-lost-1', 6, 'user-admin-1');
+      const result = await service.updateStatus(
+        'asset-lost-1',
+        6,
+        'user-admin-1',
+      );
 
       expect(mockPrismaService.$transaction).toHaveBeenCalled();
-      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.borrowTransaction.updateMany,
+      ).toHaveBeenCalledWith({
         where: {
           asset_id: 'asset-lost-1',
           borrow_status_id: { notIn: [90, 91, 99] },
@@ -773,13 +916,23 @@ describe('AssetService', () => {
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockReservedAsset,
         status: { id: 6, code: 'LOST', name: 'สูญหาย' },
-        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        availabilityStatus: {
+          id: 10,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
         borrowTransactions: [],
       });
 
-      const result = await service.updateStatus('asset-lost-2', 6, 'user-admin-1');
+      const result = await service.updateStatus(
+        'asset-lost-2',
+        6,
+        'user-admin-1',
+      );
 
-      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.borrowTransaction.updateMany,
+      ).toHaveBeenCalledWith({
         where: {
           asset_id: 'asset-lost-2',
           borrow_status_id: { notIn: [90, 91, 99] },
@@ -799,13 +952,23 @@ describe('AssetService', () => {
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockBorrowedAsset,
         status: { id: 6, code: 'LOST', name: 'สูญหาย' },
-        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        availabilityStatus: {
+          id: 10,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
         borrowTransactions: [],
       });
 
-      const result = await service.update('asset-lost-1', { asset_status_id: 6 } as any, 'user-admin-1');
+      const result = await service.update(
+        'asset-lost-1',
+        { asset_status_id: 6 },
+        'user-admin-1',
+      );
 
-      expect(mockPrismaService.borrowTransaction.updateMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.borrowTransaction.updateMany,
+      ).toHaveBeenCalledWith({
         where: {
           asset_id: 'asset-lost-1',
           borrow_status_id: { notIn: [90, 91, 99] },
@@ -827,8 +990,9 @@ describe('AssetService', () => {
         throw Object.assign(new Error('stale asset'), { code: 'P2025' });
       });
 
-      await expect(service.updateStatus('asset-lost-1', 6, 'user-admin-1'))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.updateStatus('asset-lost-1', 6, 'user-admin-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -838,33 +1002,66 @@ describe('AssetService', () => {
       name: 'Infusion Pump',
       section_id: 'sec-1',
       status: { id: 3, code: 'UNDER_REPAIR', name: 'อยู่ระหว่างซ่อม' },
-      availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+      availabilityStatus: {
+        id: 10,
+        code: 'UNAVAILABLE',
+        name: 'ไม่พร้อมใช้งาน',
+      },
       borrowTransactions: [],
     };
 
     beforeEach(() => {
-      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({ id: 99, code: 'CANCELLED' });
+      mockPrismaService.borrowStatus.findUnique.mockResolvedValue({
+        id: 99,
+        code: 'CANCELLED',
+      });
       mockPrismaService.borrowStatus.findMany.mockResolvedValue([]);
-      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({ count: 0 });
-      mockPrismaService.jobStatus.findUnique.mockResolvedValue({ id: 88, code: 'CANCELLED' });
+      mockPrismaService.borrowTransaction.updateMany.mockResolvedValue({
+        count: 0,
+      });
+      mockPrismaService.jobStatus.findUnique.mockResolvedValue({
+        id: 88,
+        code: 'CANCELLED',
+      });
       mockPrismaService.repairJob.findMany.mockResolvedValue([
         { id: 'job-1', solution: 'Initial diagnosis note' },
       ]);
-      mockPrismaService.repairJob.update.mockResolvedValue({ id: 'job-1', jobStatusId: 88 });
+      mockPrismaService.repairJob.update.mockResolvedValue({
+        id: 'job-1',
+        jobStatusId: 88,
+      });
       mockPrismaService.sparepartTxn.deleteMany.mockResolvedValue({ count: 2 });
-      mockPrismaService.assetStatus.findUnique.mockResolvedValue({ id: 6, code: 'LOST', name: 'สูญหาย' });
-      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({ id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' });
+      mockPrismaService.assetStatus.findUnique.mockResolvedValue({
+        id: 6,
+        code: 'LOST',
+        name: 'สูญหาย',
+      });
+      mockPrismaService.availabilityStatus.findUnique.mockResolvedValue({
+        id: 10,
+        code: 'UNAVAILABLE',
+        name: 'ไม่พร้อมใช้งาน',
+      });
     });
 
     it('TC-REPAIR-LOST-1: updateStatus to LOST on UNDER_REPAIR asset auto-cancels active repair jobs and deletes pending spare part txns', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.findUnique.mockResolvedValue(
+        mockUnderRepairAsset,
+      );
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockUnderRepairAsset,
         status: { id: 6, code: 'LOST', name: 'สูญหาย' },
-        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        availabilityStatus: {
+          id: 10,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
       });
 
-      const result = await service.updateStatus('asset-repair-lost-1', 6, 'user-admin-1');
+      const result = await service.updateStatus(
+        'asset-repair-lost-1',
+        6,
+        'user-admin-1',
+      );
 
       expect(mockPrismaService.$transaction).toHaveBeenCalled();
       expect(mockPrismaService.jobStatus.findUnique).toHaveBeenCalledWith({
@@ -883,7 +1080,9 @@ describe('AssetService', () => {
         where: { id: 'job-1' },
         data: {
           jobStatusId: 88,
-          solution: expect.stringContaining('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)'),
+          solution: expect.stringContaining(
+            '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)',
+          ),
           updatedBy: 'user-admin-1',
         },
       });
@@ -898,14 +1097,24 @@ describe('AssetService', () => {
     });
 
     it('TC-REPAIR-LOST-2: update with asset_status_id set to LOST on UNDER_REPAIR asset auto-cancels active repair jobs', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.findUnique.mockResolvedValue(
+        mockUnderRepairAsset,
+      );
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockUnderRepairAsset,
         status: { id: 6, code: 'LOST', name: 'สูญหาย' },
-        availabilityStatus: { id: 10, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
+        availabilityStatus: {
+          id: 10,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
       });
 
-      const result = await service.update('asset-repair-lost-1', { asset_status_id: 6 } as any, 'user-admin-1');
+      const result = await service.update(
+        'asset-repair-lost-1',
+        { asset_status_id: 6 },
+        'user-admin-1',
+      );
 
       expect(mockPrismaService.repairJob.update).toHaveBeenCalledWith({
         where: { id: 'job-1' },
@@ -920,7 +1129,9 @@ describe('AssetService', () => {
     });
 
     it('TC-REPAIR-LOST-3: preserves existing solution when appending automated cancellation note', async () => {
-      mockPrismaService.asset.findUnique.mockResolvedValue(mockUnderRepairAsset);
+      mockPrismaService.asset.findUnique.mockResolvedValue(
+        mockUnderRepairAsset,
+      );
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockUnderRepairAsset,
         status: { id: 6, code: 'LOST' },
@@ -930,8 +1141,9 @@ describe('AssetService', () => {
 
       const updateCall = mockPrismaService.repairJob.update.mock.calls[0][0];
       expect(updateCall.data.solution).toContain('Initial diagnosis note');
-      expect(updateCall.data.solution).toContain('[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)');
+      expect(updateCall.data.solution).toContain(
+        '[ยกเลิกอัตโนมัติ] ครุภัณฑ์ถูกปรับสถานะเป็นสูญหาย (LOST)',
+      );
     });
   });
 });
-

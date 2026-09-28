@@ -3,7 +3,9 @@ import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
 import { ReportType, UrgencyStatus } from '@prisma/client';
 
 export class UpdateRepairRequestDto {
-  @ApiPropertyOptional({ description: 'Updated symptom or problem description' })
+  @ApiPropertyOptional({
+    description: 'Updated symptom or problem description',
+  })
   @IsString()
   @IsOptional()
   symptom?: string;

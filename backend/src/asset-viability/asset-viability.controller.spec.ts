@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetViabilityController } from './asset-viability.controller';
 import { AssetViabilityService } from './asset-viability.service';
-import { ViabilitySortBy, ViabilityStatusFilter } from './dto/query-asset-viability.dto';
+import {
+  ViabilitySortBy,
+  ViabilityStatusFilter,
+} from './dto/query-asset-viability.dto';
 
 describe('AssetViabilityController', () => {
   let controller: AssetViabilityController;
@@ -32,10 +35,19 @@ describe('AssetViabilityController', () => {
 
   describe('findAll', () => {
     it('should delegate query to assetViabilityService.findAll', async () => {
-      const mockResult = { summary: {} as any, items: [], pagination: {} as any };
+      const mockResult = {
+        summary: {} as any,
+        items: [],
+        pagination: {} as any,
+      };
       mockAssetViabilityService.findAll.mockResolvedValue(mockResult);
 
-      const query = { page: 1, limit: 20, viabilityStatus: ViabilityStatusFilter.UNVIABLE, sortBy: ViabilitySortBy.COST_RATIO };
+      const query = {
+        page: 1,
+        limit: 20,
+        viabilityStatus: ViabilityStatusFilter.UNVIABLE,
+        sortBy: ViabilitySortBy.COST_RATIO,
+      };
       const result = await controller.findAll(query);
 
       expect(mockAssetViabilityService.findAll).toHaveBeenCalledWith(query);
@@ -43,7 +55,11 @@ describe('AssetViabilityController', () => {
     });
 
     it('should support findAllAlias for singular path', async () => {
-      const mockResult = { summary: {} as any, items: [], pagination: {} as any };
+      const mockResult = {
+        summary: {} as any,
+        items: [],
+        pagination: {} as any,
+      };
       mockAssetViabilityService.findAll.mockResolvedValue(mockResult);
 
       const query = { page: 1, limit: 10 };
@@ -61,7 +77,9 @@ describe('AssetViabilityController', () => {
 
       const result = await controller.findOne('asset-uuid-1');
 
-      expect(mockAssetViabilityService.findOne).toHaveBeenCalledWith('asset-uuid-1');
+      expect(mockAssetViabilityService.findOne).toHaveBeenCalledWith(
+        'asset-uuid-1',
+      );
       expect(result).toBe(mockResult);
     });
 
@@ -71,7 +89,9 @@ describe('AssetViabilityController', () => {
 
       const result = await controller.findOneAlias('asset-uuid-1');
 
-      expect(mockAssetViabilityService.findOne).toHaveBeenCalledWith('asset-uuid-1');
+      expect(mockAssetViabilityService.findOne).toHaveBeenCalledWith(
+        'asset-uuid-1',
+      );
       expect(result).toBe(mockResult);
     });
   });
@@ -84,9 +104,17 @@ describe('AssetViabilityController', () => {
       mockAssetViabilityService.requestDisposal.mockResolvedValue(mockResult);
 
       const dto = { reason: 'ซ่อมไม่คุ้มค่า', storageLocation: 'ห้องพัสดุ' };
-      const result = await controller.requestDisposal('asset-uuid-1', dto, mockSession);
+      const result = await controller.requestDisposal(
+        'asset-uuid-1',
+        dto,
+        mockSession,
+      );
 
-      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith('asset-uuid-1', dto, 'user-parcel-1');
+      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith(
+        'asset-uuid-1',
+        dto,
+        'user-parcel-1',
+      );
       expect(result).toBe(mockResult);
     });
 
@@ -95,9 +123,17 @@ describe('AssetViabilityController', () => {
       mockAssetViabilityService.requestDisposal.mockResolvedValue(mockResult);
 
       const dto = { reason: 'ซ่อมไม่คุ้มค่า' };
-      const result = await controller.requestDisposalAlias('asset-uuid-1', dto, mockSession);
+      const result = await controller.requestDisposalAlias(
+        'asset-uuid-1',
+        dto,
+        mockSession,
+      );
 
-      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith('asset-uuid-1', dto, 'user-parcel-1');
+      expect(mockAssetViabilityService.requestDisposal).toHaveBeenCalledWith(
+        'asset-uuid-1',
+        dto,
+        'user-parcel-1',
+      );
       expect(result).toBe(mockResult);
     });
   });

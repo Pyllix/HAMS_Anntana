@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 import type {
   RepairListItem,
   RepairDetail,
@@ -15,20 +15,9 @@ import type {
   BaseLookup,
 } from "../types/TypeAssessment";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-
-function getHeaders() {
-  const token = localStorage.getItem("token");
-
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 export async function getPendingEvaluations(): Promise<RepairListItem[]> {
-  const res = await axios.get(`${BASE_URL}/repairs`, getHeaders());
+  const res = await apiClient.get(`/repairs`);
 
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
@@ -36,7 +25,7 @@ export async function getPendingEvaluations(): Promise<RepairListItem[]> {
 export async function getRepairJobById(
   id: string | number,
 ): Promise<RepairDetail> {
-  const res = await axios.get(`${BASE_URL}/repairs/${id}`, getHeaders());
+  const res = await apiClient.get(`/repairs/${id}`);
 
   return res.data;
 }
@@ -45,10 +34,9 @@ export async function assignMechanics(
   id: string,
   dto: AssignMechanicDto,
 ): Promise<RepairDetail> {
-  const res = await axios.post(
-    `${BASE_URL}/repairs/${id}/assign`,
+  const res = await apiClient.post(
+    `/repairs/${id}/assign`,
     dto,
-    getHeaders(),
   );
 
   return res.data;
@@ -58,10 +46,9 @@ export async function createEvaluation(
   id: string,
   dto: DiagnoseDto,
 ): Promise<RepairDetail> {
-  const res = await axios.patch(
-    `${BASE_URL}/repairs/${id}/diagnose`,
+  const res = await apiClient.patch(
+    `/repairs/${id}/diagnose`,
     dto,
-    getHeaders(),
   );
 
   return res.data;
@@ -71,10 +58,9 @@ export async function advanceRepairStep(
   id: string,
   dto: AdvanceStepDto,
 ): Promise<RepairDetail> {
-  const res = await axios.patch(
-    `${BASE_URL}/repairs/${id}/steps/next`,
+  const res = await apiClient.patch(
+    `/repairs/${id}/steps/next`,
     dto,
-    getHeaders(),
   );
 
   return res.data;
@@ -84,10 +70,9 @@ export async function rejectRepairStep(
   id: string,
   dto: RejectStepDto,
 ): Promise<RepairDetail> {
-  const res = await axios.patch(
-    `${BASE_URL}/repairs/${id}/steps/reject`,
+  const res = await apiClient.patch(
+    `/repairs/${id}/steps/reject`,
     dto,
-    getHeaders(),
   );
 
   return res.data;
@@ -97,10 +82,9 @@ export async function completeUnrepairable(
   id: string,
   dto: CompleteUnrepairableDto,
 ): Promise<RepairDetail> {
-  const res = await axios.patch(
-    `${BASE_URL}/repairs/${id}/complete-unrepairable`,
+  const res = await apiClient.patch(
+    `/repairs/${id}/complete-unrepairable`,
     dto,
-    getHeaders(),
   );
 
   return res.data;
@@ -114,10 +98,9 @@ export async function cancelRepairJob(
     reason: (dto as any).reason || (dto as any).solution || "",
   };
 
-  const res = await axios.patch(
-    `${BASE_URL}/repairs/${id}/cancel`,
+  const res = await apiClient.patch(
+    `/repairs/${id}/cancel`,
     payload,
-    getHeaders(),
   );
 
   return res.data;
@@ -127,42 +110,40 @@ export async function returnSparePart(
   id: string,
   dto: ReturnSparePartDto,
 ): Promise<void> {
-  await axios.post(
-    `${BASE_URL}/repairs/${id}/spare-parts/return`,
+  await apiClient.post(
+    `/repairs/${id}/spare-parts/return`,
     dto,
-    getHeaders(),
   );
 }
 
 export async function getMechanics(): Promise<Mechanic[]> {
-  const res = await axios.get(`${BASE_URL}/repairs/mechanics`, getHeaders());
+  const res = await apiClient.get(`/repairs/mechanics`);
 
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
 export async function getMechanicWorkloads(): Promise<Mechanic[]> {
-  const res = await axios.get(
-    `${BASE_URL}/repairs/mechanic-workloads`,
-    getHeaders(),
+  const res = await apiClient.get(
+    `/repairs/mechanic-workloads`,
   );
 
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
 export async function getSpareParts(): Promise<SparePart[]> {
-  const res = await axios.get(`${BASE_URL}/spare-parts`, getHeaders());
+  const res = await apiClient.get(`/spare-parts`);
 
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
 export async function getAssetTypes(): Promise<BaseLookup[]> {
-  const res = await axios.get(`${BASE_URL}/asset-type`, getHeaders());
+  const res = await apiClient.get(`/asset-type`);
   return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
 }
 
 export async function getRepairMetaLookups(): Promise<RepairMetaLookups> {
   const [metaRes, assetTypesRes] = await Promise.allSettled([
-    axios.get(`${BASE_URL}/repairs/lookups/meta`, getHeaders()),
+    apiClient.get(`/repairs/lookups/meta`),
     getAssetTypes(),
   ]);
 

@@ -11,8 +11,8 @@ model Section {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  users User[]
-  asset Asset[]
+  users         User[]
+  asset         Asset[]
   transfersFrom Transfer[]  @relation("TransferFromSection")
   transfersTo   Transfer[]  @relation("TransferToSection")
   repairJobs    RepairJob[]

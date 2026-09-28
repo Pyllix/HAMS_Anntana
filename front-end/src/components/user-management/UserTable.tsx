@@ -8,6 +8,7 @@ import {
 import { useEffect, useMemo } from "react";
 import type { User } from "../../types/TypeUser";
 import { useQuery } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { getAllUser } from "../../services/userService";
 
 import UserInfo from "./table-compnent/UserInfo";
@@ -127,10 +128,20 @@ interface UserTableProps {
 }
 
 export default function UserTable({ search, role, status }: UserTableProps) {
-  const { data: users } = useQuery({
-    queryKey: ["assets"],
+  const { data: users, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["users"],
     queryFn: () => getAllUser(),
   });
+
+  const loadErrorDetail = isAxiosError(error)
+    ? error.response
+      ? `HTTP ${error.response.status}`
+      : error.code ?? "เชื่อมต่อ API ไม่ได้"
+    : error instanceof Error
+      ? error.message === "User list API returned an invalid response"
+        ? "API ส่งข้อมูลกลับมาผิดรูปแบบ"
+        : error.message
+      : null;
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -206,6 +217,28 @@ export default function UserTable({ search, role, status }: UserTableProps) {
                   ))}
                 </tr>
               ))
+            ) : isLoading ? (
+              <tr>
+                <td colSpan={columns.length} className="text-center py-12 text-slate-400">
+                  กำลังโหลดข้อมูลผู้ใช้...
+                </td>
+              </tr>
+            ) : isError ? (
+              <tr>
+                <td colSpan={columns.length} className="text-center py-12 text-rose-700">
+                  <div className="flex flex-col items-center gap-2">
+                    <span>โหลดข้อมูลผู้ใช้ไม่สำเร็จ</span>
+                    {loadErrorDetail && <span className="text-xs">{loadErrorDetail}</span>}
+                    <button
+                      type="button"
+                      onClick={() => void refetch()}
+                      className="rounded-lg border border-rose-300 px-3 py-1 text-sm hover:bg-rose-50"
+                    >
+                      ลองอีกครั้ง
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ) : (
               <tr>
                 <td

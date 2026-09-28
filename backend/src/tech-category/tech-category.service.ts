@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateTechCategoryDto } from './dto/create-tech-category.dto';
 import { UpdateTechCategoryDto } from './dto/update-tech-category.dto';
 import { PrismaService } from 'src/prisma.service';
@@ -12,7 +16,9 @@ export class TechCategoryService {
       where: { code: dto.code, deleteAt: null },
     });
     if (existing) {
-      throw new ConflictException(`TechCategory with code "${dto.code}" already exists`);
+      throw new ConflictException(
+        `TechCategory with code "${dto.code}" already exists`,
+      );
     }
 
     return this.prisma.techCategory.create({
@@ -52,7 +58,9 @@ export class TechCategoryService {
         where: { code: dto.code, id: { not: id }, deleteAt: null },
       });
       if (existing) {
-        throw new ConflictException(`TechCategory with code "${dto.code}" already exists`);
+        throw new ConflictException(
+          `TechCategory with code "${dto.code}" already exists`,
+        );
       }
     }
 

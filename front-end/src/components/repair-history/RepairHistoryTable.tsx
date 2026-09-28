@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   tableFeatures,
   useTable,
-  rowPaginationFeature,       
-  createPaginatedRowModel,    
+  rowPaginationFeature,
+  createPaginatedRowModel,
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

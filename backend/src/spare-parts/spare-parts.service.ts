@@ -115,7 +115,9 @@ export class SparePartsService {
     };
 
     if (query.lowStock) {
-      const lowStockIds = await this.prisma.$queryRaw<{ sparepart_id: number }[]>`
+      const lowStockIds = await this.prisma.$queryRaw<
+        { sparepart_id: number }[]
+      >`
         SELECT sparepart_id FROM spareparts
         WHERE deleted_at IS NULL
           AND qty_in_stock <= min_stock
@@ -207,7 +209,9 @@ export class SparePartsService {
         where: { id: dto.groupId, deletedAt: null },
       });
       if (!group) {
-        throw new NotFoundException(`Spare part group #${dto.groupId} not found`);
+        throw new NotFoundException(
+          `Spare part group #${dto.groupId} not found`,
+        );
       }
     }
 
@@ -369,11 +373,15 @@ export class SparePartsService {
       ...(query.jobId ? { jobId: query.jobId } : {}),
       ...(query.txnType ? { txnType: query.txnType } : {}),
       ...(query.userId ? { txnBy: query.userId } : {}),
-      ...((query.startDate || query.endDate)
+      ...(query.startDate || query.endDate
         ? {
             createdAt: {
-              ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
-              ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+              ...(query.startDate
+                ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+                : {}),
+              ...(query.endDate
+                ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+                : {}),
             },
           }
         : {}),
@@ -413,22 +421,44 @@ export class SparePartsService {
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
       ...(query.addBy ? { addBy: query.addBy } : {}),
       ...(query.sparepartAddDoc
-        ? { sparepartAddDoc: { contains: query.sparepartAddDoc, mode: 'insensitive' } }
+        ? {
+            sparepartAddDoc: {
+              contains: query.sparepartAddDoc,
+              mode: 'insensitive',
+            },
+          }
         : {}),
-      ...((query.startDate || query.endDate)
+      ...(query.startDate || query.endDate
         ? {
             createdAt: {
-              ...(query.startDate ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) } : {}),
-              ...(query.endDate ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) } : {}),
+              ...(query.startDate
+                ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+                : {}),
+              ...(query.endDate
+                ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+                : {}),
             },
           }
         : {}),
       ...(query.search
         ? {
             OR: [
-              { sparepartAddDoc: { contains: query.search, mode: 'insensitive' } },
-              { sparepart: { code: { contains: query.search, mode: 'insensitive' } } },
-              { sparepart: { name: { contains: query.search, mode: 'insensitive' } } },
+              {
+                sparepartAddDoc: {
+                  contains: query.search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                sparepart: {
+                  code: { contains: query.search, mode: 'insensitive' },
+                },
+              },
+              {
+                sparepart: {
+                  name: { contains: query.search, mode: 'insensitive' },
+                },
+              },
             ],
           }
         : {}),

@@ -14,7 +14,8 @@ export class QueryExpenseForecastDto {
   sectionId?: string = 'all';
 
   @ApiPropertyOptional({
-    description: 'จำนวนเดือนที่ต้องการพยากรณ์ล่วงหน้า (ค่าเริ่มต้น 12 เดือน, สูงสุด 24 เดือน)',
+    description:
+      'จำนวนเดือนที่ต้องการพยากรณ์ล่วงหน้า (ค่าเริ่มต้น 12 เดือน, สูงสุด 24 เดือน)',
     example: 12,
     default: 12,
   })
@@ -26,7 +27,8 @@ export class QueryExpenseForecastDto {
   months?: number = 12;
 
   @ApiPropertyOptional({
-    description: 'จำนวนเดือนย้อนหลังที่ต้องการดึงประวัติค่าใช้จ่าย (ค่าเริ่มต้น 12 เดือน หรือ 1 ปี)',
+    description:
+      'จำนวนเดือนย้อนหลังที่ต้องการดึงประวัติค่าใช้จ่าย (ค่าเริ่มต้น 12 เดือน หรือ 1 ปี)',
     example: 12,
     default: 12,
   })
@@ -37,4 +39,3 @@ export class QueryExpenseForecastDto {
   @Max(60)
   historyMonths?: number = 12;
 }
-

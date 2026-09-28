@@ -1,14 +1,30 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpStatus, HttpCode, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  HttpStatus,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
 import { AssetStatusService } from './asset-status.service';
 import { CreateAssetStatusDto } from './dto/create-asset-status.dto';
 import { UpdateAssetStatusDto } from './dto/update-asset-status.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Asset Status')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('asset-status')
 export class AssetStatusController {
@@ -18,7 +34,10 @@ export class AssetStatusController {
   @Post()
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create new asset status' })
-  @ApiResponse({ status: 201, description: 'Asset Status created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Asset Status created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -56,7 +75,10 @@ export class AssetStatusController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Asset Status not found' })
-  update(@Param('id') id: string, @Body() updateAssetStatusDto: UpdateAssetStatusDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateAssetStatusDto: UpdateAssetStatusDto,
+  ) {
     return this.assetStatusService.update(+id, updateAssetStatusDto);
   }
 
@@ -65,7 +87,10 @@ export class AssetStatusController {
   @HttpCode(HttpStatus.OK)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Soft Delete Asset Status by ID' })
-  @ApiResponse({ status: 200, description: 'Asset Status deleted successfully (soft delete)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset Status deleted successfully (soft delete)',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Asset Status not found' })
@@ -77,7 +102,10 @@ export class AssetStatusController {
   @Patch(':id/restore')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Restore a soft-deleted asset status' })
-  @ApiResponse({ status: 200, description: 'Asset Status restored successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Asset Status restored successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Deleted asset status not found' })

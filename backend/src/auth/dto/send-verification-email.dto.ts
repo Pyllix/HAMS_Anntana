@@ -11,7 +11,8 @@ export class SendVerificationEmailDto {
   email: string;
 
   @ApiPropertyOptional({
-    description: 'Callback URL สำหรับ redirect ไปยังหน้า Frontend หลังยืนยันสำเร็จ',
+    description:
+      'Callback URL สำหรับ redirect ไปยังหน้า Frontend หลังยืนยันสำเร็จ',
     example: 'http://localhost:5173/login?verified=true',
   })
   @IsString()

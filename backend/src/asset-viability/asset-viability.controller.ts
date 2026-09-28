@@ -1,6 +1,23 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AuthGuard, Session, type UserSession } from '@thallesp/nestjs-better-auth';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import {
+  AuthGuard,
+  Session,
+  type UserSession,
+} from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { AssetViabilityService } from './asset-viability.service';
@@ -12,16 +29,22 @@ import {
 } from './dto/asset-viability-response.dto';
 
 @ApiTags('Asset Viability')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller()
 export class AssetViabilityController {
   constructor(private readonly assetViabilityService: AssetViabilityService) {}
 
   @Get('assets/viability')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
-    summary: 'Find paginated assets with economic viability assessment and summary KPI counters',
+    summary:
+      'Find paginated assets with economic viability assessment and summary KPI counters',
     description:
       'Evaluates assets using Rule-based Decision Tree (EQM-WI-040) based on cumulative repair cost ratio, useful life, and repair breakdown frequency.',
   })
@@ -35,7 +58,12 @@ export class AssetViabilityController {
   }
 
   @Get('asset/viability')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: 'Alias for GET /assets/viability (singular "asset" path)',
   })
@@ -49,7 +77,12 @@ export class AssetViabilityController {
   }
 
   @Get('assets/:id/viability')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: 'Find single asset deep-dive viability assessment',
     description:
@@ -66,7 +99,12 @@ export class AssetViabilityController {
   }
 
   @Get('asset/:id/viability')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: 'Alias for GET /assets/:id/viability (singular "asset" path)',
   })
@@ -81,9 +119,15 @@ export class AssetViabilityController {
   }
 
   @Post('assets/:id/request-disposal')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
-    summary: 'Request asset disposal (Transition to WAIT_DISPOSAL & UNAVAILABLE)',
+    summary:
+      'Request asset disposal (Transition to WAIT_DISPOSAL & UNAVAILABLE)',
     description:
       'Transitions an unviable asset into WAIT_DISPOSAL, locks availability to UNAVAILABLE, and appends the disposal justification to asset remarks.',
   })
@@ -91,7 +135,10 @@ export class AssetViabilityController {
     status: 200,
     description: 'Asset transitioned to WAIT_DISPOSAL successfully',
   })
-  @ApiResponse({ status: 400, description: 'Asset currently borrowed or already disposed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Asset currently borrowed or already disposed',
+  })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   requestDisposal(
     @Param('id') id: string,
@@ -102,15 +149,24 @@ export class AssetViabilityController {
   }
 
   @Post('asset/:id/request-disposal')
-  @Roles(UserRole.PARCEL_STAFF, UserRole.MAINTENANCE_HEAD, UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
-    summary: 'Alias for POST /assets/:id/request-disposal (singular "asset" path)',
+    summary:
+      'Alias for POST /assets/:id/request-disposal (singular "asset" path)',
   })
   @ApiResponse({
     status: 200,
     description: 'Asset transitioned to WAIT_DISPOSAL successfully',
   })
-  @ApiResponse({ status: 400, description: 'Asset currently borrowed or already disposed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Asset currently borrowed or already disposed',
+  })
   @ApiResponse({ status: 404, description: 'Asset not found' })
   requestDisposalAlias(
     @Param('id') id: string,

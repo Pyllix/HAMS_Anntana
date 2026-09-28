@@ -1,4 +1,9 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsDateString,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -53,4 +58,3 @@ export class CreateAssetTransferDto {
   @IsString()
   remark?: string;
 }
-

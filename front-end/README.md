@@ -1,5 +1,15 @@
 # React + Vite
 
+## Use the Render test backend during local frontend development
+
+Copy `front-end/.env.local.example` to `front-end/.env.local`. The example contains:
+
+```env
+DEV_API_PROXY_TARGET=https://hams-anntana-test.onrender.com
+```
+
+Restart the Vite development server after changing this file. Browser API requests still use `/api`; Vite forwards them to the configured backend. Omit this setting to use the local backend at `http://localhost:3000`. `.env.local` is ignored by Git, so each developer can choose their own target.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

@@ -1,0 +1,13 @@
+model SecurityAuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String   @map("actor_user_id")
+  targetUserId String  @map("target_user_id")
+  action      String   @db.VarChar(80)
+  reason      String?  @db.VarChar(1000)
+  details     Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@map("security_audit_logs")
+}

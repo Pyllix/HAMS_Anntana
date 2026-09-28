@@ -8,7 +8,10 @@ export class CreateSectionDto {
   @MaxLength(20)
   code: string;
 
-  @ApiProperty({ example: 'Information Technology', description: 'ชื่อแผนก/ฝ่าย' })
+  @ApiProperty({
+    example: 'Information Technology',
+    description: 'ชื่อแผนก/ฝ่าย',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
@@ -20,7 +23,10 @@ export class CreateSectionDto {
   @MaxLength(20)
   tel?: string;
 
-  @ApiPropertyOptional({ example: 'Main Building', description: 'สถานที่ตั้ง/อาคาร' })
+  @ApiPropertyOptional({
+    example: 'Main Building',
+    description: 'สถานที่ตั้ง/อาคาร',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(100)

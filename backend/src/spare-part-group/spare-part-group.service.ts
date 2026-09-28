@@ -20,7 +20,9 @@ export class SparePartGroupService {
       where: { name: dto.name, deletedAt: null },
     });
     if (existing) {
-      throw new ConflictException(`Spare part group "${dto.name}" already exists`);
+      throw new ConflictException(
+        `Spare part group "${dto.name}" already exists`,
+      );
     }
 
     return this.prisma.sparepartGroup.create({
@@ -88,7 +90,9 @@ export class SparePartGroupService {
         where: { name: dto.name, deletedAt: null, NOT: { id } },
       });
       if (existing) {
-        throw new ConflictException(`Spare part group "${dto.name}" already exists`);
+        throw new ConflictException(
+          `Spare part group "${dto.name}" already exists`,
+        );
       }
     }
 

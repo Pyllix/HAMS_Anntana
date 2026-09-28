@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import {
@@ -46,7 +50,9 @@ export class AssetViabilityService {
    * Core Rule-based Decision Tree evaluating asset economic viability.
    * Pure function for high testability and deterministic compliance with EQM-WI-040.
    */
-  evaluateViability(input: ViabilityEvaluationInput): ViabilityEvaluationResult {
+  evaluateViability(
+    input: ViabilityEvaluationInput,
+  ): ViabilityEvaluationResult {
     const now = input.now ?? new Date();
 
     // 1. Check Active Warranty
@@ -62,19 +68,23 @@ export class AssetViabilityService {
     let ageYears = 0;
     if (input.receivedDate && !isNaN(input.receivedDate.getTime())) {
       if (input.receivedDate <= now) {
-        const diffDays = (now.getTime() - input.receivedDate.getTime()) / (1000 * 60 * 60 * 24);
+        const diffDays =
+          (now.getTime() - input.receivedDate.getTime()) /
+          (1000 * 60 * 60 * 24);
         ageYears = Math.round((diffDays / 365.25) * 10) / 10;
       }
     }
 
     // 3. Fallback useful life (Default 8 years for medical equipment)
-    const usefulLifeYears = input.usefulLifeYears > 0 ? input.usefulLifeYears : 8;
+    const usefulLifeYears =
+      input.usefulLifeYears > 0 ? input.usefulLifeYears : 8;
     const isUsefulLifeExceeded = ageYears >= usefulLifeYears;
 
     // 4. Calculate Cost Ratio Percentage (null if price <= 0)
     let costRatioPercentage: number | null = null;
     if (input.price > 0) {
-      costRatioPercentage = Math.round((input.cumulativeRepairCost / input.price) * 1000) / 10;
+      costRatioPercentage =
+        Math.round((input.cumulativeRepairCost / input.price) * 1000) / 10;
     }
 
     // ─── Rule Hierarchy (Precedence Order) ───────────────────────────────────
@@ -93,7 +103,11 @@ export class AssetViabilityService {
     }
 
     // Rule 2: Critical Cumulative Cost Ratio (>= 70%)
-    if (input.price > 0 && costRatioPercentage !== null && costRatioPercentage >= 70) {
+    if (
+      input.price > 0 &&
+      costRatioPercentage !== null &&
+      costRatioPercentage >= 70
+    ) {
       const formattedCost = input.cumulativeRepairCost.toLocaleString('th-TH', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -128,7 +142,11 @@ export class AssetViabilityService {
     }
 
     // Rule 4: Zero-Price Assets (Donations/Building attachments) with Expired Life & Excessive Breakdown
-    if (input.price <= 0 && isUsefulLifeExceeded && input.totalRepairCount >= 3) {
+    if (
+      input.price <= 0 &&
+      isUsefulLifeExceeded &&
+      input.totalRepairCount >= 3
+    ) {
       return {
         viabilityStatus: 'UNVIABLE',
         viabilityReason: `ครุภัณฑ์ไม่มีราคาจัดซื้อ (บริจาค/โอนย้าย) ใช้งานเกินอายุขัยมาตรฐาน (${ageYears} ปี) และมีประวัติส่งซ่อมซ้ำซากเกินเกณฑ์`,
@@ -141,7 +159,11 @@ export class AssetViabilityService {
     }
 
     // Rule 5: Warning Thresholds (Cost Ratio 50-70%, Expired Life, or Recent Frequency >= 3)
-    if (input.price > 0 && costRatioPercentage !== null && costRatioPercentage >= 50) {
+    if (
+      input.price > 0 &&
+      costRatioPercentage !== null &&
+      costRatioPercentage >= 50
+    ) {
       return {
         viabilityStatus: 'WARNING',
         viabilityReason: `ค่าซ่อมสะสมคิดเป็น ${costRatioPercentage.toFixed(1)}% ของราคาจัดซื้อ (เข้าข่ายเฝ้าระวังช่วง 50–70%)`,
@@ -180,7 +202,8 @@ export class AssetViabilityService {
     // Rule 6: Default Viable
     return {
       viabilityStatus: 'VIABLE',
-      viabilityReason: 'ค่าซ่อมสะสมและอายุการใช้งานอยู่ในเกณฑ์คุ้มค่าต่อการซ่อมบำรุง',
+      viabilityReason:
+        'ค่าซ่อมสะสมและอายุการใช้งานอยู่ในเกณฑ์คุ้มค่าต่อการซ่อมบำรุง',
       ageYears,
       usefulLifeYears,
       isUsefulLifeExceeded,
@@ -192,7 +215,9 @@ export class AssetViabilityService {
   /**
    * Find paginated assets with economic viability assessment and summary KPI counters.
    */
-  async findAll(query: QueryAssetViabilityDto): Promise<AssetViabilityListResponseDto> {
+  async findAll(
+    query: QueryAssetViabilityDto,
+  ): Promise<AssetViabilityListResponseDto> {
     const page = Math.max(1, query.page ?? 1);
     const limit = Math.min(100, Math.max(1, query.limit ?? 20));
     const sectionId = query.sectionId;
@@ -203,7 +228,9 @@ export class AssetViabilityService {
     const whereConditions: Prisma.Sql[] = [];
 
     if (!query.includeDisposed) {
-      whereConditions.push(Prisma.sql`ast.status_code NOT IN ('DISPOSAL', 'LOST')`);
+      whereConditions.push(
+        Prisma.sql`ast.status_code NOT IN ('DISPOSAL', 'LOST')`,
+      );
     }
 
     if (sectionId) {
@@ -310,7 +337,9 @@ export class AssetViabilityService {
         model: row.model,
         serialNo: row.serial_no,
         price,
-        receivedDate: receivedDate ? receivedDate.toISOString() : new Date(row.created_at).toISOString(),
+        receivedDate: receivedDate
+          ? receivedDate.toISOString()
+          : new Date(row.created_at).toISOString(),
         warrantyDate,
         isWarrantyActive: evalResult.isWarrantyActive,
         assetType: {
@@ -344,16 +373,29 @@ export class AssetViabilityService {
     // 4. Calculate Summary KPI Counters (Across all evaluated assets matching initial query)
     const summary: AssetViabilitySummaryDto = {
       totalEvaluated: evaluatedItems.length,
-      viableCount: evaluatedItems.filter((i) => i.viabilityStatus === 'VIABLE').length,
-      warningCount: evaluatedItems.filter((i) => i.viabilityStatus === 'WARNING').length,
-      unviableCount: evaluatedItems.filter((i) => i.viabilityStatus === 'UNVIABLE').length,
-      totalCumulativeRepairCost: evaluatedItems.reduce((acc, i) => acc + i.metrics.cumulativeRepairCost, 0),
+      viableCount: evaluatedItems.filter((i) => i.viabilityStatus === 'VIABLE')
+        .length,
+      warningCount: evaluatedItems.filter(
+        (i) => i.viabilityStatus === 'WARNING',
+      ).length,
+      unviableCount: evaluatedItems.filter(
+        (i) => i.viabilityStatus === 'UNVIABLE',
+      ).length,
+      totalCumulativeRepairCost: evaluatedItems.reduce(
+        (acc, i) => acc + i.metrics.cumulativeRepairCost,
+        0,
+      ),
     };
 
     // 5. Filter by viabilityStatus if requested
     let filteredItems = evaluatedItems;
-    if (query.viabilityStatus && query.viabilityStatus !== ViabilityStatusFilter.ALL) {
-      filteredItems = evaluatedItems.filter((i) => i.viabilityStatus === query.viabilityStatus);
+    if (
+      query.viabilityStatus &&
+      query.viabilityStatus !== ViabilityStatusFilter.ALL
+    ) {
+      filteredItems = evaluatedItems.filter(
+        (i) => i.viabilityStatus === query.viabilityStatus,
+      );
     }
 
     // 6. Sort items
@@ -365,10 +407,13 @@ export class AssetViabilityService {
       let comparison = 0;
       switch (sortBy) {
         case ViabilitySortBy.COST_RATIO:
-          comparison = (a.metrics.costRatioPercentage ?? -1) - (b.metrics.costRatioPercentage ?? -1);
+          comparison =
+            (a.metrics.costRatioPercentage ?? -1) -
+            (b.metrics.costRatioPercentage ?? -1);
           break;
         case ViabilitySortBy.CUMULATIVE_COST:
-          comparison = a.metrics.cumulativeRepairCost - b.metrics.cumulativeRepairCost;
+          comparison =
+            a.metrics.cumulativeRepairCost - b.metrics.cumulativeRepairCost;
           break;
         case ViabilitySortBy.REPAIR_COUNT:
           comparison = a.metrics.totalRepairCount - b.metrics.totalRepairCount;
@@ -378,7 +423,9 @@ export class AssetViabilityService {
           break;
         case ViabilitySortBy.CREATED_AT:
         default:
-          comparison = new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+          comparison =
+            new Date(a.receivedDate).getTime() -
+            new Date(b.receivedDate).getTime();
           break;
       }
       return comparison * multiplier;
@@ -418,7 +465,12 @@ export class AssetViabilityService {
         availabilityStatus: true,
         company: true,
         owner: {
-          select: { id: true, firstname: true, lastname: true, employeeId: true },
+          select: {
+            id: true,
+            firstname: true,
+            lastname: true,
+            employeeId: true,
+          },
         },
         repairJobs: {
           orderBy: { createdAt: 'desc' },
@@ -438,9 +490,14 @@ export class AssetViabilityService {
     }
 
     const price = Number(asset.price) || 0;
-    const receivedDate = asset.receivedDate ? new Date(asset.receivedDate) : null;
+    const receivedDate = asset.receivedDate
+      ? new Date(asset.receivedDate)
+      : null;
     const warrantyDate = asset.warrantyDate || null;
-    const usefulLifeYears = asset.type?.useful_life && asset.type.useful_life > 0 ? asset.type.useful_life : 8;
+    const usefulLifeYears =
+      asset.type?.useful_life && asset.type.useful_life > 0
+        ? asset.type.useful_life
+        : 8;
 
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -449,51 +506,53 @@ export class AssetViabilityService {
     let totalSparePartsCost = 0;
     let recentRepairCount = 0;
 
-    const repairHistory: HistoricalRepairJobDto[] = asset.repairJobs.map((job) => {
-      const outsourceCost = job.repairCost ? Number(job.repairCost) : 0;
-      totalOutsourceCost += outsourceCost;
+    const repairHistory: HistoricalRepairJobDto[] = asset.repairJobs.map(
+      (job) => {
+        const outsourceCost = job.repairCost ? Number(job.repairCost) : 0;
+        totalOutsourceCost += outsourceCost;
 
-      let jobSparePartsCost = 0;
-      const spareParts = job.sparepartTxns.map((t) => {
-        const unitPrice = Number(t.unitPrice) || 0;
-        const lineTotal = unitPrice * t.qty;
-        if (t.txnType === 'WITHDRAW') {
-          jobSparePartsCost += lineTotal;
-        } else if (t.txnType === 'RETURN') {
-          jobSparePartsCost -= lineTotal;
+        let jobSparePartsCost = 0;
+        const spareParts = job.sparepartTxns.map((t) => {
+          const unitPrice = Number(t.unitPrice) || 0;
+          const lineTotal = unitPrice * t.qty;
+          if (t.txnType === 'WITHDRAW') {
+            jobSparePartsCost += lineTotal;
+          } else if (t.txnType === 'RETURN') {
+            jobSparePartsCost -= lineTotal;
+          }
+          return {
+            code: t.sparepart?.code || 'N/A',
+            name: t.sparepart?.name || 'Unknown Part',
+            qty: t.qty,
+            unitPrice,
+            totalPrice: lineTotal,
+            txnType: t.txnType,
+          };
+        });
+
+        const netJobSparePartsCost = Math.max(0, jobSparePartsCost);
+        totalSparePartsCost += netJobSparePartsCost;
+
+        const createdAt = new Date(job.createdAt);
+        if (createdAt >= oneYearAgo) {
+          recentRepairCount++;
         }
+
         return {
-          code: t.sparepart?.code || 'N/A',
-          name: t.sparepart?.name || 'Unknown Part',
-          qty: t.qty,
-          unitPrice,
-          totalPrice: lineTotal,
-          txnType: t.txnType,
+          jobId: job.id,
+          jobNo: job.jobNo,
+          reportType: job.reportType,
+          actionType: job.actionType,
+          createdAt: createdAt.toISOString(),
+          symptom: job.symptom,
+          solution: job.solution,
+          outsourceCost,
+          sparePartsCost: netJobSparePartsCost,
+          totalCost: outsourceCost + netJobSparePartsCost,
+          spareParts,
         };
-      });
-
-      const netJobSparePartsCost = Math.max(0, jobSparePartsCost);
-      totalSparePartsCost += netJobSparePartsCost;
-
-      const createdAt = new Date(job.createdAt);
-      if (createdAt >= oneYearAgo) {
-        recentRepairCount++;
-      }
-
-      return {
-        jobId: job.id,
-        jobNo: job.jobNo,
-        reportType: job.reportType,
-        actionType: job.actionType,
-        createdAt: createdAt.toISOString(),
-        symptom: job.symptom,
-        solution: job.solution,
-        outsourceCost,
-        sparePartsCost: netJobSparePartsCost,
-        totalCost: outsourceCost + netJobSparePartsCost,
-        spareParts,
-      };
-    });
+      },
+    );
 
     const cumulativeRepairCost = totalOutsourceCost + totalSparePartsCost;
     const totalRepairCount = asset.repairJobs.length;
@@ -509,7 +568,10 @@ export class AssetViabilityService {
     });
 
     // Determine disposal recommendation & guards
-    let recommendedAction: 'PROCEED_REPAIR' | 'CAUTION_REPAIR' | 'RECOMMEND_DISPOSAL' = 'PROCEED_REPAIR';
+    let recommendedAction:
+      | 'PROCEED_REPAIR'
+      | 'CAUTION_REPAIR'
+      | 'RECOMMEND_DISPOSAL' = 'PROCEED_REPAIR';
     let actionLabel = 'ใช้งานและซ่อมบำรุงตามปกติ';
 
     if (viabilityResult.viabilityStatus === 'UNVIABLE') {
@@ -544,11 +606,33 @@ export class AssetViabilityService {
         receivedDate: receivedDate ? receivedDate.toISOString() : null,
         warrantyDate,
         imageUrl: asset.imageUrl,
-        section: asset.section ? { id: asset.section.id, name: asset.section.name, building: asset.section.building } : null,
-        type: asset.type ? { id: asset.type.id, name: asset.type.name, usefulLife: usefulLifeYears } : null,
-        status: asset.status ? { id: asset.status.id, code: asset.status.code, name: asset.status.name } : null,
+        section: asset.section
+          ? {
+              id: asset.section.id,
+              name: asset.section.name,
+              building: asset.section.building,
+            }
+          : null,
+        type: asset.type
+          ? {
+              id: asset.type.id,
+              name: asset.type.name,
+              usefulLife: usefulLifeYears,
+            }
+          : null,
+        status: asset.status
+          ? {
+              id: asset.status.id,
+              code: asset.status.code,
+              name: asset.status.name,
+            }
+          : null,
         availabilityStatus: asset.availabilityStatus
-          ? { id: asset.availabilityStatus.id, code: asset.availabilityStatus.code, name: asset.availabilityStatus.name }
+          ? {
+              id: asset.availabilityStatus.id,
+              code: asset.availabilityStatus.code,
+              name: asset.availabilityStatus.name,
+            }
           : null,
       },
       viability: {
@@ -606,7 +690,9 @@ export class AssetViabilityService {
     }
 
     if (asset.status?.code === 'DISPOSAL') {
-      throw new BadRequestException('Asset has already been permanently disposed');
+      throw new BadRequestException(
+        'Asset has already been permanently disposed',
+      );
     }
 
     if (asset.status?.code === 'LOST') {
@@ -618,7 +704,9 @@ export class AssetViabilityService {
     }
 
     if (asset.availabilityStatus?.code === 'BORROWED') {
-      throw new BadRequestException('Cannot request disposal for an asset that is currently borrowed');
+      throw new BadRequestException(
+        'Cannot request disposal for an asset that is currently borrowed',
+      );
     }
 
     const waitDisposalStatus = await this.prisma.assetStatus.findUnique({
@@ -635,12 +723,20 @@ export class AssetViabilityService {
       throw new NotFoundException('Status UNAVAILABLE not found in database');
     }
 
-    const reasonNote = dto.reason?.trim() ? `[เสนอรอจำหน่าย]: ${dto.reason.trim()}` : '';
-    const locationNote = dto.storageLocation?.trim() ? `[สถานที่พักซาก]: ${dto.storageLocation.trim()}` : '';
-    const additionalNotes = [reasonNote, locationNote].filter(Boolean).join(' | ');
+    const reasonNote = dto.reason?.trim()
+      ? `[เสนอรอจำหน่าย]: ${dto.reason.trim()}`
+      : '';
+    const locationNote = dto.storageLocation?.trim()
+      ? `[สถานที่พักซาก]: ${dto.storageLocation.trim()}`
+      : '';
+    const additionalNotes = [reasonNote, locationNote]
+      .filter(Boolean)
+      .join(' | ');
 
     const updatedRemark = additionalNotes
-      ? (asset.remark ? `${asset.remark}\n${additionalNotes}` : additionalNotes)
+      ? asset.remark
+        ? `${asset.remark}\n${additionalNotes}`
+        : additionalNotes
       : asset.remark;
 
     const updatedAsset = await this.prisma.asset.update({
@@ -660,7 +756,8 @@ export class AssetViabilityService {
 
     return {
       success: true,
-      message: 'ปรับสถานะครุภัณฑ์เป็น WAIT_DISPOSAL (รอจำหน่าย) และล็อกเป็น UNAVAILABLE เรียบร้อยแล้ว',
+      message:
+        'ปรับสถานะครุภัณฑ์เป็น WAIT_DISPOSAL (รอจำหน่าย) และล็อกเป็น UNAVAILABLE เรียบร้อยแล้ว',
       asset: {
         id: updatedAsset.id,
         noid: updatedAsset.noid,
@@ -676,7 +773,9 @@ export class AssetViabilityService {
           code: updatedAsset.availabilityStatus?.code,
           name: updatedAsset.availabilityStatus?.name,
         },
-        section: updatedAsset.section ? { id: updatedAsset.section.id, name: updatedAsset.section.name } : null,
+        section: updatedAsset.section
+          ? { id: updatedAsset.section.id, name: updatedAsset.section.name }
+          : null,
         remark: updatedAsset.remark,
         requestedDisposalReason: dto.reason,
         storageLocation: dto.storageLocation,

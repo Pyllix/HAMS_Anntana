@@ -1,5 +1,5 @@
 import type { Company } from "../types/TypeAsset";
-import axios from "axios";
+import { apiClient } from "./apiClient";
 
 export interface TrackRes {
   id: string;
@@ -163,12 +163,9 @@ export interface RepairsLookupMeta {
 export async function getRepairsHistory(
   sectionId?: string | number,
 ): Promise<TrackRes[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/repairs", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const res = await apiClient.get("/repairs", {
+
     params: {
       ...(sectionId && { sectionId }),
       limit: 100,
@@ -179,16 +176,8 @@ export async function getRepairsHistory(
 }
 
 export async function getLookUp(): Promise<RepairsLookupMeta> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/repairs/lookups/meta",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.get("/repairs/lookups/meta");
 
   return res.data;
 }

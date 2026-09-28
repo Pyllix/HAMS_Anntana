@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 import type {
   AssetType,
   Asset,
@@ -12,7 +12,6 @@ import type {
 export async function getAssetsPaginated(
   params?: AssetQueryParams,
 ): Promise<PaginatedResponse<Asset>> {
-  const token = localStorage.getItem("token");
 
   const cleanParams: Record<string, any> = {};
   if (params) {
@@ -32,10 +31,8 @@ export async function getAssetsPaginated(
       cleanParams.equipment_type_id = params.equipment_type_id;
   }
 
-  const res = await axios.get("https://hams-anntana.onrender.com/asset", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const res = await apiClient.get("/asset", {
+
     params: cleanParams,
   });
 
@@ -57,7 +54,6 @@ export async function getMySectionAssetsPaginated(params?: {
   limit?: number;
   search?: string;
 }): Promise<PaginatedResponse<Asset>> {
-  const token = localStorage.getItem("token");
 
   const cleanParams: Record<string, any> = {};
   if (params) {
@@ -67,12 +63,10 @@ export async function getMySectionAssetsPaginated(params?: {
       cleanParams.search = params.search.trim();
   }
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/asset/my-section",
+  const res = await apiClient.get(
+    "/asset/my-section",
     {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+
       params: cleanParams,
     },
   );
@@ -93,12 +87,9 @@ export async function getMySectionAssetsPaginated(params?: {
 export async function getAssets(
   section_id?: string | number,
 ): Promise<Asset[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/asset", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const res = await apiClient.get("/asset", {
+
     params: {
       ...(section_id && { section_id }),
     },
@@ -108,154 +99,80 @@ export async function getAssets(
 }
 
 export async function getAssetTypes(): Promise<AssetType[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/asset-type", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get("/asset-type");
 
   return res.data;
 }
 
 export async function getAvailabilities(): Promise<Availabilities[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/availabilities",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.get("/availabilities");
 
   return res.data;
 }
 
 export async function getAssetStatuses(): Promise<AssetStatus[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/asset-status",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.get("/asset-status");
 
   return res.data;
 }
 
 export async function getSections(): Promise<Section[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/sections", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get("/sections");
 
   return res.data;
 }
 
 export async function getMySectionAssets(): Promise<Asset[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/asset/my-section",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.get("/asset/my-section");
 
   return res.data.data;
 }
 
 export async function getAssetsBySection(sectionId: string): Promise<Asset[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    `https://hams-anntana.onrender.com/asset/section/${sectionId}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
+  const res = await apiClient.get(`/asset/section/${sectionId}`);
 
   return res.data.data;
 }
 
 export async function createAsset(data: any): Promise<Asset> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.post("https://hams-anntana.onrender.com/asset", data, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.post("/asset", data);
 
   return res.data;
 }
 
 export async function updateAsset(id: string, data: any): Promise<Asset> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.patch(
-    `https://hams-anntana.onrender.com/asset/${id}`,
-    data,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  const res = await apiClient.patch(`/asset/${id}`, data);
 
   return res.data;
 }
 
 export async function getBudgetTypes(): Promise<any[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/budget-types", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get("/budget-types");
 
   const raw = res.data;
   return Array.isArray(raw) ? raw : (raw?.data ?? []);
 }
 
 export async function getEquipmentTypes(): Promise<any[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(
-    "https://hams-anntana.onrender.com/equipment-types",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  const res = await apiClient.get("/equipment-types");
 
   const raw = res.data;
   return Array.isArray(raw) ? raw : (raw?.data ?? []);
 }
 
 export async function getAllUsers(): Promise<any[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get("https://hams-anntana.onrender.com/users", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get("/users");
 
   const raw = res.data;
   return Array.isArray(raw) ? raw : (raw?.data ?? []);

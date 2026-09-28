@@ -1,37 +1,61 @@
 import { create } from "zustand";
-import { User, UserRole } from "../types/TypeUser";
-import { RoleType } from "../router/roles";
+import type { User } from "../types/TypeUser";
+import type { PreAuthStep } from "../types/AuthFlow";
+import type { RoleType } from "../router/roles";
+import type { SessionDeadlines } from "../services/authService";
+import { clearLegacyBrowserAuthStorage } from "../services/legacyAuthStorage";
 
 interface AuthState {
   user: User | null;
   role: RoleType | null;
-  token: string | null;
+  session: SessionDeadlines | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
+  preAuthStep: PreAuthStep | null;
+  login: (user: User, session: SessionDeadlines) => void;
+  enterPreAuth: (step: PreAuthStep) => void;
+
+  updateSession: (session: SessionDeadlines) => void;
   logout: () => void;
 }
+
+clearLegacyBrowserAuthStorage();
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   role: null,
-  token: null,
+  session: null,
   isAuthenticated: false,
-  login: (user, token) =>
+  preAuthStep: null,
+  login: (user, session) => {
+    clearLegacyBrowserAuthStorage();
     set({
-      user: user,
+      user,
       role: user.role,
-      token: token,
+      session,
       isAuthenticated: true,
-    }),
-
-  logout: () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
+      preAuthStep: null,
+    });
+  },
+  enterPreAuth: (step) => {
+    clearLegacyBrowserAuthStorage();
     set({
       user: null,
       role: null,
-      token: null,
+      session: null,
       isAuthenticated: false,
+      preAuthStep: step,
+    });
+  },
+
+  updateSession: (session) => set({ session }),
+  logout: () => {
+    clearLegacyBrowserAuthStorage();
+    set({
+      user: null,
+      role: null,
+      session: null,
+      isAuthenticated: false,
+      preAuthStep: null,
     });
   },
 }));

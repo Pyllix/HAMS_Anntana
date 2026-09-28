@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class QuerySparepartTxnDto extends PaginationDto {
@@ -11,12 +18,18 @@ export class QuerySparepartTxnDto extends PaginationDto {
   @IsPositive()
   sparepartId?: number;
 
-  @ApiPropertyOptional({ example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', description: 'กรองตามรหัสใบงานซ่อม' })
+  @ApiPropertyOptional({
+    example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    description: 'กรองตามรหัสใบงานซ่อม',
+  })
   @IsOptional()
   @IsUUID()
   jobId?: string;
 
-  @ApiPropertyOptional({ example: 'WITHDRAW', description: 'กรองตามประเภทรายการ (WITHDRAW, RETURN, ADJUST)' })
+  @ApiPropertyOptional({
+    example: 'WITHDRAW',
+    description: 'กรองตามประเภทรายการ (WITHDRAW, RETURN, ADJUST)',
+  })
   @IsOptional()
   @IsString()
   txnType?: string;
@@ -26,14 +39,19 @@ export class QuerySparepartTxnDto extends PaginationDto {
   @IsUUID()
   userId?: string;
 
-  @ApiPropertyOptional({ description: 'กรองรายการตั้งแต่วันที่ (YYYY-MM-DD)', example: '2026-08-01' })
+  @ApiPropertyOptional({
+    description: 'กรองรายการตั้งแต่วันที่ (YYYY-MM-DD)',
+    example: '2026-08-01',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'กรองรายการถึงวันที่ (YYYY-MM-DD)', example: '2026-08-31' })
+  @ApiPropertyOptional({
+    description: 'กรองรายการถึงวันที่ (YYYY-MM-DD)',
+    example: '2026-08-31',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   endDate?: string;
 }
-

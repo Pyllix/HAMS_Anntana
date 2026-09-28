@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 
 
 export interface ExpenseCategoryDetail {
@@ -315,15 +315,12 @@ export async function getExpenseForecast(
   sectionId: string = "all",
   months: number = 12
 ): Promise<ForecastResponse> {
-  const token = localStorage.getItem("token");
-  const res = await axios.get(`https://hams-anntana.onrender.com/forecast/expenses`, {
+  const res = await apiClient.get(`/forecast/expenses`, {
     params: {
       sectionId: sectionId === "all" ? undefined : sectionId,
       months,
     },
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+
   });
   return res.data;
 }

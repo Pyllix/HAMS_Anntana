@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { AssetViabilityService } from './asset-viability.service';
 import { PrismaService } from 'src/prisma.service';
-import { ViabilitySortBy, ViabilityStatusFilter } from './dto/query-asset-viability.dto';
+import {
+  ViabilitySortBy,
+  ViabilityStatusFilter,
+} from './dto/query-asset-viability.dto';
 
 describe('AssetViabilityService', () => {
   let service: AssetViabilityService;
@@ -99,7 +102,9 @@ describe('AssetViabilityService', () => {
 
       expect(result.viabilityStatus).toBe('UNVIABLE');
       expect(result.costRatioPercentage).toBe(76);
-      expect(result.viabilityReason).toContain('เกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ');
+      expect(result.viabilityReason).toContain(
+        'เกินเกณฑ์ร้อยละ 70 ตามระเบียบพัสดุ',
+      );
     });
 
     it('TC-04: should evaluate as UNVIABLE when useful life is exceeded AND cost ratio >= 50%', () => {
@@ -176,7 +181,9 @@ describe('AssetViabilityService', () => {
       });
 
       expect(result.viabilityStatus).toBe('WARNING');
-      expect(result.viabilityReason).toContain('ส่งซ่อมถี่ผิดปกติ (4 ครั้งในรอบ 12 เดือนล่าสุด)');
+      expect(result.viabilityReason).toContain(
+        'ส่งซ่อมถี่ผิดปกติ (4 ครั้งในรอบ 12 เดือนล่าสุด)',
+      );
     });
 
     it('TC-08: should evaluate as UNVIABLE for donated/zero-price asset with expired life and breakdown history', () => {
@@ -194,7 +201,9 @@ describe('AssetViabilityService', () => {
 
       expect(result.viabilityStatus).toBe('UNVIABLE');
       expect(result.costRatioPercentage).toBeNull();
-      expect(result.viabilityReason).toContain('ไม่มีราคาจัดซื้อ (บริจาค/โอนย้าย)');
+      expect(result.viabilityReason).toContain(
+        'ไม่มีราคาจัดซื้อ (บริจาค/โอนย้าย)',
+      );
     });
 
     it('TC-09: should fallback to default 8 years when useful life is 0 or negative', () => {
@@ -344,7 +353,9 @@ describe('AssetViabilityService', () => {
     it('should throw NotFoundException when asset is not found', async () => {
       mockPrismaService.asset.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent-id')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('non-existent-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should calculate itemized repairs, net spare parts, and prefill disposal payload', async () => {
@@ -400,8 +411,12 @@ describe('AssetViabilityService', () => {
       expect(result.repairHistory[0].sparePartsCost).toBe(1500); // 3000 - 1500
       expect(result.repairHistory[0].totalCost).toBe(21500);
       expect(result.disposalRecommendation.canInitiateDisposal).toBe(true);
-      expect(result.disposalRecommendation.prefillData.noid).toBe('MD-2567-001');
-      expect(result.disposalRecommendation.prefillData.suggestedDocPrefix).toContain('DISP-');
+      expect(result.disposalRecommendation.prefillData.noid).toBe(
+        'MD-2567-001',
+      );
+      expect(
+        result.disposalRecommendation.prefillData.suggestedDocPrefix,
+      ).toContain('DISP-');
     });
 
     it('should block disposal when asset is currently BORROWED', async () => {
@@ -420,7 +435,9 @@ describe('AssetViabilityService', () => {
       const result = await service.findOne('asset-uuid-borrowed');
 
       expect(result.disposalRecommendation.canInitiateDisposal).toBe(false);
-      expect(result.disposalRecommendation.blockReason).toBe('ASSET_CURRENTLY_BORROWED');
+      expect(result.disposalRecommendation.blockReason).toBe(
+        'ASSET_CURRENTLY_BORROWED',
+      );
     });
   });
 
@@ -450,8 +467,13 @@ describe('AssetViabilityService', () => {
       mockPrismaService.asset.update.mockResolvedValue({
         ...mockAsset,
         status: { id: 4, code: 'WAIT_DISPOSAL', name: 'รอจำหน่าย' },
-        availabilityStatus: { id: 13, code: 'UNAVAILABLE', name: 'ไม่พร้อมใช้งาน' },
-        remark: 'เครื่องเดิม\n[เสนอรอจำหน่าย]: ค่าซ่อมเกิน 70% | [สถานที่พักซาก]: ห้องพักพัสดุ อาคาร A',
+        availabilityStatus: {
+          id: 13,
+          code: 'UNAVAILABLE',
+          name: 'ไม่พร้อมใช้งาน',
+        },
+        remark:
+          'เครื่องเดิม\n[เสนอรอจำหน่าย]: ค่าซ่อมเกิน 70% | [สถานที่พักซาก]: ห้องพักพัสดุ อาคาร A',
         updatedAt: new Date(),
       });
 
@@ -485,7 +507,9 @@ describe('AssetViabilityService', () => {
 
       await expect(
         service.requestDisposal('asset-borrowed', { reason: 'ซ่อมไม่คุ้ม' }),
-      ).rejects.toThrow('Cannot request disposal for an asset that is currently borrowed');
+      ).rejects.toThrow(
+        'Cannot request disposal for an asset that is currently borrowed',
+      );
     });
 
     it('should reject when asset is already WAIT_DISPOSAL', async () => {

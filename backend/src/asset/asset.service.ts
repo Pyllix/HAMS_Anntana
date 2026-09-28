@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
@@ -38,7 +42,9 @@ const ASSET_INCLUDE = {
   equipmentType: { select: { id: true, name: true } },
   section: { select: { id: true, code: true, name: true, building: true } },
   company: { select: { id: true, name: true } },
-  owner: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+  owner: {
+    select: { id: true, employeeId: true, firstname: true, lastname: true },
+  },
   borrowTransactions: {
     where: {
       borrowStatus: {
@@ -114,22 +120,33 @@ export class AssetService {
     const { borrowTransactions, ...rest } = asset;
     return {
       ...rest,
-      currentBorrowing: Array.isArray(borrowTransactions) && borrowTransactions.length > 0
-        ? borrowTransactions[0]
-        : null,
+      currentBorrowing:
+        Array.isArray(borrowTransactions) && borrowTransactions.length > 0
+          ? borrowTransactions[0]
+          : null,
     };
   }
 
   async create(createAssetDto: CreateAssetDto, userId: string) {
-    const { createdBy: _ignore, updatedBy: _ignore2, ...dto } = createAssetDto as any;
+    const {
+      createdBy: _ignore,
+      updatedBy: _ignore2,
+      ...dto
+    } = createAssetDto as any;
     const asset = await this.prisma.asset.create({
-      data: { ...toAssetDates(dto), createdBy: userId, updatedBy: userId } as any,
+      data: {
+        ...toAssetDates(dto),
+        createdBy: userId,
+        updatedBy: userId,
+      } as any,
       include: ASSET_INCLUDE,
     });
     return this.transformAsset(asset);
   }
 
-  async findAll(query: AssetFilterDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findAll(
+    query: AssetFilterDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -137,9 +154,13 @@ export class AssetService {
     const where: Prisma.AssetWhereInput = {
       ...(query.section_id && { section_id: query.section_id }),
       ...(query.asset_status_id && { asset_status_id: query.asset_status_id }),
-      ...(query.availability_status_id && { availability_status_id: query.availability_status_id }),
+      ...(query.availability_status_id && {
+        availability_status_id: query.availability_status_id,
+      }),
       ...(query.asset_type_id && { type_id: query.asset_type_id }),
-      ...(query.equipment_type_id && { equipment_type_id: query.equipment_type_id }),
+      ...(query.equipment_type_id && {
+        equipment_type_id: query.equipment_type_id,
+      }),
       ...(query.search
         ? {
             OR: [
@@ -164,13 +185,21 @@ export class AssetService {
     ]);
 
     const formattedData = data.map((item) => this.transformAsset(item));
-    return paginate(formattedData as Record<string, unknown>[], total, page, limit);
+    return paginate(
+      formattedData as Record<string, unknown>[],
+      total,
+      page,
+      limit,
+    );
   }
 
   /**
    * ดึง Asset ตาม Section ID (paginated)
    */
-  async findBySection(sectionId: string, query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findBySection(
+    sectionId: string,
+    query: PaginationDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const section = await this.prisma.section.findUnique({
       where: { id: sectionId },
     });
@@ -183,7 +212,10 @@ export class AssetService {
   /**
    * ดึง Asset ของแผนกผู้ใช้งานที่ Login อยู่ (paginated)
    */
-  async findMySectionAssets(userId: string, query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findMySectionAssets(
+    userId: string,
+    query: PaginationDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { section_id: true },
@@ -205,9 +237,15 @@ export class AssetService {
     return this.transformAsset(asset);
   }
 
-  private async getConsistentAvailabilityStatusId(targetStatusCode: string): Promise<number | undefined> {
+  private async getConsistentAvailabilityStatusId(
+    targetStatusCode: string,
+  ): Promise<number | undefined> {
     let targetAvailabilityCode: string;
-    if (['DAMAGED', 'UNDER_REPAIR', 'WAIT_DISPOSAL', 'DISPOSAL', 'LOST'].includes(targetStatusCode)) {
+    if (
+      ['DAMAGED', 'UNDER_REPAIR', 'WAIT_DISPOSAL', 'DISPOSAL', 'LOST'].includes(
+        targetStatusCode,
+      )
+    ) {
       targetAvailabilityCode = 'UNAVAILABLE';
     } else if (targetStatusCode === 'NORMAL') {
       targetAvailabilityCode = 'AVAILABLE';
@@ -231,7 +269,9 @@ export class AssetService {
   ): void {
     if (
       this.isBorrowedOrReserved(currentAvailabilityCode) &&
-      ['DISPOSAL', 'WAIT_DISPOSAL', 'DAMAGED', 'UNDER_REPAIR'].includes(targetStatusCode)
+      ['DISPOSAL', 'WAIT_DISPOSAL', 'DAMAGED', 'UNDER_REPAIR'].includes(
+        targetStatusCode,
+      )
     ) {
       throw new BadRequestException(
         `Cannot update asset status to ${targetStatusCode} while asset is ${currentAvailabilityCode}`,
@@ -244,7 +284,9 @@ export class AssetService {
       return await write();
     } catch (error) {
       if ((error as { code?: unknown } | null)?.code === 'P2025') {
-        throw new BadRequestException('Asset status changed during this request; please retry');
+        throw new BadRequestException(
+          'Asset status changed during this request; please retry',
+        );
       }
       throw error;
     }
@@ -337,8 +379,13 @@ export class AssetService {
       availability_status_id: requestedAvailabilityId,
       ...dto
     } = updateAssetDto as any;
-    if (requestedAvailabilityId != null && requestedAvailabilityId !== asset.availabilityStatus?.id) {
-      throw new BadRequestException('Availability status must be changed through its workflow');
+    if (
+      requestedAvailabilityId != null &&
+      requestedAvailabilityId !== asset.availabilityStatus?.id
+    ) {
+      throw new BadRequestException(
+        'Availability status must be changed through its workflow',
+      );
     }
 
     let autoAvailabilityId: number | undefined = undefined;
@@ -348,39 +395,53 @@ export class AssetService {
         where: { id: dto.asset_status_id },
       });
       if (!targetStatus) {
-        throw new NotFoundException(`AssetStatus #${dto.asset_status_id} not found`);
+        throw new NotFoundException(
+          `AssetStatus #${dto.asset_status_id} not found`,
+        );
       }
       if (targetStatus.code !== asset.status.code) {
         this.validateStatusTransition(asset.status.code, targetStatus.code);
       }
-      this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
+      this.validateBorrowedOrReservedStatusGuard(
+        asset.availabilityStatus?.code,
+        targetStatus.code,
+      );
       if (targetStatus.code !== asset.status.code) {
-        autoAvailabilityId = await this.getConsistentAvailabilityStatusId(targetStatus.code);
+        autoAvailabilityId = await this.getConsistentAvailabilityStatusId(
+          targetStatus.code,
+        );
       }
     }
 
     const payload = toAssetDates(dto);
-    const updateAsset = (client: Prisma.TransactionClient | PrismaService) => client.asset.update({
-      where: {
-        id,
-        ...(dto.asset_status_id && {
-          asset_status_id: asset.status.id,
-          availability_status_id: asset.availabilityStatus?.id ?? null,
-        }),
-      },
-      data: {
-        ...payload,
-        ...(autoAvailabilityId !== undefined && { availability_status_id: autoAvailabilityId }),
-        updatedBy: userId,
-      },
-      include: ASSET_INCLUDE,
-    });
+    const updateAsset = (client: Prisma.TransactionClient | PrismaService) =>
+      client.asset.update({
+        where: {
+          id,
+          ...(dto.asset_status_id && {
+            asset_status_id: asset.status.id,
+            availability_status_id: asset.availabilityStatus?.id ?? null,
+          }),
+        },
+        data: {
+          ...payload,
+          ...(autoAvailabilityId !== undefined && {
+            availability_status_id: autoAvailabilityId,
+          }),
+          updatedBy: userId,
+        },
+        include: ASSET_INCLUDE,
+      });
     const updated = dto.asset_status_id
       ? await this.rejectStaleAssetWrite(() =>
           this.prisma.$transaction(async (tx) => {
             if (targetStatus?.code === 'LOST') {
               if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
-                await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+                await this.cascadeCancelActiveBorrowTransactions(
+                  tx,
+                  id,
+                  userId,
+                );
               }
               if (asset.status.code === 'UNDER_REPAIR') {
                 await this.cascadeCancelActiveRepairJobs(tx, id, userId);
@@ -407,11 +468,15 @@ export class AssetService {
     if (targetStatus.code !== asset.status.code) {
       this.validateStatusTransition(asset.status.code, targetStatus.code);
     }
-    this.validateBorrowedOrReservedStatusGuard(asset.availabilityStatus?.code, targetStatus.code);
+    this.validateBorrowedOrReservedStatusGuard(
+      asset.availabilityStatus?.code,
+      targetStatus.code,
+    );
 
-    const availabilityStatusId = targetStatus.code === asset.status.code
-      ? undefined
-      : await this.getConsistentAvailabilityStatusId(targetStatus.code);
+    const availabilityStatusId =
+      targetStatus.code === asset.status.code
+        ? undefined
+        : await this.getConsistentAvailabilityStatusId(targetStatus.code);
 
     const updated = await this.rejectStaleAssetWrite(() =>
       this.prisma.$transaction(async (tx) => {
@@ -432,7 +497,9 @@ export class AssetService {
           },
           data: {
             asset_status_id: assetStatusId,
-            ...(availabilityStatusId !== undefined && { availability_status_id: availabilityStatusId }),
+            ...(availabilityStatusId !== undefined && {
+              availability_status_id: availabilityStatusId,
+            }),
             updatedBy: userId,
           },
           include: ASSET_INCLUDE,
@@ -445,7 +512,9 @@ export class AssetService {
   // ─── Disposal ─────────────────────────────────────────────────────────────
 
   /** ดึงประวัติการจำหน่ายทั้งหมด (DISPOSAL) (paginated) */
-  async findAllDisposalRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findAllDisposalRecords(
+    query: PaginationDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -485,7 +554,11 @@ export class AssetService {
   /**
    * สร้างระเบียนจำหน่าย (Disposal) พร้อมปรับสถานะ Asset เป็น DISPOSAL
    */
-  async createDisposal(id: string, dto: CreateAssetDisposalDto, userId: string) {
+  async createDisposal(
+    id: string,
+    dto: CreateAssetDisposalDto,
+    userId: string,
+  ) {
     const asset = await this.findOne(id);
 
     if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
@@ -496,24 +569,31 @@ export class AssetService {
 
     this.validateStatusTransition(asset.status.code, 'DISPOSAL');
 
-    const disposalStatus = await this.prisma.assetStatus.findUnique({ where: { code: 'DISPOSAL' } });
-    if (!disposalStatus) throw new NotFoundException('Status DISPOSAL not found');
+    const disposalStatus = await this.prisma.assetStatus.findUnique({
+      where: { code: 'DISPOSAL' },
+    });
+    if (!disposalStatus)
+      throw new NotFoundException('Status DISPOSAL not found');
 
-    const unavailableStatus = await this.prisma.availabilityStatus.findUnique({ where: { code: 'UNAVAILABLE' } });
+    const unavailableStatus = await this.prisma.availabilityStatus.findUnique({
+      where: { code: 'UNAVAILABLE' },
+    });
 
     return this.prisma.$transaction(async (prisma) => {
-      await this.rejectStaleAssetWrite(() => prisma.asset.update({
-        where: {
-          id,
-          asset_status_id: asset.status.id,
-          availability_status_id: asset.availabilityStatus?.id ?? null,
-        },
-        data: {
-          asset_status_id: disposalStatus.id,
-          availability_status_id: unavailableStatus?.id,
-          updatedBy: userId,
-        },
-      }));
+      await this.rejectStaleAssetWrite(() =>
+        prisma.asset.update({
+          where: {
+            id,
+            asset_status_id: asset.status.id,
+            availability_status_id: asset.availabilityStatus?.id ?? null,
+          },
+          data: {
+            asset_status_id: disposalStatus.id,
+            availability_status_id: unavailableStatus?.id,
+            updatedBy: userId,
+          },
+        }),
+      );
 
       return prisma.disposal.create({
         data: {
@@ -542,7 +622,9 @@ export class AssetService {
   /**
    * ดึงประวัติการโอนย้ายครุภัณฑ์ทั้งหมดของโรงพยาบาล (paginated & searchable)
    */
-  async findAllTransferRecords(query: PaginationDto): Promise<PaginatedResult<Record<string, unknown>>> {
+  async findAllTransferRecords(
+    query: PaginationDto,
+  ): Promise<PaginatedResult<Record<string, unknown>>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -581,9 +663,20 @@ export class AssetService {
         orderBy: { transferDate: 'desc' },
         include: {
           asset: { include: ASSET_INCLUDE },
-          fromSection: { select: { id: true, code: true, name: true, building: true } },
-          toSection: { select: { id: true, code: true, name: true, building: true } },
-          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          fromSection: {
+            select: { id: true, code: true, name: true, building: true },
+          },
+          toSection: {
+            select: { id: true, code: true, name: true, building: true },
+          },
+          transferredBy: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstname: true,
+              lastname: true,
+            },
+          },
         },
         skip,
         take: limit,
@@ -597,16 +690,24 @@ export class AssetService {
   /**
    * สร้างระเบียนการโอนย้าย (Transfer) พร้อมอัปเดต section_id ของ Asset ไปยังแผนกใหม่โดยอัตโนมัติ
    */
-  async createTransfer(id: string, dto: CreateAssetTransferDto, userId: string) {
+  async createTransfer(
+    id: string,
+    dto: CreateAssetTransferDto,
+    userId: string,
+  ) {
     const asset = await this.findOne(id);
 
     // 1. ตรวจสอบสถานะห้ามโอนย้าย
     if (asset.status?.code === 'DISPOSAL') {
-      throw new BadRequestException('Cannot transfer an asset that has been disposed');
+      throw new BadRequestException(
+        'Cannot transfer an asset that has been disposed',
+      );
     }
 
     if (asset.availabilityStatus?.code === 'BORROWED') {
-      throw new BadRequestException('Cannot transfer an asset that is currently borrowed');
+      throw new BadRequestException(
+        'Cannot transfer an asset that is currently borrowed',
+      );
     }
 
     if (asset.status?.code === 'UNDER_REPAIR') {
@@ -617,7 +718,9 @@ export class AssetService {
 
     // 2. ตรวจสอบว่าไม่ได้โอนย้ายไปยังแผนกเดิม
     if (asset.section?.id === dto.to_section_id) {
-      throw new BadRequestException('Target section must be different from current section');
+      throw new BadRequestException(
+        'Target section must be different from current section',
+      );
     }
 
     // 3. ตรวจสอบว่าแผนกปลายทางมีอยู่จริงในระบบ
@@ -625,22 +728,26 @@ export class AssetService {
       where: { id: dto.to_section_id },
     });
     if (!targetSection) {
-      throw new NotFoundException(`Target section #${dto.to_section_id} not found`);
+      throw new NotFoundException(
+        `Target section #${dto.to_section_id} not found`,
+      );
     }
 
     return this.prisma.$transaction(async (prisma) => {
       // อัปเดตแผนกของ Asset ไปยังแผนกใหม่
-      await this.rejectStaleAssetWrite(() => prisma.asset.update({
-        where: {
-          id,
-          asset_status_id: asset.status.id,
-          availability_status_id: asset.availabilityStatus?.id ?? null,
-        },
-        data: {
-          section_id: dto.to_section_id,
-          updatedBy: userId,
-        },
-      }));
+      await this.rejectStaleAssetWrite(() =>
+        prisma.asset.update({
+          where: {
+            id,
+            asset_status_id: asset.status.id,
+            availability_status_id: asset.availabilityStatus?.id ?? null,
+          },
+          data: {
+            section_id: dto.to_section_id,
+            updatedBy: userId,
+          },
+        }),
+      );
 
       // บันทึกระเบียนประวัติการโอนย้าย (Direct Transfer)
       return prisma.transfer.create({
@@ -657,9 +764,20 @@ export class AssetService {
         },
         include: {
           asset: { include: ASSET_INCLUDE },
-          fromSection: { select: { id: true, code: true, name: true, building: true } },
-          toSection: { select: { id: true, code: true, name: true, building: true } },
-          transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+          fromSection: {
+            select: { id: true, code: true, name: true, building: true },
+          },
+          toSection: {
+            select: { id: true, code: true, name: true, building: true },
+          },
+          transferredBy: {
+            select: {
+              id: true,
+              employeeId: true,
+              firstname: true,
+              lastname: true,
+            },
+          },
         },
       });
     });
@@ -674,9 +792,20 @@ export class AssetService {
       where: { asset_id: id },
       orderBy: { transferDate: 'desc' },
       include: {
-        fromSection: { select: { id: true, code: true, name: true, building: true } },
-        toSection: { select: { id: true, code: true, name: true, building: true } },
-        transferredBy: { select: { id: true, employeeId: true, firstname: true, lastname: true } },
+        fromSection: {
+          select: { id: true, code: true, name: true, building: true },
+        },
+        toSection: {
+          select: { id: true, code: true, name: true, building: true },
+        },
+        transferredBy: {
+          select: {
+            id: true,
+            employeeId: true,
+            firstname: true,
+            lastname: true,
+          },
+        },
       },
     });
   }

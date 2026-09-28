@@ -1,11 +1,12 @@
 import { useAuthStore } from "../stores/authStore";
+import useSignOut from "../hooks/useSignOut";
 import { NavLink } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { Box, LogOut } from "lucide-react";
 
 export default function Sidebar() {
   const role = useAuthStore((state) => state.role);
-  const logout = useAuthStore((state) => state.logout);
+  const { signOut, isSigningOut, signOutError } = useSignOut();
 
   const navItems = APP_ROUTE.filter(
     (item) => item.showInNav && role && item.roles.includes(role),
@@ -48,12 +49,17 @@ export default function Sidebar() {
       {/* logout */}
       <div className="p-4 border-t border-slate-400/20 shrink-0">
         <button
-          onClick={logout}
-          className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-red-400 hover:bg-slate-800 hover:text-red-300 transition-colors"
+          type="button"
+          onClick={() => void signOut()}
+          disabled={isSigningOut}
+          className="flex w-full items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-red-400 hover:bg-slate-800 hover:text-red-300 transition-colors disabled:opacity-60"
         >
           <LogOut className="w-5 h-5 shrink-0" />
-          <span className="truncate">ออกจากระบบ</span>
+          <span className="truncate">
+            {isSigningOut ? "กำลังออก..." : "ออกจากระบบ"}
+          </span>
         </button>
+        {signOutError && <p role="alert" className="mt-2 text-xs text-red-300">{signOutError}</p>}
       </div>
     </div>
   );

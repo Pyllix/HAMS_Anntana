@@ -1,18 +1,12 @@
-import axios from "axios";
+import { isAxiosError } from "axios";
+import { createApiClient } from "./apiClient";
 import type { ConfirmUnrepairableReceiptDto, UnrepairableJobDto, UnrepairableReceipt } from "../types/TypeUnrepairableReceipt";
 import { mapUnrepairableReceipt } from "./unrepairableReceiptMapper";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
-const api = axios.create({ baseURL: BASE_URL, timeout: 30000 });
-
-function config(signal?: AbortSignal) {
-  const token = localStorage.getItem("token");
-  if (!token) throw new Error("กรุณาเข้าสู่ระบบใหม่ก่อนทำรายการ");
-  return { signal, headers: { Authorization: `Bearer ${token}` } };
-}
+const api = createApiClient({ timeout: 30000 });
 
 export async function getUnrepairableReceipt(id: string, signal?: AbortSignal): Promise<UnrepairableReceipt> {
-  const { data } = await api.get<UnrepairableJobDto>(`/repairs/${encodeURIComponent(id)}`, config(signal));
+  const { data } = await api.get<UnrepairableJobDto>(`/repairs/${encodeURIComponent(id)}`, { signal });
   const receipt = mapUnrepairableReceipt(data);
   if (!receipt) throw new Error("งานนี้ยังไม่ได้ส่งคืน ถูกยกเลิก หรือมีเจ้าหน้าที่รับคืนแล้ว กรุณารีเฟรชรายการ");
   return receipt;
@@ -23,7 +17,7 @@ export async function getUnrepairableReceipts(signal?: AbortSignal): Promise<Unr
   const ids = new Set<string>();
   for (let page = 1; ; page += 1) {
     const { data } = await api.get<{ data: { id: string }[]; meta: { totalPages: number } }>("/repairs", {
-      ...config(signal),
+      signal,
       params: { page, limit: 100, statusCode: "UNREPAIRABLE", stepActionType: "UNREPAIRABLE" },
     });
     if (!Array.isArray(data.data) || !Number.isInteger(data.meta?.totalPages)) {
@@ -36,7 +30,7 @@ export async function getUnrepairableReceipts(signal?: AbortSignal): Promise<Unr
   const uniqueIds = [...ids];
   for (let offset = 0; offset < uniqueIds.length; offset += 6) {
     const batch = await Promise.all(uniqueIds.slice(offset, offset + 6).map(async (id) => {
-      const { data } = await api.get<UnrepairableJobDto>(`/repairs/${encodeURIComponent(id)}`, config(signal));
+      const { data } = await api.get<UnrepairableJobDto>(`/repairs/${encodeURIComponent(id)}`, { signal });
       return mapUnrepairableReceipt(data);
     }));
     batch.forEach((job) => { if (job) jobs.push(job); });
@@ -51,11 +45,11 @@ export async function confirmUnrepairableReceipt(id: string, dto: ConfirmUnrepai
   await getUnrepairableReceipt(id);
   await api.patch(`/repairs/${encodeURIComponent(id)}/complete-unrepairable`, {
     storageLocation, note: dto.note?.trim() || undefined,
-  }, config());
+  }, {});
 }
 
 export function receiptError(error: unknown): string {
-  if (axios.isAxiosError(error)) {
+  if (isAxiosError(error)) {
     if (error.response?.status === 401) return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่";
     if (error.response?.status === 403) return "บัญชีนี้ไม่มีสิทธิ์รับคืนครุภัณฑ์ กรุณาใช้บัญชีเจ้าหน้าที่พัสดุ";
     const message: unknown = error.response?.data?.message;

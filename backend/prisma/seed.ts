@@ -1,8 +1,8 @@
 /**
  * Prisma Seed Script — Mock data ครอบคลุมทั้งระบบ
  *
- * Run with:
- *   pnpm tsx prisma/seed.ts
+ * Development/demo only. Run with:
+ *   pnpm run prisma:seed:demo
  */
 
 import 'dotenv/config';
@@ -121,6 +121,16 @@ const systemUsers = [
     lastname: 'แอดมินระบบ',
     email: 'admin@hospital.go.th',
     password: 'Admin@1234',
+    role: 'ADMIN' as const,
+    sectionCode: 'IT',
+  },
+  {
+    employeeId: 'GOV-670028',
+    userName: 'admin_backup',
+    firstname: 'อรทัย',
+    lastname: 'ผู้ดูแลระบบสำรอง',
+    email: 'admin.backup@hospital.go.th',
+    password: 'AdminBackup@1234',
     role: 'ADMIN' as const,
     sectionCode: 'IT',
   },
@@ -391,6 +401,13 @@ const systemUsers = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Demo seed is disabled in production');
+  }
+  if (!process.argv.includes('--demo')) {
+    throw new Error('Pass --demo to run the development mock seed');
+  }
+
   console.log('🌱 Seeding database with enhanced test mockups...\n');
 
   // 1. AssetStatus
@@ -522,12 +539,14 @@ async function main() {
       },
     });
 
-    const hashedPassword = await hashPassword(data.password);
     const sectionId = sectionMap[data.sectionCode];
 
     if (existing) {
+      if (existing.email !== data.email || existing.employeeId !== data.employeeId) {
+        throw new Error(`Demo user identity conflict (${data.employeeId})`);
+      }
       userMap[data.userName] = existing.id;
-      if (data.role === 'ADMIN') adminId = existing.id;
+      if (data.role === 'ADMIN' && !adminId) adminId = existing.id;
       await prisma.user.update({
         where: { id: existing.id },
         data: {
@@ -542,38 +561,29 @@ async function main() {
         },
       });
 
-      // ซิงค์ข้อมูลบัญชีและรหัสผ่านในตาราง accounts
+      // Keep an existing password so rerunning the demo seed does not reset credentials.
       const existingAccount = await prisma.account.findFirst({
-        where: { userId: existing.id },
+        where: { userId: existing.id, providerId: 'credential' },
       });
-      if (existingAccount) {
-        await prisma.account.update({
-          where: { id: existingAccount.id },
-          data: {
-            accountId: data.email,
-            password: hashedPassword,
-            updatedAt: new Date(),
-          },
-        });
-      } else {
+      if (!existingAccount) {
         await prisma.account.create({
           data: {
             id: randomUUID(),
             userId: existing.id,
             providerId: 'credential',
             accountId: data.email,
-            password: hashedPassword,
+            password: await hashPassword(data.password),
             createdAt: new Date(),
             updatedAt: new Date(),
           },
         });
       }
 
-      console.log(`  🔄 Updated existing user and password (${data.employeeId}): ${data.email}`);
+      console.log(`  🔄 Updated existing user (${data.employeeId}): ${data.email}`);
       continue;
     }
     const userId = randomUUID();
-    if (data.role === 'ADMIN') adminId = userId;
+    if (data.role === 'ADMIN' && !adminId) adminId = userId;
     userMap[data.userName] = userId;
 
     await prisma.user.create({
@@ -594,7 +604,7 @@ async function main() {
             id: randomUUID(),
             providerId: 'credential',
             accountId: data.email,
-            password: hashedPassword,
+            password: await hashPassword(data.password),
             createdAt: new Date(),
             updatedAt: new Date(),
           },

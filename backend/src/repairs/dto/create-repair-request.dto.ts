@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEnum, IsNotEmpty, IsString, IsUUID } from 'class-validator';
 import { ReportType, UrgencyStatus } from '@prisma/client';
 
 export class CreateRepairRequestDto {

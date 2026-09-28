@@ -7,31 +7,35 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
-  IsUUID,
-  Min,
   ValidateNested,
 } from 'class-validator';
 import { ActionType, StepActionType } from '@prisma/client';
 
 export class SparePartRequisitionItemDto {
-  @ApiProperty({ description: 'Spare part ID from Master SPAREPART table', example: 1 })
+  @ApiProperty({
+    description: 'Spare part ID from Master SPAREPART table',
+    example: 1,
+  })
   @IsInt()
   @IsPositive()
   @IsNotEmpty()
   sparepartId: number;
 
-  @ApiProperty({ description: 'Quantity required for this repair job', example: 2 })
+  @ApiProperty({
+    description: 'Quantity required for this repair job',
+    example: 2,
+  })
   @IsInt()
   @IsPositive()
   @IsNotEmpty()
   qty: number;
 
   @ApiProperty({
-    description: 'Source of the spare part: INTERNAL (in-warehouse) or EXTERNAL (procure from outside)',
+    description:
+      'Source of the spare part: INTERNAL (in-warehouse) or EXTERNAL (procure from outside)',
     enum: ['INTERNAL', 'EXTERNAL'],
     example: 'INTERNAL',
   })
@@ -58,7 +62,10 @@ export class DiagnoseRepairJobDto {
   @IsNotEmpty()
   causeId: number;
 
-  @ApiPropertyOptional({ description: 'Tech Category ID from TECH_CATEGORY table', example: 1 })
+  @ApiPropertyOptional({
+    description: 'Tech Category ID from TECH_CATEGORY table',
+    example: 1,
+  })
   @IsInt()
   @IsOptional()
   techCategoryId?: number;
@@ -70,7 +77,8 @@ export class DiagnoseRepairJobDto {
 
   @ApiProperty({
     enum: ActionType,
-    description: 'ประเภทการดำเนินการ: REPAIR (ตรวจซ่อม), FABRICATE (สร้างใหม่), MODIFY (ปรับปรุง), PREVENTIVE (เชิงรุก)',
+    description:
+      'ประเภทการดำเนินการ: REPAIR (ตรวจซ่อม), FABRICATE (สร้างใหม่), MODIFY (ปรับปรุง), PREVENTIVE (เชิงรุก)',
     default: ActionType.REPAIR,
   })
   @IsEnum(ActionType)
@@ -86,23 +94,31 @@ export class DiagnoseRepairJobDto {
   @IsNotEmpty()
   stepActionType: StepActionType;
 
-  @ApiPropertyOptional({ description: 'Estimated completion date (ISO string)' })
+  @ApiPropertyOptional({
+    description: 'Estimated completion date (ISO string)',
+  })
   @IsDateString({ strict: true })
   @IsOptional()
   dueDate?: string;
 
-  @ApiPropertyOptional({ description: 'Is this a repeated repair for the same issue?', default: false })
+  @ApiPropertyOptional({
+    description: 'Is this a repeated repair for the same issue?',
+    default: false,
+  })
   @IsBoolean()
   @IsOptional()
   isRepeatRepair?: boolean;
 
-  @ApiPropertyOptional({ description: 'Reason equipment is unrepairable (required for UNREPAIRABLE)' })
+  @ApiPropertyOptional({
+    description: 'Reason equipment is unrepairable (required for UNREPAIRABLE)',
+  })
   @IsString()
   @IsOptional()
   unrepairableReason?: string;
 
   @ApiPropertyOptional({
-    description: 'List of spare parts required (for WITH_PARTS with mixed internal/external requisition)',
+    description:
+      'List of spare parts required (for WITH_PARTS with mixed internal/external requisition)',
     type: [SparePartRequisitionItemDto],
   })
   @IsArray()

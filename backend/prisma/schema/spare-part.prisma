@@ -13,21 +13,21 @@ model SparepartGroup {
 }
 
 model Sparepart {
-  id          Int       @id @default(autoincrement()) @map("sparepart_id")
-  code        String    @unique @map("sparepart_code") @db.VarChar(100)
-  name        String    @db.VarChar(100)
-  unit        String    @default("ชิ้น") @db.VarChar(50)
-  price       Decimal   @db.Decimal(15, 2)
-  minStock    Int       @default(0) @map("min_stock")
-  qtyInStock  Int       @default(0) @map("qty_in_stock")
-  groupId     Int       @map("group_id")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime? @map("deleted_at")
+  id         Int       @id @default(autoincrement()) @map("sparepart_id")
+  code       String    @unique @map("sparepart_code") @db.VarChar(100)
+  name       String    @db.VarChar(100)
+  unit       String    @default("ชิ้น") @db.VarChar(50)
+  price      Decimal   @db.Decimal(15, 2)
+  minStock   Int       @default(0) @map("min_stock")
+  qtyInStock Int       @default(0) @map("qty_in_stock")
+  groupId    Int       @map("group_id")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime? @map("deleted_at")
 
-  group            SparepartGroup @relation(fields: [groupId], references: [id])
-  sparepartAdds    SparepartAdd[]
-  sparepartTxns    SparepartTxn[]
+  group         SparepartGroup @relation(fields: [groupId], references: [id])
+  sparepartAdds SparepartAdd[]
+  sparepartTxns SparepartTxn[]
 
   @@index([groupId])
   @@map("spareparts")

@@ -6,6 +6,19 @@ export interface SendVerificationEmailParams {
   verificationUrl: string;
 }
 
+export interface SendTwoFactorResetNoticeParams {
+  to: string;
+  name?: string;
+  resetAt: Date;
+}
+
+export interface SendBootstrapAdminCredentialsParams {
+  to: string;
+  name: string;
+  userName: string;
+  initialPassword: string;
+}
+
 export class MailService {
   private transporter: Transporter;
   private defaultFrom: string;
@@ -14,6 +27,7 @@ export class MailService {
     const host = process.env.SMTP_HOST || 'localhost';
     const port = parseInt(process.env.SMTP_PORT || '1025', 10);
     const secure = process.env.SMTP_SECURE === 'true';
+    const requireTLS = process.env.SMTP_REQUIRE_TLS === 'true';
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
 
@@ -24,6 +38,7 @@ export class MailService {
       host,
       port,
       secure,
+      requireTLS,
       auth: user ? { user, pass } : undefined,
     });
   }
@@ -31,7 +46,9 @@ export class MailService {
   /**
    * ส่งอีเมลยืนยันตัวตนพร้อม Verification Link สำหรับ Better Auth
    */
-  async sendVerificationEmail(params: SendVerificationEmailParams): Promise<void> {
+  async sendVerificationEmail(
+    params: SendVerificationEmailParams,
+  ): Promise<void> {
     const { to, name, verificationUrl } = params;
     const displayName = name?.trim() || to;
 
@@ -141,7 +158,8 @@ export class MailService {
 </html>
     `;
 
-    const textContent = `เรียนคุณ ${displayName},\n\n` +
+    const textContent =
+      `เรียนคุณ ${displayName},\n\n` +
       `มีการสร้างบัญชีผู้ใช้งานสำหรับคุณในระบบบริหารจัดการครุภัณฑ์โรงพยาบาล (HAMS)\n` +
       `กรุณายืนยันที่อยู่อีเมลของคุณโดยเปิดลิงก์ต่อไปนี้:\n\n` +
       `${verificationUrl}\n\n` +
@@ -157,7 +175,9 @@ export class MailService {
         html: htmlContent,
       });
 
-      console.log(`[MailService] Verification email sent to: ${to} (MessageId: ${info.messageId})`);
+      console.log(
+        `[MailService] Verification email sent to: ${to} (MessageId: ${info.messageId})`,
+      );
     } catch (error) {
       console.error(
         `[MailService] Error sending verification email to ${to}:`,
@@ -167,6 +187,61 @@ export class MailService {
         '[MailService] ⚠️ Make sure your SMTP server or Mailpit is running (e.g. docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit)',
       );
       throw error;
+    }
+  }
+
+  async sendTwoFactorResetNotice(
+    params: SendTwoFactorResetNoticeParams,
+  ): Promise<void> {
+    const displayName = params.name?.trim() || params.to;
+    const resetAt = params.resetAt.toISOString();
+    const text =
+      `เรียนคุณ ${displayName},\n\n` +
+      `ผู้ดูแลระบบได้รีเซ็ตการยืนยันตัวตนสองขั้นตอนของบัญชี HAMS ของคุณ ` +
+      `เมื่อ ${resetAt} โดย Authenticator และ Recovery Codes เดิมถูกยกเลิกแล้ว\n\n` +
+      `เมื่อลงชื่อเข้าใช้ครั้งถัดไป คุณจะต้องลงทะเบียน Authenticator และยืนยัน Recovery Codes ชุดใหม่ก่อนเข้าใช้งานระบบ\n\n` +
+      `หากคุณไม่ได้ร้องขอการดำเนินการนี้ โปรดติดต่อผู้ดูแลระบบของโรงพยาบาลทันที`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.defaultFrom,
+        to: params.to,
+        subject: '[HAMS] มีการรีเซ็ตการยืนยันตัวตนสองขั้นตอน',
+        text,
+      });
+    } catch (error) {
+      console.error('[MailService] Error sending 2FA reset notice:', error);
+      throw error;
+    }
+  }
+
+  async sendBootstrapAdminCredentials(
+    params: SendBootstrapAdminCredentialsParams,
+  ): Promise<void> {
+    const text =
+      `เรียนคุณ ${params.name},\n\n` +
+      `บัญชีผู้ดูแลระบบ HAMS ของคุณกำลังถูกเตรียมใช้งาน\n` +
+      `ชื่อผู้ใช้: ${params.userName}\n` +
+      `รหัสผ่านเริ่มต้น: ${params.initialPassword}\n\n` +
+      `ระบบจะส่งอีเมลยืนยันที่อยู่อีเมลแยกอีกฉบับ หลังยืนยันแล้วให้ลงชื่อเข้าใช้และตั้งค่า Authenticator กับ Recovery Codes ด้วยตนเอง\n` +
+      `ระบบไม่บังคับเปลี่ยนรหัสผ่านนี้เมื่อเข้าสู่ระบบครั้งแรก โปรดเก็บรหัสผ่านไว้อย่างปลอดภัยและลบอีเมลฉบับนี้หลังบันทึกข้อมูลแล้ว`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.defaultFrom,
+        to: params.to,
+        subject: '[HAMS] ข้อมูลเริ่มต้นบัญชีผู้ดูแลระบบ',
+        text,
+      });
+      console.log(
+        `[MailService] Initial ADMIN credentials sent to: ${params.to}`,
+      );
+    } catch {
+      // Deliberately never log the message or the SMTP error object here.
+      console.error(
+        `[MailService] Initial ADMIN credentials delivery failed to: ${params.to}`,
+      );
+      throw new Error('Unable to deliver ADMIN bootstrap credentials');
     }
   }
 }

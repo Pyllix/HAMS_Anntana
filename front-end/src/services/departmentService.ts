@@ -1,30 +1,20 @@
-import axios from "axios";
+import { apiClient } from "./apiClient";
 import { Department, DepartmentDto } from "../types/TypeDepartment";
 
-const BASE_URL = "https://hams-anntana.onrender.com/sections";
+const BASE_URL = "/sections";
 
 // เรียกใช้งาน API เพื่อดึงข้อมูลแผนกทั้งหมด
 export async function getAllDepartment(): Promise<Department[]> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(BASE_URL, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get(BASE_URL);
 
   return res.data;
 }
 
 // เรียกใช้งาน API เพื่อดึงข้อมูลแผนกตาม ID
 export async function getDepartmentById(id: string): Promise<Department> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.get(`${BASE_URL}/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.get(`${BASE_URL}/${id}`);
 
   return res.data;
 }
@@ -33,11 +23,9 @@ export async function getDepartmentById(id: string): Promise<Department> {
 export async function createDepartment(
   department: DepartmentDto,
 ): Promise<Department> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.post(BASE_URL, department, {
+  const res = await apiClient.post(BASE_URL, department, {
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -50,11 +38,9 @@ export async function updateDepartment(
   id: string,
   department: Partial<DepartmentDto>,
 ): Promise<Department> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.patch(`${BASE_URL}/${id}`, department, {
+  const res = await apiClient.patch(`${BASE_URL}/${id}`, department, {
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -64,13 +50,8 @@ export async function updateDepartment(
 
 // เรียกใช้งาน API เพื่อลบข้อมูลแผนกตาม ID
 export async function deleteDepartmentById(id: string): Promise<Department> {
-  const token = localStorage.getItem("token");
 
-  const res = await axios.delete(`${BASE_URL}/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiClient.delete(`${BASE_URL}/${id}`);
 
   return res.data;
 }

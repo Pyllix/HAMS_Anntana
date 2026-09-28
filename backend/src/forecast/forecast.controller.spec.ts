@@ -4,7 +4,6 @@ import { ForecastService } from './forecast.service';
 
 describe('ForecastController', () => {
   let controller: ForecastController;
-  let service: ForecastService;
 
   const mockForecastService = {
     getExpenseForecast: jest.fn(),
@@ -13,13 +12,10 @@ describe('ForecastController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ForecastController],
-      providers: [
-        { provide: ForecastService, useValue: mockForecastService },
-      ],
+      providers: [{ provide: ForecastService, useValue: mockForecastService }],
     }).compile();
 
     controller = module.get<ForecastController>(ForecastController);
-    service = module.get<ForecastService>(ForecastService);
 
     jest.clearAllMocks();
   });
@@ -42,9 +38,16 @@ describe('ForecastController', () => {
       };
       mockForecastService.getExpenseForecast.mockResolvedValue(mockResult);
 
-      const result = await controller.getExpenseForecast('all', 6);
+      const result = await controller.getExpenseForecast({
+        sectionId: 'all',
+        months: 6,
+      });
 
-      expect(mockForecastService.getExpenseForecast).toHaveBeenCalledWith(6, 'all', 12);
+      expect(mockForecastService.getExpenseForecast).toHaveBeenCalledWith(
+        6,
+        'all',
+        12,
+      );
       expect(result).toEqual(mockResult);
     });
 
@@ -61,9 +64,16 @@ describe('ForecastController', () => {
       };
       mockForecastService.getExpenseForecast.mockResolvedValue(mockResult);
 
-      const result = await controller.getExpenseForecast('sec-101', 12);
+      const result = await controller.getExpenseForecast({
+        sectionId: 'sec-101',
+        months: 12,
+      });
 
-      expect(mockForecastService.getExpenseForecast).toHaveBeenCalledWith(12, 'sec-101', 12);
+      expect(mockForecastService.getExpenseForecast).toHaveBeenCalledWith(
+        12,
+        'sec-101',
+        12,
+      );
       expect(result).toEqual(mockResult);
     });
   });

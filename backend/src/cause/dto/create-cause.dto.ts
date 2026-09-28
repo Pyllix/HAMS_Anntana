@@ -7,7 +7,10 @@ export class CreateCauseDto {
   @IsNotEmpty()
   code: string;
 
-  @ApiProperty({ description: 'Cause description name', example: 'การเสื่อมสภาพตามอายุการใช้งาน' })
+  @ApiProperty({
+    description: 'Cause description name',
+    example: 'การเสื่อมสภาพตามอายุการใช้งาน',
+  })
   @IsString()
   @IsNotEmpty()
   name: string;

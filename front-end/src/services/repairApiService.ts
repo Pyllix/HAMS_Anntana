@@ -1,4 +1,5 @@
 import axios from "axios";
+import { apiClient } from "./apiClient";
 import type {
   RepairActionType,
   RepairAvailabilityCode,
@@ -8,7 +9,6 @@ import type {
   RepairUser,
 } from "../types/TypeRepairWorkflow";
 
-const BASE_URL = "https://hams-anntana.onrender.com";
 const PAGE_SIZE = 100;
 const DETAIL_BATCH_SIZE = 8;
 
@@ -188,15 +188,6 @@ const repairStatusCodes: RepairJobStatusCode[] = [
   "COMPLETED",
   "CANCELLED",
 ];
-
-function getHeaders() {
-  const token = localStorage.getItem("token");
-  return {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
-}
 
 function isRepairActionType(value?: string | null): value is RepairActionType {
   return repairActionTypes.includes(value as RepairActionType);
@@ -467,10 +458,10 @@ export async function fetchRepairJobSummaries(
   let hasNextPage = false;
 
   do {
-    const response = await axios.get<
+    const response = await apiClient.get<
       ApiPaginatedResponse<ApiRepairJob> | ApiRepairJob[]
-    >(`${BASE_URL}/repairs`, {
-      ...getHeaders(),
+    >(`/repairs`, {
+
       params: { ...params, page, limit: PAGE_SIZE },
     });
     jobs.push(...getPageData(response.data));
@@ -485,9 +476,8 @@ export async function fetchRepairJobSummaries(
 export async function fetchRepairJobDetail(
   jobId: string,
 ): Promise<ApiRepairJob> {
-  const response = await axios.get<ApiRepairJob>(
-    `${BASE_URL}/repairs/${jobId}`,
-    getHeaders(),
+  const response = await apiClient.get<ApiRepairJob>(
+    `/repairs/${jobId}`,
   );
   return response.data;
 }
@@ -509,10 +499,9 @@ export async function advanceNextRepairStep(
   jobId: string,
   body: { note?: string; receiverId?: string; warrantyDate?: string },
 ): Promise<ApiRepairJob> {
-  const response = await axios.patch<{ job: ApiRepairJob } | ApiRepairJob>(
-    `${BASE_URL}/repairs/${jobId}/steps/next`,
+  const response = await apiClient.patch<{ job: ApiRepairJob } | ApiRepairJob>(
+    `/repairs/${jobId}/steps/next`,
     body,
-    getHeaders(),
   );
   return "job" in response.data ? response.data.job : response.data;
 }
@@ -523,10 +512,10 @@ export async function fetchRepairReceivers(
   const fallback = job.reporter ? [job.reporter] : [];
   if (!job.sectionId) return fallback;
 
-  const response = await axios.get<ApiPaginatedResponse<ApiUser> | ApiUser[]>(
-    `${BASE_URL}/users`,
+  const response = await apiClient.get<ApiPaginatedResponse<ApiUser> | ApiUser[]>(
+    `/users`,
     {
-      ...getHeaders(),
+
       params: { section_id: job.sectionId, page: 1, limit: PAGE_SIZE },
     },
   );

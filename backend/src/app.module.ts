@@ -23,6 +23,11 @@ import { CauseModule } from './cause/cause.module';
 import { JobTypeModule } from './job-type/job-type.module';
 import { AssetViabilityModule } from './asset-viability/asset-viability.module';
 import { RolesGuard } from './common/guards/roles.guard';
+import { PreAuthGuard } from './auth/pre-auth.guard';
+import { SessionLifetimeGuard } from './auth/session-lifetime.guard';
+import { CsrfGuard } from './auth/csrf.guard';
+import { SessionLifetimeService } from './auth/session-lifetime.service';
+import { MandatoryEnrollmentGuard } from './auth/mandatory-enrollment.guard';
 import { ForecastModule } from './forecast/forecast.module';
 
 @Module({
@@ -52,9 +57,26 @@ import { ForecastModule } from './forecast/forecast.module';
   controllers: [],
   providers: [
     PrismaService,
+    SessionLifetimeService,
+    {
+      provide: APP_GUARD,
+      useClass: PreAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SessionLifetimeGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: MandatoryEnrollmentGuard,
     },
     {
       provide: APP_GUARD,

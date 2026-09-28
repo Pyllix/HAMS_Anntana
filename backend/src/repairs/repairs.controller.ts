@@ -8,7 +8,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import { UserRole } from '@prisma/client';
@@ -26,7 +31,7 @@ import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
 import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
 
 @ApiTags('Repairs')
-@ApiBearerAuth()
+@ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('repairs')
 export class RepairsController {
@@ -46,7 +51,10 @@ export class RepairsController {
     UserRole.MANAGER,
   )
   @ApiOperation({ summary: 'Submit an online repair request ticket (UC3)' })
-  @ApiResponse({ status: 201, description: 'Repair ticket created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Repair ticket created successfully',
+  })
   async createRequest(
     @Body() dto: CreateRepairRequestDto,
     @Session() session: UserSession,
@@ -58,18 +66,20 @@ export class RepairsController {
   // 2. Lookups & Workload Balancing
   // ───────────────────────────────────────────────────────────────────────────
   @Get('lookups/meta')
-  @ApiOperation({ summary: 'Get repair lookup tables (Job statuses, Causes, Tech categories, Job types, Step masters)' })
+  @ApiOperation({
+    summary:
+      'Get repair lookup tables (Job statuses, Causes, Tech categories, Job types, Step masters)',
+  })
   async getLookups() {
     return this.repairsService.getLookups();
   }
 
   @Get('mechanic-workloads')
-  @Roles(
-    UserRole.MAINTENANCE_HEAD,
-    UserRole.MANAGER,
-    UserRole.ADMIN,
-  )
-  @ApiOperation({ summary: 'Get active workload counts of all mechanics for balanced job dispatch' })
+  @Roles(UserRole.MAINTENANCE_HEAD, UserRole.MANAGER, UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Get active workload counts of all mechanics for balanced job dispatch',
+  })
   async getMechanicWorkloads() {
     return this.repairsService.getMechanicWorkloads();
   }
@@ -105,7 +115,10 @@ export class RepairsController {
     UserRole.MANAGER,
     UserRole.ADMIN,
   )
-  @ApiOperation({ summary: 'Get list of active mechanics (users with MAINTENANCE_STAFF or MAINTENANCE_HEAD role)' })
+  @ApiOperation({
+    summary:
+      'Get list of active mechanics (users with MAINTENANCE_STAFF or MAINTENANCE_HEAD role)',
+  })
   async getMechanics() {
     return this.repairsService.getMechanics();
   }
@@ -120,7 +133,10 @@ export class RepairsController {
     UserRole.MANAGER,
     UserRole.ADMIN,
   )
-  @ApiOperation({ summary: 'Get single repair job details including steps, spare parts, and cost breakdown' })
+  @ApiOperation({
+    summary:
+      'Get single repair job details including steps, spare parts, and cost breakdown',
+  })
   async findOne(@Param('id') id: string) {
     return this.repairsService.findOne(id);
   }
@@ -135,7 +151,9 @@ export class RepairsController {
     UserRole.ADMIN,
     UserRole.MANAGER,
   )
-  @ApiOperation({ summary: 'Edit repair ticket details while pending assignment' })
+  @ApiOperation({
+    summary: 'Edit repair ticket details while pending assignment',
+  })
   async updateRepairRequest(
     @Param('id') id: string,
     @Body() dto: UpdateRepairRequestDto,
@@ -146,7 +164,9 @@ export class RepairsController {
 
   @Post(':id/assign')
   @Roles(UserRole.MAINTENANCE_HEAD)
-  @ApiOperation({ summary: 'Head mechanic triages and assigns job to one or more technicians' })
+  @ApiOperation({
+    summary: 'Head mechanic triages and assigns job to one or more technicians',
+  })
   async assignJob(
     @Param('id') id: string,
     @Body() dto: AssignRepairJobDto,
@@ -160,7 +180,10 @@ export class RepairsController {
   // ───────────────────────────────────────────────────────────────────────────
   @Patch(':id/diagnose')
   @Roles(UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD)
-  @ApiOperation({ summary: 'Mechanic diagnoses job, selects one of 4 ActionTracks, and plans operational steps' })
+  @ApiOperation({
+    summary:
+      'Mechanic diagnoses job, selects one of 4 ActionTracks, and plans operational steps',
+  })
   async diagnose(
     @Param('id') id: string,
     @Body() dto: DiagnoseRepairJobDto,
@@ -179,7 +202,10 @@ export class RepairsController {
     UserRole.PARCEL_STAFF,
     UserRole.MANAGER,
   )
-  @ApiOperation({ summary: 'Advance to and complete the next pending repair step automatically' })
+  @ApiOperation({
+    summary:
+      'Advance to and complete the next pending repair step automatically',
+  })
   async advanceNextStep(
     @Param('id') id: string,
     @Body() dto: UpdateRepairStepDto,
@@ -190,7 +216,10 @@ export class RepairsController {
 
   @Patch(':id/steps/reject')
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Reject/disapprove the pending approval step and return job for re-diagnosis' })
+  @ApiOperation({
+    summary:
+      'Reject/disapprove the pending approval step and return job for re-diagnosis',
+  })
   async rejectStep(
     @Param('id') id: string,
     @Body() dto: RejectRepairStepDto,
@@ -201,7 +230,10 @@ export class RepairsController {
 
   @Patch(':id/complete-unrepairable')
   @Roles(UserRole.PARCEL_STAFF, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Parcel staff confirms physical custody of unrepairable equipment and updates asset to WAIT_DISPOSAL' })
+  @ApiOperation({
+    summary:
+      'Parcel staff confirms physical custody of unrepairable equipment and updates asset to WAIT_DISPOSAL',
+  })
   async completeUnrepairable(
     @Param('id') id: string,
     @Body() dto: CompleteUnrepairableDto,
@@ -212,7 +244,10 @@ export class RepairsController {
 
   @Patch(':id/cancel')
   @Roles(UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD)
-  @ApiOperation({ summary: 'Technician or head cancels repair job ticket before approval/in-progress and restores asset to NORMAL' })
+  @ApiOperation({
+    summary:
+      'Technician or head cancels repair job ticket before approval/in-progress and restores asset to NORMAL',
+  })
   async cancelJob(
     @Param('id') id: string,
     @Body() dto: CancelRepairJobDto,
@@ -226,7 +261,10 @@ export class RepairsController {
   // ───────────────────────────────────────────────────────────────────────────
   @Post(':id/spare-parts/return')
   @Roles(UserRole.PARCEL_STAFF)
-  @ApiOperation({ summary: 'Parcel staff confirms physical receipt and returns unused spare parts back into stock' })
+  @ApiOperation({
+    summary:
+      'Parcel staff confirms physical receipt and returns unused spare parts back into stock',
+  })
   async returnSparePart(
     @Param('id') id: string,
     @Body() dto: ReturnRepairSparePartDto,

@@ -9,4 +9,3 @@ import { PrismaService } from 'src/prisma.service';
   exports: [ForecastService],
 })
 export class ForecastModule {}
-

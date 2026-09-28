@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSessionDraft } from "../../hooks/useSessionDraft";
+import { clearSessionDraft } from "../../services/sessionDraftStorage";
 import {
   ArrowLeft,
   Loader2,
@@ -143,7 +145,7 @@ export default function AssessmentForm() {
 
   const currentJobId = selectedJob?.id;
   const displayJobNo = selectedJob?.jobNo || `JOB-${currentJobId || ""}`;
-  const draftStorageKey = `draft_assessment_${displayJobNo}`;
+  const draftStorageKey = "assessment:" + displayJobNo;
 
   const { data: metaLookups } = useQuery<RepairMetaLookups>({
     queryKey: ["repairMetaLookups"],
@@ -204,34 +206,33 @@ export default function AssessmentForm() {
   useEffect(() => {
     if (!currentJobId) return;
 
-    if (!isAssignMode && !isReassessment) {
-      const savedDraft = localStorage.getItem(draftStorageKey);
-      if (savedDraft) {
-        try {
-          const parsed = JSON.parse(savedDraft);
-          setActionStatus(
-            parsed.actionStatus === "ขอซื้อทดแทน"
-              ? "ไม่สามารถซ่อมได้"
-              : parsed.actionStatus === "ขอเบิกอะไหล่ภายใน" ||
-                  parsed.actionStatus === "ขอเบิกอะไหล่ภายนอก"
-                ? "ขอเบิกอะไหล่"
-                : parsed.actionStatus || "ซ่อมเองได้",
-          );
-          setFormState(parsed.formState || INITIAL_FORM_STATE);
-          setSelectedMechanicIds(parsed.selectedMechanicIds || []);
-          setSelectedSpares(parsed.selectedSpares || []);
-          return;
-        } catch (error) {
-          console.error("Failed to parse draft:", error);
-        }
-      }
-    }
-
     setActionStatus("ซ่อมเองได้");
     setFormState(INITIAL_FORM_STATE);
     setSelectedMechanicIds([]);
     setSelectedSpares([]);
   }, [currentJobId, draftStorageKey, isAssignMode, isReassessment]);
+
+  const assessmentDraft = useMemo(
+    () => ({ actionStatus, formState, selectedMechanicIds, selectedSpares }),
+    [actionStatus, formState, selectedMechanicIds, selectedSpares],
+  );
+  useSessionDraft({
+    key: draftStorageKey,
+    accountId: user?.id,
+    enabled: Boolean(user?.id && currentJobId && !isAssignMode && !isReassessment),
+    value: assessmentDraft,
+    restore: (draft) => {
+      setActionStatus(draft.actionStatus || "ซ่อมเองได้");
+      setFormState({ ...INITIAL_FORM_STATE, ...(draft.formState || {}) });
+      setSelectedMechanicIds(draft.selectedMechanicIds || []);
+      setSelectedSpares(draft.selectedSpares || []);
+    },
+    isEmpty: (draft) =>
+      draft.actionStatus === "ซ่อมเองได้" &&
+      Object.values(draft.formState).every((value) => value === "" || value === undefined) &&
+      draft.selectedMechanicIds.length === 0 &&
+      draft.selectedSpares.length === 0,
+  });
 
   useEffect(() => {
     if (!jobDetail) return;
@@ -300,7 +301,7 @@ export default function AssessmentForm() {
       return await createEvaluation(String(currentJobId), dto);
     },
     onSuccess: async () => {
-      if (draftStorageKey) localStorage.removeItem(draftStorageKey);
+      clearSessionDraft(draftStorageKey);
       await queryClient.invalidateQueries({ queryKey: ["pendingEvaluations"] });
       await queryClient.invalidateQueries({ queryKey: ["repairHistory"] });
       await queryClient.invalidateQueries({ queryKey: ["repairList"] });
@@ -591,7 +592,7 @@ export default function AssessmentForm() {
 
         {/* Right Side: Action Form (มี Scrollbar ฝั่งเดียว) */}
         <div className="lg:col-span-7 bg-white border border-slate-100 shadow-2xs rounded-xl p-5 flex flex-col justify-between overflow-hidden">
-          
+
           {/* Locked Form Header Section */}
           <div className="shrink-0 space-y-4 mb-4">
             {isReassessment && (

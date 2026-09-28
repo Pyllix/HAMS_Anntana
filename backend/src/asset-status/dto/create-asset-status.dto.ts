@@ -7,7 +7,10 @@ export class CreateAssetStatusDto {
   @IsString()
   code: string;
 
-  @ApiProperty({ example: 'ใช้งานปกติ', description: 'Name of the asset status' })
+  @ApiProperty({
+    example: 'ใช้งานปกติ',
+    description: 'Name of the asset status',
+  })
   @IsNotEmpty()
   @IsString()
   name: string;

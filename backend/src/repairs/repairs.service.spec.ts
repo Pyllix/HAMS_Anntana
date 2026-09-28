@@ -194,7 +194,10 @@ describe('RepairsService', () => {
       });
       mockPrisma.repairJob.findFirst.mockResolvedValue(null);
       mockPrisma.jobType.findFirst.mockResolvedValue({ id: 1 });
-      mockPrisma.jobStatus.findUnique.mockResolvedValue({ id: 1, code: 'PENDING_ASSIGN' });
+      mockPrisma.jobStatus.findUnique.mockResolvedValue({
+        id: 1,
+        code: 'PENDING_ASSIGN',
+      });
       mockPrisma.repairJob.create.mockResolvedValue({ id: 'job-uuid-1' });
       mockPrisma.asset.update.mockImplementation(async ({ where }: any) => {
         if (where.availability_status_id === 1) {
@@ -203,7 +206,9 @@ describe('RepairsService', () => {
         return {};
       });
 
-      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(BadRequestException);
+      await expect(service.createRequest(createDto, mockUser)).rejects.toThrow(
+        BadRequestException,
+      );
     });
     it('should throw NotFoundException if asset does not exist', async () => {
       mockPrisma.asset.findUnique.mockResolvedValue(null);
