@@ -17,6 +17,7 @@ import {
   updateSparepart,
   deleteSparepart,
   getSparepartGroups,
+  getSparePartTimestamp,
 } from "../../services/sparepartService";
 import type { Sparepart, CreateSparepartDto } from "../../types/TypeSparePart";
 import { getSparePartStatus } from "../../types/TypeSparePart";
@@ -49,6 +50,29 @@ export function SparePartDetailModal() {
     "th-TH",
     { minimumFractionDigits: 0 },
   );
+
+  const ts = getSparePartTimestamp(selectedItem.id);
+  const rawCreatedAt =
+    selectedItem.createdAt && selectedItem.createdAt !== "-"
+      ? selectedItem.createdAt
+      : ts?.createdAt;
+  const rawUpdatedAt =
+    selectedItem.updatedAt && selectedItem.updatedAt !== "-"
+      ? selectedItem.updatedAt
+      : ts?.updatedAt || rawCreatedAt;
+
+  const formatDateTime = (val?: string) => {
+    if (!val || val === "-") return "-";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("th-TH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
@@ -133,15 +157,7 @@ export function SparePartDetailModal() {
               </p>
               <div>
                 <p className="font-medium text-slate-700">
-                  {selectedItem.createdAt
-                    ? new Date(selectedItem.createdAt).toLocaleString("th-TH", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                    : "-"}
+                  {formatDateTime(rawCreatedAt)}
                 </p>
               </div>
             </div>
@@ -152,15 +168,7 @@ export function SparePartDetailModal() {
               </p>
               <div>
                 <p className="font-medium text-slate-700">
-                  {selectedItem.updatedAt
-                    ? new Date(selectedItem.updatedAt).toLocaleString("th-TH", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                    : "-"}
+                  {formatDateTime(rawUpdatedAt)}
                 </p>
               </div>
             </div>
@@ -277,6 +285,59 @@ export function SparePartFormModal() {
     return () => stopTimer();
   }, []);
 
+  const handleIntegerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      ["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"].includes(e.key) ||
+      e.ctrlKey ||
+      e.metaKey
+    ) {
+      return;
+    }
+    // Block non-digits (including +, -, ., e, E)
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
+  const handleDecimalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      ["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"].includes(e.key) ||
+      e.ctrlKey ||
+      e.metaKey
+    ) {
+      return;
+    }
+    // Block +, -, e, E
+    if (["+", "-", "e", "E"].includes(e.key)) {
+      e.preventDefault();
+      return;
+    }
+    // Only allow one decimal point
+    if (e.key === ".") {
+      if (e.currentTarget.value.includes(".")) {
+        e.preventDefault();
+      }
+      return;
+    }
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
+  const handleIntegerPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const paste = e.clipboardData.getData("text");
+    if (!/^\d+$/.test(paste.trim())) {
+      e.preventDefault();
+    }
+  };
+
+  const handleDecimalPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const paste = e.clipboardData.getData("text");
+    if (!/^\d+(\.\d{1,2})?$/.test(paste.trim())) {
+      e.preventDefault();
+    }
+  };
+
   const mutation = useMutation({
     mutationFn: async (dto: CreateSparepartDto) => {
       if (editItem) {
@@ -326,6 +387,14 @@ export function SparePartFormModal() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!form.name.trim()) {
+                alert("กรุณากรอกชื่ออะไหล่");
+                return;
+              }
+              if (Number(form.minStock) < 0 || Number(form.price) < 0 || Number(form.qtyInStock) < 0) {
+                alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
+                return;
+              }
               mutation.mutate(form);
             }}
             className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
@@ -370,7 +439,7 @@ export function SparePartFormModal() {
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        ชื่ออะไหล่
+                        ชื่ออะไหล่ <span className="text-rose-500 font-bold ml-1">*</span>
                       </label>
                       <input
                         type="text"
@@ -384,20 +453,23 @@ export function SparePartFormModal() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        จุดสั่งซื้อขั้นต่ำ
+                        จุดสั่งซื้อขั้นต่ำ <span className="text-rose-500 font-bold ml-1">*</span>
                       </label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="0"
                         value={form.minStock === 0 ? "" : form.minStock}
                         onFocus={(e) => e.target.select()}
-                        onChange={(e) =>
+                        onKeyDown={handleIntegerKeyDown}
+                        onPaste={handleIntegerPaste}
+                        onChange={(e) => {
+                          const clean = e.target.value.replace(/\D/g, "");
                           setForm((f) => ({
                             ...f,
-                            minStock:
-                              e.target.value === "" ? 0 : Number(e.target.value),
-                          }))
-                        }
+                            minStock: clean === "" ? 0 : parseInt(clean, 10),
+                          }));
+                        }}
                         className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         required
                       />
@@ -407,7 +479,7 @@ export function SparePartFormModal() {
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        หมวดหมู่
+                        หมวดหมู่ <span className="text-rose-500 font-bold ml-1">*</span>
                       </label>
                       <select
                         value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
@@ -431,7 +503,7 @@ export function SparePartFormModal() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        หน่วยนับ
+                        หน่วยนับ <span className="text-rose-500 font-bold ml-1">*</span>
                       </label>
                       <input
                         type="text"
@@ -441,6 +513,7 @@ export function SparePartFormModal() {
                         }
                         placeholder="เช่น ชิ้น, อัน, กล่อง"
                         className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        required
                       />
                     </div>
                   </div>
@@ -500,7 +573,9 @@ export function SparePartFormModal() {
                 {/* Price Box */}
                 <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 shadow-2xs">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500">ราคาต่อหน่วย</span>
+                    <span className="text-slate-600 font-medium">
+                      ราคาต่อหน่วย <span className="text-rose-500 font-bold ml-1">*</span>
+                    </span>
                     <span className="font-bold text-slate-900 text-sm">
                       {Number(form.price).toLocaleString("th-TH", {
                         minimumFractionDigits: 2,
@@ -509,19 +584,22 @@ export function SparePartFormModal() {
                     </span>
                   </div>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="0.00"
                     value={form.price === 0 ? "" : form.price}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) =>
+                    onKeyDown={handleDecimalKeyDown}
+                    onPaste={handleDecimalPaste}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^0-9.]/g, "");
                       setForm((f) => ({
                         ...f,
-                        price:
-                          e.target.value === "" ? 0 : Number(e.target.value),
-                      }))
-                    }
+                        price: clean === "" ? 0 : parseFloat(clean) || 0,
+                      }));
+                    }}
                     className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500"
+                    required
                   />
                 </div>
               </div>
@@ -538,10 +616,6 @@ export function SparePartFormModal() {
               </button>
               <button
                 type="submit"
-                onClick={(e) => {
-                  e.preventDefault();
-                  mutation.mutate(form);
-                }}
                 disabled={mutation.isPending}
                 className="px-5 h-9 rounded-xl bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
               >
@@ -578,6 +652,14 @@ export function SparePartFormModal() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!form.name.trim()) {
+              alert("กรุณากรอกชื่ออะไหล่");
+              return;
+            }
+            if (Number(form.qtyInStock) < 0 || Number(form.minStock) < 0 || Number(form.price) < 0) {
+              alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
+              return;
+            }
             mutation.mutate(form);
           }}
           className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
@@ -588,7 +670,7 @@ export function SparePartFormModal() {
               <p className="text-xs font-bold text-slate-800">ข้อมูลพื้นฐาน</p>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  ชื่ออะไหล่ *
+                  ชื่ออะไหล่ <span className="text-rose-500 font-bold ml-1">*</span>
                 </label>
                 <input
                   type="text"
@@ -605,7 +687,7 @@ export function SparePartFormModal() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    หมวดหมู่ *
+                    หมวดหมู่ <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <select
                     value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
@@ -629,7 +711,7 @@ export function SparePartFormModal() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    หน่วยนับ *
+                    หน่วยนับ <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <input
                     type="text"
@@ -651,21 +733,24 @@ export function SparePartFormModal() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    จำนวนสต็อกเริ่มต้น *
+                    จำนวนสต็อกเริ่มต้น <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="0"
                       value={form.qtyInStock === 0 ? "" : form.qtyInStock}
                       onFocus={(e) => e.target.select()}
-                      onChange={(e) =>
+                      onKeyDown={handleIntegerKeyDown}
+                      onPaste={handleIntegerPaste}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, "");
                         setForm((f) => ({
                           ...f,
-                          qtyInStock:
-                            e.target.value === "" ? 0 : Number(e.target.value),
-                        }))
-                      }
+                          qtyInStock: clean === "" ? 0 : parseInt(clean, 10),
+                        }));
+                      }}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       required
                     />
@@ -676,21 +761,24 @@ export function SparePartFormModal() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    จุดสั่งซื้อขั้นต่ำ *
+                    จุดสั่งซื้อขั้นต่ำ <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="0"
                       value={form.minStock === 0 ? "" : form.minStock}
                       onFocus={(e) => e.target.select()}
-                      onChange={(e) =>
+                      onKeyDown={handleIntegerKeyDown}
+                      onPaste={handleIntegerPaste}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, "");
                         setForm((f) => ({
                           ...f,
-                          minStock:
-                            e.target.value === "" ? 0 : Number(e.target.value),
-                        }))
-                      }
+                          minStock: clean === "" ? 0 : parseInt(clean, 10),
+                        }));
+                      }}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       required
                     />
@@ -701,22 +789,24 @@ export function SparePartFormModal() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    ราคาต่อหน่วย *
+                    ราคาต่อหน่วย <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0.00"
                       value={form.price === 0 ? "" : form.price}
                       onFocus={(e) => e.target.select()}
-                      onChange={(e) =>
+                      onKeyDown={handleDecimalKeyDown}
+                      onPaste={handleDecimalPaste}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/[^0-9.]/g, "");
                         setForm((f) => ({
                           ...f,
-                          price:
-                            e.target.value === "" ? 0 : Number(e.target.value),
-                        }))
-                      }
+                          price: clean === "" ? 0 : parseFloat(clean) || 0,
+                        }));
+                      }}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       required
                     />
@@ -770,7 +860,7 @@ export function SparePartDeleteModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-center">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-center">
         {/* Red Circular Icon */}
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-500">
           <Trash2 className="h-7 w-7" />
@@ -788,13 +878,17 @@ export function SparePartDeleteModal() {
         </div>
 
         {/* Item Preview Card */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 flex items-center justify-between text-left">
-          <div className="min-w-0">
-            <p className="text-xs font-bold text-slate-800 truncate">{targetItem.name}</p>
-            <p className="text-2xs text-slate-500 font-mono">รหัส: {targetItem.code}</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-slate-800 break-words whitespace-normal leading-relaxed">
+              {targetItem.name}
+            </p>
+            <p className="text-2xs text-slate-500 font-mono mt-0.5">
+              รหัส: {targetItem.code}
+            </p>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 ml-2">
-            <span className="h-1 w-1 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 self-start sm:self-center">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             คงเหลือ {targetItem.qtyInStock} {targetItem.unit || "ชิ้น"}
           </span>
         </div>
