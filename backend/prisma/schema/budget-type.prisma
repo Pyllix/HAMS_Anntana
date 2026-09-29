@@ -2,6 +2,7 @@
 
 model BudgetType {
   id          Int       @id @default(autoincrement()) @map("budget_type_id")
+  // Name uniqueness (trimmed and case-insensitive) is enforced by a partial SQL index.
   name        String    @map("name") @db.VarChar(255)
   isActive    Boolean   @default(true) @map("is_active")
   fiscalYear  Int?      @map("fiscal_year")
