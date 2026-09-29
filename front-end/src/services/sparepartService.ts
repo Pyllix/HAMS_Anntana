@@ -70,6 +70,51 @@ export async function getSparepartGroups(): Promise<SparepartGroup[]> {
   }
 }
 
+const TIMESTAMPS_KEY = "hams_spareparts_timestamps_v1";
+
+function getSavedTimestamps(): Record<string, { createdAt?: string; updatedAt?: string }> {
+  try {
+    const raw = localStorage.getItem(TIMESTAMPS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveSparepartTimestamp(id: number | string, data: { createdAt?: string; updatedAt?: string }) {
+  try {
+    const all = getSavedTimestamps();
+    const prev = all[String(id)] || {};
+    all[String(id)] = {
+      createdAt: data.createdAt || prev.createdAt || new Date().toISOString(),
+      updatedAt: data.updatedAt || prev.updatedAt || data.createdAt || new Date().toISOString(),
+    };
+    localStorage.setItem(TIMESTAMPS_KEY, JSON.stringify(all));
+  } catch {
+    // ignore
+  }
+}
+
+export function getSparePartTimestamp(id: number | string): { createdAt?: string; updatedAt?: string } | undefined {
+  const all = getSavedTimestamps();
+  return all[String(id)];
+}
+
+function enrichTimestamps(item: Sparepart): Sparepart {
+  const ts = getSparePartTimestamp(item.id);
+  const now = new Date().toISOString();
+  const createdAt = item.createdAt || ts?.createdAt || now;
+  const updatedAt = item.updatedAt || ts?.updatedAt || createdAt;
+  if (!ts) {
+    saveSparepartTimestamp(item.id, { createdAt, updatedAt });
+  }
+  return {
+    ...item,
+    createdAt,
+    updatedAt,
+  };
+}
+
 // ─── Spare Parts CRUD ─────────────────────────────────────────────────────────
 
 export async function getSpareParts(): Promise<Sparepart[]> {
@@ -85,16 +130,19 @@ export async function getSpareParts(): Promise<Sparepart[]> {
       // Merge: take backend item, but override with local changes if edited
       const merged = items.map((item) => {
         const local = localMap.get(item.id);
-        return local ? { ...item, ...local } : item;
+        const resolved = local ? { ...item, ...local } : item;
+        return enrichTimestamps(resolved);
       });
       const backendIds = new Set(items.map((i) => i.id));
-      const newLocals = localSpareparts.filter((l) => !backendIds.has(l.id));
+      const newLocals = localSpareparts
+        .filter((l) => !backendIds.has(l.id))
+        .map(enrichTimestamps);
       return [...merged, ...newLocals];
     }
-    return localSpareparts;
+    return localSpareparts.map(enrichTimestamps);
   } catch (err) {
     console.warn("Backend spare-parts query error, using local fallback:", err);
-    return localSpareparts;
+    return localSpareparts.map(enrichTimestamps);
   }
 }
 
@@ -104,11 +152,11 @@ export async function getSparepartById(id: number): Promise<Sparepart> {
     const res = await apiClient.get(
       `/spare-parts/${id}`,
     );
-    return res.data;
+    return enrichTimestamps(res.data);
   } catch {
     const found = localSpareparts.find((i) => i.id === id);
     if (!found) throw new Error("Item not found");
-    return found;
+    return enrichTimestamps(found);
   }
 }
 
@@ -116,6 +164,7 @@ export async function createSparepart(
   dto: CreateSparepartDto,
 ): Promise<Sparepart> {
   ensureLocalSparepartsForCurrentAccount();
+  const now = new Date().toISOString();
   const payload: Record<string, any> = {
     name: dto.name,
     unit: dto.unit || "ชิ้น",
@@ -123,6 +172,8 @@ export async function createSparepart(
     minStock: Number(dto.minStock ?? 0),
     qtyInStock: Number(dto.qtyInStock ?? 0),
     groupId: Number(dto.groupId || 1),
+    createdAt: now,
+    updatedAt: now,
   };
   if (dto.code) {
     payload.code = dto.code;
@@ -136,7 +187,10 @@ export async function createSparepart(
     const saved: Sparepart = {
       ...res.data,
       category: dto.category || res.data?.group?.name || "ไฟฟ้า",
+      createdAt: res.data?.createdAt || now,
+      updatedAt: res.data?.updatedAt || now,
     };
+    saveSparepartTimestamp(saved.id, { createdAt: saved.createdAt, updatedAt: saved.updatedAt });
     localSpareparts = [saved, ...localSpareparts.filter((i) => i.id !== saved.id)];
     saveSparepartsToStorage(localSpareparts);
     return saved;
@@ -153,7 +207,10 @@ export async function createSparepart(
       qtyInStock: Number(dto.qtyInStock ?? 0),
       groupId: Number(dto.groupId || 1),
       category: dto.category || "ไฟฟ้า",
+      createdAt: now,
+      updatedAt: now,
     };
+    saveSparepartTimestamp(fallbackItem.id, { createdAt: now, updatedAt: now });
     localSpareparts = [fallbackItem, ...localSpareparts];
     saveSparepartsToStorage(localSpareparts);
     return fallbackItem;
@@ -165,7 +222,14 @@ export async function updateSparepart(
   dto: UpdateSparepartDto,
 ): Promise<Sparepart> {
   ensureLocalSparepartsForCurrentAccount();
-  const payload: Record<string, any> = {};
+  const now = new Date().toISOString();
+  const existing = localSpareparts.find((i) => i.id === id);
+  const prevTs = getSparePartTimestamp(id);
+  const createdAt = existing?.createdAt || prevTs?.createdAt || now;
+
+  const payload: Record<string, any> = {
+    updatedAt: now,
+  };
   if (dto.code !== undefined) payload.code = dto.code;
   if (dto.name !== undefined) payload.name = dto.name;
   if (dto.unit !== undefined) payload.unit = dto.unit;
@@ -182,7 +246,10 @@ export async function updateSparepart(
     const updated: Sparepart = {
       ...res.data,
       ...dto,
+      createdAt: res.data?.createdAt || createdAt,
+      updatedAt: res.data?.updatedAt || now,
     };
+    saveSparepartTimestamp(id, { createdAt: updated.createdAt, updatedAt: now });
     const exists = localSpareparts.some((i) => i.id === id);
     if (exists) {
       localSpareparts = localSpareparts.map((i) => (i.id === id ? { ...i, ...updated } : i));
@@ -194,11 +261,17 @@ export async function updateSparepart(
   } catch (err) {
     if (isSessionExpiredApiError(err)) throw err;
     console.warn("Backend update failed, updating locally:", err);
+    saveSparepartTimestamp(id, { createdAt, updatedAt: now });
     const exists = localSpareparts.some((i) => i.id === id);
-    const fallback = { id, ...dto } as Sparepart;
+    const fallback = {
+      id,
+      ...dto,
+      createdAt,
+      updatedAt: now,
+    } as Sparepart;
     if (exists) {
       localSpareparts = localSpareparts.map((i) =>
-        i.id === id ? ({ ...i, ...dto } as Sparepart) : i,
+        i.id === id ? ({ ...i, ...dto, createdAt, updatedAt: now } as Sparepart) : i,
       );
     } else {
       localSpareparts = [fallback, ...localSpareparts];
