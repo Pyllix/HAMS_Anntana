@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AcqTypeService } from './acq-type.service';
 import { PrismaService } from 'src/prisma.service';
 
@@ -8,6 +13,7 @@ describe('AcqTypeService', () => {
   let prisma: PrismaService;
 
   const mockPrisma = {
+    $queryRaw: jest.fn(),
     acqType: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -27,6 +33,7 @@ describe('AcqTypeService', () => {
     service = module.get<AcqTypeService>(AcqTypeService);
     prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
+    mockPrisma.$queryRaw.mockResolvedValue([]);
   });
 
   it('should be defined', () => {
@@ -40,6 +47,46 @@ describe('AcqTypeService', () => {
     const result = await service.create(dto);
     expect(result).toEqual({ id: 1, ...dto });
     expect(mockPrisma.acqType.create).toHaveBeenCalledWith({ data: dto });
+  });
+
+  it('should trim the name before creating an acquisition type', async () => {
+    mockPrisma.acqType.create.mockResolvedValue({ id: 1, name: 'บริจาค' });
+
+    await service.create({ name: '  บริจาค  ' });
+
+    expect(mockPrisma.acqType.create).toHaveBeenCalledWith({
+      data: { name: 'บริจาค' },
+    });
+  });
+
+  it('should reject an existing name regardless of letter case or surrounding spaces', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 2 }]);
+
+    await expect(service.create({ name: ' Donation ' })).rejects.toThrow(
+      ConflictException,
+    );
+    expect(mockPrisma.acqType.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject a whitespace-only name', async () => {
+    await expect(service.create({ name: '   ' })).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mockPrisma.acqType.create).not.toHaveBeenCalled();
+  });
+
+  it('should return a conflict when the database rejects a concurrent duplicate', async () => {
+    mockPrisma.acqType.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(service.create({ name: 'บริจาค' })).rejects.toThrow(
+      ConflictException,
+    );
   });
 
   it('should return all active acquisition types', async () => {
@@ -74,6 +121,36 @@ describe('AcqTypeService', () => {
     expect(result.name).toEqual('บริจาคพิเศษ');
   });
 
+  it('should reject a duplicate name when updating an acquisition type', async () => {
+    mockPrisma.acqType.findFirst.mockResolvedValueOnce({
+      id: 1,
+      name: 'บริจาคเดิม',
+      deletedAt: null,
+    });
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ id: 2 }]);
+
+    await expect(service.update(1, { name: 'บริจาคซ้ำ' })).rejects.toThrow(
+      ConflictException,
+    );
+    expect(mockPrisma.acqType.update).not.toHaveBeenCalled();
+  });
+
+  it('should trim the name when updating an acquisition type', async () => {
+    mockPrisma.acqType.findFirst.mockResolvedValueOnce({
+      id: 1,
+      name: 'บริจาค',
+      deletedAt: null,
+    });
+    mockPrisma.acqType.update.mockResolvedValue({ id: 1, name: 'บริจาคใหม่' });
+
+    await service.update(1, { name: '  บริจาคใหม่  ' });
+
+    expect(mockPrisma.acqType.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { name: 'บริจาคใหม่' },
+    });
+  });
+
   it('should soft delete an acquisition type', async () => {
     mockPrisma.acqType.findFirst.mockResolvedValue({ id: 1, name: 'บริจาค' });
     mockPrisma.acqType.update.mockResolvedValue({
@@ -91,11 +168,24 @@ describe('AcqTypeService', () => {
   it('should restore a soft-deleted acquisition type', async () => {
     mockPrisma.acqType.findFirst.mockResolvedValue({
       id: 1,
+      name: 'บริจาค',
       deletedAt: new Date(),
     });
     mockPrisma.acqType.update.mockResolvedValue({ id: 1, deletedAt: null });
 
     const result = await service.restore(1);
     expect(result.deletedAt).toBeNull();
+  });
+
+  it('should reject a duplicate name when restoring an acquisition type', async () => {
+    mockPrisma.acqType.findFirst.mockResolvedValueOnce({
+      id: 1,
+      name: 'บริจาคซ้ำ',
+      deletedAt: new Date(),
+    });
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ id: 2 }]);
+
+    await expect(service.restore(1)).rejects.toThrow(ConflictException);
+    expect(mockPrisma.acqType.update).not.toHaveBeenCalled();
   });
 });
