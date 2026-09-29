@@ -30,6 +30,8 @@ import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistor
 import WaitDisposalModal from "../components/equipment-stock/WaitDisposalModal";
 import ConfirmDisposalModal from "../components/equipment-stock/ConfirmDisposalModal";
 import ConfirmLostModal from "../components/equipment-stock/ConfirmLostModal";
+import SendAssessmentModal from "../components/equipment-stock/SendAssessmentModal";
+import ToastContainer from "../components/borrow-return/ToastContainer";
 import CalendarFilterDialog from "../components/equipment-stock/CalendarFilterDialog";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
 import StatCards from "../components/borrow-return/StatCards";
@@ -534,6 +536,10 @@ export default function EquipmentStock() {
       <WaitDisposalModal />
       <ConfirmDisposalModal />
       <ConfirmLostModal />
+      <SendAssessmentModal />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
 
       {/* Calendar Filter Dialog */}
       <CalendarFilterDialog
