@@ -158,7 +158,7 @@ const stepMasterTemplates: {
 ];
 
 async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(90260926)`;
+  await tx.$queryRaw`SELECT 1 AS acquired FROM pg_advisory_xact_lock(90260926)`;
 
   for (const status of assetStatuses) {
     await tx.assetStatus.upsert({
