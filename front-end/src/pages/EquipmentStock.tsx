@@ -30,6 +30,8 @@ import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistor
 import WaitDisposalModal from "../components/equipment-stock/WaitDisposalModal";
 import ConfirmDisposalModal from "../components/equipment-stock/ConfirmDisposalModal";
 import ConfirmLostModal from "../components/equipment-stock/ConfirmLostModal";
+import SendAssessmentModal from "../components/equipment-stock/SendAssessmentModal";
+import ToastContainer from "../components/borrow-return/ToastContainer";
 import CalendarFilterDialog from "../components/equipment-stock/CalendarFilterDialog";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
 import StatCards from "../components/borrow-return/StatCards";
@@ -357,7 +359,7 @@ export default function EquipmentStock() {
     activeTab === "LOST";
 
   return (
-    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+    <div className="flex flex-col h-full space-y-4">
       {/* Stat Cards */}
       <div className="shrink-0">
         <StatCards
@@ -482,7 +484,7 @@ export default function EquipmentStock() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-hidden min-h-[420px]">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === "WAIT_DISPOSAL" ? (
           <WaitDisposalTable
             assets={displayedAssets}
@@ -534,6 +536,10 @@ export default function EquipmentStock() {
       <WaitDisposalModal />
       <ConfirmDisposalModal />
       <ConfirmLostModal />
+      <SendAssessmentModal />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
 
       {/* Calendar Filter Dialog */}
       <CalendarFilterDialog

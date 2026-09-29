@@ -19,6 +19,12 @@ interface DisposalModalState {
   markLostAsset: Asset | null;
   openMarkLost: (asset: Asset) => void;
   closeMarkLost: () => void;
+
+  // 4. Dialog Send Assessment (ส่งประเมินสภาพครุภัณฑ์ไปยังช่าง)
+  isSendAssessmentOpen: boolean;
+  sendAssessmentAsset: Asset | null;
+  openSendAssessment: (asset: Asset) => void;
+  closeSendAssessment: () => void;
 }
 
 export const useDisposalModalStore = create<DisposalModalState>((set) => ({
@@ -59,5 +65,18 @@ export const useDisposalModalStore = create<DisposalModalState>((set) => ({
     set({
       isMarkLostOpen: false,
       markLostAsset: null,
+    }),
+
+  isSendAssessmentOpen: false,
+  sendAssessmentAsset: null,
+  openSendAssessment: (asset: Asset) =>
+    set({
+      isSendAssessmentOpen: true,
+      sendAssessmentAsset: asset,
+    }),
+  closeSendAssessment: () =>
+    set({
+      isSendAssessmentOpen: false,
+      sendAssessmentAsset: null,
     }),
 }));

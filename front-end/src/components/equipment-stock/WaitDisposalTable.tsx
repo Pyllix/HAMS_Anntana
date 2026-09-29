@@ -7,6 +7,7 @@ import {
   Clock,
   AlertTriangle,
   XCircle,
+  ClipboardCheck,
   Image as ImageIcon,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
@@ -44,7 +45,8 @@ export default function WaitDisposalTable({
   onPageChange,
 }: WaitDisposalTableProps) {
   const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
-  const { openConfirmDisposal, openMarkLost } = useDisposalModalStore();
+  const { openConfirmDisposal, openMarkLost, openSendAssessment } =
+    useDisposalModalStore();
   const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(null);
 
   const columns = useMemo<Array<ColumnDef<typeof features, Asset>>>(() => {
@@ -209,7 +211,18 @@ export default function WaitDisposalTable({
                       className="fixed inset-0 z-20"
                       onClick={() => setOpenActionDropdown(null)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                    <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenActionDropdown(null);
+                          openSendAssessment(row);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
+                      >
+                        <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
+                        <span className="font-semibold">ส่งประเมิน</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -241,7 +254,7 @@ export default function WaitDisposalTable({
         },
       },
     ];
-  }, [openDetail, openActionDropdown, openConfirmDisposal, openMarkLost]);
+  }, [openDetail, openActionDropdown, openConfirmDisposal, openMarkLost, openSendAssessment]);
 
   const table = useTable({
     key: "wait-disposal-table",
