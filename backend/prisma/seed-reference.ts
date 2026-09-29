@@ -157,9 +157,13 @@ const stepMasterTemplates: {
   { stepNumber: 8, actionType: StepActionType.UNREPAIRABLE, label: 'ปรับเป็น WAIT_DISPOSAL' },
 ];
 
-async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(90260926)`;
+let seedStage = 'connection';
 
+async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
+  seedStage = 'advisory-lock';
+  await tx.$queryRaw`SELECT 1 AS acquired FROM pg_advisory_xact_lock(90260926)`;
+
+  seedStage = 'asset-statuses';
   for (const status of assetStatuses) {
     await tx.assetStatus.upsert({
       where: { code: status.code },
@@ -168,6 +172,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     });
   }
 
+  seedStage = 'availability-statuses';
   for (const status of availabilityStatuses) {
     await tx.availabilityStatus.upsert({
       where: { code: status.code },
@@ -176,6 +181,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     });
   }
 
+  seedStage = 'borrow-statuses';
   for (const status of borrowStatuses) {
     await tx.borrowStatus.upsert({
       where: { code: status.code },
@@ -184,6 +190,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     });
   }
 
+  seedStage = 'asset-types';
   for (const type of assetTypes) {
     const existing = await tx.assetType.findFirst({
       where: { name: type.name },
@@ -192,6 +199,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     if (!existing) await tx.assetType.create({ data: type });
   }
 
+  seedStage = 'acquisition-types';
   for (const type of acquisitionTypes) {
     const existing = await tx.acqType.findFirst({
       where: { name: type.name },
@@ -202,6 +210,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     }
   }
 
+  seedStage = 'equipment-types';
   for (const type of equipmentTypes) {
     const existing = await tx.equipmentType.findFirst({
       where: { name: type.name },
@@ -210,6 +219,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     if (!existing) await tx.equipmentType.create({ data: type });
   }
 
+  seedStage = 'job-statuses';
   for (const status of jobStatuses) {
     await tx.jobStatus.upsert({
       where: { code: status.code },
@@ -218,6 +228,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     });
   }
 
+  seedStage = 'job-types';
   for (const name of jobTypes) {
     const existing = await tx.jobType.findFirst({
       where: { name },
@@ -226,6 +237,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     if (!existing) await tx.jobType.create({ data: { name } });
   }
 
+  seedStage = 'causes';
   for (const cause of causes) {
     const existing = await tx.cause.findFirst({
       where: { code: cause.code },
@@ -234,6 +246,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     if (!existing) await tx.cause.create({ data: cause });
   }
 
+  seedStage = 'tech-categories';
   for (const category of techCategories) {
     const existing = await tx.techCategory.findFirst({
       where: { code: category.code },
@@ -244,6 +257,7 @@ async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
     }
   }
 
+  seedStage = 'step-master';
   for (const step of stepMasterTemplates) {
     const existing = await tx.stepMaster.findFirst({
       where: { stepNumber: step.stepNumber, actionType: step.actionType },
@@ -261,7 +275,10 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
   try {
-    await prisma.$transaction(seedReferenceData);
+    await prisma.$transaction(seedReferenceData, {
+      maxWait: 10_000,
+      timeout: 120_000,
+    });
     console.info('Production reference data is ready. No demo records were loaded.');
   } finally {
     await prisma.$disconnect();
@@ -269,7 +286,18 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(() => {
-  console.error('Production reference seeding failed. No demo seed was run.');
+main().catch((error: unknown) => {
+  const code =
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+      ? error.code
+      : error instanceof Error
+        ? error.name
+        : 'unknown';
+  console.error(
+    `Production reference seeding failed at ${seedStage} (code: ${code}). No demo seed was run.`,
+  );
   process.exitCode = 1;
 });
