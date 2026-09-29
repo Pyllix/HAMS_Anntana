@@ -543,6 +543,12 @@ async function main() {
 
     if (existing) {
       if (existing.email !== data.email || existing.employeeId !== data.employeeId) {
+        if (data.userName === 'admin_backup') {
+          console.warn(
+            `  ⚠️ Skipped demo backup ADMIN (${data.employeeId}): identity belongs to another account`,
+          );
+          continue;
+        }
         throw new Error(`Demo user identity conflict (${data.employeeId})`);
       }
       userMap[data.userName] = existing.id;
