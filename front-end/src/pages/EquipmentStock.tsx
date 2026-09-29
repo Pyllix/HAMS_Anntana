@@ -359,7 +359,7 @@ export default function EquipmentStock() {
     activeTab === "LOST";
 
   return (
-    <div className="flex flex-col h-full space-y-4 md:space-y-6">
+    <div className="flex flex-col h-full space-y-4">
       {/* Stat Cards */}
       <div className="shrink-0">
         <StatCards
@@ -484,7 +484,7 @@ export default function EquipmentStock() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-hidden min-h-[420px]">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === "WAIT_DISPOSAL" ? (
           <WaitDisposalTable
             assets={displayedAssets}
