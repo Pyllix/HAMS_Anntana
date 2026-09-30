@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SparePartsService } from './spare-parts.service';
 import { PrismaService } from 'src/prisma.service';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('SparePartsService', () => {
   let service: SparePartsService;
@@ -51,6 +55,29 @@ describe('SparePartsService', () => {
   });
 
   describe('Sparepart', () => {
+    it.each(['price', 'minStock', 'qtyInStock'] as const)(
+      'does not save a new spare part with negative %s',
+      async (field) => {
+        await expect(
+          service.create(
+            { name: 'Fuse', price: 0, groupId: 1, [field]: -1 },
+            'user-admin',
+          ),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['price', 'minStock', 'qtyInStock'] as const)(
+      'does not update a spare part with negative %s',
+      async (field) => {
+        await expect(service.update(1, { [field]: -1 })).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(mockPrismaService.sparepart.update).not.toHaveBeenCalled();
+      },
+    );
+
     it('should throw NotFoundException if groupId does not exist when creating sparepart', async () => {
       mockPrismaService.sparepartGroup.findFirst.mockResolvedValue(null);
 

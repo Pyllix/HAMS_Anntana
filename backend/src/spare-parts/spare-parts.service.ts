@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -17,6 +18,15 @@ import { Prisma } from '@prisma/client';
 @Injectable()
 export class SparePartsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private validateNonNegativeValues(dto: UpdateSparepartDto) {
+    for (const field of ['price', 'minStock', 'qtyInStock'] as const) {
+      const value = dto[field];
+      if (value !== undefined && value < 0) {
+        throw new BadRequestException(`${field} must not be negative`);
+      }
+    }
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Helper Methods
@@ -55,6 +65,7 @@ export class SparePartsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async create(dto: CreateSparepartDto, userId: string) {
+    this.validateNonNegativeValues(dto);
     // Validate group exists
     const group = await this.prisma.sparepartGroup.findFirst({
       where: { id: dto.groupId, deletedAt: null },
@@ -202,6 +213,7 @@ export class SparePartsService {
   }
 
   async update(id: number, dto: UpdateSparepartDto) {
+    this.validateNonNegativeValues(dto);
     await this.findOne(id);
 
     if (dto.groupId) {
