@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { UserSession } from '@thallesp/nestjs-better-auth';
 import type { Session as BetterAuthSession } from 'better-auth/types';
 import { AuthController } from './auth.controller';
 import { TwoFactorService } from './two-factor.service';
@@ -13,6 +14,7 @@ import { TrustedBrowserService } from './trusted-browser.service';
 import { PreAuthService } from './pre-auth.service';
 import { AdminStepUpService } from './admin-step-up.service';
 import { auth } from './auth';
+import { ImageReadService } from '../images/image-read.service';
 
 // ─── Mock Better Auth ────────────────────────────────────────────────────────
 jest.mock('./auth', () => ({
@@ -74,6 +76,9 @@ describe('AuthController', () => {
     clearForUser: jest.fn(),
     verifyAndGrant: jest.fn(),
   };
+  const mockImageReadService = {
+    describeEmployeePhotoByUserId: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -95,6 +100,7 @@ describe('AuthController', () => {
           provide: AdminStepUpService,
           useValue: mockAdminStepUpService,
         },
+        { provide: ImageReadService, useValue: mockImageReadService },
       ],
     }).compile();
 
@@ -106,6 +112,10 @@ describe('AuthController', () => {
       email: 'admin@hospital.go.th',
       firstname: 'สมชาย แอดมินระบบ',
       role: 'DEPARTMENT_STAFF',
+    });
+    mockImageReadService.describeEmployeePhotoByUserId.mockResolvedValue({
+      hasEmployeePhoto: false,
+      photoRevision: null,
     });
     mockTrustedBrowserService.resolveTrustForSignIn.mockResolvedValue({
       trusted: false,
@@ -536,7 +546,11 @@ describe('AuthController', () => {
       ]);
 
       await expect(
-        controller.regenerateRecoveryCodes({ code: '654321' }, request, session),
+        controller.regenerateRecoveryCodes(
+          { code: '654321' },
+          request,
+          session,
+        ),
       ).resolves.toEqual({ recoveryCodes: ['CODE-ONE'] });
 
       expect(mockTwoFactorService.regenerateRecoveryCodes).toHaveBeenCalledWith(
@@ -578,6 +592,10 @@ describe('AuthController', () => {
 
       const result = await controller.getSession(session, mockReqWithRes);
 
+      expect(mockReqWithRes.res?.setHeader).toHaveBeenCalledWith(
+        'Cache-Control',
+        'private, no-store',
+      );
       expect(result).toEqual({
         session: {
           id: session.id,
@@ -587,6 +605,49 @@ describe('AuthController', () => {
           absoluteExpiresAt: expiryWindow.absoluteExpiresAt,
         },
       });
+    });
+
+    it('returns only the employee photo descriptor in the authenticated session', async () => {
+      mockTwoFactorService.requiresTwoFactor.mockReturnValue(false);
+      mockImageReadService.describeEmployeePhotoByUserId.mockResolvedValue({
+        hasEmployeePhoto: true,
+        photoRevision: 'opaque-revision',
+      });
+      const session: UserSession<typeof auth> = {
+        session: {
+          id: 'session-id',
+          expiresAt: new Date('2026-10-03T12:00:00.000Z'),
+          createdAt: new Date('2026-10-03T10:00:00.000Z'),
+          updatedAt: new Date('2026-10-03T10:00:00.000Z'),
+          token: 'mock-session-token',
+          userId: 'user-uuid-1',
+        },
+        user: {
+          id: 'user-uuid-1',
+          email: 'admin@hospital.go.th',
+          emailVerified: true,
+          createdAt: new Date('2026-10-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+          role: 'ADMIN',
+          name: 'System Admin',
+          image: null,
+        },
+      };
+
+      const result = await controller.getSession(session, mockRequest);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          user: expect.objectContaining({
+            hasEmployeePhoto: true,
+            photoRevision: 'opaque-revision',
+          }),
+        }),
+      );
+      expect(JSON.stringify(result)).not.toContain('url');
+      expect(
+        mockImageReadService.describeEmployeePhotoByUserId,
+      ).toHaveBeenCalledWith('user-uuid-1');
     });
 
     it('revokes a legacy un-enrolled mandatory-role session', async () => {

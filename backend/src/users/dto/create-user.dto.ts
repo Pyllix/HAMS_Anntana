@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUrl,
   IsUUID,
   MinLength,
   MaxLength,
@@ -49,14 +48,6 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   @IsOptional()
   role?: UserRole;
-
-  @ApiPropertyOptional({
-    example: 'https://example.com/avatar.png',
-    description: 'Profile image URL',
-  })
-  @IsUrl()
-  @IsOptional()
-  imageUrl?: string;
 
   @ApiPropertyOptional({
     format: 'uuid',

@@ -35,13 +35,17 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { AdminResetTwoFactorDto } from './dto/admin-reset-two-factor.dto';
 import { auth } from '../auth/auth';
+import { ImageReadService } from '../images/image-read.service';
 
 @ApiTags('Users')
 @ApiCookieAuth()
 @UseGuards(AuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly imageReadService: ImageReadService,
+  ) {}
 
   private requireAdminSession(session: UserSession<typeof auth> | null): {
     userId: string;
@@ -108,6 +112,27 @@ export class UsersController {
   }
 
   // ─── Read One ──────────────────────────────────────────────────────────────
+
+  @Get(':id/photo')
+  @ApiOperation({
+    summary: 'Get a short-lived read grant for an Employee Photo',
+    description:
+      'Any authenticated user may request the current photo by user ID or employee code. The response contains a short-lived provider-enforced URL and is never cacheable.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (CUID/UUID) or Employee Code',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Current photo grant, or explicit no-photo result',
+  })
+  @ApiResponse({ status: 401, description: 'Authentication required' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 503, description: 'Photo provider is unavailable' })
+  getPhoto(@Param('id') id: string) {
+    return this.imageReadService.readEmployeePhoto(id);
+  }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get User by ID' })

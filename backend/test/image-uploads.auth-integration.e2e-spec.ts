@@ -15,6 +15,7 @@ import {
   IMAGE_STORAGE,
   type ImageObjectReference,
   type ImageStoragePort,
+  type ShortLivedImageGrant,
   type UploadInstructionsInput,
   type VerifyUploadedObjectInput,
 } from '../src/images/image-storage.port';
@@ -26,6 +27,8 @@ const originalCompletionAttemptLimit =
 const originalIntentLimit =
   process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR;
 const originalCrudAttachmentEnabled = process.env.IMAGE_CRUD_ATTACHMENT_ENABLED;
+const originalReadGrantSeconds =
+  process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
 const fixedNow = new Date('2026-10-01T03:00:00.000Z');
 jest.setTimeout(60_000);
 const fixtureEmails = {
@@ -91,8 +94,13 @@ class DeterministicImageStorage implements ImageStoragePort {
   readonly createdInstructions: UploadInstructionsInput[] = [];
   readonly verifiedEvidence: VerifyUploadedObjectInput[] = [];
   readonly deleteCalls: ImageObjectReference[] = [];
+  readonly readGrants: Array<{
+    reference: ImageObjectReference;
+    expiresAt: Date;
+  }> = [];
   failNextInstruction = false;
   failNextVerification = false;
+  failNextReadGrant = false;
 
   constructor(private readonly clock: ImageClock) {}
 
@@ -178,8 +186,23 @@ class DeterministicImageStorage implements ImageStoragePort {
     return `https://images.test/image/upload/v${reference.version}/${reference.publicId}.jpg`;
   }
 
-  createShortLivedReadGrant(): never {
-    throw new Error('not used by upload acceptance tests');
+  createShortLivedReadGrant(
+    reference: ImageObjectReference,
+    expiresAt: Date,
+  ): ShortLivedImageGrant {
+    if (this.failNextReadGrant) {
+      this.failNextReadGrant = false;
+      throw new ImageStorageError(
+        'UNAVAILABLE',
+        'The test provider is temporarily unavailable',
+      );
+    }
+    const actualExpiry = new Date(expiresAt);
+    this.readGrants.push({ reference, expiresAt: actualExpiry });
+    return {
+      url: `https://api.cloudinary.com/v1_1/test-cloud/image/download?public_id=${encodeURIComponent(reference.publicId)}&type=authenticated&format=jpg&expires_at=${Math.floor(actualExpiry.getTime() / 1000)}&api_key=test-api-key&signature=opaque-test-grant`,
+      expiresAt: actualExpiry,
+    };
   }
 
   deleteObject(reference: ImageObjectReference): Promise<void> {
@@ -218,6 +241,7 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
   let pool: import('pg').Pool | undefined;
   let sectionId: string;
   let adminId: string;
+  let assetCenterId: string;
   let adminCookie: string;
   let adminTotpSecret: string;
   let departmentCookie: string;
@@ -310,6 +334,7 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     process.env.IMAGE_UPLOAD_MAX_COMPLETION_ATTEMPTS_PER_INTENT = '2';
     process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR = '100';
     process.env.IMAGE_CRUD_ATTACHMENT_ENABLED = 'true';
+    delete process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
     csrfCookieName =
       process.env.NODE_ENV === 'production' ? '__Host-hams.csrf' : 'hams.csrf';
     const pg = await import('pg');
@@ -359,7 +384,7 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
       UserRole.DEPARTMENT_STAFF,
       'test_image_department',
     );
-    const assetCenterId = await seedUser(
+    assetCenterId = await seedUser(
       fixtureEmails.assetCenter,
       UserRole.ASSET_CENTER_STAFF,
       'test_image_asset_center',
@@ -518,12 +543,19 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     } else {
       process.env.IMAGE_CRUD_ATTACHMENT_ENABLED = originalCrudAttachmentEnabled;
     }
+    if (originalReadGrantSeconds === undefined) {
+      delete process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
+    } else {
+      process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS =
+        originalReadGrantSeconds;
+    }
   });
 
   beforeEach(() => {
     clock.set(fixedNow);
     storage.failNextInstruction = false;
     storage.failNextVerification = false;
+    storage.failNextReadGrant = false;
   });
 
   it('denies unauthenticated upload authorization without creating an intent', async () => {
@@ -664,6 +696,169 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     expect(statusBody.attachmentExpiresAt).toBe(attachmentDeadline);
   });
 
+  it('limits pending previews to live verified uploads and returns purpose-specific read URLs', async () => {
+    const adminCookieWithCsrf = await issueCsrfCookie(adminCookie);
+    const adminCsrf = adminCookieWithCsrf
+      .split(`${csrfCookieName}=`)
+      .at(-1)
+      ?.split(';', 1)[0];
+    const adminHeaders = {
+      Origin: 'http://localhost:5173',
+      Cookie: adminCookieWithCsrf,
+      'X-CSRF-Token': decodeURIComponent(adminCsrf ?? ''),
+    };
+    const assetIntent = await createVerifiedUpload(adminHeaders, 'ASSET_IMAGE');
+    const grantsBeforeAssetPreview = storage.readGrants.length;
+    const assetPreview = await request(server())
+      .get(`/images/uploads/${assetIntent.uploadId}/preview`)
+      .set('Cookie', adminCookie);
+    expect(assetPreview.status).toBe(200);
+    expect(assetPreview.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody(assetPreview)).toMatchObject({
+      purpose: 'ASSET_IMAGE',
+      status: 'VERIFIED_PENDING',
+      url: `https://images.test/image/upload/v1/${assetIntent.uploadInstructions.fields.public_id}.jpg`,
+      expiresAt: null,
+    });
+    expect(storage.readGrants).toHaveLength(grantsBeforeAssetPreview);
+
+    const employeeIntent = await createVerifiedUpload(
+      adminHeaders,
+      'EMPLOYEE_PHOTO',
+      adminId,
+    );
+    const employeePreview = await request(server())
+      .get(`/images/uploads/${employeeIntent.uploadId}/preview`)
+      .set('Cookie', adminCookie);
+    expect(employeePreview.status).toBe(200);
+    expect(employeePreview.headers['cache-control']).toBe('private, no-store');
+    const employeePreviewBody = responseBody<{
+      purpose: string;
+      status: string;
+      url: string;
+      expiresAt: string;
+    }>(employeePreview);
+    expect(employeePreviewBody).toMatchObject({
+      purpose: 'EMPLOYEE_PHOTO',
+      status: 'VERIFIED_PENDING',
+      expiresAt: '2026-10-01T03:05:00.000Z',
+    });
+    expect(employeePreviewBody.url).toContain('/image/download?');
+    expect(employeePreviewBody.url).not.toContain('/image/upload/');
+    expect(storage.readGrants.at(-1)).toMatchObject({
+      reference: {
+        publicId: employeeIntent.uploadInstructions.fields.public_id,
+        deliveryType: 'authenticated',
+      },
+      expiresAt: new Date('2026-10-01T03:05:00.000Z'),
+    });
+
+    const unverifiedIntent = await request(server())
+      .post('/images/uploads')
+      .set(adminHeaders)
+      .send({
+        purpose: 'EMPLOYEE_PHOTO',
+        targetId: adminId,
+        sourceContentType: 'image/jpeg',
+        sourceSizeBytes: 1024,
+      });
+    expect(unverifiedIntent.status).toBe(201);
+    const unverifiedIntentBody =
+      responseBody<UploadIntentResponse>(unverifiedIntent);
+    const grantsBeforeUnverifiedPreview = storage.readGrants.length;
+    const unverifiedPreview = await request(server())
+      .get(`/images/uploads/${unverifiedIntentBody.uploadId}/preview`)
+      .set('Cookie', adminCookie);
+    expect(unverifiedPreview.status).toBe(409);
+    expect(unverifiedPreview.headers['cache-control']).toBe(
+      'private, no-store',
+    );
+    expect(responseBody<ApiErrorResponse>(unverifiedPreview).code).toBe(
+      'UPLOAD_PREVIEW_NOT_AVAILABLE',
+    );
+    expect(storage.readGrants).toHaveLength(grantsBeforeUnverifiedPreview);
+
+    const otherUploader = await request(server())
+      .get(`/images/uploads/${assetIntent.uploadId}/preview`)
+      .set('Cookie', parcelCookie);
+    expect(otherUploader.status).toBe(404);
+    expect(otherUploader.headers['cache-control']).toBe('private, no-store');
+
+    const anonymous = await request(server()).get(
+      `/images/uploads/${assetIntent.uploadId}/preview`,
+    );
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers['cache-control']).toBe('private, no-store');
+
+    const expiredUpload = await prisma.imageUpload.findUniqueOrThrow({
+      where: { id: assetIntent.uploadId },
+    });
+    clock.set(expiredUpload.attachmentExpiresAt as Date);
+    const expired = await request(server())
+      .get(`/images/uploads/${assetIntent.uploadId}/preview`)
+      .set('Cookie', adminCookie);
+    expect(expired.status).toBe(410);
+    expect(expired.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody<ApiErrorResponse>(expired).code).toBe('UPLOAD_EXPIRED');
+  });
+
+  it('rechecks current purpose permission and handles provider outages without caching', async () => {
+    const cookie = await issueCsrfCookie(assetCenterCookie);
+    const csrfToken = cookie
+      .split(`${csrfCookieName}=`)
+      .at(-1)
+      ?.split(';', 1)[0];
+    const headers = {
+      Origin: 'http://localhost:5173',
+      Cookie: cookie,
+      'X-CSRF-Token': decodeURIComponent(csrfToken ?? ''),
+    };
+    const intent = await createVerifiedUpload(headers, 'ASSET_IMAGE');
+
+    await prisma.user.update({
+      where: { id: assetCenterId },
+      data: { role: UserRole.DEPARTMENT_STAFF },
+    });
+    try {
+      const revokedPermission = await request(server())
+        .get(`/images/uploads/${intent.uploadId}/preview`)
+        .set('Cookie', assetCenterCookie);
+      expect(revokedPermission.status).toBe(403);
+      expect(revokedPermission.headers['cache-control']).toBe(
+        'private, no-store',
+      );
+    } finally {
+      await prisma.user.update({
+        where: { id: assetCenterId },
+        data: { role: UserRole.ASSET_CENTER_STAFF },
+      });
+    }
+
+    const adminCookieWithCsrf = await issueCsrfCookie(adminCookie);
+    const adminCsrfToken = adminCookieWithCsrf
+      .split(`${csrfCookieName}=`)
+      .at(-1)
+      ?.split(';', 1)[0];
+    const employeeIntent = await createVerifiedUpload(
+      {
+        Origin: 'http://localhost:5173',
+        Cookie: adminCookieWithCsrf,
+        'X-CSRF-Token': decodeURIComponent(adminCsrfToken ?? ''),
+      },
+      'EMPLOYEE_PHOTO',
+      adminId,
+    );
+    storage.failNextReadGrant = true;
+    const unavailable = await request(server())
+      .get(`/images/uploads/${employeeIntent.uploadId}/preview`)
+      .set('Cookie', adminCookie);
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody<ApiErrorResponse>(unavailable).code).toBe(
+      'IMAGE_READ_UNAVAILABLE',
+    );
+  });
+
   it('allows ASSET_CENTER_STAFF to request an Asset Image', async () => {
     const cookie = await issueCsrfCookie(assetCenterCookie);
     const csrfToken = cookie
@@ -727,6 +922,31 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
       'VERIFIED_PENDING',
     );
     expect(storage.verifiedEvidence.at(-1)?.deliveryType).toBe('authenticated');
+  });
+
+  it('returns no-photo separately from a missing user without exposing metadata', async () => {
+    const noPhotoGrantCount = storage.readGrants.length;
+    const noPhoto = await request(server())
+      .get(`/users/${adminId}/photo`)
+      .set('Cookie', departmentCookie);
+    expect(noPhoto.status).toBe(200);
+    expect(noPhoto.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody(noPhoto)).toEqual({
+      hasEmployeePhoto: false,
+      photoRevision: null,
+      url: null,
+      expiresAt: null,
+    });
+    expect(storage.readGrants).toHaveLength(noPhotoGrantCount);
+
+    const missingUser = await request(server())
+      .get('/users/no-such-user/photo')
+      .set('Cookie', departmentCookie);
+    expect(missingUser.status).toBe(404);
+    expect(missingUser.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody<ApiErrorResponse>(missingUser).code).toBe(
+      'USER_NOT_FOUND',
+    );
   });
 
   it('does not accept Base64, arbitrary URLs, or oversized declared files', async () => {
@@ -1401,12 +1621,36 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
       imageUploadId: intent.uploadId,
       imageCreationContextToken: intent.creationContextToken,
     };
+    const rawPhotoUrlCreate = await request(server())
+      .post('/users')
+      .set(headers)
+      .send({
+        ...createUserPayload,
+        imageUrl: 'https://public.example/employee-photo.jpg',
+      });
+    expect(rawPhotoUrlCreate.status).toBe(400);
+    expect(
+      await prisma.user.count({
+        where: { email: fixtureEmails.ticket02Employee },
+      }),
+    ).toBe(0);
+
     const created = await request(server())
       .post('/users')
       .set(headers)
       .send(createUserPayload);
     expect(created.status).toBe(201);
-    const createdBody = responseBody<{ id: string }>(created);
+    const createdBody = responseBody<{
+      id: string;
+      imageUrl: string | null;
+      hasEmployeePhoto: boolean;
+      photoRevision: string | null;
+    }>(created);
+    expect(createdBody.imageUrl).toBeNull();
+    expect(createdBody.hasEmployeePhoto).toBe(true);
+    expect(typeof createdBody.photoRevision).toBe('string');
+    expect(JSON.stringify(createdBody)).not.toContain('imagePublicId');
+    expect(JSON.stringify(createdBody)).not.toContain('/image/download/');
     const employee = await prisma.user.findUniqueOrThrow({
       where: { id: createdBody.id },
     });
@@ -1414,6 +1658,156 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     expect(employee.imagePublicId).toBe(
       intent.uploadInstructions.fields.public_id,
     );
+
+    const originalReadGrantSetting =
+      process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
+    const grantsBeforeInvalidConfiguration = storage.readGrants.length;
+    process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS = '0';
+    try {
+      const invalidConfiguration = await request(server())
+        .get(`/users/${employee.id}/photo`)
+        .set('Cookie', departmentCookie);
+      expect(invalidConfiguration.status).toBe(503);
+      expect(invalidConfiguration.headers['cache-control']).toBe(
+        'private, no-store',
+      );
+      expect(responseBody<ApiErrorResponse>(invalidConfiguration).code).toBe(
+        'IMAGE_READ_CONFIGURATION_INVALID',
+      );
+      expect(storage.readGrants).toHaveLength(grantsBeforeInvalidConfiguration);
+    } finally {
+      if (originalReadGrantSetting === undefined) {
+        delete process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
+      } else {
+        process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS =
+          originalReadGrantSetting;
+      }
+    }
+
+    const readById = await request(server())
+      .get(`/users/${employee.id}/photo`)
+      .set('Cookie', departmentCookie);
+    expect(readById.status).toBe(200);
+    expect(readById.headers['cache-control']).toBe('private, no-store');
+    const readByIdBody = responseBody<{
+      hasEmployeePhoto: boolean;
+      photoRevision: string;
+      url: string;
+      expiresAt: string;
+    }>(readById);
+    expect(readByIdBody).toMatchObject({
+      hasEmployeePhoto: true,
+      photoRevision: createdBody.photoRevision,
+      expiresAt: '2026-10-01T03:05:00.000Z',
+    });
+    expect(readByIdBody.url).toContain('/image/download?');
+    expect(readByIdBody.url).not.toContain('/image/upload/');
+
+    const readByEmployeeCode = await request(server())
+      .get(`/users/${employee.employeeId}/photo`)
+      .set('Cookie', parcelCookie);
+    expect(readByEmployeeCode.status).toBe(200);
+    expect(readByEmployeeCode.headers['cache-control']).toBe(
+      'private, no-store',
+    );
+    expect(
+      responseBody<{ photoRevision: string }>(readByEmployeeCode).photoRevision,
+    ).toBe(createdBody.photoRevision);
+
+    const userDetails = await request(server())
+      .get(`/users/${employee.id}`)
+      .set('Cookie', departmentCookie);
+    expect(userDetails.status).toBe(200);
+    expect(userDetails.body).toMatchObject({
+      imageUrl: null,
+      hasEmployeePhoto: true,
+      photoRevision: createdBody.photoRevision,
+    });
+    expect(userDetails.body).not.toHaveProperty('imagePublicId');
+    expect(userDetails.body).not.toHaveProperty('imageStorageProvider');
+
+    const userList = await request(server())
+      .get('/users')
+      .query({ search: employee.email, limit: 100 })
+      .set('Cookie', departmentCookie);
+    expect(userList.status).toBe(200);
+    const listedEmployee = responseBody<{
+      data: Array<Record<string, unknown>>;
+    }>(userList).data.find((user) => user.id === employee.id);
+    expect(listedEmployee).toMatchObject({
+      imageUrl: null,
+      hasEmployeePhoto: true,
+      photoRevision: createdBody.photoRevision,
+    });
+    expect(listedEmployee).not.toHaveProperty('imagePublicId');
+
+    await prisma.user.update({
+      where: { id: employee.id },
+      data: { emailVerified: true },
+    });
+    const employeeSignIn = await request(server())
+      .post('/auth/sign-in')
+      .send({ email: employee.email, password: sharedPassword });
+    expect(employeeSignIn.status).toBe(200);
+    const employeeSessionCookie = sessionCookieHeader(employeeSignIn);
+    const employeeSession = await request(server())
+      .get('/auth/session')
+      .set('Cookie', employeeSessionCookie);
+    expect(employeeSession.status).toBe(200);
+    expect(employeeSession.headers['cache-control']).toBe('private, no-store');
+    const employeeSessionBody = responseBody<{
+      user: { hasEmployeePhoto: boolean; photoRevision: string };
+    }>(employeeSession);
+    expect(employeeSessionBody.user).toMatchObject({
+      hasEmployeePhoto: true,
+      photoRevision: createdBody.photoRevision,
+    });
+    expect(JSON.stringify(employeeSession.body)).not.toContain(
+      '/image/download?',
+    );
+
+    const readWithoutAuth = await request(server()).get(
+      `/users/${employee.id}/photo`,
+    );
+    expect(readWithoutAuth.status).toBe(401);
+    expect(readWithoutAuth.headers['cache-control']).toBe('private, no-store');
+    expect(storage.readGrants.at(-1)?.expiresAt).toEqual(
+      new Date('2026-10-01T03:05:00.000Z'),
+    );
+
+    storage.failNextReadGrant = true;
+    const readOutage = await request(server())
+      .get(`/users/${employee.id}/photo`)
+      .set('Cookie', departmentCookie);
+    expect(readOutage.status).toBe(503);
+    expect(readOutage.headers['cache-control']).toBe('private, no-store');
+    expect(responseBody<ApiErrorResponse>(readOutage).code).toBe(
+      'IMAGE_READ_UNAVAILABLE',
+    );
+
+    const previousGrantCount = storage.readGrants.length;
+    const employeePhotoBeforeLogout = await request(server())
+      .get(`/users/${employee.id}/photo`)
+      .set('Cookie', employeeSessionCookie);
+    expect(employeePhotoBeforeLogout.status).toBe(200);
+    const previousGrant = responseBody<{ url: string; expiresAt: string }>(
+      employeePhotoBeforeLogout,
+    );
+    const signOut = await request(server())
+      .post('/auth/sign-out')
+      .set('Cookie', employeeSessionCookie);
+    expect(signOut.status).toBe(200);
+    const readAfterLogout = await request(server())
+      .get(`/users/${employee.id}/photo`)
+      .set('Cookie', employeeSessionCookie);
+    expect(readAfterLogout.status).toBe(401);
+    expect(readAfterLogout.headers['cache-control']).toBe('private, no-store');
+    expect(storage.readGrants).toHaveLength(previousGrantCount + 1);
+    expect(previousGrant.url).toContain('/image/download?');
+    expect(Date.parse(previousGrant.expiresAt)).toBeGreaterThan(
+      fixedNow.getTime(),
+    );
+
     await expect(
       prisma.$executeRaw`
         UPDATE "users"
@@ -1486,6 +1880,16 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
       .set(headers)
       .send({ imageUploadId: updateIntent.uploadId });
     expect(updatePhoto.status).toBe(200);
+    const updatedUserResponse = responseBody<{
+      imageUrl: string | null;
+      hasEmployeePhoto: boolean;
+      photoRevision: string;
+    }>(updatePhoto);
+    expect(updatedUserResponse.imageUrl).toBeNull();
+    expect(updatedUserResponse.hasEmployeePhoto).toBe(true);
+    expect(updatedUserResponse.photoRevision).not.toBe(
+      createdBody.photoRevision,
+    );
     const updatedEmployee = await prisma.user.findUniqueOrThrow({
       where: { id: employee.id },
     });
@@ -1493,6 +1897,18 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     expect(updatedEmployee.imagePublicId).toBe(
       updateIntent.uploadInstructions.fields.public_id,
     );
+    const currentPhotoRead = await request(server())
+      .get(`/users/${employee.id}/photo`)
+      .set('Cookie', departmentCookie);
+    expect(currentPhotoRead.status).toBe(200);
+    expect(
+      responseBody<{ photoRevision: string }>(currentPhotoRead).photoRevision,
+    ).toBe(updatedUserResponse.photoRevision);
+    const rawPhotoUrlUpdate = await request(server())
+      .patch(`/users/${employee.id}`)
+      .set(headers)
+      .send({ imageUrl: 'https://public.example/employee-photo.jpg' });
+    expect(rawPhotoUrlUpdate.status).toBe(400);
     expect(
       (
         await prisma.imageUpload.findUniqueOrThrow({

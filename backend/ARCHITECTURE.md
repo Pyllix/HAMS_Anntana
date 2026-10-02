@@ -81,9 +81,9 @@ HTTP Request
 ```
 
 **Rules:**
-- Controllers never call Prisma directly
-- Services never handle HTTP concerns (status codes, headers)
-- Guards are the only place that checks identity and role
+- Controllers never call Prisma directly; they handle HTTP requests, headers, status codes, and response mapping.
+- Services own business logic and data access, and may throw Nest `HttpException` subclasses for business errors. They do not construct HTTP responses or set headers.
+- Guards establish request identity and enforce coarse route-level roles. Services may recheck current account state and resource-purpose permission when business rules require it.
 - Common logic (logging, error formatting) handled by Interceptors and Filters in `common/`
 
 ---

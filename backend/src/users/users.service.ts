@@ -23,6 +23,10 @@ import {
   managedImageLocator,
   type ImageClaimRequest,
 } from '../images/image-attachment.service';
+import {
+  ImageReadService,
+  PRIVATE_USER_IMAGE_FIELDS,
+} from '../images/image-read.service';
 
 type SecurityAuditAction =
   | 'USER_CREATED'
@@ -49,6 +53,7 @@ export class UsersService {
     private readonly adminStepUpService: AdminStepUpService,
     private readonly twoFactorService: TwoFactorService,
     private readonly imageAttachmentService: ImageAttachmentService,
+    private readonly imageReadService: ImageReadService,
   ) {}
 
   // ─── Auto-generate Employee ID ───────────────────────────────────────────────
@@ -86,7 +91,6 @@ export class UsersService {
       purpose: 'EMPLOYEE_PHOTO',
       uploadId: dto.imageUploadId,
       creationContextToken: dto.imageCreationContextToken,
-      imageUrl: dto.imageUrl,
     });
     let imageClaimRequest: ImageClaimRequest | undefined;
     if (dto.imageUploadId) {
@@ -120,7 +124,7 @@ export class UsersService {
             message: 'The created account is no longer available',
           });
         }
-        return prior;
+        return this.imageReadService.projectUser(prior);
       }
       await this.imageAttachmentService.preflightClaim(imageClaimRequest);
     }
@@ -226,7 +230,7 @@ export class UsersService {
             firstname: dto.firstname,
             lastname: dto.lastname,
             role: dto.role ?? UserRole.DEPARTMENT_STAFF,
-            ...(imageClaimRequest ? imageFields : { imageUrl: dto.imageUrl }),
+            ...(imageClaimRequest ? imageFields : {}),
             section_id: dto.sectionId,
           },
           omit: { deletedAt: true },
@@ -241,7 +245,7 @@ export class UsersService {
         return created;
       });
 
-      return user;
+      return this.imageReadService.projectUser(user);
     } catch (error) {
       // Compensating rollback: clean up orphaned Better-Auth records
       await this.prisma.account.deleteMany({
@@ -292,7 +296,12 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return paginate(data, total, page, limit);
+    return paginate(
+      data.map((user) => this.imageReadService.projectUser(user)),
+      total,
+      page,
+      limit,
+    );
   }
 
   // ─── Read One ─────────────────────────────────────────────────────────────────
@@ -313,7 +322,7 @@ export class UsersService {
       );
     }
 
-    return user;
+    return this.imageReadService.projectUser(user);
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────────
@@ -330,7 +339,6 @@ export class UsersService {
       purpose: 'EMPLOYEE_PHOTO',
       uploadId: dto.imageUploadId,
       creationContextToken: dto.imageCreationContextToken,
-      imageUrl: dto.imageUrl,
     });
     let imageClaimRequest: ImageClaimRequest | undefined;
     if (dto.imageUploadId) {
@@ -409,18 +417,19 @@ export class UsersService {
       'role',
       'banned',
       'employeeId',
+      ...PRIVATE_USER_IMAGE_FIELDS,
     ]) {
       delete profileFields[field];
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       // Lock all ADMIN rows before changes that can remove an active ADMIN.
       // This serializes concurrent demotions/disables against the same count.
       if (dto.role !== undefined || dto.banned !== undefined) {
         await this.lockAdminRows(tx);
       }
 
-      if (imageClaimRequest || profileDto.imageUrl !== undefined) {
+      if (imageClaimRequest) {
         await this.imageAttachmentService.lockTargetRow(
           tx,
           'EMPLOYEE_PHOTO',
@@ -468,22 +477,6 @@ export class UsersService {
           imageDeliveryType: claim.attachment.deliveryType,
           imageVersion: claim.attachment.version,
         };
-      } else {
-        const previous = managedImageLocator(current);
-        if (previous) {
-          if (
-            profileDto.imageUrl != null &&
-            profileDto.imageUrl !== '' &&
-            profileDto.imageUrl !== current.imageUrl
-          ) {
-            throw new BadRequestException({
-              code: 'MANAGED_PHOTO_REQUIRES_VERIFIED_UPLOAD',
-              message:
-                'Replace this managed Employee Photo with a verified upload',
-            });
-          }
-          delete safeProfileFields.imageUrl;
-        }
       }
 
       const roleChanged = dto.role !== undefined && dto.role !== current.role;
@@ -553,6 +546,7 @@ export class UsersService {
 
       return updated;
     });
+    return this.imageReadService.projectUser(updated);
   }
 
   // ─── Admin Reset Password ──────────────────────────────────────────────────
@@ -743,7 +737,7 @@ export class UsersService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const restored = await this.prisma.$transaction(async (tx) => {
       const restored = await tx.user.update({
         where: { id: user.id },
         data: { deletedAt: null },
@@ -763,6 +757,7 @@ export class UsersService {
       });
       return restored;
     });
+    return this.imageReadService.projectUser(restored);
   }
 
   private async revokeAccess(tx: Prisma.TransactionClient, userId: string) {

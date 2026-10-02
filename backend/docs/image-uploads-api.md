@@ -1,8 +1,8 @@
-# Image upload API (Ticket 01)
+# Image upload and read API (Tickets 01–03)
 
-This document covers direct upload authorization and verification (Ticket 01) and the additive Asset/User CRUD attachment contract (Ticket 02). Completing an upload creates a verified pending image; it does not change an Asset or User record. Pending previews, photo grants for application screens, and cleanup processing remain separate tickets.
+This document covers direct upload authorization and verification (Ticket 01), the additive Asset/User CRUD attachment contract (Ticket 02), and authenticated read/preview behavior (Ticket 03). Completing an upload creates a verified pending image; it does not change an Asset or User record. Cleanup processing remains a separate ticket.
 
-All new responses, including errors handled by the upload controller, use `Cache-Control: private, no-store`. Requests use the existing HAMS cookie session, CSRF, session-lifetime, mandatory-enrollment/2FA, and role guards.
+Upload, status, preview, photo-grant, and photo-read error responses use `Cache-Control: private, no-store`. The session endpoint uses `Cache-Control: private, no-store`. Requests use the existing HAMS cookie session, CSRF, session-lifetime, mandatory-enrollment/2FA, and role guards.
 
 ## Create an upload intent
 
@@ -89,7 +89,46 @@ Success returns `200` with `status: "VERIFIED_PENDING"`, the fixed `attachmentEx
 
 Only the original uploader can inspect an upload, and they must still have the current purpose-specific role. A different user receives `404` so upload ownership is not disclosed. The response reports status, target ID, deadlines, and verified output metadata; it never returns upload credentials or the create-context token.
 
-Current statuses are `AUTHORIZED`, `VERIFIED_PENDING`, `CLAIMED`, `SUPERSEDED`, `EXPIRED`, and `REJECTED`. A successful CRUD save records `claimedTargetId` and `claimedAt`; replacing that attachment changes its upload status to `SUPERSEDED` and queues its trusted object locator for later cleanup. No preview endpoint or image-removal endpoint is added here.
+Current statuses are `AUTHORIZED`, `VERIFIED_PENDING`, `CLAIMED`, `SUPERSEDED`, `EXPIRED`, and `REJECTED`. A successful CRUD save records `claimedTargetId` and `claimedAt`; replacing that attachment changes its upload status to `SUPERSEDED` and queues its trusted object locator for later cleanup.
+
+## Preview a verified pending upload
+
+`GET /images/uploads/:uploadId/preview`
+
+The original uploader may preview a `VERIFIED_PENDING` upload while its attachment window is live and the account still has current permission for that purpose. Another uploader receives `404`; an upload that is no longer pending conflicts, and an expired upload returns `410 UPLOAD_EXPIRED`. The response and errors use `Cache-Control: private, no-store`.
+
+Asset previews use the same server-derived HTTPS versioned public URL as the saved Asset. Employee Photo previews use a Cloudinary `authenticated` download grant with a five-minute default lifetime. Preview does not make Employee Photo bytes public.
+
+```json
+{
+  "purpose": "EMPLOYEE_PHOTO",
+  "status": "VERIFIED_PENDING",
+  "revision": "opaque-image-revision",
+  "url": "https://api.cloudinary.com/v1_1/<cloud>/image/download?...",
+  "expiresAt": "2026-10-01T03:05:00.000Z"
+}
+```
+
+## Read an Employee Photo
+
+`GET /users/:id/photo`
+
+Any authenticated user who can access the existing Users API may request the current Employee Photo by user ID or employee code. This route follows the Users controller's normal authentication/visibility rules and adds no owner-only or ADMIN-only read restriction. It returns a provider-enforced, time-limited `authenticated` download grant and its actual expiry. `IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS` configures the grant from 1 to 3,600 seconds; the default is 300 seconds.
+
+```json
+{
+  "hasEmployeePhoto": true,
+  "photoRevision": "opaque-image-revision",
+  "url": "https://api.cloudinary.com/v1_1/<cloud>/image/download?...",
+  "expiresAt": "2026-10-01T03:05:00.000Z"
+}
+```
+
+When the user has no photo, the route returns `200` with `hasEmployeePhoto: false`, `photoRevision: null`, `url: null`, and `expiresAt: null`. A missing user returns `404 USER_NOT_FOUND`; provider/configuration failures return a non-cacheable `503`. No permanent or public fallback URL is returned for Employee Photos.
+
+User details, user lists, and `/auth/session` include `hasEmployeePhoto` and `photoRevision`, but never a grant URL or provider locator. Managed Employee Photos keep durable `imageUrl` as `null`; the User create/update DTOs do not accept an Employee Photo URL. These responses do not issue grants for each User in a list.
+
+Logout or session revocation prevents future HAMS grant requests. A grant already issued is a bearer URL and can remain usable until its provider expiry; logout cannot retract bytes already downloaded or cached by a client. The API and tests make no stronger promise.
 
 ## Attach an upload through Asset/User CRUD (Ticket 02)
 
@@ -97,33 +136,37 @@ The optional CRUD contract is controlled by `IMAGE_CRUD_ATTACHMENT_ENABLED`. Kee
 
 For a new record, create the upload intent without `targetId`, then send both returned values with the existing CRUD payload. For an existing record, create the intent with its canonical `targetId` and send only `imageUploadId` when saving. The API checks current permission, uploader, purpose, target or creation context, verified object identity, and attachment deadline again during the save.
 
-Asset responses retain the server-derived, HTTPS, versioned public URL and store the provider/account/object locator and version. Employee Photos store their locator/version while durable `imageUrl` remains `null`. Omitting the image fields or sending a null reference during an edit preserves the currently committed image. Empty or malformed upload IDs fail validation; there is no photo-removal endpoint.
+Asset responses retain the server-derived, HTTPS, versioned public URL and store the provider/account/object locator and version. Employee Photos store their locator/version while durable `imageUrl` remains `null`; public Employee Photo URL inputs are not accepted. User response projections hide all provider locator fields and report only `hasEmployeePhoto` and `photoRevision`. Omitting the image fields or sending a null reference during an edit preserves the currently committed image. Empty or malformed upload IDs fail validation; there is no photo-removal endpoint.
 
 The business record, locator fields, upload claim, and cleanup work for the actually superseded managed image commit in one database transaction. Provider deletion is deferred to the cleanup ticket. Retrying the same committed create recovers its original Asset/User; retrying a superseded attachment returns the current record without restoring the old photo or replaying stale business fields.
 
-The existing legacy CRUD `imageUrl` fields remain for the deferred caller inventory/cutover gate. A raw URL is not proof of a Ticket 02 managed attachment; callers should use `imageUploadId` for this contract.
+The legacy Asset `imageUrl` input remains for the deferred caller inventory/cutover gate. Employee Photo create/update no longer accepts an `imageUrl`; callers must use `imageUploadId` for a managed photo.
 
 ## Stable feature errors
 
-| HTTP | Code                            | Meaning                                                                   |
-| ---- | ------------------------------- | ------------------------------------------------------------------------- |
-| 400  | `SOURCE_SIZE_LIMIT`             | Declared source exceeds configured early limit                            |
-| 400  | `SOURCE_TYPE_NOT_ALLOWED`       | Declared source type is not supported                                     |
-| 400  | `UPLOAD_EVIDENCE_INVALID`       | Evidence is malformed, forged, or identifies another object               |
-| 403  | `IMAGE_PURPOSE_FORBIDDEN`       | Current role cannot manage this image purpose                             |
-| 404  | `UPLOAD_NOT_FOUND`              | Upload does not exist for this uploader                                   |
-| 404  | `IMAGE_TARGET_NOT_FOUND`        | Existing Asset/User target does not exist                                 |
-| 409  | `UPLOAD_OBJECT_NOT_FOUND`       | Allocated object is not present at Cloudinary yet                         |
-| 409  | `UPLOAD_OBJECT_POLICY_REJECTED` | Provider object fails identity or normalized-output policy                |
-| 409  | `UPLOAD_ALREADY_VERIFIED`       | Completion differs from the previously verified result                    |
-| 409  | `IMAGE_UPLOAD_NOT_CLAIMABLE`    | Upload owner, purpose, target, state, or verified identity does not match |
-| 410  | `UPLOAD_EXPIRED`                | Verified upload is past its fixed attachment deadline                     |
-| 429  | `UPLOAD_RATE_LIMITED`           | Configured intent budget is reached                                       |
-| 503  | `IMAGE_STORAGE_NOT_CONFIGURED`  | Required Cloudinary environment is missing or invalid                     |
-| 503  | `IMAGE_STORAGE_UNAVAILABLE`     | Provider verification or storage operation is unavailable                 |
-| 503  | `IMAGE_ATTACHMENT_NOT_ACTIVE`   | CRUD attachment is disabled pending the release gate                      |
+| HTTP | Code                               | Meaning                                                                   |
+| ---- | ---------------------------------- | ------------------------------------------------------------------------- |
+| 400  | `SOURCE_SIZE_LIMIT`                | Declared source exceeds configured early limit                            |
+| 400  | `SOURCE_TYPE_NOT_ALLOWED`          | Declared source type is not supported                                     |
+| 400  | `UPLOAD_EVIDENCE_INVALID`          | Evidence is malformed, forged, or identifies another object               |
+| 403  | `IMAGE_PURPOSE_FORBIDDEN`          | Current role cannot manage this image purpose                             |
+| 404  | `UPLOAD_NOT_FOUND`                 | Upload does not exist for this uploader                                   |
+| 404  | `IMAGE_TARGET_NOT_FOUND`           | Existing Asset/User target does not exist                                 |
+| 409  | `UPLOAD_OBJECT_NOT_FOUND`          | Allocated object is not present at Cloudinary yet                         |
+| 409  | `UPLOAD_OBJECT_POLICY_REJECTED`    | Provider object fails identity or normalized-output policy                |
+| 409  | `UPLOAD_ALREADY_VERIFIED`          | Completion differs from the previously verified result                    |
+| 409  | `IMAGE_UPLOAD_NOT_CLAIMABLE`       | Upload owner, purpose, target, state, or verified identity does not match |
+| 410  | `UPLOAD_EXPIRED`                   | Verified upload is past its fixed attachment deadline                     |
+| 429  | `UPLOAD_RATE_LIMITED`              | Configured intent budget is reached                                       |
+| 503  | `IMAGE_STORAGE_NOT_CONFIGURED`     | Required Cloudinary environment is missing or invalid                     |
+| 503  | `IMAGE_STORAGE_UNAVAILABLE`        | Provider verification or storage operation is unavailable                 |
+| 503  | `IMAGE_ATTACHMENT_NOT_ACTIVE`      | CRUD attachment is disabled pending the release gate                      |
+| 404  | `USER_NOT_FOUND`                   | No active User matches the requested ID or employee code                  |
+| 409  | `UPLOAD_PREVIEW_NOT_AVAILABLE`     | Upload is not a verified pending image                                    |
+| 503  | `IMAGE_READ_CONFIGURATION_INVALID` | Employee Photo grant lifetime configuration is invalid                    |
+| 503  | `IMAGE_READ_UNAVAILABLE`           | The restricted read grant or read provider is unavailable                 |
 
-The upload endpoint rejects unrecognized fields, including Base64 and arbitrary URLs. The CRUD attachment flow accepts only the verified `imageUploadId` as evidence for a managed image; the existing legacy `imageUrl` input remains subject to the later caller cutover gate. Error messages do not include provider URLs, credentials, or signed fields.
+The upload endpoint rejects unrecognized fields, including Base64 and arbitrary URLs. The Asset CRUD attachment flow accepts only the verified `imageUploadId` as evidence for a managed image; the legacy Asset `imageUrl` input remains subject to the later caller cutover gate. The User CRUD attachment flow accepts only the verified `imageUploadId`. Error messages do not include provider URLs, credentials, or signed fields.
 
 ## Environment and tests
 
@@ -158,6 +201,6 @@ $env:RUN_CLOUDINARY_CONTRACTS = 'true'
 pnpm exec jest --config ./test/jest-e2e.json --runInBand test/cloudinary-image-storage.contract.e2e-spec.ts
 ```
 
-The real-provider source, pixel, animated-input, HEIC/HEIF, metadata, color, orientation, output, private-access, and raw-resource checks are a release gate. A passing fake/API suite alone does not prove G1. On 2026-10-02 the isolated live suite passed 23/23 tests, adapter units passed 6/6, and authenticated HAMS API tests passed 11/11. These cover Ticket 01, not later attachment, preview/cache, or cleanup tickets.
+The real-provider source, pixel, animated-input, HEIC/HEIF, metadata, color, orientation, output, private-access, and raw-resource checks are a release gate. A passing fake/API suite alone does not prove provider behavior. On 2026-10-02 the isolated live suite passed 23/23 tests, adapter units passed 6/6, and authenticated HAMS API tests passed 11/11. Ticket 03 adds opt-in tests for public/unauthenticated/error cache headers and grant expiry. See [image-read-g2-verification.md](image-read-g2-verification.md) for the actual G2 run status; do not infer provider Cache-Control values from the HAMS API's `private, no-store` header.
 
 Upload signatures explicitly set `backup=false` and `overwrite=false`; unique intent keys prevent replacement revisions, and no eager transformations are requested. Incoming processing strips capture EXIF/IPTC/XMP, including synthetic camera/GPS metadata. This is not a promise that every container tag disappears: JPEG encoding/color-profile data or provider-generated provenance may remain, but must not reintroduce capture metadata. Output checks include color behavior rather than requiring every non-capture tag to vanish.

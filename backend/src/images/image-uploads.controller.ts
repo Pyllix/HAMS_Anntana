@@ -115,4 +115,32 @@ export class ImageUploadsController {
       uploadId,
     );
   }
+
+  @Get(':uploadId/preview')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
+  @ApiOperation({
+    summary: 'Get a preview URL for a verified pending image',
+    description:
+      'Returns a preview only to the original uploader while the verified upload is live and the uploader still has permission for its purpose. Employee Photos use a short-lived restricted grant.',
+  })
+  @ApiResponse({ status: 200, description: 'Verified pending image preview' })
+  @ApiResponse({ status: 403, description: 'Current role cannot preview it' })
+  @ApiResponse({
+    status: 404,
+    description: 'Upload was not found for uploader',
+  })
+  @ApiResponse({ status: 410, description: 'Upload attachment window expired' })
+  @ApiResponse({ status: 503, description: 'Image storage is unavailable' })
+  preview(
+    @Param('uploadId', new ParseUUIDPipe()) uploadId: string,
+    @Session() session: UserSession,
+  ): ReturnType<ImageUploadService['getPreview']> {
+    return this.imageUploadService.getPreview(
+      {
+        userId: session.user.id,
+        role: session.user.role as UserRole,
+      },
+      uploadId,
+    );
+  }
 }

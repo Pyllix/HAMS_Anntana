@@ -44,6 +44,10 @@ import {
   uploadBudgets,
 } from './image-upload-policy';
 import { CreateImageUploadDto } from './dto/create-image-upload.dto';
+import {
+  ImageReadService,
+  type PendingImagePreview,
+} from './image-read.service';
 
 interface UploadActor {
   readonly userId: string;
@@ -78,6 +82,7 @@ export class ImageUploadService {
     private readonly prisma: PrismaService,
     @Inject(IMAGE_STORAGE) private readonly storage: ImageStoragePort,
     @Inject(IMAGE_CLOCK) private readonly clock: ImageClock,
+    private readonly imageReadService: ImageReadService,
   ) {}
 
   async createIntent(
@@ -411,6 +416,99 @@ export class ImageUploadService {
       return this.toStatus({ ...upload, status: ImageUploadStatus.EXPIRED });
     }
     return this.toStatus(upload);
+  }
+
+  async getPreview(
+    actor: UploadActor,
+    uploadId: string,
+  ): Promise<PendingImagePreview> {
+    const upload = await this.findOwnedUpload(actor, uploadId);
+    const currentActor = await this.prisma.user.findFirst({
+      where: { id: actor.userId, deletedAt: null },
+      select: { role: true, banned: true },
+    });
+    if (!currentActor || currentActor.banned === true) {
+      throw new ForbiddenException({
+        code: 'IMAGE_PURPOSE_FORBIDDEN',
+        message: 'The current account cannot preview this image',
+      });
+    }
+    this.assertPurposePermission(currentActor.role, upload.purpose);
+
+    if (upload.status === ImageUploadStatus.EXPIRED) {
+      throw this.expiredException();
+    }
+    if (upload.status !== ImageUploadStatus.VERIFIED_PENDING) {
+      throw new ConflictException({
+        code: 'UPLOAD_PREVIEW_NOT_AVAILABLE',
+        message: 'Only a verified pending image can be previewed',
+      });
+    }
+    if (
+      !upload.attachmentExpiresAt ||
+      upload.attachmentExpiresAt <= this.clock.now()
+    ) {
+      await this.markExpired(upload.id);
+      throw this.expiredException();
+    }
+
+    const policy = this.readPolicy(upload.purpose);
+    const storageContext = this.safeCurrentStorageContext();
+    if (
+      upload.storageProvider !== storageContext.provider ||
+      upload.storageAccountId !== storageContext.accountId
+    ) {
+      throw new ServiceUnavailableException({
+        code: 'IMAGE_READ_UNAVAILABLE',
+        message: 'The image is temporarily unavailable',
+      });
+    }
+    if (
+      upload.publicId !== imagePublicIdForPurpose(upload.purpose, upload.id) ||
+      upload.resourceType !== 'image' ||
+      upload.deliveryType !== imageDeliveryTypeForPurpose(upload.purpose) ||
+      upload.policyRevision !== policy.revision ||
+      upload.verifiedVersion === null ||
+      upload.verifiedFormat !== 'jpg' ||
+      upload.verifiedPages !== 1 ||
+      upload.verifiedBytes === null ||
+      upload.verifiedBytes < 1 ||
+      upload.verifiedWidth === null ||
+      upload.verifiedHeight === null ||
+      upload.verifiedWidth < 1 ||
+      upload.verifiedHeight < 1 ||
+      upload.verifiedWidth > policy.maxEdge ||
+      upload.verifiedHeight > policy.maxEdge
+    ) {
+      throw new ConflictException({
+        code: 'UPLOAD_PREVIEW_METADATA_INVALID',
+        message: 'The pending image metadata is inconsistent',
+      });
+    }
+
+    return this.imageReadService.createPendingPreview(upload.purpose, {
+      publicId: upload.publicId,
+      storageContext: {
+        provider: upload.storageProvider,
+        accountId: upload.storageAccountId,
+      },
+      resourceType: 'image',
+      deliveryType: imageDeliveryTypeForPurpose(upload.purpose),
+      version: upload.verifiedVersion,
+    });
+  }
+
+  private safeCurrentStorageContext(): ImageStorageContext {
+    try {
+      const context = this.storage.getProviderContext();
+      if (!context.provider || !context.accountId) throw new Error();
+      return context;
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'IMAGE_READ_UNAVAILABLE',
+        message: 'The image is temporarily unavailable',
+      });
+    }
   }
 
   private async findOwnedUpload(

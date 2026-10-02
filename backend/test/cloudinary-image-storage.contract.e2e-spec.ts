@@ -52,6 +52,11 @@ cloudinaryDescribe(
     const savedEnvironment = new Map<string, string | undefined>();
     let fixtureDirectory: string;
     let cloudName: string;
+    const cacheObservations: Array<{
+      readonly check: string;
+      readonly status: number;
+      readonly cacheControl: string | null;
+    }> = [];
     let storageContext: ReturnType<
       CloudinaryStorageAdapter['getProviderContext']
     >;
@@ -147,6 +152,11 @@ cloudinaryDescribe(
           `Cloudinary cleanup failed for ${failures.length} test-scoped object(s); inspect only the recorded test prefix`,
         );
       }
+      if (cacheObservations.length) {
+        console.info(
+          `[image-read-g2-cache] ${JSON.stringify(cacheObservations)}`,
+        );
+      }
     }, 120_000);
 
     it.each(fixtureSpecs)(
@@ -181,6 +191,7 @@ cloudinaryDescribe(
             }),
             { cache: 'no-store' },
           );
+          observeCache('asset-public-success', imageResponse);
           expect(imageResponse.status).toBe(200);
           expect(imageResponse.headers.get('content-type')).toMatch(
             /image\/jpeg/i,
@@ -224,6 +235,110 @@ cloudinaryDescribe(
       },
       60_000,
     );
+
+    it('records actual delivery cache headers and enforces expiring Employee Photo grants', async () => {
+      const uploadedAsset = await uploadFixture(
+        'jpeg.jpg',
+        'image/jpeg',
+        'ASSET_IMAGE',
+      );
+      const asset = await verifyUploaded(uploadedAsset);
+      const assetUrl = adapter.publicUrl({
+        publicId: asset.publicId,
+        storageContext,
+        resourceType: 'image',
+        deliveryType: 'upload',
+        version: asset.version,
+      });
+      const assetSuccess = await fetch(assetUrl, { cache: 'no-store' });
+      observeCache('asset-public-success', assetSuccess);
+      expect(assetSuccess.status).toBe(200);
+      const assetError = await fetch(
+        assetUrl.replace(asset.publicId, `${asset.publicId}-missing`),
+        { cache: 'no-store' },
+      );
+      observeCache('asset-public-error', assetError);
+      expect(assetError.ok).toBe(false);
+
+      const uploadedEmployee = await uploadFixture(
+        'jpeg.jpg',
+        'image/jpeg',
+        'EMPLOYEE_PHOTO',
+      );
+      const employee = await verifyUploaded(uploadedEmployee);
+      const reference: ImageObjectReference = {
+        publicId: employee.publicId,
+        storageContext,
+        resourceType: 'image',
+        deliveryType: 'authenticated',
+        version: employee.version,
+      };
+      const unsignedOriginal = await fetch(
+        `https://res.cloudinary.com/${cloudName}/image/authenticated/v${employee.version}/${employee.publicId}.jpg`,
+        { cache: 'no-store' },
+      );
+      observeCache('employee-unsigned-original-error', unsignedOriginal);
+      expect(unsignedOriginal.ok).toBe(false);
+      const unsignedDerivative = await fetch(
+        `https://res.cloudinary.com/${cloudName}/image/authenticated/c_fill,w_64/v${employee.version}/${employee.publicId}.jpg`,
+        { cache: 'no-store' },
+      );
+      observeCache('employee-unsigned-derivative-error', unsignedDerivative);
+      expect(unsignedDerivative.ok).toBe(false);
+      const publicAlias = await fetch(
+        `https://res.cloudinary.com/${cloudName}/image/upload/v${employee.version}/${employee.publicId}.jpg`,
+        { cache: 'no-store' },
+      );
+      observeCache('employee-public-alias-error', publicAlias);
+      expect(publicAlias.ok).toBe(false);
+
+      const defaultGrant = adapter.createShortLivedReadGrant(
+        reference,
+        new Date(Date.now() + 5 * 60 * 1000),
+      );
+      expect(defaultGrant.expiresAt.getTime()).toBeGreaterThan(
+        Date.now() + 4 * 60 * 1000,
+      );
+      expect(defaultGrant.expiresAt.getTime()).toBeLessThanOrEqual(
+        Date.now() + 5 * 60 * 1000,
+      );
+      const defaultGrantResponse = await fetch(defaultGrant.url, {
+        cache: 'no-store',
+      });
+      observeCache(
+        'employee-default-five-minute-grant-success',
+        defaultGrantResponse,
+      );
+      expect(defaultGrantResponse.status).toBe(200);
+
+      const shortGrant = adapter.createShortLivedReadGrant(
+        reference,
+        new Date(Date.now() + 15 * 1000),
+      );
+      const shortGrantResponse = await fetch(shortGrant.url, {
+        cache: 'no-store',
+      });
+      observeCache(
+        'employee-short-grant-before-expiry-success',
+        shortGrantResponse,
+      );
+      expect(shortGrantResponse.status).toBe(200);
+      await new Promise((resolveDelay) =>
+        setTimeout(
+          resolveDelay,
+          Math.max(0, shortGrant.expiresAt.getTime() - Date.now() + 1_250),
+        ),
+      );
+      const expiredGrantResponse = await fetch(shortGrant.url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      });
+      observeCache(
+        'employee-short-grant-after-expiry-error',
+        expiredGrantResponse,
+      );
+      expect(expiredGrantResponse.ok).toBe(false);
+    }, 60_000);
 
     it.each(normalizationFixtures)(
       'preserves normalized pixels and strips capture metadata for $name',
@@ -528,6 +643,14 @@ cloudinaryDescribe(
         policy: imageUploadPolicy(purpose),
         evidence,
       };
+    }
+
+    function observeCache(check: string, response: Response): void {
+      cacheObservations.push({
+        check,
+        status: response.status,
+        cacheControl: response.headers.get('cache-control'),
+      });
     }
 
     function allocateInstructions(purpose: ImagePurpose): {
