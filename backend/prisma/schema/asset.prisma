@@ -1,25 +1,32 @@
 model Asset {
-  id                String    @id @default(uuid()) @map("asset_id")
-  noid              String?   @map("noid") @db.VarChar(30)
-  name              String    @map("name") @db.VarChar(100)
-  model             String    @map("model") @db.VarChar(100)
-  serialNo          String?   @map("serial_no") @db.VarChar(30)
-  budgetType        String    @default("") @map("budget_type") @db.VarChar(100)
-  acqType           String    @default("") @map("acq_type") @db.VarChar(100)
-  price             Decimal   @map("price") @db.Decimal(15, 2)
-  acqDoc            String    @default("") @map("acq_doc") @db.Text
-  warrantyDate      String?   @map("warranty_date") @db.VarChar(30)
-  pmType            PmType    @default(IM) @map("pm_type")
-  pmIntervalMonth   Int?      @map("pm_interval_month")
-  calType           CalType   @default(IC) @map("cal_type")
-  calIntervalMonth  Int?      @map("cal_interval_month")
-  equipment_type_id Int?      @map("equipment_type")
-  riskLevel         RiskLevel @default(UNSPECIFIED) @map("risk_level")
-  isSpecial         Boolean   @default(false) @map("is_special")
-  isBackup          Boolean   @default(false) @map("is_backup")
-  remark            String?   @db.Text
-  imageUrl          String    @default("") @map("image_url") @db.Text
-  receivedDate      DateTime  @map("receive_date")
+  id                    String    @id @default(uuid()) @map("asset_id")
+  noid                  String?   @map("noid") @db.VarChar(30)
+  name                  String    @map("name") @db.VarChar(100)
+  model                 String    @map("model") @db.VarChar(100)
+  serialNo              String?   @map("serial_no") @db.VarChar(30)
+  budgetType            String    @default("") @map("budget_type") @db.VarChar(100)
+  acqType               String    @default("") @map("acq_type") @db.VarChar(100)
+  price                 Decimal   @map("price") @db.Decimal(15, 2)
+  acqDoc                String    @default("") @map("acq_doc") @db.Text
+  warrantyDate          String?   @map("warranty_date") @db.VarChar(30)
+  pmType                PmType    @default(IM) @map("pm_type")
+  pmIntervalMonth       Int?      @map("pm_interval_month")
+  calType               CalType   @default(IC) @map("cal_type")
+  calIntervalMonth      Int?      @map("cal_interval_month")
+  equipment_type_id     Int?      @map("equipment_type")
+  riskLevel             RiskLevel @default(UNSPECIFIED) @map("risk_level")
+  isSpecial             Boolean   @default(false) @map("is_special")
+  isBackup              Boolean   @default(false) @map("is_backup")
+  remark                String?   @db.Text
+  imageUrl              String    @default("") @map("image_url") @db.Text
+  // All-null or complete-value CHECK is maintained in a SQL migration.
+  imageStorageProvider  String?   @map("image_storage_provider") @db.VarChar(40)
+  imageStorageAccountId String?   @map("image_storage_account_id") @db.VarChar(128)
+  imagePublicId         String?   @map("image_public_id") @db.VarChar(255)
+  imageResourceType     String?   @map("image_resource_type") @db.VarChar(20)
+  imageDeliveryType     String?   @map("image_delivery_type") @db.VarChar(20)
+  imageVersion          Int?      @map("image_version")
+  receivedDate          DateTime  @map("receive_date")
 
   //relations (FK scalars)
   type_id                Int    @map("type_id")

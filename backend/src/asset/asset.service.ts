@@ -12,6 +12,13 @@ import { PrismaService } from 'src/prisma.service';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+import {
+  ImageAttachmentService,
+  imageClaimFingerprint,
+  managedImageLocator,
+  type ImageClaimRequest,
+} from '../images/image-attachment.service';
 
 /**
  * Asset Status Transition Map
@@ -85,6 +92,8 @@ const ASSET_INCLUDE = {
   },
 } satisfies Prisma.AssetInclude;
 
+type Mutable<T> = { -readonly [Property in keyof T]: T[Property] };
+
 /**
  * แปลง date string → Date object สำหรับ DateTime field ของ Asset
  */
@@ -97,7 +106,10 @@ function toAssetDates(dto: Record<string, any>) {
 
 @Injectable()
 export class AssetService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly imageAttachmentService: ImageAttachmentService,
+  ) {}
 
   // ─── Status Transition Guard ─────────────────────────────────────────────
 
@@ -128,6 +140,97 @@ export class AssetService {
   }
 
   async create(createAssetDto: CreateAssetDto, userId: string) {
+    this.imageAttachmentService.assertAttachmentPayload({
+      purpose: 'ASSET_IMAGE',
+      uploadId: createAssetDto.imageUploadId,
+      creationContextToken: createAssetDto.imageCreationContextToken,
+      imageUrl: createAssetDto.imageUrl,
+    });
+    if (createAssetDto.imageUploadId) {
+      const request: ImageClaimRequest = {
+        actorUserId: userId,
+        purpose: 'ASSET_IMAGE',
+        uploadId: createAssetDto.imageUploadId,
+        operation: 'CREATE',
+        targetId: randomUUID(),
+        creationContextToken: createAssetDto.imageCreationContextToken,
+        fingerprint: imageClaimFingerprint({
+          actorUserId: userId,
+          purpose: 'ASSET_IMAGE',
+          operation: 'CREATE',
+          targetId: null,
+          fields: createAssetDto,
+        }),
+      };
+      const priorTargetId =
+        await this.imageAttachmentService.committedTargetForRetry(request);
+      if (priorTargetId) {
+        const prior = await this.prisma.asset.findUnique({
+          where: { id: priorTargetId },
+          include: ASSET_INCLUDE,
+        });
+        if (!prior) {
+          throw new NotFoundException({
+            code: 'IMAGE_TARGET_NOT_FOUND',
+            message: 'The created Asset is no longer available',
+          });
+        }
+        return this.transformAsset(prior);
+      }
+      await this.imageAttachmentService.preflightClaim(request);
+
+      return this.prisma.$transaction(async (tx) => {
+        const claim = await this.imageAttachmentService.claimInTransaction(
+          tx,
+          request,
+          null,
+        );
+        if (claim.kind === 'REPLAY') {
+          const prior = await tx.asset.findUnique({
+            where: { id: claim.targetId },
+            include: ASSET_INCLUDE,
+          });
+          if (!prior) {
+            throw new NotFoundException({
+              code: 'IMAGE_TARGET_NOT_FOUND',
+              message: 'The created Asset is no longer available',
+            });
+          }
+          return this.transformAsset(prior);
+        }
+        if (claim.attachment.purpose !== 'ASSET_IMAGE') {
+          throw new BadRequestException('Image purpose does not match Asset');
+        }
+        const businessFields = {
+          ...createAssetDto,
+        } as Mutable<CreateAssetDto> & {
+          createdBy?: string;
+          updatedBy?: string;
+        };
+        delete businessFields.createdBy;
+        delete businessFields.updatedBy;
+        delete businessFields.imageUrl;
+        delete businessFields.imageUploadId;
+        delete businessFields.imageCreationContextToken;
+        const asset = await tx.asset.create({
+          data: {
+            id: request.targetId,
+            ...toAssetDates(businessFields),
+            imageUrl: claim.attachment.imageUrl,
+            imageStorageProvider: claim.attachment.storageProvider,
+            imageStorageAccountId: claim.attachment.storageAccountId,
+            imagePublicId: claim.attachment.publicId,
+            imageResourceType: claim.attachment.resourceType,
+            imageDeliveryType: claim.attachment.deliveryType,
+            imageVersion: claim.attachment.version,
+            createdBy: userId,
+            updatedBy: userId,
+          } as Prisma.AssetUncheckedCreateInput,
+          include: ASSET_INCLUDE,
+        });
+        return this.transformAsset(asset);
+      });
+    }
     const {
       createdBy: _ignore,
       updatedBy: _ignore2,
@@ -377,8 +480,44 @@ export class AssetService {
       createdBy: _ignore,
       updatedBy: _ignore2,
       availability_status_id: requestedAvailabilityId,
+      imageUploadId,
+      imageCreationContextToken,
       ...dto
-    } = updateAssetDto as any;
+    } = updateAssetDto as UpdateAssetDto & {
+      createdBy?: string;
+      updatedBy?: string;
+    };
+    this.imageAttachmentService.assertAttachmentPayload({
+      purpose: 'ASSET_IMAGE',
+      uploadId: imageUploadId,
+      creationContextToken: imageCreationContextToken,
+      imageUrl: dto.imageUrl,
+    });
+    const imageMutation = Boolean(imageUploadId) || dto.imageUrl !== undefined;
+    let imageClaimRequest: ImageClaimRequest | undefined;
+    if (imageUploadId) {
+      imageClaimRequest = {
+        actorUserId: userId,
+        purpose: 'ASSET_IMAGE',
+        uploadId: imageUploadId,
+        operation: 'UPDATE',
+        targetId: id,
+        creationContextToken: imageCreationContextToken,
+        fingerprint: imageClaimFingerprint({
+          actorUserId: userId,
+          purpose: 'ASSET_IMAGE',
+          operation: 'UPDATE',
+          targetId: id,
+          fields: updateAssetDto,
+        }),
+      };
+      const priorTargetId =
+        await this.imageAttachmentService.committedTargetForRetry(
+          imageClaimRequest,
+        );
+      if (priorTargetId) return this.findOne(id);
+      await this.imageAttachmentService.preflightClaim(imageClaimRequest);
+    }
     if (
       requestedAvailabilityId != null &&
       requestedAvailabilityId !== asset.availabilityStatus?.id
@@ -413,8 +552,11 @@ export class AssetService {
       }
     }
 
-    const payload = toAssetDates(dto);
-    const updateAsset = (client: Prisma.TransactionClient | PrismaService) =>
+    const basePayload = toAssetDates(dto);
+    const updateAsset = (
+      client: Prisma.TransactionClient | PrismaService,
+      payload: Record<string, unknown>,
+    ) =>
       client.asset.update({
         where: {
           id,
@@ -432,25 +574,78 @@ export class AssetService {
         },
         include: ASSET_INCLUDE,
       });
-    const updated = dto.asset_status_id
-      ? await this.rejectStaleAssetWrite(() =>
-          this.prisma.$transaction(async (tx) => {
-            if (targetStatus?.code === 'LOST') {
-              if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
-                await this.cascadeCancelActiveBorrowTransactions(
-                  tx,
-                  id,
-                  userId,
-                );
-              }
-              if (asset.status.code === 'UNDER_REPAIR') {
-                await this.cascadeCancelActiveRepairJobs(tx, id, userId);
-              }
+    const updateInTransaction = async (tx: Prisma.TransactionClient) => {
+      let payload: Record<string, unknown> = { ...basePayload };
+      if (imageMutation) {
+        await this.imageAttachmentService.lockTargetRow(tx, 'ASSET_IMAGE', id);
+        const current = await tx.asset.findUnique({
+          where: { id },
+          include: ASSET_INCLUDE,
+        });
+        if (!current) throw new NotFoundException(`Asset #${id} not found`);
+        const previous = managedImageLocator(current);
+
+        if (imageClaimRequest) {
+          const claim = await this.imageAttachmentService.claimInTransaction(
+            tx,
+            imageClaimRequest,
+            previous,
+            current.imageUrl,
+          );
+          if (claim.kind === 'REPLAY') {
+            if (claim.targetId !== id) {
+              throw new BadRequestException({
+                code: 'IMAGE_UPLOAD_ALREADY_CLAIMED',
+                message:
+                  'The upload has already been attached to another record',
+              });
             }
-            return updateAsset(tx);
-          }),
-        )
-      : await updateAsset(this.prisma);
+            return current;
+          }
+          if (claim.attachment.purpose !== 'ASSET_IMAGE') {
+            throw new BadRequestException('Image purpose does not match Asset');
+          }
+          payload = {
+            ...payload,
+            imageUrl: claim.attachment.imageUrl,
+            imageStorageProvider: claim.attachment.storageProvider,
+            imageStorageAccountId: claim.attachment.storageAccountId,
+            imagePublicId: claim.attachment.publicId,
+            imageResourceType: claim.attachment.resourceType,
+            imageDeliveryType: claim.attachment.deliveryType,
+            imageVersion: claim.attachment.version,
+          };
+        } else if (previous) {
+          if (
+            dto.imageUrl != null &&
+            dto.imageUrl !== '' &&
+            dto.imageUrl !== current.imageUrl
+          ) {
+            throw new BadRequestException({
+              code: 'MANAGED_IMAGE_REQUIRES_VERIFIED_UPLOAD',
+              message: 'Replace this managed image with a verified upload',
+            });
+          }
+          delete payload.imageUrl;
+        }
+      }
+
+      if (targetStatus?.code === 'LOST') {
+        if (this.isBorrowedOrReserved(asset.availabilityStatus?.code)) {
+          await this.cascadeCancelActiveBorrowTransactions(tx, id, userId);
+        }
+        if (asset.status.code === 'UNDER_REPAIR') {
+          await this.cascadeCancelActiveRepairJobs(tx, id, userId);
+        }
+      }
+      return updateAsset(tx, payload);
+    };
+    const updated =
+      dto.asset_status_id || imageMutation
+        ? await this.rejectStaleAssetWrite(() =>
+            this.prisma.$transaction(updateInTransaction),
+          )
+        : await updateAsset(this.prisma, basePayload);
     return this.transformAsset(updated);
   }
 

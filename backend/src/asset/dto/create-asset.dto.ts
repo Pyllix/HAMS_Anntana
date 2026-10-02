@@ -7,8 +7,10 @@ import {
   IsDateString,
   IsUUID,
   IsEnum,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { RiskLevel, PmType, CalType } from '@prisma/client';
 
 export class CreateAssetDto {
@@ -175,6 +177,26 @@ export class CreateAssetDto {
   @IsOptional()
   imageUrl?: string;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Verified pending Asset Image upload to attach when saving this record',
+  })
+  @IsUUID()
+  @IsOptional()
+  readonly imageUploadId?: string;
+
+  @ApiPropertyOptional({
+    description: 'One-time creation context returned for a new Asset upload',
+    minLength: 32,
+    maxLength: 128,
+  })
+  @IsString()
+  @MinLength(32)
+  @MaxLength(128)
+  @IsOptional()
+  readonly imageCreationContextToken?: string;
+
   @ApiProperty({
     example: '2024-01-01',
     description: 'วันที่รับครุภัณฑ์',
@@ -225,10 +247,10 @@ export class CreateAssetDto {
   availability_status_id?: number;
 
   @ApiProperty({
-    example: '9c05939c-956b-46f4-a4bd-f5dccc56df89',
-    description: 'ผู้รับผิดชอบครุภัณฑ์ (User UUID)',
+    example: '8NI6iVaIofVv8bNGYSlN6uVL4tfeYAtC',
+    description: 'รหัสผู้รับผิดชอบครุภัณฑ์ (User ID)',
   })
-  @IsUUID()
+  @IsString()
   @IsNotEmpty()
   owner_id: string;
 }

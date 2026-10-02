@@ -8,6 +8,7 @@ import {
   IsUrl,
   IsUUID,
   MinLength,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -56,6 +57,26 @@ export class CreateUserDto {
   @IsUrl()
   @IsOptional()
   imageUrl?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Verified pending Employee Photo upload to attach when saving this account',
+  })
+  @IsUUID()
+  @IsOptional()
+  readonly imageUploadId?: string;
+
+  @ApiPropertyOptional({
+    description: 'One-time creation context returned for a new account photo',
+    minLength: 32,
+    maxLength: 128,
+  })
+  @IsString()
+  @MinLength(32)
+  @MaxLength(128)
+  @IsOptional()
+  readonly imageCreationContextToken?: string;
 
   @ApiPropertyOptional({
     example: '94037db6-e299-49de-98a1-bfc82a9f5ecb',

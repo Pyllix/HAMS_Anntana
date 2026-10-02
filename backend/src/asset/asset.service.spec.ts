@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssetService } from './asset.service';
 import { PrismaService } from 'src/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { ImageAttachmentService } from '../images/image-attachment.service';
 
 describe('AssetService', () => {
   let service: AssetService;
@@ -57,12 +58,24 @@ describe('AssetService', () => {
     },
     $transaction: jest.fn(),
   };
+  const mockImageAttachmentService = {
+    assertFeatureActive: jest.fn(),
+    assertAttachmentPayload: jest.fn(),
+    committedTargetForRetry: jest.fn(),
+    preflightClaim: jest.fn(),
+    claimInTransaction: jest.fn(),
+    lockTargetRow: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssetService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: ImageAttachmentService,
+          useValue: mockImageAttachmentService,
+        },
       ],
     }).compile();
 

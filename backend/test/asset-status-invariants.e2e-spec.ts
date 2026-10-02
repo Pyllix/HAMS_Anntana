@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import request from 'supertest';
 import { AssetController } from '../src/asset/asset.controller';
 import { AssetService } from '../src/asset/asset.service';
+import { ImageAttachmentService } from '../src/images/image-attachment.service';
 import { RepairsController } from '../src/repairs/repairs.controller';
 import { RepairsService } from '../src/repairs/repairs.service';
 import { PrismaService } from '../src/prisma.service';
@@ -254,6 +255,15 @@ describeWithDatabase(
           AssetService,
           RepairsService,
           { provide: PrismaService, useValue: prisma },
+          {
+            provide: ImageAttachmentService,
+            useValue: {
+              committedTargetForRetry: jest.fn(),
+              preflightClaim: jest.fn(),
+              claimInTransaction: jest.fn(),
+              lockTargetRow: jest.fn(),
+            },
+          },
         ],
       }).compile();
       app = module.createNestApplication();

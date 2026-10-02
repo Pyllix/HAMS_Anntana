@@ -17,6 +17,12 @@ import { AdminStepUpService } from '../auth/admin-step-up.service';
 import { TwoFactorService } from '../auth/two-factor.service';
 import { mailService } from '../common/mail/mail.service';
 import { AdminResetTwoFactorDto } from './dto/admin-reset-two-factor.dto';
+import {
+  ImageAttachmentService,
+  imageClaimFingerprint,
+  managedImageLocator,
+  type ImageClaimRequest,
+} from '../images/image-attachment.service';
 
 type SecurityAuditAction =
   | 'USER_CREATED'
@@ -42,6 +48,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly adminStepUpService: AdminStepUpService,
     private readonly twoFactorService: TwoFactorService,
+    private readonly imageAttachmentService: ImageAttachmentService,
   ) {}
 
   // ─── Auto-generate Employee ID ───────────────────────────────────────────────
@@ -75,6 +82,48 @@ export class UsersService {
 
   /** Create a new user via better-auth with pre-validation and compensating rollback */
   async create(dto: CreateUserDto, actorUserId: string) {
+    this.imageAttachmentService.assertAttachmentPayload({
+      purpose: 'EMPLOYEE_PHOTO',
+      uploadId: dto.imageUploadId,
+      creationContextToken: dto.imageCreationContextToken,
+      imageUrl: dto.imageUrl,
+    });
+    let imageClaimRequest: ImageClaimRequest | undefined;
+    if (dto.imageUploadId) {
+      imageClaimRequest = {
+        actorUserId,
+        purpose: 'EMPLOYEE_PHOTO',
+        uploadId: dto.imageUploadId,
+        operation: 'CREATE',
+        targetId: 'pending-user-target',
+        creationContextToken: dto.imageCreationContextToken,
+        fingerprint: imageClaimFingerprint({
+          actorUserId,
+          purpose: 'EMPLOYEE_PHOTO',
+          operation: 'CREATE',
+          targetId: null,
+          fields: dto,
+        }),
+      };
+      const priorTargetId =
+        await this.imageAttachmentService.committedTargetForRetry(
+          imageClaimRequest,
+        );
+      if (priorTargetId) {
+        const prior = await this.prisma.user.findFirst({
+          where: { id: priorTargetId, deletedAt: null },
+          omit: { deletedAt: true },
+        });
+        if (!prior) {
+          throw new NotFoundException({
+            code: 'IMAGE_TARGET_NOT_FOUND',
+            message: 'The created account is no longer available',
+          });
+        }
+        return prior;
+      }
+      await this.imageAttachmentService.preflightClaim(imageClaimRequest);
+    }
     // 1. Pre-validation: Email uniqueness
     const existingEmail = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -129,6 +178,46 @@ export class UsersService {
     // 6. Update additional fields with compensating rollback on failure
     try {
       const user = await this.prisma.$transaction(async (tx) => {
+        let imageFields = {};
+        if (imageClaimRequest) {
+          await this.imageAttachmentService.lockTargetRow(
+            tx,
+            'EMPLOYEE_PHOTO',
+            result.user.id,
+          );
+          const claim = await this.imageAttachmentService.claimInTransaction(
+            tx,
+            { ...imageClaimRequest, targetId: result.user.id },
+            null,
+          );
+          if (claim.kind === 'REPLAY') {
+            if (claim.targetId !== result.user.id) {
+              throw new ConflictException({
+                code: 'IMAGE_UPLOAD_ALREADY_CLAIMED',
+                message:
+                  'The upload has already been attached to another account',
+              });
+            }
+            const prior = await tx.user.findFirst({
+              where: { id: claim.targetId, deletedAt: null },
+              omit: { deletedAt: true },
+            });
+            if (!prior) throw new NotFoundException('Created user not found');
+            return prior;
+          }
+          if (claim.attachment.purpose !== 'EMPLOYEE_PHOTO') {
+            throw new BadRequestException('Image purpose does not match User');
+          }
+          imageFields = {
+            imageUrl: null,
+            imageStorageProvider: claim.attachment.storageProvider,
+            imageStorageAccountId: claim.attachment.storageAccountId,
+            imagePublicId: claim.attachment.publicId,
+            imageResourceType: claim.attachment.resourceType,
+            imageDeliveryType: claim.attachment.deliveryType,
+            imageVersion: claim.attachment.version,
+          };
+        }
         const created = await tx.user.update({
           where: { id: result.user.id },
           data: {
@@ -137,7 +226,7 @@ export class UsersService {
             firstname: dto.firstname,
             lastname: dto.lastname,
             role: dto.role ?? UserRole.DEPARTMENT_STAFF,
-            imageUrl: dto.imageUrl,
+            ...(imageClaimRequest ? imageFields : { imageUrl: dto.imageUrl }),
             section_id: dto.sectionId,
           },
           omit: { deletedAt: true },
@@ -237,7 +326,41 @@ export class UsersService {
   ) {
     const user = await this.findOne(idOrEmployeeId); // throws NotFoundException if not found
 
-    const { sectionId, email, userName } = dto;
+    this.imageAttachmentService.assertAttachmentPayload({
+      purpose: 'EMPLOYEE_PHOTO',
+      uploadId: dto.imageUploadId,
+      creationContextToken: dto.imageCreationContextToken,
+      imageUrl: dto.imageUrl,
+    });
+    let imageClaimRequest: ImageClaimRequest | undefined;
+    if (dto.imageUploadId) {
+      imageClaimRequest = {
+        actorUserId,
+        purpose: 'EMPLOYEE_PHOTO',
+        uploadId: dto.imageUploadId,
+        operation: 'UPDATE',
+        targetId: user.id,
+        creationContextToken: dto.imageCreationContextToken,
+        fingerprint: imageClaimFingerprint({
+          actorUserId,
+          purpose: 'EMPLOYEE_PHOTO',
+          operation: 'UPDATE',
+          targetId: user.id,
+          fields: dto,
+        }),
+      };
+      const priorTargetId =
+        await this.imageAttachmentService.committedTargetForRetry(
+          imageClaimRequest,
+        );
+      if (priorTargetId) return user;
+      await this.imageAttachmentService.preflightClaim(imageClaimRequest);
+    }
+
+    const profileDto = { ...dto };
+    delete profileDto.imageUploadId;
+    delete profileDto.imageCreationContextToken;
+    const { sectionId, email, userName } = profileDto;
 
     if (email && email !== user.email) {
       const emailExists = await this.prisma.user.findFirst({
@@ -278,7 +401,7 @@ export class UsersService {
     }
 
     // Employee IDs are immutable through profile updates.
-    const profileFields: Record<string, unknown> = { ...dto };
+    const profileFields: Record<string, unknown> = { ...profileDto };
     for (const field of [
       'sectionId',
       'email',
@@ -297,6 +420,14 @@ export class UsersService {
         await this.lockAdminRows(tx);
       }
 
+      if (imageClaimRequest || profileDto.imageUrl !== undefined) {
+        await this.imageAttachmentService.lockTargetRow(
+          tx,
+          'EMPLOYEE_PHOTO',
+          user.id,
+        );
+      }
+
       const current = await tx.user.findFirst({
         where: { id: user.id, deletedAt: null },
       });
@@ -304,6 +435,55 @@ export class UsersService {
         throw new NotFoundException(
           `User not found with ID: ${idOrEmployeeId}`,
         );
+      }
+
+      const safeProfileFields = { ...profileFields };
+      let imageFields: Prisma.UserUncheckedUpdateInput = {};
+      if (imageClaimRequest) {
+        const claim = await this.imageAttachmentService.claimInTransaction(
+          tx,
+          imageClaimRequest,
+          managedImageLocator(current),
+          current.imageUrl,
+        );
+        if (claim.kind === 'REPLAY') {
+          if (claim.targetId !== current.id) {
+            throw new ConflictException({
+              code: 'IMAGE_UPLOAD_ALREADY_CLAIMED',
+              message:
+                'The upload has already been attached to another account',
+            });
+          }
+          return current;
+        }
+        if (claim.attachment.purpose !== 'EMPLOYEE_PHOTO') {
+          throw new BadRequestException('Image purpose does not match User');
+        }
+        imageFields = {
+          imageUrl: null,
+          imageStorageProvider: claim.attachment.storageProvider,
+          imageStorageAccountId: claim.attachment.storageAccountId,
+          imagePublicId: claim.attachment.publicId,
+          imageResourceType: claim.attachment.resourceType,
+          imageDeliveryType: claim.attachment.deliveryType,
+          imageVersion: claim.attachment.version,
+        };
+      } else {
+        const previous = managedImageLocator(current);
+        if (previous) {
+          if (
+            profileDto.imageUrl != null &&
+            profileDto.imageUrl !== '' &&
+            profileDto.imageUrl !== current.imageUrl
+          ) {
+            throw new BadRequestException({
+              code: 'MANAGED_PHOTO_REQUIRES_VERIFIED_UPLOAD',
+              message:
+                'Replace this managed Employee Photo with a verified upload',
+            });
+          }
+          delete safeProfileFields.imageUrl;
+        }
       }
 
       const roleChanged = dto.role !== undefined && dto.role !== current.role;
@@ -319,7 +499,8 @@ export class UsersService {
       }
 
       const updateData: Prisma.UserUncheckedUpdateInput = {
-        ...profileFields,
+        ...safeProfileFields,
+        ...imageFields,
         ...(email !== undefined ? { email } : {}),
         ...(userName !== undefined ? { userName } : {}),
         ...(dto.role !== undefined ? { role: dto.role } : {}),

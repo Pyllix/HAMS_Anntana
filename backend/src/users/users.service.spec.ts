@@ -12,6 +12,7 @@ import { AdminStepUpService } from '../auth/admin-step-up.service';
 import { TwoFactorService } from '../auth/two-factor.service';
 import { plainToInstance } from 'class-transformer';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ImageAttachmentService } from '../images/image-attachment.service';
 
 jest.mock('better-auth/crypto', () => ({
   hashPassword: jest.fn().mockResolvedValue('hashed-password'),
@@ -65,6 +66,14 @@ const mockPrismaService = {
 
 const mockAdminStepUpService = { requireActive: jest.fn() };
 const mockTwoFactorService = { requiresTwoFactor: jest.fn() };
+const mockImageAttachmentService = {
+  assertFeatureActive: jest.fn(),
+  assertAttachmentPayload: jest.fn(),
+  committedTargetForRetry: jest.fn(),
+  preflightClaim: jest.fn(),
+  claimInTransaction: jest.fn(),
+  lockTargetRow: jest.fn(),
+};
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 const mockUser = {
@@ -91,6 +100,10 @@ describe('UsersService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: AdminStepUpService, useValue: mockAdminStepUpService },
         { provide: TwoFactorService, useValue: mockTwoFactorService },
+        {
+          provide: ImageAttachmentService,
+          useValue: mockImageAttachmentService,
+        },
       ],
     }).compile();
 
@@ -490,7 +503,9 @@ describe('UsersService', () => {
       await expect(
         service.update(admin.id, { banned: true }, 'another-admin'),
       ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
@@ -658,9 +673,9 @@ describe('UsersService', () => {
           details: { revokedSessions: 2, revokedTrustedDevices: 0 },
         }),
       });
-      expect(JSON.stringify(mockPrismaService.securityAuditLog.create.mock.calls)).not.toContain(
-        'NewPassword123',
-      );
+      expect(
+        JSON.stringify(mockPrismaService.securityAuditLog.create.mock.calls),
+      ).not.toContain('NewPassword123');
       expect(result).toEqual({
         message: 'Password for user jdoe has been successfully reset',
       });
@@ -763,7 +778,9 @@ describe('UsersService', () => {
           'admin-2',
           'session-2',
         ),
-      ).resolves.toMatchObject({ message: expect.stringContaining('must enroll') });
+      ).resolves.toMatchObject({
+        message: expect.stringContaining('must enroll'),
+      });
       expect(mockPrismaService.twoFactorAuth.delete).toHaveBeenCalledWith({
         where: { userId: target.id },
       });
@@ -790,7 +807,9 @@ describe('UsersService', () => {
           'session-2',
         ),
       ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.twoFactorAuth.delete).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
@@ -835,8 +854,12 @@ describe('UsersService', () => {
       mockPrismaService.user.findMany.mockResolvedValue([{ id: admin.id }]);
       mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
 
-      await expect(service.remove(admin.id, 'another-admin')).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+      await expect(
+        service.remove(admin.id, 'another-admin'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
