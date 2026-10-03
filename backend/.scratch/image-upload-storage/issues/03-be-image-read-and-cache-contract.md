@@ -6,9 +6,9 @@
 
 **Owner / change boundary:** Backend image read/preview APIs, user/list/session projections และ Cloudinary read/cache verification; ไม่ทำ FE display integration ในใบนี้
 
-**Status:** implementation-complete; G2 test-account verification pending
+**Status:** implementation-complete; live provider access/expiry verified, Employee Photo cache decision pending
 
-**Verification:** On 2026-10-03, the focused image HTTP acceptance suite passed 17/17 with exit code 0 against a fresh isolated PostgreSQL database. This covers the HAMS read/preview/auth/cache-response contract with a deterministic storage adapter. Cloudinary byte delivery, protection, expiry, and actual cache headers remain unverified; see [G2 verification](../../../docs/image-read-g2-verification.md).
+**Verification:** On 2026-10-03, the focused image HTTP acceptance suite passed 17/17 against a fresh isolated PostgreSQL database. The separate real-Cloudinary G2 case passed 1/1 with exit code 0 and scoped teardown; it observed public Asset delivery, restricted Employee Photo originals/derivatives, valid grants, fresh post-expiry denial, and actual byte-response headers. The user accepted the observed 30-day Asset cache for public versioned URLs. Signed Employee Photo success returned `public, max-age=2592000`; its cache policy remains unapproved. See [G2 verification](../../../docs/image-read-g2-verification.md) for every status/header and the remaining Cloudinary support question. Local TypeScript checking and the full Backend unit suite also passed (450/450) after correcting the session test fixture.
 
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 1, 5, 8; Testing Decisions/G2.
 
@@ -22,11 +22,11 @@
 - [x] User/list/session projections มี consistent `hasEmployeePhoto`/`photoRevision` และ no-photo semantics; managed Employee Photo durable `imageUrl` null ไม่เก็บ temporary URL ใน User/BetterAuth/session cache และไม่ generate grant ให้ทุก nested/list user โดยอัตโนมัติ
 - [x] API errors แยก no-photo, unauthorized, expired pending และ retryable provider outage โดยไม่เผย secret/grant ของผู้อื่น; photo response failure หลัง successful CRUD commit ไม่อ้างว่า business transaction rollback
 - [x] Upload/status-private-data/preview/grant responses และ relevant errors ใช้ `Cache-Control: private, no-store`; endpoint อื่นที่ embed grant ถ้ามีต้องใช้ policy เดียวและไม่ผ่าน shared application/server cache
-- [ ] ตรวจ actual Cloudinary image success/error Cache-Control: asset long-lived public caching เป็น intent และค่า `public, max-age=31536000, immutable` เป็น desired exact value ไม่อ้าง enforce ได้ก่อนมี evidence; ไม่ถือ one-day Employee Photo browser caching เป็นมติที่อนุมัติแล้ว
+- [x] ตรวจ actual Cloudinary image success/error Cache-Control และบันทึกความต่าง: Asset success เป็น `public, no-transform, immutable, max-age=2592000` ไม่ใช่ desired one-year; signed Employee Photo success เป็น `public, max-age=2592000` และยังไม่ถือว่าเป็น policy ที่อนุมัติแล้ว
 - [x] HTTP acceptance tests พิสูจน์ read scope, pending-owner protection, current revision/no-photo, metadata/session no credential persistence, auth denial และ no-store headers
-- [ ] Opt-in real-Cloudinary tests พิสูจน์ public asset path และ restricted originals/derivatives, grant ก่อนหมดอายุใช้งานได้ และ fresh cache-bypassed request หลัง expiry ล้มเหลว; มี shortened-TTL timing check และ default 5-minute check แยก ไม่อ้าง cached displayed image เป็น expiry proof
+- [x] Opt-in real-Cloudinary G2 test พิสูจน์ public asset path และ restricted originals/derivatives, grant ก่อนหมดอายุใช้งานได้ และ fresh cache-bypassed request หลัง expiry ล้มเหลว; มี shortened-TTL timing check และ default 5-minute check แยก ไม่อ้าง cached displayed image เป็น expiry proof
 - [x] Logout/revoke หยุด future grant issuance แต่ prior bearer grant อาจใช้ได้จน expiry ตาม risk ที่ยอมรับ; tests/docs ไม่สัญญาว่าลบ cached/downloaded bytes ได้
-- [ ] บันทึกผล G2, account capability, actual headers และ trade-off ของ private download ที่ bypass CDN/มีค่า delivery bandwidth สูงขึ้นตาม spec; หาก policy ที่ต้องการทำไม่ได้ให้แสดง gap ขอ scoped decision ไม่ proxy bytes ผ่าน Render หรือเปลี่ยน privacy เอง
+- [ ] ตัดสินใจ scoped Employee Photo byte cache policy หลังบันทึกผล G2, account capability, actual headers และ trade-off ของ private download แล้ว; ผู้ใช้ยอมรับ Asset public cache 30 วัน แต่ signed Employee byte response ยังเป็น `public` 30 วันโดยไม่มีมติรับ ไม่ proxy bytes ผ่าน Render หรือเปลี่ยน privacy เอง
 
 ## Handoff and boundaries
 

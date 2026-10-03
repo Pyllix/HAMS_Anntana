@@ -203,12 +203,12 @@ Prepare the synthetic pack locally with `pnpm fixtures:cloudinary`. It generates
 
 Cloudinary does not sign the resource namespace in the upload path. A raw-only upload may be stored by the provider, but HAMS must reject it: completion independently verifies only the allocated image namespace and expected delivery type. Ticket 04 must reconcile alternate raw identities, including `allocatedKey` and `allocatedKey.<accepted extension>`, through bounded, intent-scoped probes; do not scan/delete unrelated cloud media or attached images. The live suite records and deletes every returned test identity, including raw aliases. This is an application-verification boundary, not a promise that Cloudinary rejects every altered upload path.
 
-For the opt-in contract run in PowerShell, point the test at that folder and enable the real-provider suite after setting the separate test Cloudinary credentials:
+For the opt-in contract run in PowerShell, put the separate test Cloudinary credentials in the ignored backend `.env` file, point the test at that folder, and enable the real-provider suite. Preload `dotenv/config` so Jest receives the values from `.env`:
 
 ```powershell
 $env:CLOUDINARY_CONTRACT_FIXTURE_DIR = (Resolve-Path .\test\fixtures\cloudinary-contract).Path
 $env:RUN_CLOUDINARY_CONTRACTS = 'true'
-pnpm exec jest --config ./test/jest-e2e.json --runInBand test/cloudinary-image-storage.contract.e2e-spec.ts
+node -r dotenv/config ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json --runInBand test/cloudinary-image-storage.contract.e2e-spec.ts
 ```
 
 The real-provider source, pixel, animated-input, HEIC/HEIF, metadata, color, orientation, output, private-access, and raw-resource checks are a release gate. A passing fake/API suite alone does not prove provider behavior. On 2026-10-02 the isolated live suite passed 23/23 tests, adapter units passed 6/6, and authenticated HAMS API tests passed 11/11. Ticket 03 adds opt-in tests for public/unauthenticated/error cache headers and grant expiry. See [image-read-g2-verification.md](image-read-g2-verification.md) for the actual G2 run status; do not infer provider Cache-Control values from the HAMS API's `private, no-store` header.

@@ -6,13 +6,13 @@
 
 | Gate | Status | Evidence and remaining work |
 | --- | --- | --- |
-| G1 — source proof and normalization | **Pass recorded** | Ticket 01 records the isolated live Cloudinary run: 23/23 tests passed with 18 synthetic fixtures, scoped cleanup completed, and zero `hams-contract-` objects remained. The API/adapter and disposable-PostgreSQL results are also recorded in [Ticket 01](../.scratch/image-upload-storage/issues/01-be-direct-upload-and-normalization.md). This Ticket 05 audit did not repeat the live run because its test account is not configured here. |
-| G2 — restricted reads and cache behavior | **Pending provider evidence** | The isolated-DB HTTP suite passed 17/17, including HAMS read/preview cases, but the opt-in Cloudinary checks were not run. There are no observed provider byte-response headers, account capability results, grant-expiry observations, or account-specific delivery-cost measurements. See [G2 verification](image-read-g2-verification.md). HAMS `private, no-store` response headers do not establish Cloudinary image-byte cache behavior. |
+| G1 — source proof and normalization | **Pass recorded** | Ticket 01 records the isolated live Cloudinary run: 23/23 tests passed with 18 synthetic fixtures, scoped cleanup completed, and zero `hams-contract-` objects remained. The API/adapter and disposable-PostgreSQL results are also recorded in [Ticket 01](../.scratch/image-upload-storage/issues/01-be-direct-upload-and-normalization.md). The later G2-focused run did not repeat all G1 cases. |
+| G2 — restricted reads and cache behavior | **Provider access/expiry verified; Employee cache decision pending** | The isolated-DB HTTP suite passed 17/17. On 2026-10-03, the opt-in Cloudinary G2 case passed 1/1 with test-scoped teardown: public Asset access, unsigned Employee denial, five-minute and short-grant success, fresh post-expiry denial, and actual success/error headers were observed. The user accepted the observed 30-day cache for public versioned Asset URLs. Signed Employee Photo success still returned `public, max-age=2592000`; this was not accepted and needs a provider capability answer or separately scoped delivery decision before G2 closes. See [G2 verification](image-read-g2-verification.md). No account-specific bandwidth charge was measured. |
 | G3 — durable lifecycle | **Partial; provider acceptance pending** | Ticket 04 code, migration, and tests are present; the backend build, Prisma validation, and 450/450 unit tests passed. On 2026-10-03, all 29 committed migrations applied to an isolated PostgreSQL test database and the focused HTTP suite passed 17/17 with exit code 0. The live cleanup contract remains unrun, so provider deletion/replay/request-count behavior is unverified. See [Ticket 04](../.scratch/image-upload-storage/issues/04-be-image-cleanup-and-recovery.md) and [G3 verification](image-cleanup-g3-verification.md). |
 | G4 — shared CRUD cutover | **Pending decision** | The existing Frontend still sends Base64 through shared Asset `imageUrl` writes, including the explicitly deferred wait-disposal form. Employee-photo displays still use `imageUrl` directly. The user reconfirmed on 2026-10-03 that the wait-disposal photo flow is to remain untouched for now; possible later removal is not an approved cutover. The caller inventory and compatibility details are below. |
 | G5 — BE-to-FE readiness | **Pending** | The contract reference and setup checklist exist, but the phase barrier stays closed until G1–G4 have verified evidence or a scoped decision allowed by the spec. |
 
-The initial Ticket 05 audit had no dedicated database or test-only Cloudinary settings. A temporary `TEST_DATABASE_URL` was subsequently set only for the isolated local PostgreSQL acceptance run. The synthetic Cloudinary fixture pack is present, but the opt-in flag and separate test-cloud credentials remain absent. No real-provider request, production configuration change, or Base64-data cleanup was performed.
+The initial Ticket 05 audit had no dedicated database or test-only Cloudinary settings. A temporary `TEST_DATABASE_URL` was subsequently set only for the isolated local PostgreSQL acceptance run. A separate test-only Cloudinary cloud was configured for the later G2-focused run; that case used synthetic fixtures and test-scoped cleanup. No production configuration change or Base64-data cleanup was performed. G3's live cleanup/replay case has not run.
 
 ## Backend contract baseline
 
@@ -26,7 +26,7 @@ The request/response examples, stable errors, deadlines, preview scope, employee
 | Attach during CRUD | `imageUploadId` plus the creation-context token when creating a record. Asset and Employee Photo fields are derived by the backend from the verified upload. Omission or null on edit preserves the current attachment; there is no removal endpoint. |
 | Read Employee Photo | `GET /users/:id/photo`; returns a short-lived authenticated grant on demand. The managed photo's durable `imageUrl` is null. |
 
-Intent, provider signature, and attachment deadlines are separate. HAMS responses containing private upload/preview/grant data use `private, no-store`; actual cache headers on Cloudinary image responses remain a G2 observation, not an established API guarantee. See the API reference and [`.env.example`](../.env.example) for the exact lifetimes, limits, and defaults.
+Intent, provider signature, and attachment deadlines are separate. HAMS responses containing private upload/preview/grant data use `private, no-store`; the observed Cloudinary byte headers are different and remain subject to the G2 cache decision. See the API reference, [G2 verification](image-read-g2-verification.md), and [`.env.example`](../.env.example) for the exact lifetimes, limits, and defaults.
 
 ## Shared caller inventory and compatibility
 
@@ -65,7 +65,7 @@ Keep the following settings and checks in the BE-only configuration. Cloudinary 
 | `TEST_DATABASE_URL` | Disposable isolated PostgreSQL only | Required for the HTTP acceptance suite and Ticket 04 database lifecycle tests; never point these tests at a shared or production database. |
 | `RUN_CLOUDINARY_CONTRACTS` and `CLOUDINARY_CONTRACT_*` | Opt-in, separate test-only Cloudinary account | Required for G2/G3 real-provider checks and manifest-scoped test cleanup. The test account must differ from the configured application cloud. |
 
-Defaults are mirrored in [`.env.example`](../.env.example). The API reference contains the commands for the isolated HTTP and opt-in provider suites. The isolated HTTP suite has now passed; the real-provider suite remains unrun because the separate test-cloud credentials are absent.
+Defaults are mirrored in [`.env.example`](../.env.example). The API reference contains the commands for the isolated HTTP and opt-in provider suites. The isolated HTTP suite and the focused G2 real-provider case have passed; the G3 provider cleanup/replay case remains unrun.
 
 Missing or invalid provider configuration must fail image upload/read operations explicitly. The contract has no fallback to public Employee Photo URLs, local image storage, or sending image bytes/Base64 through HAMS.
 
@@ -96,7 +96,7 @@ Missing or invalid provider configuration must fail image upload/read operations
 ## Release sequence and remaining work
 
 1. Keep the backend contract additive and the managed CRUD feature flag off while the old shared writers remain active.
-2. Retain the recorded dedicated-DB lifecycle/concurrency result and obtain the remaining G2/G3 real-provider evidence: read/cache observations and the isolated cleanup/replay run with its actual request budget.
+2. Retain the recorded dedicated-DB lifecycle/concurrency and G2 real-provider observations. Keep the user's 30-day public Asset cache decision scoped to Asset; resolve the signed Employee Photo byte-cache response with Cloudinary or a separate delivery decision. Run the remaining G3 isolated cleanup/replay case with its actual request budget.
 3. Resolve G4 with proven safe isolation or a separately approved cutover decision. In particular, preserve the wait-disposal photo/custody behavior until the team decides its scope.
 4. Only after gates permit FE work, implement the ordinary Asset/User form and display changes against this API reference. Test the FE build and API flow before activation.
 5. Coordinate backend-first deployment and managed-write activation so old Base64 callers cannot race with managed image data. If the platform cannot provide a safe transition under the approved G4 scope, keep activation off and return for a scoped decision.

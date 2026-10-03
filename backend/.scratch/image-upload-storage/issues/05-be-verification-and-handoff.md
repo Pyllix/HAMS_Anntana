@@ -6,9 +6,9 @@
 
 **Owner / change boundary:** Backend integration/regression, compatibility review, configuration และ FE handoff; ยังไม่แก้ FE ไม่ตัดสินรอจำหน่ายแทนทีม และไม่ถือการเขียน ticket เป็น authorization ให้ mutate production
 
-**Status:** verification prepared; G2/G3/G4 pending — handoff not ready
+**Status:** verification prepared; G2 Employee Photo cache decision, G3 provider acceptance, and G4 pending — handoff not ready
 
-**Verification:** backend contract audit and Frontend caller inventory are recorded in [Image backend verification and handoff](../../../docs/image-backend-handoff.md). G1 has recorded live-provider evidence (Ticket 01); the Ticket 04 dedicated-database HTTP suite passed 17/17 on 2026-10-03. G2 provider cache/read observations, G3 live-provider acceptance, and G4 shared CRUD cutover decision remain open. The user reconfirmed that the wait-disposal photo flow stays untouched for now; possible later removal is not a cutover decision. Do not start Tickets 06/07 or enable managed CRUD attachments until the gate table is updated with verified evidence or an approved scoped decision.
+**Verification:** backend contract audit and Frontend caller inventory are recorded in [Image backend verification and handoff](../../../docs/image-backend-handoff.md). G1 has recorded live-provider evidence (Ticket 01); the Ticket 04 dedicated-database HTTP suite passed 17/17 on 2026-10-03. The focused G2 Cloudinary case passed 1/1 with real access, expiry, and header observations. The user accepted the observed 30-day Asset byte cache for public versioned URLs, while the signed Employee Photo response's `public` 30-day cache remains unapproved pending a Cloudinary capability answer or separate delivery decision. G3 live-provider acceptance and G4 shared CRUD cutover remain open. The user reconfirmed that the wait-disposal photo flow stays untouched for now; possible later removal is not a cutover decision. Do not start Tickets 06/07 or enable managed CRUD attachments until the gate table is updated with verified evidence or an approved scoped decision.
 
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 9; Testing Decisions/G1–G5; Out of Scope.
 
