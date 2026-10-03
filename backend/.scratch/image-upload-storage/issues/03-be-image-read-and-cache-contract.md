@@ -8,6 +8,8 @@
 
 **Status:** implementation-complete; G2 test-account verification pending
 
+**Verification:** On 2026-10-03, the focused image HTTP acceptance suite passed 17/17 with exit code 0 against a fresh isolated PostgreSQL database. This covers the HAMS read/preview/auth/cache-response contract with a deterministic storage adapter. Cloudinary byte delivery, protection, expiry, and actual cache headers remain unverified; see [G2 verification](../../../docs/image-read-g2-verification.md).
+
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 1, 5, 8; Testing Decisions/G2.
 
 ## Acceptance criteria

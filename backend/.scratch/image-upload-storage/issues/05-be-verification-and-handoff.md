@@ -8,7 +8,7 @@
 
 **Status:** verification prepared; G2/G3/G4 pending — handoff not ready
 
-**Verification:** backend contract audit and Frontend caller inventory are recorded in [Image backend verification and handoff](../../../docs/image-backend-handoff.md). G1 has recorded live-provider evidence (Ticket 01); G2 provider cache/read observations, Ticket 04 dedicated-database and G3 live-provider acceptance, and G4 shared CRUD cutover decision remain open. Do not start Tickets 06/07 or enable managed CRUD attachments until the gate table is updated with verified evidence or an approved scoped decision.
+**Verification:** backend contract audit and Frontend caller inventory are recorded in [Image backend verification and handoff](../../../docs/image-backend-handoff.md). G1 has recorded live-provider evidence (Ticket 01); the Ticket 04 dedicated-database HTTP suite passed 17/17 on 2026-10-03. G2 provider cache/read observations, G3 live-provider acceptance, and G4 shared CRUD cutover decision remain open. The user reconfirmed that the wait-disposal photo flow stays untouched for now; possible later removal is not a cutover decision. Do not start Tickets 06/07 or enable managed CRUD attachments until the gate table is updated with verified evidence or an approved scoped decision.
 
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 9; Testing Decisions/G1–G5; Out of Scope.
 

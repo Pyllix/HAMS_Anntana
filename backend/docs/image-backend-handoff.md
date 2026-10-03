@@ -7,12 +7,12 @@
 | Gate | Status | Evidence and remaining work |
 | --- | --- | --- |
 | G1 — source proof and normalization | **Pass recorded** | Ticket 01 records the isolated live Cloudinary run: 23/23 tests passed with 18 synthetic fixtures, scoped cleanup completed, and zero `hams-contract-` objects remained. The API/adapter and disposable-PostgreSQL results are also recorded in [Ticket 01](../.scratch/image-upload-storage/issues/01-be-direct-upload-and-normalization.md). This Ticket 05 audit did not repeat the live run because its test account is not configured here. |
-| G2 — restricted reads and cache behavior | **Pending** | The opt-in Cloudinary checks were not run in this environment. There are no observed provider byte-response headers, account capability results, grant-expiry observations, or account-specific delivery-cost measurements. See [G2 verification](image-read-g2-verification.md). HAMS `private, no-store` response headers do not establish Cloudinary image-byte cache behavior. |
-| G3 — durable lifecycle | **Partial; acceptance pending** | Ticket 04 code, migration, and tests are present; the backend build, Prisma validation, and 450/450 unit tests passed on the current implementation. Its dedicated PostgreSQL HTTP suite and live cleanup contract were not run here, so atomicity/recovery under a real DB and provider deletion/replay/request-count behavior remain unverified. See [Ticket 04](../.scratch/image-upload-storage/issues/04-be-image-cleanup-and-recovery.md) and [G3 verification](image-cleanup-g3-verification.md). |
-| G4 — shared CRUD cutover | **Pending decision** | The existing Frontend still sends Base64 through shared Asset `imageUrl` writes, including the explicitly deferred wait-disposal form. Employee-photo displays still use `imageUrl` directly. No approved decision changes wait-disposal behavior or authorizes this cutover. The caller inventory and compatibility details are below. |
+| G2 — restricted reads and cache behavior | **Pending provider evidence** | The isolated-DB HTTP suite passed 17/17, including HAMS read/preview cases, but the opt-in Cloudinary checks were not run. There are no observed provider byte-response headers, account capability results, grant-expiry observations, or account-specific delivery-cost measurements. See [G2 verification](image-read-g2-verification.md). HAMS `private, no-store` response headers do not establish Cloudinary image-byte cache behavior. |
+| G3 — durable lifecycle | **Partial; provider acceptance pending** | Ticket 04 code, migration, and tests are present; the backend build, Prisma validation, and 450/450 unit tests passed. On 2026-10-03, all 29 committed migrations applied to an isolated PostgreSQL test database and the focused HTTP suite passed 17/17 with exit code 0. The live cleanup contract remains unrun, so provider deletion/replay/request-count behavior is unverified. See [Ticket 04](../.scratch/image-upload-storage/issues/04-be-image-cleanup-and-recovery.md) and [G3 verification](image-cleanup-g3-verification.md). |
+| G4 — shared CRUD cutover | **Pending decision** | The existing Frontend still sends Base64 through shared Asset `imageUrl` writes, including the explicitly deferred wait-disposal form. Employee-photo displays still use `imageUrl` directly. The user reconfirmed on 2026-10-03 that the wait-disposal photo flow is to remain untouched for now; possible later removal is not an approved cutover. The caller inventory and compatibility details are below. |
 | G5 — BE-to-FE readiness | **Pending** | The contract reference and setup checklist exist, but the phase barrier stays closed until G1–G4 have verified evidence or a scoped decision allowed by the spec. |
 
-On this run, `TEST_DATABASE_URL`, the opt-in Cloudinary flag, separate test-cloud credentials, and the fixture-directory variable were absent from the process environment. No database connection, provider request, production configuration change, or Base64-data cleanup was performed for this audit.
+The initial Ticket 05 audit had no dedicated database or test-only Cloudinary settings. A temporary `TEST_DATABASE_URL` was subsequently set only for the isolated local PostgreSQL acceptance run. The synthetic Cloudinary fixture pack is present, but the opt-in flag and separate test-cloud credentials remain absent. No real-provider request, production configuration change, or Base64-data cleanup was performed.
 
 ## Backend contract baseline
 
@@ -43,6 +43,8 @@ This is a read-only inventory. No Frontend files were changed.
 
 The repository default in `.env.example` keeps `IMAGE_CRUD_ATTACHMENT_ENABLED=false`. The deployed value was not inspected. Keep managed CRUD attachment activation behind the release gate; do not infer production configuration from the sample file.
 
+On 2026-10-03, the user reconfirmed that the wait-disposal photo field must not be changed now; the team may remove it later. This leaves G4 open because a wait-disposal request that includes a changed Base64 `imageUrl` still conflicts with an Asset whose image is managed. No silent field ignore, temporary Base64 exception, or wait-disposal migration is authorized by this clarification.
+
 ## Configuration and test setup
 
 Keep the following settings and checks in the BE-only configuration. Cloudinary API secrets must never be copied to Frontend settings or handoff examples.
@@ -63,7 +65,7 @@ Keep the following settings and checks in the BE-only configuration. Cloudinary 
 | `TEST_DATABASE_URL` | Disposable isolated PostgreSQL only | Required for the HTTP acceptance suite and Ticket 04 database lifecycle tests; never point these tests at a shared or production database. |
 | `RUN_CLOUDINARY_CONTRACTS` and `CLOUDINARY_CONTRACT_*` | Opt-in, separate test-only Cloudinary account | Required for G2/G3 real-provider checks and manifest-scoped test cleanup. The test account must differ from the configured application cloud. |
 
-Defaults are mirrored in [`.env.example`](../.env.example). The API reference contains the commands for the isolated HTTP and opt-in provider suites. This audit did not run either suite because the required dedicated DB/provider test settings were absent.
+Defaults are mirrored in [`.env.example`](../.env.example). The API reference contains the commands for the isolated HTTP and opt-in provider suites. The isolated HTTP suite has now passed; the real-provider suite remains unrun because the separate test-cloud credentials are absent.
 
 Missing or invalid provider configuration must fail image upload/read operations explicitly. The contract has no fallback to public Employee Photo URLs, local image storage, or sending image bytes/Base64 through HAMS.
 
@@ -94,10 +96,10 @@ Missing or invalid provider configuration must fail image upload/read operations
 ## Release sequence and remaining work
 
 1. Keep the backend contract additive and the managed CRUD feature flag off while the old shared writers remain active.
-2. Obtain the separate G2 and G3 evidence: provider read/cache observations; dedicated-DB lifecycle/concurrency suite; and the isolated G3 cleanup/replay run with its actual request budget.
+2. Retain the recorded dedicated-DB lifecycle/concurrency result and obtain the remaining G2/G3 real-provider evidence: read/cache observations and the isolated cleanup/replay run with its actual request budget.
 3. Resolve G4 with proven safe isolation or a separately approved cutover decision. In particular, preserve the wait-disposal photo/custody behavior until the team decides its scope.
 4. Only after gates permit FE work, implement the ordinary Asset/User form and display changes against this API reference. Test the FE build and API flow before activation.
 5. Coordinate backend-first deployment and managed-write activation so old Base64 callers cannot race with managed image data. If the platform cannot provide a safe transition under the approved G4 scope, keep activation off and return for a scoped decision.
 6. Record actual test results and configuration ownership, then update the G1–G5 gate table before marking Ticket 05 complete or unblocking Tickets 06/07.
 
-No production environment was mutated, no database was queried, and no cleanup operation was run as part of this handoff audit.
+No production environment was mutated and no provider-object or Base64-data cleanup was run as part of this handoff audit. The only database mutations were in the newly created local disposable test databases used for G3 verification; both were removed afterward.

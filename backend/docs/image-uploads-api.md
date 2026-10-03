@@ -183,19 +183,17 @@ The upload endpoint rejects unrecognized fields, including Base64 and arbitrary 
 
 The backend reads `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`; none belong in the frontend. Optional policy defaults are in `.env.example`: 10,000,000 source bytes, 25,000,000 source pixels, a one-hour signature/attachment window, and per-hour intent budgets.
 
-Run the HTTP acceptance suite against a disposable PostgreSQL database through `TEST_DATABASE_URL`. For a fresh local database, create one whose name contains `test`, sync the current Prisma schema, apply the image locator and durable cleanup migrations, then run the focused suite:
+Run the HTTP acceptance suite against a disposable PostgreSQL database through `TEST_DATABASE_URL`. For a fresh local database, create one whose name contains `test`, apply the committed migrations in order, then run the focused suite. Set `DATABASE_URL` to the same checked test database before applying migrations:
 
 ```powershell
 docker exec hams-postgres createdb -U postgres hams_image_upload_test_20261001
 $env:TEST_DATABASE_URL = 'postgresql://USER:PASSWORD@localhost:5432/hams_image_upload_test_20261001?schema=public'
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
-pnpm exec prisma db push
-pnpm exec prisma db execute --file prisma/migrations/20261003100000_enforce_image_locator_invariants/migration.sql
-pnpm exec prisma db execute --file prisma/migrations/20261003120000_add_durable_image_cleanup_recovery/migration.sql
+pnpm exec prisma migrate deploy
 node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-auth-integration.json --runInBand test/image-uploads.auth-integration.e2e-spec.ts
 ```
 
-The suite checks the test-database name and confirms that the `image_upload` table exists before creating fixtures. It uses real HAMS authentication, CSRF, 2FA, RBAC, and database state, while replacing only the Cloudinary port with a deterministic fake. Adapter unit tests do not contact Cloudinary.
+Do not run `prisma db push` and then replay the image migrations on a fresh database: the current schema already includes the columns and indexes those migrations add, so replaying them fails on duplicate objects. The suite checks the test-database name and confirms that the `image_upload` table exists before creating fixtures. It uses real HAMS authentication, CSRF, 2FA, RBAC, and database state, while replacing only the Cloudinary port with a deterministic fake. Adapter unit tests do not contact Cloudinary.
 
 The real Cloudinary contract suite is opt-in with `RUN_CLOUDINARY_CONTRACTS=true`. It requires a separate test-only Cloudinary account and a synthetic fixture directory configured with the `CLOUDINARY_CONTRACT_*` variables. It refuses to run when the test and regular Cloudinary cloud names match. The suite deletes only its own random `hams-contract-*` IDs. Do not point it at an account containing unrelated or production media.
 
