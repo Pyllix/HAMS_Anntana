@@ -87,6 +87,10 @@ export interface ImageStoragePort {
     expiresAt: Date,
   ): ShortLivedImageGrant;
   deleteObject(reference: ImageObjectReference): Promise<void>;
+  deleteAllocatedImageVariants(input: {
+    readonly publicId: string;
+    readonly storageContext: ImageStorageContext;
+  }): Promise<void>;
 }
 
 export type ImageStorageErrorCode =

@@ -2,14 +2,22 @@ import 'dotenv/config';
 import type { Server } from 'http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Prisma, PrismaClient, UserRole } from '@prisma/client';
+import {
+  ImageCleanupReason,
+  ImageCleanupStatus,
+  Prisma,
+  PrismaClient,
+  UserRole,
+} from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import request from 'supertest';
 import { generateSync } from 'otplib';
 import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/users/users.service';
 import { TwoFactorService } from '../src/auth/two-factor.service';
+import { PrismaService } from '../src/prisma.service';
 import { IMAGE_CLOCK, type ImageClock } from '../src/images/image-clock.port';
+import { ImageCleanupService } from '../src/images/image-cleanup.service';
 import {
   ImageStorageError,
   IMAGE_STORAGE,
@@ -48,6 +56,7 @@ interface UploadIntentResponse {
   readonly creationContextToken: string | null;
   readonly issuedAt: string;
   readonly signatureExpiresAt: string;
+  readonly intentExpiresAt: string;
   readonly uploadInstructions: {
     readonly method: string;
     readonly url: string;
@@ -56,6 +65,8 @@ interface UploadIntentResponse {
 }
 
 interface UploadStatusResponse {
+  readonly intentExpiresAt: string;
+  readonly reconciliationAfter: string;
   readonly status: string;
   readonly attachmentExpiresAt: string | null;
   readonly verifiedImage?: {
@@ -94,6 +105,14 @@ class DeterministicImageStorage implements ImageStoragePort {
   readonly createdInstructions: UploadInstructionsInput[] = [];
   readonly verifiedEvidence: VerifyUploadedObjectInput[] = [];
   readonly deleteCalls: ImageObjectReference[] = [];
+  readonly allocatedCleanupCalls: Array<{
+    publicId: string;
+    storageContext: { provider: string; accountId: string };
+  }> = [];
+  readonly allocatedCleanupAttempts: Array<{
+    publicId: string;
+    storageContext: { provider: string; accountId: string };
+  }> = [];
   readonly readGrants: Array<{
     reference: ImageObjectReference;
     expiresAt: Date;
@@ -101,6 +120,8 @@ class DeterministicImageStorage implements ImageStoragePort {
   failNextInstruction = false;
   failNextVerification = false;
   failNextReadGrant = false;
+  failNextDeletion = false;
+  pauseNextDeletion: (() => Promise<void>) | null = null;
 
   constructor(private readonly clock: ImageClock) {}
 
@@ -208,6 +229,24 @@ class DeterministicImageStorage implements ImageStoragePort {
   deleteObject(reference: ImageObjectReference): Promise<void> {
     this.deleteCalls.push(reference);
     return Promise.resolve();
+  }
+
+  async deleteAllocatedImageVariants(input: {
+    publicId: string;
+    storageContext: { provider: string; accountId: string };
+  }): Promise<void> {
+    this.allocatedCleanupAttempts.push(input);
+    const pause = this.pauseNextDeletion;
+    this.pauseNextDeletion = null;
+    if (pause) await pause();
+    if (this.failNextDeletion) {
+      this.failNextDeletion = false;
+      throw new ImageStorageError(
+        'UNAVAILABLE',
+        'The test provider is temporarily unavailable',
+      );
+    }
+    this.allocatedCleanupCalls.push(input);
   }
 }
 
@@ -556,6 +595,8 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     storage.failNextInstruction = false;
     storage.failNextVerification = false;
     storage.failNextReadGrant = false;
+    storage.failNextDeletion = false;
+    storage.pauseNextDeletion = null;
   });
 
   it('denies unauthenticated upload authorization without creating an intent', async () => {
@@ -1978,5 +2019,316 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
         })
       ).status,
     ).toBe('VERIFIED_PENDING');
+  });
+
+  it('retains soft-deleted photos, recovers cleanup leases, retries outages, and closes the claim-delete race', async () => {
+    const cookie = await issueCsrfCookie(adminCookie);
+    const csrfToken = cookie
+      .split(`${csrfCookieName}=`)
+      .at(-1)
+      ?.split(';', 1)[0];
+    const headers = {
+      Origin: 'http://localhost:5173',
+      Cookie: cookie,
+      'X-CSRF-Token': decodeURIComponent(csrfToken ?? ''),
+    };
+    const cleanupService = app.get(ImageCleanupService);
+    const targetAssetId = createdAssetIds.at(0);
+    if (!targetAssetId) throw new Error('Ticket 02 did not create its Asset');
+    const assetBefore = await prisma.asset.findUniqueOrThrow({
+      where: { id: targetAssetId },
+    });
+
+    const employee = await prisma.user.findUniqueOrThrow({
+      where: { email: fixtureEmails.ticket02Employee },
+    });
+    if (!employee.imagePublicId || !employee.imageVersion) {
+      throw new Error('Ticket 02 did not attach the Employee Photo fixture');
+    }
+    const employeeUpload = await prisma.imageUpload.findUniqueOrThrow({
+      where: { publicId: employee.imagePublicId },
+    });
+    clock.set(fixedNow);
+    await prisma.user.update({
+      where: { id: employee.id },
+      data: { deletedAt: fixedNow },
+    });
+    const retainedCandidate = await prisma.imageCleanup.create({
+      data: {
+        storageProvider: employee.imageStorageProvider as string,
+        storageAccountId: employee.imageStorageAccountId as string,
+        publicId: employee.imagePublicId,
+        uploadId: employeeUpload.id,
+        // Any version of a public ID is retained because cleanup removes every
+        // version/variant under that identity.
+        version: employee.imageVersion + 1,
+        resourceType: 'image',
+        deliveryType: 'authenticated',
+        reason: ImageCleanupReason.SUPERSEDED_ATTACHMENT,
+        status: ImageCleanupStatus.PENDING,
+        eligibleAt: fixedNow,
+      },
+    });
+    await cleanupService.runSweepOnce();
+    expect(
+      (
+        await prisma.imageCleanup.findUniqueOrThrow({
+          where: { id: retainedCandidate.id },
+        })
+      ).status,
+    ).toBe(ImageCleanupStatus.RETAINED);
+    expect(
+      storage.allocatedCleanupAttempts.some(
+        ({ publicId }) => publicId === employee.imagePublicId,
+      ),
+    ).toBe(false);
+    await prisma.user.update({
+      where: { id: employee.id },
+      data: { deletedAt: null },
+    });
+    await prisma.imageCleanup.delete({ where: { id: retainedCandidate.id } });
+
+    const unreportedIntentResponse = await request(server())
+      .post('/images/uploads')
+      .set(headers)
+      .send({
+        purpose: 'ASSET_IMAGE',
+        targetId: targetAssetId,
+        sourceContentType: 'image/jpeg',
+        sourceSizeBytes: 1024,
+      });
+    expect(unreportedIntentResponse.status).toBe(201);
+    const unreported = responseBody<UploadIntentResponse>(
+      unreportedIntentResponse,
+    );
+    const unreportedRow = await prisma.imageUpload.findUniqueOrThrow({
+      where: { id: unreported.uploadId },
+    });
+    expect(unreportedRow.intentExpiresAt.toISOString()).toBe(
+      unreported.intentExpiresAt,
+    );
+    expect(unreportedRow.reconciliationAfter.getTime()).toBeGreaterThan(
+      unreportedRow.signatureExpiresAt.getTime(),
+    );
+
+    clock.set(unreportedRow.intentExpiresAt);
+    const expiredStatusResponse = await request(server())
+      .get(`/images/uploads/${unreported.uploadId}`)
+      .set('Cookie', adminCookie);
+    expect(expiredStatusResponse.status).toBe(200);
+    expect(
+      responseBody<UploadStatusResponse>(expiredStatusResponse).status,
+    ).toBe('EXPIRED');
+    const unreportedCleanup = await prisma.imageCleanup.findFirstOrThrow({
+      where: { uploadId: unreported.uploadId },
+    });
+    expect(unreportedCleanup.reason).toBe(ImageCleanupReason.UNREPORTED_UPLOAD);
+    expect(unreportedCleanup.eligibleAt).toEqual(
+      unreportedRow.reconciliationAfter,
+    );
+    const rejectedClaim = await request(server())
+      .patch(`/asset/${targetAssetId}`)
+      .set(headers)
+      .send({ imageUploadId: unreported.uploadId });
+    expect(rejectedClaim.status).toBe(410);
+    expect(
+      (await prisma.asset.findUniqueOrThrow({ where: { id: targetAssetId } }))
+        .imagePublicId,
+    ).toBe(assetBefore.imagePublicId);
+
+    const beforeHorizon = await cleanupService.runSweepOnce();
+    expect(beforeHorizon.attemptedObjects).toBe(0);
+    expect(
+      (
+        await prisma.imageCleanup.findUniqueOrThrow({
+          where: { id: unreportedCleanup.id },
+        })
+      ).status,
+    ).toBe(ImageCleanupStatus.PENDING);
+
+    // Move the target out of the ready set while draining earlier fixture
+    // work, then restore the original eligibility and an expired lease. This
+    // models a process stopping after durable work was claimed.
+    const originalEligibility = unreportedCleanup.eligibleAt;
+    await prisma.imageCleanup.update({
+      where: { id: unreportedCleanup.id },
+      data: {
+        eligibleAt: new Date(originalEligibility.getTime() + 60 * 60 * 1000),
+      },
+    });
+    clock.set(unreportedRow.reconciliationAfter);
+    for (let sweep = 0; sweep < 100; sweep += 1) {
+      const now = clock.now();
+      const dueUploads = await prisma.imageUpload.count({
+        where: {
+          OR: [
+            {
+              status: 'AUTHORIZED',
+              intentExpiresAt: { lte: now },
+            },
+            {
+              status: 'VERIFIED_PENDING',
+              attachmentExpiresAt: { lte: now },
+            },
+          ],
+        },
+      });
+      const dueCleanup = await prisma.imageCleanup.count({
+        where: {
+          id: { not: unreportedCleanup.id },
+          OR: [
+            {
+              status: ImageCleanupStatus.PENDING,
+              eligibleAt: { lte: now },
+            },
+            {
+              status: ImageCleanupStatus.RETRY,
+              nextAttemptAt: { lte: now },
+            },
+            {
+              status: ImageCleanupStatus.LEASED,
+              leaseExpiresAt: { lte: now },
+            },
+          ],
+        },
+      });
+      if (dueUploads === 0 && dueCleanup === 0) break;
+      await cleanupService.runSweepOnce();
+      if (sweep === 99)
+        throw new Error('Fixture cleanup backlog did not drain');
+    }
+    const eligibleAtRetry = clock.now();
+    await prisma.imageCleanup.update({
+      where: { id: unreportedCleanup.id },
+      data: {
+        eligibleAt: originalEligibility,
+        status: ImageCleanupStatus.LEASED,
+        leaseToken: 'simulated-stopped-worker',
+        leaseExpiresAt: new Date(eligibleAtRetry.getTime() - 1),
+      },
+    });
+
+    storage.failNextDeletion = true;
+    const callsBeforeRecovery = storage.allocatedCleanupAttempts.length;
+    const restartedCoordinator = new ImageCleanupService(
+      app.get(PrismaService),
+      storage,
+      clock,
+    );
+    const failedSweep = await restartedCoordinator.runSweepOnce();
+    expect(failedSweep.attemptedObjects).toBe(1);
+    expect(storage.allocatedCleanupAttempts).toHaveLength(
+      callsBeforeRecovery + 1,
+    );
+    const retryJob = await prisma.imageCleanup.findUniqueOrThrow({
+      where: { id: unreportedCleanup.id },
+    });
+    expect(retryJob.status).toBe(ImageCleanupStatus.RETRY);
+    expect(retryJob.attemptCount).toBe(1);
+    expect(retryJob.lastErrorCode).toBe('PROVIDER_UNAVAILABLE');
+    const retryAt = retryJob.nextAttemptAt;
+    expect(retryAt).not.toBeNull();
+    if (!retryAt) throw new Error('Cleanup retry did not persist its deadline');
+    expect(retryAt.getTime()).toBeGreaterThan(eligibleAtRetry.getTime());
+    clock.set(retryAt);
+    const recoveredSweep = await new ImageCleanupService(
+      app.get(PrismaService),
+      storage,
+      clock,
+    ).runSweepOnce();
+    expect(recoveredSweep.attemptedObjects).toBe(1);
+    expect(recoveredSweep.deletedOrAbsent).toBe(1);
+    expect(
+      (
+        await prisma.imageCleanup.findUniqueOrThrow({
+          where: { id: unreportedCleanup.id },
+        })
+      ).status,
+    ).toBe(ImageCleanupStatus.COMPLETED);
+
+    // Drain older intent/attachment expiries before creating the race target.
+    clock.set(new Date(retryAt.getTime() + 3 * 60 * 60 * 1000));
+    for (let sweep = 0; sweep < 100; sweep += 1) {
+      const now = clock.now();
+      const dueUploads = await prisma.imageUpload.count({
+        where: {
+          OR: [
+            { status: 'AUTHORIZED', intentExpiresAt: { lte: now } },
+            {
+              status: 'VERIFIED_PENDING',
+              attachmentExpiresAt: { lte: now },
+            },
+          ],
+        },
+      });
+      const dueCleanup = await prisma.imageCleanup.count({
+        where: {
+          OR: [
+            { status: ImageCleanupStatus.PENDING, eligibleAt: { lte: now } },
+            { status: ImageCleanupStatus.RETRY, nextAttemptAt: { lte: now } },
+            { status: ImageCleanupStatus.LEASED, leaseExpiresAt: { lte: now } },
+          ],
+        },
+      });
+      if (dueUploads === 0 && dueCleanup === 0) break;
+      await cleanupService.runSweepOnce();
+      if (sweep === 99)
+        throw new Error('Fixture cleanup backlog did not drain');
+    }
+
+    const raceUpload = await createVerifiedUpload(
+      headers,
+      'ASSET_IMAGE',
+      targetAssetId,
+    );
+    const raceRow = await prisma.imageUpload.findUniqueOrThrow({
+      where: { id: raceUpload.uploadId },
+    });
+    const raceTime = new Date(
+      Math.max(
+        raceRow.attachmentExpiresAt?.getTime() ?? 0,
+        raceRow.reconciliationAfter.getTime(),
+      ),
+    );
+    clock.set(raceTime);
+    let signalDeletionStarted: (() => void) | undefined;
+    let releaseDeletion: (() => void) | undefined;
+    const deletionStarted = new Promise<void>((resolve) => {
+      signalDeletionStarted = resolve;
+    });
+    const deletionBarrier = new Promise<void>((resolve) => {
+      releaseDeletion = resolve;
+    });
+    storage.pauseNextDeletion = async () => {
+      signalDeletionStarted?.();
+      await deletionBarrier;
+    };
+    const racingSweep = cleanupService.runSweepOnce();
+    await deletionStarted;
+    expect(
+      (
+        await prisma.imageUpload.findUniqueOrThrow({
+          where: { id: raceUpload.uploadId },
+        })
+      ).status,
+    ).toBe('EXPIRED');
+    const claimDuringDelete = await request(server())
+      .patch(`/asset/${targetAssetId}`)
+      .set(headers)
+      .send({ imageUploadId: raceUpload.uploadId });
+    expect(claimDuringDelete.status).toBe(410);
+    expect(
+      (await prisma.asset.findUniqueOrThrow({ where: { id: targetAssetId } }))
+        .imagePublicId,
+    ).toBe(assetBefore.imagePublicId);
+    releaseDeletion?.();
+    await racingSweep;
+    expect(
+      (
+        await prisma.imageCleanup.findFirstOrThrow({
+          where: { uploadId: raceUpload.uploadId },
+        })
+      ).status,
+    ).toBe(ImageCleanupStatus.COMPLETED);
   });
 });

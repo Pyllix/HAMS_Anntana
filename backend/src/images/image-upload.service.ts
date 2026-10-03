@@ -12,6 +12,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  ImageCleanupReason,
   ImageUploadStatus,
   Prisma,
   type ImageUpload,
@@ -40,9 +41,16 @@ import {
   imagePublicIdForPurpose,
   imagePurposeAllowsRole,
   imageTargetForPurpose,
+  intentWindowMs,
   signatureWindowMs,
+  uploadSettlementHorizonMs,
   uploadBudgets,
 } from './image-upload-policy';
+import {
+  expiredUploadCleanupEligibleAt,
+  expiredUploadCleanupPolicy,
+  enqueueImageCleanup,
+} from './image-cleanup.persistence';
 import { CreateImageUploadDto } from './dto/create-image-upload.dto';
 import {
   ImageReadService,
@@ -61,6 +69,8 @@ interface UploadStatusResponse {
   readonly targetId: string | null;
   readonly issuedAt: string;
   readonly signatureExpiresAt: string;
+  readonly intentExpiresAt: string;
+  readonly reconciliationAfter: string;
   readonly providerCreatedAt: string | null;
   readonly attachmentExpiresAt: string | null;
   readonly claimedTargetId: string | null;
@@ -96,6 +106,7 @@ export class ImageUploadService {
     creationContextToken: string | null;
     issuedAt: string;
     signatureExpiresAt: string;
+    intentExpiresAt: string;
     attachmentExpiresAt: null;
     attachmentWindowSeconds: number;
     acceptedSourceMimeTypes: readonly string[];
@@ -150,6 +161,11 @@ export class ImageUploadService {
       imageDeliveryTypeForPurpose(purpose);
     const signatureExpiresAt = new Date(
       now.getTime() + this.readSignatureWindow(),
+    );
+    const intentExpiresAt = new Date(now.getTime() + this.readIntentWindow());
+    const reconciliationAfter = new Date(
+      Math.max(signatureExpiresAt.getTime(), intentExpiresAt.getTime()) +
+        this.readSettlementHorizon(),
     );
     const creationContextToken = dto.targetId
       ? null
@@ -217,6 +233,8 @@ export class ImageUploadService {
               status: ImageUploadStatus.AUTHORIZED,
               issuedAt: now,
               signatureExpiresAt,
+              intentExpiresAt,
+              reconciliationAfter,
               createdAt: now,
             },
           });
@@ -244,6 +262,7 @@ export class ImageUploadService {
       creationContextToken,
       issuedAt: now.toISOString(),
       signatureExpiresAt: signatureExpiresAt.toISOString(),
+      intentExpiresAt: intentExpiresAt.toISOString(),
       attachmentExpiresAt: null,
       attachmentWindowSeconds: Math.floor(this.readAttachmentWindow() / 1000),
       acceptedSourceMimeTypes: ACCEPTED_SOURCE_MIME_TYPES,
@@ -299,17 +318,23 @@ export class ImageUploadService {
         message: 'This upload is not available for completion',
       });
     }
+    const verificationStartedAt = this.clock.now();
+    if (upload.intentExpiresAt <= verificationStartedAt) {
+      await this.markExpired(upload.id);
+      throw this.expiredException();
+    }
 
     const attemptLimit = this.readBudgets().completionAttemptsPerIntent;
     const reservedAttempt = await this.prisma.imageUpload.updateMany({
       where: {
         id: upload.id,
         status: ImageUploadStatus.AUTHORIZED,
+        intentExpiresAt: { gt: verificationStartedAt },
         verificationAttempts: { lt: attemptLimit },
       },
       data: {
         verificationAttempts: { increment: 1 },
-        updatedAt: this.clock.now(),
+        updatedAt: verificationStartedAt,
       },
     });
     if (reservedAttempt.count !== 1) {
@@ -319,6 +344,13 @@ export class ImageUploadService {
         current.verificationAttempts >= attemptLimit
       ) {
         throw this.rateLimitException();
+      }
+      if (
+        current.status === ImageUploadStatus.AUTHORIZED &&
+        current.intentExpiresAt <= this.clock.now()
+      ) {
+        await this.markExpired(upload.id);
+        throw this.expiredException();
       }
       throw new ConflictException({
         code: 'UPLOAD_STATE_CHANGED',
@@ -343,20 +375,24 @@ export class ImageUploadService {
         error instanceof ImageStorageError &&
         error.code === 'OBJECT_POLICY_REJECTED'
       ) {
-        await this.prisma.imageUpload.updateMany({
-          where: { id: upload.id, status: ImageUploadStatus.AUTHORIZED },
-          data: {
-            status: ImageUploadStatus.REJECTED,
-            rejectionCode: 'UPLOAD_OBJECT_POLICY_REJECTED',
-            updatedAt: this.clock.now(),
-          },
-        });
+        await this.markRejected(upload.id, 'UPLOAD_OBJECT_POLICY_REJECTED');
       }
       this.raiseStorageError(error);
     }
-    this.assertVerifiedImage(upload, verified);
+    try {
+      this.assertVerifiedImage(upload, verified);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        await this.markRejected(upload.id, 'UPLOAD_OBJECT_POLICY_REJECTED');
+      }
+      throw error;
+    }
 
     const now = this.clock.now();
+    if (upload.intentExpiresAt <= now) {
+      await this.markExpired(upload.id);
+      throw this.expiredException();
+    }
     const attachmentExpiresAt = new Date(
       verified.createdAt.getTime() + this.readAttachmentWindow(),
     );
@@ -391,6 +427,14 @@ export class ImageUploadService {
       ) {
         return this.toStatus(current);
       }
+      if (
+        current.status === ImageUploadStatus.EXPIRED ||
+        (current.status === ImageUploadStatus.AUTHORIZED &&
+          current.intentExpiresAt <= now)
+      ) {
+        await this.markExpired(current.id);
+        throw this.expiredException();
+      }
       throw new ConflictException({
         code: 'UPLOAD_STATE_CHANGED',
         message: 'The upload state changed while it was being verified',
@@ -407,13 +451,16 @@ export class ImageUploadService {
   ): Promise<UploadStatusResponse> {
     const upload = await this.findOwnedUpload(actor, uploadId);
     this.assertPurposePermission(actor.role, upload.purpose);
+    const now = this.clock.now();
     if (
-      upload.status === ImageUploadStatus.VERIFIED_PENDING &&
-      upload.attachmentExpiresAt &&
-      upload.attachmentExpiresAt <= this.clock.now()
+      (upload.status === ImageUploadStatus.AUTHORIZED &&
+        upload.intentExpiresAt <= now) ||
+      (upload.status === ImageUploadStatus.VERIFIED_PENDING &&
+        upload.attachmentExpiresAt !== null &&
+        upload.attachmentExpiresAt <= now)
     ) {
       await this.markExpired(upload.id);
-      return this.toStatus({ ...upload, status: ImageUploadStatus.EXPIRED });
+      return this.toStatus(await this.findOwnedUpload(actor, uploadId));
     }
     return this.toStatus(upload);
   }
@@ -610,6 +657,8 @@ export class ImageUploadService {
       targetId: upload.targetId,
       issuedAt: upload.issuedAt.toISOString(),
       signatureExpiresAt: upload.signatureExpiresAt.toISOString(),
+      intentExpiresAt: upload.intentExpiresAt.toISOString(),
+      reconciliationAfter: upload.reconciliationAfter.toISOString(),
       providerCreatedAt: upload.providerCreatedAt?.toISOString() ?? null,
       attachmentExpiresAt: upload.attachmentExpiresAt?.toISOString() ?? null,
       claimedTargetId: upload.claimedTargetId,
@@ -633,6 +682,14 @@ export class ImageUploadService {
 
   private readSignatureWindow(): number {
     return this.readConfiguration(signatureWindowMs);
+  }
+
+  private readIntentWindow(): number {
+    return this.readConfiguration(intentWindowMs);
+  }
+
+  private readSettlementHorizon(): number {
+    return this.readConfiguration(uploadSettlementHorizonMs);
   }
 
   private readConfiguration<T>(load: () => T): T {
@@ -698,12 +755,68 @@ export class ImageUploadService {
   }
 
   private async markExpired(uploadId: string): Promise<void> {
-    await this.prisma.imageUpload.updateMany({
-      where: { id: uploadId, status: ImageUploadStatus.VERIFIED_PENDING },
-      data: {
-        status: ImageUploadStatus.EXPIRED,
-        updatedAt: this.clock.now(),
-      },
+    const now = this.clock.now();
+    await this.prisma.$transaction(async (tx) => {
+      const upload = await tx.imageUpload.findUnique({
+        where: { id: uploadId },
+      });
+      if (
+        !upload ||
+        (upload.status !== ImageUploadStatus.VERIFIED_PENDING &&
+          upload.status !== ImageUploadStatus.AUTHORIZED)
+      ) {
+        return;
+      }
+      const cleanupPolicy = expiredUploadCleanupPolicy(upload, now);
+      if (!cleanupPolicy) return;
+      const updated = await tx.imageUpload.updateMany({
+        where: {
+          id: upload.id,
+          status: upload.status,
+          ...cleanupPolicy.deadlineFilter,
+        },
+        data: {
+          status: ImageUploadStatus.EXPIRED,
+          updatedAt: now,
+        },
+      });
+      if (updated.count !== 1) return;
+      await enqueueImageCleanup(
+        tx,
+        upload,
+        cleanupPolicy.reason,
+        expiredUploadCleanupEligibleAt(upload, now),
+        upload.verifiedVersion,
+      );
+    });
+  }
+
+  private async markRejected(
+    uploadId: string,
+    rejectionCode: string,
+  ): Promise<void> {
+    const now = this.clock.now();
+    await this.prisma.$transaction(async (tx) => {
+      const upload = await tx.imageUpload.findUnique({
+        where: { id: uploadId },
+      });
+      if (!upload || upload.status !== ImageUploadStatus.AUTHORIZED) return;
+      const updated = await tx.imageUpload.updateMany({
+        where: { id: uploadId, status: ImageUploadStatus.AUTHORIZED },
+        data: {
+          status: ImageUploadStatus.REJECTED,
+          rejectionCode,
+          updatedAt: now,
+        },
+      });
+      if (updated.count !== 1) return;
+      await enqueueImageCleanup(
+        tx,
+        upload,
+        ImageCleanupReason.REJECTED_UPLOAD,
+        upload.reconciliationAfter,
+        null,
+      );
     });
   }
 

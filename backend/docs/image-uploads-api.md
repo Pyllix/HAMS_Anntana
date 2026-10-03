@@ -1,6 +1,6 @@
-# Image upload and read API (Tickets 01–03)
+# Image upload, read, and cleanup API (Tickets 01–04)
 
-This document covers direct upload authorization and verification (Ticket 01), the additive Asset/User CRUD attachment contract (Ticket 02), and authenticated read/preview behavior (Ticket 03). Completing an upload creates a verified pending image; it does not change an Asset or User record. Cleanup processing remains a separate ticket.
+This document covers direct upload authorization and verification (Ticket 01), the additive Asset/User CRUD attachment contract (Ticket 02), authenticated read/preview behavior (Ticket 03), and durable image cleanup/recovery (Ticket 04). Completing an upload creates a verified pending image; it does not change an Asset or User record.
 
 Upload, status, preview, photo-grant, and photo-read error responses use `Cache-Control: private, no-store`. The session endpoint uses `Cache-Control: private, no-store`. Requests use the existing HAMS cookie session, CSRF, session-lifetime, mandatory-enrollment/2FA, and role guards.
 
@@ -32,6 +32,7 @@ For an existing record, supply its canonical ID. For a create form, omit `target
   "creationContextToken": null,
   "issuedAt": "2026-10-01T00:00:00.000Z",
   "signatureExpiresAt": "2026-10-01T01:00:00.000Z",
+  "intentExpiresAt": "2026-10-01T01:00:00.000Z",
   "attachmentExpiresAt": null,
   "attachmentWindowSeconds": 3600,
   "acceptedSourceMimeTypes": [
@@ -65,7 +66,7 @@ The browser sends the file and every returned field directly to Cloudinary as `m
 
 Both purposes use Cloudinary's `/image/upload` REST endpoint. The signed `type` form field is `upload` for Asset Image and `authenticated` for Employee Photo; forward every returned field unchanged.
 
-The one-hour upload signature expiry and the one-hour attachment window are different clocks. HAMS starts the attachment window from Cloudinary's trusted `created_at`, not from intent creation or a completion retry. Until verification, `attachmentExpiresAt` is `null`.
+The provider signature, HAMS intent, and pending attachment use separate clocks. The intent currently defaults to one hour and cannot exceed one hour; it limits completion and new claims. The provider's trusted `created_at` starts the configurable attachment window, which defaults to and cannot exceed one hour; intent creation and completion retries do not renew it. Until verification, `attachmentExpiresAt` is `null`. HAMS retains a `reconciliationAfter` tombstone through the later of provider authorization and intent expiry plus the configured settlement horizon; that internal value is visible on status responses and is not a claim deadline.
 
 ## Verify completion
 
@@ -142,6 +143,16 @@ The business record, locator fields, upload claim, and cleanup work for the actu
 
 The legacy Asset `imageUrl` input remains for the deferred caller inventory/cutover gate. Employee Photo create/update no longer accepts an `imageUrl`; callers must use `imageUploadId` for a managed photo.
 
+## Durable cleanup and recovery (Ticket 04)
+
+Expiry, rejection, and superseded-image cleanup are stored in PostgreSQL. The backend runs a non-blocking sweep at startup and on a configurable interval while awake. A stopped process leaves pending work, retries, and leases in the database for the next process. Provider failures do not roll back a committed Asset/User save. A lease covers the full bounded provider request sequence; retry delay grows with bounded deterministic jitter.
+
+At or after `intentExpiresAt`, completion and new claims are rejected. An expired pending image becomes cleanup-eligible only after its reconciliation horizon; attachment expiry is based on trusted provider creation time. Attached records have no pending-image TTL. Reference checks include soft-deleted Users, and cleanup never deletes a still-referenced image. Cleanup probes only the exact HAMS-allocated identity in the known image/video/raw and upload/private/authenticated namespaces. Raw probes batch the allocated key and accepted source-extension aliases. A provider not-found result completes idempotently. This bounded scan does not search the Cloudinary account and does not apply to legacy fixture URLs.
+
+Defaults are listed in `.env.example`. `IMAGE_UPLOAD_INTENT_WINDOW_SECONDS` and `IMAGE_UPLOAD_SETTLEMENT_HORIZON_SECONDS` control intent expiry and tombstone recovery; the settlement horizon is at least one minute to cover in-flight verification. `IMAGE_CLEANUP_INTERVAL_SECONDS`, `IMAGE_CLEANUP_BATCH_SIZE`, `IMAGE_CLEANUP_PROVIDER_REQUEST_BUDGET`, `IMAGE_CLEANUP_LEASE_SECONDS`, `IMAGE_CLEANUP_MAX_BACKOFF_SECONDS`, and `IMAGE_CLEANUP_PROVIDER_TIMEOUT_MS` bound worker activity. One allocated identity uses at most 9 Admin API requests (raw extension aliases share a request); the default budget of 18 therefore attempts at most two identities per sweep. Physical deletion can be delayed while Render sleeps or the provider is unavailable; one hour is the attachment deadline, not a physical-deletion SLA.
+
+The opt-in Cloudinary contract test exercises an unreported raw upload, replay under the still-valid allocated signature, bounded cleanup, and repeated deletion. It is scoped to random `hams-contract-*` identities in a separate test-only cloud. The real-provider result and observed request budget are recorded in [image-cleanup-g3-verification.md](image-cleanup-g3-verification.md); do not infer provider behavior from the fake-storage HTTP tests.
+
 ## Stable feature errors
 
 | HTTP | Code                               | Meaning                                                                   |
@@ -172,7 +183,7 @@ The upload endpoint rejects unrecognized fields, including Base64 and arbitrary 
 
 The backend reads `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`; none belong in the frontend. Optional policy defaults are in `.env.example`: 10,000,000 source bytes, 25,000,000 source pixels, a one-hour signature/attachment window, and per-hour intent budgets.
 
-Run the HTTP acceptance suite against a disposable PostgreSQL database through `TEST_DATABASE_URL`. For a fresh local database, create one whose name contains `test`, sync the current Prisma schema, then run the focused suite:
+Run the HTTP acceptance suite against a disposable PostgreSQL database through `TEST_DATABASE_URL`. For a fresh local database, create one whose name contains `test`, sync the current Prisma schema, apply the image locator and durable cleanup migrations, then run the focused suite:
 
 ```powershell
 docker exec hams-postgres createdb -U postgres hams_image_upload_test_20261001
@@ -180,6 +191,7 @@ $env:TEST_DATABASE_URL = 'postgresql://USER:PASSWORD@localhost:5432/hams_image_u
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
 pnpm exec prisma db push
 pnpm exec prisma db execute --file prisma/migrations/20261003100000_enforce_image_locator_invariants/migration.sql
+pnpm exec prisma db execute --file prisma/migrations/20261003120000_add_durable_image_cleanup_recovery/migration.sql
 node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-auth-integration.json --runInBand test/image-uploads.auth-integration.e2e-spec.ts
 ```
 

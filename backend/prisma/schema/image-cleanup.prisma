@@ -3,7 +3,8 @@ model ImageCleanup {
   storageProvider  String             @map("storage_provider") @db.VarChar(40)
   storageAccountId String             @map("storage_account_id") @db.VarChar(128)
   publicId         String             @map("public_id") @db.VarChar(255)
-  version          Int
+  uploadId         String?            @map("upload_id") @db.Uuid
+  version          Int?
   resourceType     String             @map("resource_type") @db.VarChar(20)
   deliveryType     String             @map("delivery_type") @db.VarChar(20)
   reason           ImageCleanupReason
@@ -20,6 +21,8 @@ model ImageCleanup {
 
   @@unique([storageProvider, storageAccountId, publicId, resourceType, deliveryType])
   @@index([status, eligibleAt, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@index([uploadId])
   @@index([storageProvider, storageAccountId, publicId])
   @@map("image_cleanup")
 }

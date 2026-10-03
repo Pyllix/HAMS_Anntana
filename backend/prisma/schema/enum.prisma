@@ -104,6 +104,7 @@ enum ImageCleanupStatus {
   LEASED
   RETRY
   COMPLETED
+  RETAINED
 }
 
 enum ImageCleanupReason {

@@ -16,6 +16,8 @@ model ImageUpload {
   status               ImageUploadStatus  @default(AUTHORIZED)
   issuedAt             DateTime           @map("issued_at")
   signatureExpiresAt   DateTime           @map("signature_expires_at")
+  intentExpiresAt      DateTime           @map("intent_expires_at")
+  reconciliationAfter  DateTime           @map("reconciliation_after")
   providerCreatedAt    DateTime?          @map("provider_created_at")
   attachmentExpiresAt  DateTime?          @map("attachment_expires_at")
   verifiedVersion      Int?               @map("verified_version")
@@ -35,6 +37,7 @@ model ImageUpload {
   @@index([uploaderId, purpose, createdAt])
   @@index([storageProvider, storageAccountId, createdAt])
   @@index([status, signatureExpiresAt])
+  @@index([status, intentExpiresAt])
   @@index([status, attachmentExpiresAt])
   @@map("image_upload")
 }

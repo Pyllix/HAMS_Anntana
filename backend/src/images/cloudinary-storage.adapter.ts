@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
   ImageStorageError,
+  type ImageDeliveryType,
   type ImageStorageContext,
   type ImageObjectReference,
   type ImageStoragePort,
@@ -10,12 +11,18 @@ import {
   type VerifiedImageObject,
   type VerifyUploadedObjectInput,
 } from './image-storage.port';
+import {
+  ACCEPTED_SOURCE_FORMATS,
+  imageCleanupProviderTimeoutMs,
+} from './image-upload-policy';
 
 interface CloudinaryCredentials {
   readonly cloudName: string;
   readonly apiKey: string;
   readonly apiSecret: string;
 }
+
+type CloudinaryDeliveryType = ImageDeliveryType | 'private';
 
 interface CloudinaryResourceResponse {
   public_id?: unknown;
@@ -221,8 +228,59 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
 
   async deleteObject(reference: ImageObjectReference): Promise<void> {
     const credentials = this.credentials(reference.storageContext);
+    await this.deletePublicIds(credentials, reference, [reference.publicId]);
+  }
+
+  async deleteAllocatedImageVariants(input: {
+    readonly publicId: string;
+    readonly storageContext: ImageStorageContext;
+  }): Promise<void> {
+    if (!/^hams-[a-z\d-]{1,240}$/i.test(input.publicId)) {
+      throw new ImageStorageError(
+        'OBJECT_POLICY_REJECTED',
+        'The allocated image identity is invalid',
+      );
+    }
+    const credentials = this.credentials(input.storageContext);
+    const resourceTypes = ['image', 'video', 'raw'] as const;
+    const deliveryTypes = ['upload', 'private', 'authenticated'] as const;
+    const rawPublicIds = [
+      input.publicId,
+      ...ACCEPTED_SOURCE_FORMATS.map(
+        (extension) => `${input.publicId}.${extension}`,
+      ),
+    ];
+
+    // Nine bounded Admin API requests cover alternate resource/delivery
+    // namespaces. Raw extension aliases are sent as one manifest-scoped batch.
+    for (const resourceType of resourceTypes) {
+      for (const deliveryType of deliveryTypes) {
+        const publicIds =
+          resourceType === 'raw' ? rawPublicIds : [input.publicId];
+        await this.deletePublicIds(
+          credentials,
+          {
+            publicId: input.publicId,
+            storageContext: input.storageContext,
+            resourceType,
+            deliveryType,
+          },
+          publicIds,
+        );
+      }
+    }
+  }
+
+  private async deletePublicIds(
+    credentials: CloudinaryCredentials,
+    reference: Pick<ImageObjectReference, 'resourceType' | 'storageContext'> & {
+      readonly publicId: string;
+      readonly deliveryType: CloudinaryDeliveryType;
+    },
+    publicIds: readonly string[],
+  ): Promise<void> {
     const body = new URLSearchParams();
-    body.append('public_ids[]', reference.publicId);
+    for (const publicId of publicIds) body.append('public_ids[]', publicId);
     let response: Response;
     try {
       response = await fetch(
@@ -234,7 +292,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
             'content-type': 'application/x-www-form-urlencoded',
           },
           body,
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(imageCleanupProviderTimeoutMs()),
         },
       );
     } catch {
@@ -243,6 +301,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
         'Image storage is temporarily unavailable',
       );
     }
+    if (response.status === 404) return;
     if (!response.ok) {
       throw new ImageStorageError(
         'UNAVAILABLE',
@@ -253,8 +312,11 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     const deleted = isRecord(payload) ? payload.deleted : null;
     if (
       !isRecord(deleted) ||
-      !['deleted', 'not_found', 'not found'].includes(
-        String(deleted[reference.publicId]),
+      publicIds.some(
+        (publicId) =>
+          !['deleted', 'not_found', 'not found'].includes(
+            String(deleted[publicId]).toLowerCase(),
+          ),
       )
     ) {
       throw new ImageStorageError(

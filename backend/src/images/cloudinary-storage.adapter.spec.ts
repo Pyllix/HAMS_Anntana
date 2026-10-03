@@ -157,6 +157,84 @@ describe('Cloudinary storage adapter contract', () => {
     }
   });
 
+  it('reconciles a bounded manifest of allocated resource, delivery, and raw extension variants', async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init): Promise<Response> => {
+        const body = init?.body;
+        const publicIds =
+          body instanceof URLSearchParams ? body.getAll('public_ids[]') : [];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              deleted: Object.fromEntries(
+                publicIds.map((publicId) => [publicId, 'not_found']),
+              ),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      });
+    try {
+      await adapter.deleteAllocatedImageVariants({
+        publicId: 'hams-asset-image-123e4567-e89b-12d3-a456-426614174000',
+        storageContext: {
+          provider: 'cloudinary',
+          accountId: 'hams-test-cloud',
+        },
+      });
+
+      expect(fetchSpy).toHaveBeenCalledTimes(9);
+      const urls = fetchSpy.mock.calls.map(([url]) => requestUrlString(url));
+      expect(urls).toContain(
+        'https://api.cloudinary.com/v1_1/hams-test-cloud/resources/raw/upload',
+      );
+      expect(urls).toContain(
+        'https://api.cloudinary.com/v1_1/hams-test-cloud/resources/video/private',
+      );
+      const rawUpload = fetchSpy.mock.calls.find(
+        ([url]) =>
+          requestUrlString(url) ===
+          'https://api.cloudinary.com/v1_1/hams-test-cloud/resources/raw/upload',
+      );
+      const rawIds = (rawUpload?.[1]?.body as URLSearchParams).getAll(
+        'public_ids[]',
+      );
+      expect(rawIds).toEqual([
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.jpg',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.jpeg',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.png',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.webp',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.heic',
+        'hams-asset-image-123e4567-e89b-12d3-a456-426614174000.heif',
+      ]);
+      expect(JSON.stringify(fetchSpy.mock.calls)).not.toContain(
+        'test-api-secret',
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('rejects cleanup keys outside the HAMS-allocated namespace before provider calls', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    try {
+      await expect(
+        adapter.deleteAllocatedImageVariants({
+          publicId: 'https://untrusted.example/image.jpg',
+          storageContext: {
+            provider: 'cloudinary',
+            accountId: 'hams-test-cloud',
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'OBJECT_POLICY_REJECTED' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('creates public references and short-lived authenticated download grants only for matching delivery types', () => {
     const assetReference = {
       publicId: 'hams-asset-image-1',
@@ -232,4 +310,12 @@ describe('Cloudinary storage adapter contract', () => {
 function restoreEnvironment(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
+}
+
+function requestUrlString(input: RequestInfo | URL): string {
+  return input instanceof Request
+    ? input.url
+    : input instanceof URL
+      ? input.href
+      : input;
 }

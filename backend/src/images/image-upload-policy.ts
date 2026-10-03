@@ -5,7 +5,7 @@ import type {
   ImageUploadPolicy,
 } from './image-storage.port';
 
-const ACCEPTED_SOURCE_FORMATS = [
+export const ACCEPTED_SOURCE_FORMATS = [
   'jpg',
   'jpeg',
   'png',
@@ -27,6 +27,9 @@ export const DEFAULT_MAX_SOURCE_BYTES = 10_000_000;
 export const DEFAULT_MAX_SOURCE_PIXELS = 25_000_000;
 export const DEFAULT_ATTACHMENT_WINDOW_MS = 60 * 60 * 1000;
 export const DEFAULT_SIGNATURE_WINDOW_MS = 60 * 60 * 1000;
+export const DEFAULT_UPLOAD_SETTLEMENT_HORIZON_MS = 10 * 60 * 1000;
+export const MIN_UPLOAD_SETTLEMENT_HORIZON_MS = 60 * 1000;
+export const IMAGE_CLEANUP_PROVIDER_REQUESTS_PER_OBJECT = 9;
 
 const IMAGE_PURPOSE_ROLES: Readonly<Record<ImagePurpose, readonly UserRole[]>> =
   {
@@ -124,7 +127,7 @@ export function attachmentWindowMs(): number {
     configuredPositiveInteger(
       'IMAGE_UPLOAD_ATTACHMENT_WINDOW_SECONDS',
       DEFAULT_ATTACHMENT_WINDOW_MS / 1000,
-      60 * 60 * 24,
+      DEFAULT_ATTACHMENT_WINDOW_MS / 1000,
     ) * 1000
   );
 }
@@ -138,6 +141,85 @@ export function signatureWindowMs(): number {
       DEFAULT_SIGNATURE_WINDOW_MS / 1000,
     ) * 1000,
     DEFAULT_SIGNATURE_WINDOW_MS,
+  );
+}
+
+export function intentWindowMs(): number {
+  return (
+    configuredPositiveInteger(
+      'IMAGE_UPLOAD_INTENT_WINDOW_SECONDS',
+      DEFAULT_SIGNATURE_WINDOW_MS / 1000,
+      DEFAULT_SIGNATURE_WINDOW_MS / 1000,
+    ) * 1000
+  );
+}
+
+export function uploadSettlementHorizonMs(): number {
+  const settlementHorizonMs =
+    configuredPositiveInteger(
+      'IMAGE_UPLOAD_SETTLEMENT_HORIZON_SECONDS',
+      DEFAULT_UPLOAD_SETTLEMENT_HORIZON_MS / 1000,
+      60 * 60,
+    ) * 1000;
+  if (settlementHorizonMs < MIN_UPLOAD_SETTLEMENT_HORIZON_MS) {
+    throw new Error(
+      'IMAGE_UPLOAD_SETTLEMENT_HORIZON_SECONDS must be at least 60',
+    );
+  }
+  return settlementHorizonMs;
+}
+
+export function imageCleanupConfiguration(): {
+  readonly intervalMs: number;
+  readonly batchSize: number;
+  readonly providerRequestBudget: number;
+  readonly leaseMs: number;
+  readonly providerTimeoutMs: number;
+  readonly maxBackoffMs: number;
+} {
+  const providerRequestBudget = configuredPositiveInteger(
+    'IMAGE_CLEANUP_PROVIDER_REQUEST_BUDGET',
+    18,
+    90,
+  );
+  if (providerRequestBudget < IMAGE_CLEANUP_PROVIDER_REQUESTS_PER_OBJECT) {
+    throw new Error(
+      `IMAGE_CLEANUP_PROVIDER_REQUEST_BUDGET must be at least ${IMAGE_CLEANUP_PROVIDER_REQUESTS_PER_OBJECT}`,
+    );
+  }
+  const leaseMs =
+    configuredPositiveInteger('IMAGE_CLEANUP_LEASE_SECONDS', 120, 3600) * 1000;
+  const providerTimeoutMs = imageCleanupProviderTimeoutMs();
+  if (
+    leaseMs <
+    IMAGE_CLEANUP_PROVIDER_REQUESTS_PER_OBJECT * providerTimeoutMs + 5_000
+  ) {
+    throw new Error(
+      'IMAGE_CLEANUP_LEASE_SECONDS must cover the bounded provider request sequence',
+    );
+  }
+  return {
+    intervalMs:
+      configuredPositiveInteger('IMAGE_CLEANUP_INTERVAL_SECONDS', 300, 3600) *
+      1000,
+    batchSize: configuredPositiveInteger('IMAGE_CLEANUP_BATCH_SIZE', 20, 500),
+    providerRequestBudget,
+    leaseMs,
+    providerTimeoutMs,
+    maxBackoffMs:
+      configuredPositiveInteger(
+        'IMAGE_CLEANUP_MAX_BACKOFF_SECONDS',
+        24 * 60 * 60,
+        7 * 24 * 60 * 60,
+      ) * 1000,
+  };
+}
+
+export function imageCleanupProviderTimeoutMs(): number {
+  return configuredPositiveInteger(
+    'IMAGE_CLEANUP_PROVIDER_TIMEOUT_MS',
+    5_000,
+    30_000,
   );
 }
 

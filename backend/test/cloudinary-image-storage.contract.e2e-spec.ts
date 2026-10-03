@@ -451,6 +451,97 @@ cloudinaryDescribe(
       60_000,
     );
 
+    it('reconciles an unreported raw alias and a replay under the allocated identity', async () => {
+      const allocated = allocateInstructions('ASSET_IMAGE');
+      const bytes = await readFile(join(fixtureDirectory, 'jpeg.jpg'));
+      const originalFetch = globalThis.fetch;
+      let deleteRequests = 0;
+      globalThis.fetch = async (
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const requestUrl =
+          input instanceof Request
+            ? input.url
+            : input instanceof URL
+              ? input.href
+              : String(input);
+        if (
+          init?.method === 'DELETE' &&
+          new URL(requestUrl).pathname.includes('/resources/')
+        ) {
+          deleteRequests += 1;
+        }
+        return originalFetch(input, init);
+      };
+
+      const uploadRawAlias = async (): Promise<UploadEvidence> => {
+        const body = new FormData();
+        for (const [key, value] of Object.entries(
+          allocated.instructions.fields,
+        )) {
+          body.append(key, value);
+        }
+        body.append(
+          'file',
+          new Blob([bytes], { type: 'image/jpeg' }),
+          'jpeg.jpg',
+        );
+        const response = await fetch(
+          allocated.instructions.url.replace('/image/upload', '/raw/upload'),
+          { method: 'POST', body },
+        );
+        expect(response.status).toBe(200);
+        const evidence = await responseEvidence(response);
+        expect([allocated.publicId, `${allocated.publicId}.jpg`]).toContain(
+          evidence.publicId,
+        );
+        return evidence;
+      };
+
+      try {
+        const firstReplay = await uploadRawAlias();
+        await expect(
+          adapter.verifyUploadedObject({
+            publicId: allocated.publicId,
+            storageContext,
+            deliveryType: 'upload',
+            evidence: firstReplay,
+            policy: imageUploadPolicy('ASSET_IMAGE'),
+          }),
+        ).rejects.toMatchObject({
+          code:
+            firstReplay.publicId === allocated.publicId
+              ? 'OBJECT_NOT_FOUND'
+              : 'EVIDENCE_INVALID',
+        });
+
+        // This represents recovery of the allocated key without a completion
+        // callback. Reusing the still-live signed intent simulates a late replay.
+        await adapter.deleteAllocatedImageVariants({
+          publicId: allocated.publicId,
+          storageContext,
+        });
+        const replay = await uploadRawAlias();
+        expect(replay.publicId).toBe(firstReplay.publicId);
+        await adapter.deleteAllocatedImageVariants({
+          publicId: allocated.publicId,
+          storageContext,
+        });
+        // A repeated bounded sweep must accept provider not-found as success.
+        await adapter.deleteAllocatedImageVariants({
+          publicId: allocated.publicId,
+          storageContext,
+        });
+        expect(deleteRequests).toBe(27);
+        console.info(
+          `[image-cleanup-g3-budget] ${JSON.stringify({ allocatedIdentities: 1, deleteRequests, maxRequestsPerIdentity: 9 })}`,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }, 90_000);
+
     it('rejects changing the signed employee delivery type to public', async () => {
       const allocated = allocateInstructions('EMPLOYEE_PHOTO');
       const bytes = await readFile(join(fixtureDirectory, 'jpeg.jpg'));

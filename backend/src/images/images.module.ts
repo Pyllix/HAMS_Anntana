@@ -13,6 +13,7 @@ import { ImageUploadService } from './image-upload.service';
 import { ImageUploadsController } from './image-uploads.controller';
 import { ImageAttachmentService } from './image-attachment.service';
 import { ImageReadService } from './image-read.service';
+import { ImageCleanupService } from './image-cleanup.service';
 
 @Module({
   controllers: [ImageUploadsController],
@@ -21,11 +22,12 @@ import { ImageReadService } from './image-read.service';
     ImageUploadService,
     ImageAttachmentService,
     ImageReadService,
+    ImageCleanupService,
     CloudinaryStorageAdapter,
     { provide: IMAGE_STORAGE, useExisting: CloudinaryStorageAdapter },
     { provide: IMAGE_CLOCK, useValue: { now: () => new Date() } },
   ],
-  exports: [ImageAttachmentService, ImageReadService],
+  exports: [ImageAttachmentService, ImageReadService, ImageCleanupService],
 })
 export class ImagesModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

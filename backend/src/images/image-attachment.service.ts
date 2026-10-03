@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import {
   ImageCleanupReason,
-  ImageCleanupStatus,
   ImageUploadPurpose,
   ImageUploadStatus,
   Prisma,
@@ -36,6 +35,7 @@ import {
   imageTargetForPurpose,
   imageUploadPolicy,
 } from './image-upload-policy';
+import { enqueueImageCleanup } from './image-cleanup.persistence';
 
 export type ImageClaimOperation = 'CREATE' | 'UPDATE';
 
@@ -549,19 +549,15 @@ export class ImageAttachmentService {
     });
     if (superseded.count !== 1) throw this.claimConflict();
 
-    await tx.imageCleanup.create({
-      data: {
-        storageProvider: locator.storageProvider,
-        storageAccountId: locator.storageAccountId,
-        publicId: locator.publicId,
-        version: locator.version,
-        resourceType: locator.resourceType,
-        deliveryType: locator.deliveryType,
-        reason: ImageCleanupReason.SUPERSEDED_ATTACHMENT,
-        status: ImageCleanupStatus.PENDING,
-        eligibleAt: now,
-      },
-    });
+    await enqueueImageCleanup(
+      tx,
+      previousUpload,
+      ImageCleanupReason.SUPERSEDED_ATTACHMENT,
+      new Date(
+        Math.max(now.getTime(), previousUpload.reconciliationAfter.getTime()),
+      ),
+      locator.version,
+    );
   }
 
   private creationContextHash(token?: string | null): string | null {
