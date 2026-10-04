@@ -10,6 +10,9 @@ import request from 'supertest';
 import { AssetController } from '../src/asset/asset.controller';
 import { AssetService } from '../src/asset/asset.service';
 import { ImageAttachmentService } from '../src/images/image-attachment.service';
+import { CloudinaryStorageAdapter } from '../src/images/cloudinary-storage.adapter';
+import { IMAGE_CLOCK } from '../src/images/image-clock.port';
+import { IMAGE_STORAGE } from '../src/images/image-storage.port';
 import { RepairsController } from '../src/repairs/repairs.controller';
 import { RepairsService } from '../src/repairs/repairs.service';
 import { PrismaService } from '../src/prisma.service';
@@ -255,14 +258,14 @@ describeWithDatabase(
           AssetService,
           RepairsService,
           { provide: PrismaService, useValue: prisma },
+          ImageAttachmentService,
           {
-            provide: ImageAttachmentService,
-            useValue: {
-              committedTargetForRetry: jest.fn(),
-              preflightClaim: jest.fn(),
-              claimInTransaction: jest.fn(),
-              lockTargetRow: jest.fn(),
-            },
+            provide: IMAGE_STORAGE,
+            useClass: CloudinaryStorageAdapter,
+          },
+          {
+            provide: IMAGE_CLOCK,
+            useValue: { now: () => new Date() },
           },
         ],
       }).compile();

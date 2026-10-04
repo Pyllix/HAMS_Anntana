@@ -1,0 +1,9 @@
+// This file defines the base configuration for the Prisma schema, including the generator and datasource settings.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -6,9 +6,9 @@
 
 **Owner / change boundary:** Backend durable cleanup/reconciliation และ transaction/claim coordination; รวม HTTP, dedicated DB และ real-provider recovery tests ไม่ทำ UI หรือเพิ่ม infrastructure ที่มีค่าใช้จ่าย
 
-**Status:** implemented; dedicated-DB acceptance passed, real-provider verification pending
+**Status:** complete — 2026-10-04; dedicated-DB lifecycle and real-provider replay/deletion acceptance passed.
 
-**Verification:** Prisma schemas, backend build, Ticket 04 ESLint, focused image unit tests, and the full unit suite passed (450/450 on the final run). On 2026-10-03, all 29 committed migrations applied to a fresh isolated local PostgreSQL test database and the image HTTP acceptance suite passed 17/17 tests with exit code 0. G3 remains pending until the opt-in Cloudinary contract is run with its separate test account; see [image cleanup verification](../../../docs/image-cleanup-g3-verification.md).
+**Verification:** On 2026-10-04, the Backend build, TypeScript check, and full unit suite passed (52 suites, 450/450 tests). All 29 migrations applied to fresh isolated PostgreSQL containers; the final image HTTP acceptance run passed 17/17 and asset-status regressions passed 18/18, both with exit code 0. The separate opt-in Cloudinary G3 case passed 1/1 (24 other cases intentionally filtered), including unreported raw alias cleanup, still-valid signed-upload replay, repeated not-found cleanup, and scoped teardown. It measured 27 Admin API delete requests across three cleanup passes, nine per allocated identity per pass. G3 is verified within the documented bounds; see [image cleanup verification](../../../docs/image-cleanup-g3-verification.md).
 
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 4, 6–7, 9; Testing Decisions/G3.
 
@@ -27,7 +27,7 @@
 - [x] ไม่ retain source/history/extra derivatives โดย policy ใหม่ และไม่ลบ seed fixture URLs/unrelated provider objects ที่ไม่มี trusted managed locator
 - [x] มี sanitized operation/state/retry logs และผลตรวจ backlog ที่ช่วย debug ได้ โดยไม่ log secret, signed URL เต็ม หรือ embedded employee capture metadata
 - [x] HTTP/real-DB tests พิสูจน์ expired rejection, last-save cleanup candidates, rollback/commit boundary, lease/retry/idempotent not-found, retained reference, concurrent claim/delete และ restart recovery; clock tests ไม่ต้องรอจริงหนึ่งชั่วโมง
-- [ ] Opt-in real-provider tests/manifest-scoped teardown พิสูจน์ unreported/late/replayed upload reconciliation และ delete/not-found behavior; บันทึก G3 รวม actual request budget และข้อจำกัด ไม่อ้าง exact physical deletion SLA
+- [x] Opt-in real-provider tests/manifest-scoped teardown พิสูจน์ unreported/late/replayed upload reconciliation และ delete/not-found behavior; บันทึก G3 รวม actual request budget และข้อจำกัด ไม่อ้าง exact physical deletion SLA
 
 ## Handoff and boundaries
 

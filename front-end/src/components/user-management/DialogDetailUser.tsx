@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { User } from "../../types/TypeUser";
 import { getSectionById } from "../../services/sectionService";
 import { useQuery } from "@tanstack/react-query";
+import EmployeePhotoDisplay from "../shared/EmployeePhotoDisplay";
 
 interface DialogDetailUserProps {
   isOpen: boolean;
@@ -77,19 +78,16 @@ export default function DialogDetailUser({
           {/* ส่วน Profile ด้านบน: Avatar + ชื่อ + อีเมล + สถานะ */}
           <div className="flex items-center gap-5 pb-6">
             {/* รูป Avatar ขนาด 80x80px วงกลม */}
-            <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 border border-blue-200">
-              {user.imageUrl ? (
-                <img
-                  src={user.imageUrl}
-                  alt={fullName}
-                  className="h-full w-full object-cover object-center"
-                />
-              ) : (
-                <span className="text-2xl font-bold text-blue-600">
-                  {initial}
-                </span>
-              )}
-            </div>
+            <EmployeePhotoDisplay
+              userId={user.id}
+              hasEmployeePhoto={user.hasEmployeePhoto}
+              photoRevision={user.photoRevision}
+              alt={fullName}
+              containerClassName="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-blue-200 bg-blue-100"
+              imageClassName="h-full w-full object-cover object-center"
+              fallbackClassName="flex h-full w-full items-center justify-center text-2xl font-bold text-blue-600"
+              fallback={initial}
+            />
 
             {/* ข้อมูลชื่อและสถานะ */}
             <div className="flex flex-col gap-1.5">

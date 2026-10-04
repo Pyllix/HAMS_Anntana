@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserDto } from "../../types/TypeUser";
-import { createUser } from "../../services/userService";
+import type { UserDto } from "../../types/TypeUser";
+import { createUser, getUserById, updateUserById } from "../../services/userService";
 import { getSections } from "../../services/assetService";
 import { ROLES, RoleType } from "../../router/roles";
+import { useAuthStore } from "../../stores/authStore";
+import { useImageUploadSelection } from "../../hooks/useImageUploadSelection";
+import ImageUploadField from "../shared/ImageUploadField";
+import {
+  imageOperationErrorMessage,
+  saveImageAwareForm,
+  type VerifiedImageUpload,
+} from "../../services/imageUploadService";
 
 interface Props {
   isOpenAdd: boolean;
@@ -58,8 +66,23 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   const [form, setForm] = useState(initialForm);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
+  const submitStartedRef = useRef(false);
 
   const queryClient = useQueryClient();
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
+  const imageSelection = useImageUploadSelection({
+    purpose: "EMPLOYEE_PHOTO",
+    enabled: isOpenAdd,
+  });
+
+  useEffect(() => {
+    if (isOpenAdd) {
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown(false);
+    }
+  }, [isOpenAdd]);
 
   const { data: sections } = useQuery({
     queryKey: ["sections"],
@@ -68,15 +91,37 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   });
 
   const { mutate: addUser, isPending } = useMutation({
-    mutationFn: (user: UserDto) => createUser(user),
+    mutationFn: async (input: { payload: UserDto; upload: VerifiedImageUpload | null }) => {
+      if (!accountId || useAuthStore.getState().user?.id !== accountId) {
+        throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
+      }
+      return saveImageAwareForm({
+        creating: true,
+        payload: input.payload as unknown as Record<string, unknown>,
+        upload: input.upload,
+        create: (payload) => createUser(payload as unknown as UserDto),
+        update: (id, payload) => updateUserById(id, payload as never),
+        loadRecord: getUserById,
+      });
+    },
     onSuccess: () => {
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown(false);
+      imageSelection.clearSelection();
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setForm(initialForm);
+      setError("");
       onClose();
     },
     onError: (error) => {
-      console.error("เกิดข้อผิดพลาดในการเพิ่มผู้ใช้งาน:", error);
-      alert("ไม่สามารถเพิ่มผู้ใช้งานได้");
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown((error as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN");
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const message = imageOperationErrorMessage(error, "ไม่สามารถเพิ่มผู้ใช้งานได้ กรุณาลองใหม่");
+      if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
+        imageSelection.markSelectionError(message);
+      }
+      setError(message);
     },
   });
 
@@ -96,12 +141,21 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   };
 
   const handleClose = () => {
+    imageSelection.clearSelection();
     setForm(initialForm);
+    setError("");
     onClose();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitStartedRef.current || isPending || saveOutcomeUnknown) return;
+    setError("");
+
+    if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
+      setError("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       alert("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน");
@@ -111,7 +165,10 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
     const [firstname, ...rest] = form.fullName.trim().split(/\s+/);
     const lastname = rest.join(" ");
 
-    addUser({
+    const upload = imageSelection.state.status === "ready"
+      ? imageSelection.state.upload
+      : null;
+    const payload = {
       userName: form.email.split("@")[0],
       firstname: firstname || "",
       lastname,
@@ -119,7 +176,14 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
       password: form.password,
       role: form.role,
       ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
-    });
+    } as UserDto;
+
+    submitStartedRef.current = true;
+    addUser({ payload, upload });
+  };
+
+  const handleImageChange = (file: File) => {
+    void imageSelection.selectFile(file);
   };
 
   return (
@@ -138,6 +202,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
           <button
             type="button"
             onClick={handleClose}
+            disabled={isPending}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
             aria-label="Close dialog"
           >
@@ -150,6 +215,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-8 space-y-5"
         >
+          <fieldset disabled={isPending} className="contents">
           {/* ชื่อ-นามสกุล */}
           <div>
             <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
@@ -217,6 +283,16 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
             </div>
           </div>
 
+          <ImageUploadField
+            label="รูปพนักงาน (ไม่บังคับ)"
+            state={imageSelection.state}
+            currentStatus="missing"
+            onSelectFile={handleImageChange}
+            onCancelSelection={imageSelection.clearSelection}
+            cancelLabel="ยกเลิกการเลือกรูป"
+            disabled={isPending}
+          />
+
           {/* ระดับผู้ใช้งาน (Role) */}
           <div>
             <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
@@ -238,6 +314,12 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
               {selectedRole.description}
             </p>
           </div>
+
+          {error && (
+            <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
+              {error}
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-5">
             {/* รหัสผ่าน */}
@@ -303,18 +385,21 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
             </div>
           </div>
 
+          </fieldset>
+
           {/* Footer Buttons */}
           <div className="pt-6 flex items-center justify-end gap-3 border-t border-[#E5E7EB]">
             <button
               type="button"
               onClick={handleClose}
+              disabled={isPending}
               className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700/70 text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || saveOutcomeUnknown || ["uploading", "verifying", "error"].includes(imageSelection.state.status)}
               className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}

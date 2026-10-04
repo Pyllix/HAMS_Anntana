@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { User } from "../../types/TypeUser";
 import { deleteUserById } from "../../services/userService";
+import EmployeePhotoDisplay from "../shared/EmployeePhotoDisplay";
 
 const ROLES = {
   ADMIN: "ADMIN",
@@ -88,17 +89,16 @@ export default function DialogDelUser({
           {user && (
             <div className="mt-5 p-4 bg-gray-50 rounded-xl border border-gray-100 text-left flex items-center justify-between">
               <div className="flex items-center space-x-3 overflow-hidden">
-                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 overflow-hidden">
-                  {user.imageUrl ? (
-                    <img
-                      src={user.imageUrl}
-                      alt="avatar"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    user.firstname.charAt(0)
-                  )}
-                </div>
+                <EmployeePhotoDisplay
+                  userId={user.id}
+                  hasEmployeePhoto={user.hasEmployeePhoto}
+                  photoRevision={user.photoRevision}
+                  alt={`${user.firstname} ${user.lastname}`.trim()}
+                  containerClassName="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 font-bold text-gray-600"
+                  imageClassName="h-full w-full rounded-full object-cover"
+                  fallbackClassName="flex h-full w-full items-center justify-center"
+                  fallback={user.firstname.charAt(0) || "U"}
+                />
                 <div className="overflow-hidden">
                   <p className="text-sm font-bold text-gray-900 truncate">
                     {user.firstname} {user.lastname}

@@ -4,6 +4,7 @@ import type { PreAuthStep } from "../types/AuthFlow";
 import type { RoleType } from "../router/roles";
 import type { SessionDeadlines } from "../services/authService";
 import { clearLegacyBrowserAuthStorage } from "../services/legacyAuthStorage";
+import { clearEmployeePhotoGrantCache } from "../services/employeePhotoGrantCache";
 
 interface AuthState {
   user: User | null;
@@ -13,6 +14,7 @@ interface AuthState {
   preAuthStep: PreAuthStep | null;
   login: (user: User, session: SessionDeadlines) => void;
   enterPreAuth: (step: PreAuthStep) => void;
+  updateUserPhoto: (photo: Pick<User, "hasEmployeePhoto" | "photoRevision" | "imageUrl">) => void;
 
   updateSession: (session: SessionDeadlines) => void;
   logout: () => void;
@@ -28,6 +30,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   preAuthStep: null,
   login: (user, session) => {
     clearLegacyBrowserAuthStorage();
+    clearEmployeePhotoGrantCache();
     set({
       user,
       role: user.role,
@@ -38,6 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   enterPreAuth: (step) => {
     clearLegacyBrowserAuthStorage();
+    clearEmployeePhotoGrantCache();
     set({
       user: null,
       role: null,
@@ -46,10 +50,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       preAuthStep: step,
     });
   },
+  updateUserPhoto: (photo) => set((state) => state.user
+    ? { user: { ...state.user, ...photo } }
+    : state),
 
   updateSession: (session) => set({ session }),
   logout: () => {
     clearLegacyBrowserAuthStorage();
+    clearEmployeePhotoGrantCache();
     set({
       user: null,
       role: null,

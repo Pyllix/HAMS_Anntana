@@ -4,6 +4,7 @@ import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
 import { ROLE_LABELS } from "../router/roles";
+import EmployeePhotoDisplay from "../components/shared/EmployeePhotoDisplay";
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -17,6 +18,8 @@ export default function Header() {
   });
   const headerTitle = currentRoute?.title ?? "ระบบการจัดการ";
   const isRepairWorkPage = pathname === "/accept-work";
+  const userInitial = user?.firstname?.charAt(0).toUpperCase() || "U";
+  const userFullName = `${user?.firstname ?? ""} ${user?.lastname ?? ""}`.trim() || "User";
 
   return (
     <header className="sticky top-0 z-20 flex w-full shrink-0 items-center justify-between bg-bg-component px-4 py-3 shadow-sm md:px-6 lg:px-8">
@@ -26,13 +29,15 @@ export default function Header() {
       <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
         {isRepairWorkPage && <NotificationBell />}
         <div className="flex items-center gap-3 border-l border-slate-200 pl-3 sm:pl-4">
-          <img
-            src={
-              user?.imageUrl ??
-              "https://static.vecteezy.com/system/resources/previews/018/765/757/original/user-profile-icon-in-flat-style-member-avatar-illustration-on-isolated-background-human-permission-sign-business-concept-vector.jpg"
-            }
-            alt="User"
-            className="h-9 w-9 shrink-0 rounded-full border border-slate-200 object-cover shadow-sm sm:h-10 sm:w-10"
+          <EmployeePhotoDisplay
+            userId={user?.id}
+            hasEmployeePhoto={user?.hasEmployeePhoto}
+            photoRevision={user?.photoRevision}
+            alt={userFullName}
+            containerClassName="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm sm:h-10 sm:w-10"
+            imageClassName="h-full w-full object-cover"
+            fallbackClassName="flex h-full w-full items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600"
+            fallback={userInitial}
           />
           <div className="hidden flex-col justify-center sm:flex">
             <span className="text-sm font-semibold leading-none tracking-tight text-slate-800">

@@ -11,6 +11,8 @@ export interface User {
   email: string;
   emailVerified: boolean;
   imageUrl: string | null;
+  hasEmployeePhoto: boolean;
+  photoRevision: string | null;
   section_id: string;
   role: RoleType;
   banned: boolean;
@@ -28,4 +30,6 @@ export interface UserDto {
   password?: string;
   role: RoleType;
   sectionId?: string;
+  imageUploadId?: string;
+  imageCreationContextToken?: string;
 }

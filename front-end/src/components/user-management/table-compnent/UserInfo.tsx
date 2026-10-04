@@ -1,4 +1,5 @@
 import type { User } from "../../../types/TypeUser";
+import EmployeePhotoDisplay from "../../shared/EmployeePhotoDisplay";
 
 export default function UserInfo({
   row,
@@ -10,19 +11,16 @@ export default function UserInfo({
   return (
     <div className="flex items-center gap-3">
       {/* Avatar รูปวงกลมตามรูป SVG */}
-      <div className="relative h-10 w-10 shrink-0">
-        {row.imageUrl ? (
-          <img
-            src={row.imageUrl}
-            alt={fullName}
-            className="h-10 w-10 rounded-full object-cover object-center bg-slate-100 border border-slate-200"
-          />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-white">
-            {row.firstname?.charAt(0) || "U"}
-          </div>
-        )}
-      </div>
+      <EmployeePhotoDisplay
+        userId={row.id}
+        hasEmployeePhoto={row.hasEmployeePhoto}
+        photoRevision={row.photoRevision}
+        alt={fullName}
+        containerClassName="relative h-10 w-10 shrink-0 overflow-hidden rounded-full"
+        imageClassName="h-10 w-10 rounded-full border border-slate-200 bg-slate-100 object-cover object-center"
+        fallbackClassName="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-sm font-semibold text-white"
+        fallback={row.firstname?.charAt(0) || "U"}
+      />
 
       {/* ชื่อและ username สองบรรทัดแบบสไตล์เก่า */}
       <div className="flex flex-col justify-center min-w-[150px] max-w-[260px] whitespace-normal">

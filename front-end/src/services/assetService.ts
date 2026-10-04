@@ -154,6 +154,11 @@ export async function updateAsset(id: string, data: any): Promise<Asset> {
   return res.data;
 }
 
+export async function getAssetById(id: string): Promise<Asset> {
+  const res = await apiClient.get(`/asset/${encodeURIComponent(id)}`);
+  return res.data;
+}
+
 export async function getBudgetTypes(): Promise<any[]> {
 
   const res = await apiClient.get("/budget-types");

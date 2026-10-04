@@ -2,14 +2,14 @@
 title: HAMS Asset Image and Employee Photo — Cloudinary with Storage Abstraction
 labels:
   - ready-for-agent
-status: specification-for-review
-updated: 2026-10-01
+status: backend-handoff-complete-for-isolated-frontend
+updated: 2026-10-04
 implementation-order: backend-first-then-frontend
 ---
 
 # อัปโหลดรูปครุภัณฑ์และรูปประจำบุคลากรผ่าน Cloudinary
 
-สเปกฉบับหลักของ feature นี้ สังเคราะห์จากข้อสรุปที่ผู้ใช้ยืนยันแล้ว ไม่ใช่บันทึกการสัมภาษณ์ และยังไม่ได้เริ่ม implementation การติด label `ready-for-agent` หมายถึงพร้อมนำไปแตกงาน โดยต้องรักษา verification gates และขอบเขตที่ยังเว้นไว้ตามเอกสารนี้
+สเปกฉบับหลักของ feature นี้ สังเคราะห์จากข้อสรุปที่ผู้ใช้ยืนยันแล้ว Backend 01–05 ผ่านการส่งมอบสำหรับพัฒนาและทดสอบ FE ในสภาพแวดล้อมแยกตามมติวันที่ 2026-10-04; G4 ยังเป็นเงื่อนไขก่อนเปิดใช้ production การติด label `ready-for-agent` ไม่ใช่การอนุญาตเปิดใช้งานจริง ต้องรักษา verification gates และขอบเขตที่ยังเว้นไว้ตามเอกสารนี้
 
 ## Problem Statement
 
@@ -230,11 +230,13 @@ Logout/access changes stop future HAMS grant issuance, not a grant already issue
 | --- | --- |
 | Upload authorization, status with private data, preview/read-grant responses, related auth errors | HAMS `Cache-Control: private, no-store` |
 | Any API response that embeds a temporary photo grant | Same no-store rule; never place it in a shared/server session cache |
-| Asset image bytes | Long-lived public versioned caching selected; desired exact header `public, max-age=31536000, immutable` requires provider verification |
-| Employee image bytes | Provider-controlled; inspect actual success/error headers. Earlier suggested `private, max-age=86400` is **not** an approved final policy |
+| Asset image bytes | Scoped decision 2026-10-03 accepts observed `public, no-transform, immutable, max-age=2592000` for versioned public URLs; do not claim the original desired one-year header |
+| Employee image bytes | Provider success remains observed `public, max-age=2592000`; scoped decision 2026-10-04 requires controlled HAMS direct fetch with Fetch `no-store`, explicit request `Cache-Control: no-store`, and session-memory Blob display, not a provider header override |
 | FE photo-grant reuse | Memory only, scoped to current session/account and image revision; expire reuse at `expiresAt`, clear on logout/account switch/replacement |
 
 HAMS grant-response headers do not control the subsequent Cloudinary image response. Exact provider Cache-Control overrides are not assumed supported. If headers differ from the desired policy, document the observed behavior and obtain a scoped decision before claiming that policy met; do not add a Render byte proxy as a hidden fix. HTTP cache freshness and grant validity are separate. [HTTP Cache-Control](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control).
+
+**Approved G2 policy — 2026-10-04:** retain the current expiring authenticated grant and fetch Employee Photo bytes directly from the provider using `cache: 'no-store'`, request header `Cache-Control: no-store`, and `credentials: 'omit'`. Display the resulting Blob from memory, validate the provider URL/status/content type, use bounded cancellation, and clear/revoke display URLs on replacement/logout/account switch/unmount while rejecting stale async results. CORS failure must surface as a load error, with no fallback to direct signed-URL display. This policy covers controlled HAMS requests; copied-grant navigation does not inherit it and existing downloaded copies cannot be erased. G2/Ticket 03 is complete on recorded Backend/provider evidence plus this decision; actual shared-helper and UI acceptance belong to 06/07. See [G2 evidence](../../docs/image-read-g2-verification.md) and [ADR 0005](../../docs/adr/0005-employee-photo-cache-and-isolated-fe-handoff.md).
 
 **Read DTO choice:** keep asset `imageUrl` compatible for normal image display. User/list/session responses describe managed-photo presence and revision, with durable `imageUrl` null for managed Employee Photo; obtain its display URL on demand through the photo endpoint rather than generating a provider grant for every listed/nested user. Define shared `hasEmployeePhoto` and `photoRevision` response fields and the no-photo response consistently. The session's own user projection must include those fields without storing a signed URL in BetterAuth data or session caches.
 
@@ -256,10 +258,10 @@ Implement and deploy in this order:
 
 1. Complete independent BE behavior and deterministic API/database tests.
 2. Run isolated real-Cloudinary verification and record limits, transformation policy, replay handling, expiry, headers, and source-proof results.
-3. Resolve only the necessary shared-contract release/cutover gate without deciding wait-disposal business flow on behalf of the team. Keep old/new callers and managed metadata consistent during deployment; document the approved sequencing.
-4. Hand off a stable BE API contract with examples in the API reference, permissions, errors, no-photo semantics, provider setup checklist, and test evidence. Do not declare BE finished based solely on mocked provider tests.
-5. Start FE work: ADMIN create/edit photo fields; ordinary asset form replaces canvas/Base64 persistence with direct upload; shared read helper updates relevant displays. Do not modify wait-disposal form/checkbox/custody logic.
-6. Perform full FE-to-BE acceptance and a controlled trial; verify no-image, failure/retry, account switching, and provider usage. Any shared-contract limitation still open must be visible, not silently bypassed.
+3. Record the approved 2026-10-04 separation of isolated FE development from production activation: G4 remains unresolved for release, production managed writes remain disabled, and the wait-disposal business flow remains deferred.
+4. Complete Ticket 05/G5 handoff for the isolated FE scope using a stable API contract, permissions, errors, no-photo semantics, setup checklist, and account-backed test evidence. Do not claim production readiness or rely solely on mocked provider tests.
+5. Start Tickets 06/07 in an isolated environment with disposable test data and a separate test-only provider cloud; enable managed attachments only in that Backend process. Implement ADMIN photo fields, ordinary asset direct upload, and the shared no-store photo helper. Keep wait-disposal form/checkbox/custody logic outside this implementation.
+6. Perform isolated FE-to-BE acceptance and record the known wait-disposal conflict, no-image/failure/retry/account-switch behavior, and provider usage. Before production deployment/activation or a real customer trial, resolve G4 with proven isolation or a separately approved transition and coordinate old/new callers. No production activation is authorized by this handoff.
 
 Configuration includes provider environment/credentials, signed purpose-specific upload policies, quality/dimension/source limits, pending/grant lifetimes, cleanup schedule/budget and feature activation. Secrets remain BE-only. Missing/invalid storage configuration must fail feature activation clearly, not fall back to public employee images, unmanaged URLs, Base64, or local disk.
 
@@ -317,10 +319,12 @@ Exercise own/nested employee displays, expiry-on-next-load without polling downl
 | G1 — Source proof and provider normalization | Actual enforceable source format/size/static-image rules, source pixel/account limits, signed policy/result verification, tested output/metadata/color/orientation |
 | G2 — Restricted reads and cache | Real provider authenticated protection and expiry, success/error headers, documented desired-versus-observed cache policy; explicit decision if the desired byte headers cannot be achieved |
 | G3 — Durable lifecycle | Real-DB atomicity/concurrency tests, cleanup recovery, unreported/late/replayed uploads reconciled safely with bounded provider usage |
-| G4 — Shared CRUD cutover | Caller inventory and proven safe isolation or separately approved transition; no selected-on-behalf Base64 exception and no unapproved wait-disposal change |
-| G5 — BE-to-FE readiness | Stable documented contract, deterministic and account-backed evidence, known limitations, configuration checklist; then FE implementation and end-to-end acceptance |
+| G4 — Shared CRUD cutover | Production release blocker: caller inventory and proven safe isolation or separately approved activation transition; the 2026-10-04 scoped decision permits isolated FE work while G4 stays open, not production compatibility |
+| G5 — BE-to-FE readiness | Stable documented contract, deterministic/account-backed evidence, known limitations, configuration checklist, and approved isolated-test transition; Ticket 05 may complete and unblock 06/07 without marking G4 production cutover passed |
 
 Independent BE work may proceed while external/account verification or G4 is pending. `ready-for-agent` is not a claim that these gates passed. Unavailable credentials/test infrastructure mean the relevant checks remain explicitly unverified; they do not justify inventing a successful result.
+
+**Approved phase-boundary amendment — 2026-10-04:** the user instructed proceeding with the recommended Ticket 05 summary, approving the G2 no-store policy and isolated FE handoff above. This replaces the earlier requirement to resolve G4 before any FE work. G1–G3 and G5 are complete for Backend handoff; G4 remains a production release gate with its incompatibility recorded. See [handoff](../../docs/image-backend-handoff.md).
 
 ## Out of Scope
 
@@ -344,4 +348,4 @@ The source is intentionally discarded after normalization: later increasing reso
 
 Free-tier suitability is a trial assumption, not a capacity/price guarantee. Measure uploads, stored bytes, provider verification/reconciliation requests, and photo deliveries against the actual account quota; avoid unnecessary transformation variants and repeated grants/downloads. Verify provider account settings rather than assuming every documented feature/header is enabled.
 
-The next workflow is user review of this spec, then ticket decomposition with BE dependencies first and FE work after the verified backend handoff. This document publishes the specification only; no tickets or feature code have been created by this request.
+The next workflow is `/implement` Ticket 06 against the verified 2026-10-04 Backend handoff, then Ticket 07 in the approved isolated environment. G4 resolution and coordinated activation remain required before production release.

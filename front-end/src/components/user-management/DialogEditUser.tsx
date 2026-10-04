@@ -1,11 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "../../types/TypeUser";
-import { updateUserById, type UserUpdateDto } from "../../services/userService";
+import { getUserById, updateUserById, type UserUpdateDto } from "../../services/userService";
 import { getSections } from "../../services/assetService";
 import { ROLES, ROLE_LABELS, type RoleType } from "../../router/roles";
 import { ROLE_OPTIONS } from "./DialogAddUser";
+import { useAuthStore } from "../../stores/authStore";
+import { useImageUploadSelection } from "../../hooks/useImageUploadSelection";
+import { useEmployeePhoto } from "../../hooks/useEmployeePhoto";
+import ImageUploadField from "../shared/ImageUploadField";
+import {
+  clearEmployeePhotoGrantCache,
+  imageOperationErrorMessage,
+  saveImageAwareForm,
+  type VerifiedImageUpload,
+} from "../../services/imageUploadService";
 
 interface Props {
   isOpen: boolean;
@@ -46,15 +56,35 @@ const toForm = (user: User) => ({
 export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   const [form, setForm] = useState(() => toForm(user));
   const [error, setError] = useState("");
+  const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
+  const submitStartedRef = useRef(false);
+  const wasOpenRef = useRef(false);
 
   const queryClient = useQueryClient();
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
+  const imageSelection = useImageUploadSelection({
+    purpose: "EMPLOYEE_PHOTO",
+    targetId: user.id,
+    enabled: isOpen,
+  });
+  const currentPhoto = useEmployeePhoto(
+    user.id,
+    user.hasEmployeePhoto,
+    user.photoRevision,
+    isOpen,
+  );
 
   // รีเซ็ตฟอร์มให้ตรงกับข้อมูลผู้ใช้ล่าสุดทุกครั้งที่เปิด dialog
   useEffect(() => {
     if (isOpen) {
       setForm(toForm(user));
       setError("");
+      if (!wasOpenRef.current) {
+        setSaveOutcomeUnknown(false);
+        submitStartedRef.current = false;
+      }
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, user]);
 
   const { data: sections } = useQuery({
@@ -64,13 +94,45 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   });
 
   const { mutate: editUser, isPending } = useMutation({
-    mutationFn: (payload: UserUpdateDto) =>
-      updateUserById(user.id, payload),
-    onSuccess: async () => {
+    mutationFn: async (input: { payload: UserUpdateDto; upload: VerifiedImageUpload | null }) => {
+      if (!accountId || useAuthStore.getState().user?.id !== accountId) {
+        throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
+      }
+      return saveImageAwareForm({
+        creating: false,
+        targetId: user.id,
+        payload: input.payload as unknown as Record<string, unknown>,
+        upload: input.upload,
+        create: (payload) => updateUserById(user.id, payload as never),
+        update: (id, payload) => updateUserById(id, payload as never),
+        loadRecord: getUserById,
+      });
+    },
+    onSuccess: async (savedUser) => {
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown(false);
+      imageSelection.clearSelection();
+      clearEmployeePhotoGrantCache(accountId, user.id);
+      if (accountId === user.id) {
+        useAuthStore.getState().updateUserPhoto({
+          hasEmployeePhoto: savedUser.hasEmployeePhoto,
+          photoRevision: savedUser.photoRevision,
+          imageUrl: savedUser.imageUrl,
+        });
+      }
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       onClose();
     },
-    onError: (cause) => setError(editErrorMessage(cause)),
+    onError: (cause) => {
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown((cause as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN");
+      const code = (cause as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const message = imageOperationErrorMessage(cause, editErrorMessage(cause));
+      if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
+        imageSelection.markSelectionError(message);
+      }
+      setError(message);
+    },
   });
 
   if (!isOpen) return null;
@@ -90,11 +152,29 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleClose = () => {
+    imageSelection.clearSelection();
+    onClose();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitStartedRef.current || isPending || saveOutcomeUnknown) return;
     setError("");
 
-    editUser({
+    if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
+      setError("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
+      return;
+    }
+    if (!accountId || useAuthStore.getState().user?.id !== accountId) {
+      setError("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
+      return;
+    }
+
+    const upload = imageSelection.state.status === "ready"
+      ? imageSelection.state.upload
+      : null;
+    const payload = {
       firstname: form.firstname.trim(),
       lastname: form.lastname.trim(),
       userName: form.userName.trim(),
@@ -102,7 +182,14 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       role: form.role,
       banned: form.banned,
       ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
-    });
+    } as UserUpdateDto;
+
+    submitStartedRef.current = true;
+    editUser({ payload, upload });
+  };
+
+  const handleImageChange = (file: File) => {
+    void imageSelection.selectFile(file);
   };
 
   const inputClass =
@@ -126,7 +213,8 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={isPending}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
             aria-label="Close dialog"
           >
@@ -139,6 +227,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-8 space-y-5"
         >
+          <fieldset disabled={isPending} className="contents">
           <div className="grid grid-cols-2 gap-5">
             {/* ชื่อ */}
             <div>
@@ -236,6 +325,17 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
             </select>
           </div>
 
+          <ImageUploadField
+            label="รูปพนักงาน"
+            state={imageSelection.state}
+            currentPreviewUrl={currentPhoto.status === "ready" ? currentPhoto.objectUrl : null}
+            currentStatus={currentPhoto.status === "ready" ? "idle" : currentPhoto.status}
+            currentError={currentPhoto.status === "error" ? currentPhoto.message : undefined}
+            onSelectFile={handleImageChange}
+            onCancelSelection={imageSelection.clearSelection}
+            disabled={isPending}
+          />
+
           {/* ระดับผู้ใช้งาน (Role) */}
           <div>
             <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
@@ -281,18 +381,21 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
             </p>
           )}
 
+          </fieldset>
+
           {/* Footer Buttons */}
           <div className="pt-6 flex items-center justify-end gap-3 border-t border-[#E5E7EB]">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
+              disabled={isPending}
               className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700/70 text-sm font-bold hover:bg-gray-50 transition-colors"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || saveOutcomeUnknown || ["uploading", "verifying", "error"].includes(imageSelection.state.status)}
               className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPending ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
