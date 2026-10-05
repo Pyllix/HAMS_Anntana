@@ -28,7 +28,6 @@ import {
   type ImageStoragePort,
 } from './image-storage.port';
 import {
-  imageCrudAttachmentEnabled,
   imageDeliveryTypeForPurpose,
   imagePublicIdForPurpose,
   imagePurposeAllowsRole,
@@ -120,7 +119,6 @@ export class ImageAttachmentService {
   }
 
   async preflightClaim(request: ImageClaimRequest): Promise<void> {
-    this.assertFeatureActive();
     const actor = await this.prisma.user.findFirst({
       where: { id: request.actorUserId, deletedAt: null },
       select: { role: true, banned: true },
@@ -140,7 +138,6 @@ export class ImageAttachmentService {
   async committedTargetForRetry(
     request: ImageClaimRequest,
   ): Promise<string | null> {
-    this.assertFeatureActive();
     const actor = await this.prisma.user.findFirst({
       where: { id: request.actorUserId, deletedAt: null },
       select: { role: true, banned: true },
@@ -202,7 +199,6 @@ export class ImageAttachmentService {
     previous: ManagedImageLocator | null,
     previousImageUrl?: string | null,
   ): Promise<ImageClaimResult> {
-    this.assertFeatureActive();
     const actor = await tx.user.findFirst({
       where: { id: request.actorUserId, deletedAt: null },
       select: { role: true, banned: true },
@@ -289,24 +285,6 @@ export class ImageAttachmentService {
       );
     }
     return { kind: 'CLAIMED', attachment };
-  }
-
-  assertFeatureActive(): void {
-    let enabled: boolean;
-    try {
-      enabled = imageCrudAttachmentEnabled();
-    } catch {
-      throw new ServiceUnavailableException({
-        code: 'IMAGE_ATTACHMENT_CONFIGURATION_INVALID',
-        message: 'Image CRUD attachment is not configured correctly',
-      });
-    }
-    if (!enabled) {
-      throw new ServiceUnavailableException({
-        code: 'IMAGE_ATTACHMENT_NOT_ACTIVE',
-        message: 'Image CRUD attachment is not active in this environment',
-      });
-    }
   }
 
   private async findOwnedUpload(

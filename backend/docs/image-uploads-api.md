@@ -135,7 +135,7 @@ Logout or session revocation prevents future HAMS grant requests. A grant alread
 
 ## Attach an upload through Asset/User CRUD (Ticket 02)
 
-The optional CRUD contract is controlled by `IMAGE_CRUD_ATTACHMENT_ENABLED`. Ticket 05/G5 is complete for isolated FE development/acceptance as of 2026-10-04: enable this flag only in the separate test Backend process with disposable data and a test-only provider cloud. Keep production activation `false` until G4 and coordinated release acceptance are resolved; the deployed value was not inspected or changed. When enabled, `POST /asset` and `PATCH /asset/:id` accept `imageUploadId` and, for create forms only, the `imageCreationContextToken` returned with the upload intent. `POST /users` and `PATCH /users/:id` accept the same fields for Employee Photos under the existing ADMIN-only user-management permission. See [the environment boundary](image-backend-handoff.md).
+The optional CRUD image fields are always available. On 2026-10-05, the user requested removal of the attachment activation switch for local development; `IMAGE_CRUD_ATTACHMENT_ENABLED` is no longer read or required. `POST /asset` and `PATCH /asset/:id` accept `imageUploadId` and, for create forms only, the `imageCreationContextToken` returned with the upload intent. `POST /users` and `PATCH /users/:id` accept the same fields for Employee Photos under the existing ADMIN-only user-management permission. Permission, verified-upload, provider configuration, and expiry checks still apply. See [the environment boundary](image-backend-handoff.md).
 
 For a new record, create the upload intent without `targetId`, then send both returned values with the existing CRUD payload. For an existing record, create the intent with its canonical `targetId` and send only `imageUploadId` when saving. The API checks current permission, uploader, purpose, target or creation context, verified object identity, and attachment deadline again during the save.
 
@@ -173,7 +173,6 @@ The opt-in Cloudinary contract test exercises an unreported raw upload, replay u
 | 429  | `UPLOAD_RATE_LIMITED`              | Configured intent budget is reached                                       |
 | 503  | `IMAGE_STORAGE_NOT_CONFIGURED`     | Required Cloudinary environment is missing or invalid                     |
 | 503  | `IMAGE_STORAGE_UNAVAILABLE`        | Provider verification or storage operation is unavailable                 |
-| 503  | `IMAGE_ATTACHMENT_NOT_ACTIVE`      | CRUD attachment is disabled pending the release gate                      |
 | 404  | `USER_NOT_FOUND`                   | No active User matches the requested ID or employee code                  |
 | 409  | `UPLOAD_PREVIEW_NOT_AVAILABLE`     | Upload is not a verified pending image                                    |
 | 503  | `IMAGE_READ_CONFIGURATION_INVALID` | Employee Photo grant lifetime configuration is invalid                    |

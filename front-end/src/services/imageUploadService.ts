@@ -20,7 +20,7 @@ export const IMAGE_SOURCE_MAX_BYTES = 10_000_000;
 export const IMAGE_SOURCE_MAX_PIXELS = 25_000_000;
 export const IMAGE_SOURCE_ACCEPT =
   ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif";
-export const IMAGE_SOURCE_FORMAT_LABEL = "JPG, PNG, WebP, HEIC หรือ HEIF";
+export const IMAGE_SOURCE_FORMAT_LABEL = "JPG, PNG, WebP, HEIC/HEIF";
 
 const SOURCE_TYPES = new Set([
   "image/jpeg",
@@ -95,7 +95,7 @@ export function validateImageSource(file: File): { contentType: string } {
   if (file.size < 1 || file.size > IMAGE_SOURCE_MAX_BYTES) {
     throw new ImageUploadError(
       "SOURCE_SIZE_LIMIT",
-      "ไฟล์รูปต้องมีขนาดไม่เกิน 10,000,000 ไบต์",
+      "ไฟล์รูปต้องมีขนาดไม่เกิน 10 MB",
     );
   }
   return { contentType };
@@ -476,13 +476,13 @@ export function imageOperationErrorMessage(error: unknown, fallback: string): st
   const data = (error as { response?: { data?: { code?: string; message?: unknown } } })
     ?.response?.data;
   const errorCode = (error as { code?: string })?.code;
-  switch (data?.code) {
+  switch (data?.code ?? errorCode) {
     case "UPLOAD_EXPIRED":
     case "UPLOAD_NOT_FOUND":
     case "UPLOAD_OBJECT_NOT_FOUND":
       return "รูปที่อัปโหลดหมดอายุหรือใช้ไม่ได้แล้ว กรุณาเลือกและอัปโหลดรูปใหม่";
     case "SOURCE_SIZE_LIMIT":
-      return "ไฟล์รูปมีขนาดเกิน 10,000,000 ไบต์ กรุณาเลือกไฟล์ที่เล็กลง";
+      return "ไฟล์รูปมีขนาดเกิน 10 MB กรุณาเลือกไฟล์ที่เล็กลง";
     case "SOURCE_TYPE_NOT_ALLOWED":
       return `รองรับไฟล์ ${IMAGE_SOURCE_FORMAT_LABEL} เท่านั้น`;
     case "IMAGE_SAVE_OUTCOME_UNKNOWN":
@@ -526,6 +526,7 @@ export async function saveWithImageRecovery<T>(options: {
   save: () => Promise<T>;
   loadRecord: (id: string) => Promise<T | null>;
   api?: ImageApi;
+  recoverBeforeSave?: boolean;
 }): Promise<T> {
   const api = options.api ?? apiClient;
   const loadClaimed = async (status: { status?: string; claimedTargetId?: string | null }): Promise<T | null> => {
@@ -535,16 +536,24 @@ export async function saveWithImageRecovery<T>(options: {
     ) return null;
     return options.loadRecord(status.claimedTargetId);
   };
-  const recoverOrThrow = async (cause: unknown): Promise<T> => {
-    if (!hasAmbiguousOutcome(cause)) throw cause;
+  const recover = async (): Promise<T> => {
     let outcome: { status?: string; claimedTargetId?: string | null };
     try {
       outcome = await readUploadOutcome(api, options.uploadId);
+    } catch (error) {
+      if ((error as { response?: { data?: { code?: string } } })?.response?.data?.code === "UPLOAD_NOT_FOUND") throw error;
+      throw new ImageSaveOutcomeUnknownError();
+    }
+    let recovered: T | null;
+    try {
+      recovered = await loadClaimed(outcome);
     } catch {
       throw new ImageSaveOutcomeUnknownError();
     }
-    const recovered = await loadClaimed(outcome);
     if (recovered) return recovered;
+    if (outcome.status === "EXPIRED" || outcome.status === "REJECTED") {
+      throw new ImageUploadError("UPLOAD_EXPIRED", "รูปที่อัปโหลดหมดอายุหรือใช้ไม่ได้แล้ว กรุณาเลือกรูปใหม่");
+    }
     if (outcome.status !== "VERIFIED_PENDING") throw new ImageSaveOutcomeUnknownError();
     try {
       return await options.save();
@@ -561,14 +570,16 @@ export async function saveWithImageRecovery<T>(options: {
     }
   };
 
+  if (options.recoverBeforeSave) return recover();
   try {
     return await options.save();
   } catch (error) {
-    return recoverOrThrow(error);
+    if (!hasAmbiguousOutcome(error)) throw error;
+    return recover();
   }
 }
 
-export async function saveImageAwareForm<T>(options: {
+export interface ImageFormSaveOptions<T> {
   creating: boolean;
   targetId?: string;
   payload: Record<string, unknown>;
@@ -577,7 +588,30 @@ export async function saveImageAwareForm<T>(options: {
   update: (id: string, payload: Record<string, unknown>) => Promise<T>;
   loadRecord: (id: string) => Promise<T | null>;
   api?: ImageApi;
-}): Promise<T> {
+  recoverBeforeSave?: boolean;
+}
+
+export interface ImageFormSaveAttempt<T> {
+  readonly hasUpload: boolean;
+  readonly save: () => Promise<T>;
+  readonly recover: () => Promise<T>;
+}
+
+export function createImageSaveAttempt<T>(options: ImageFormSaveOptions<T>): ImageFormSaveAttempt<T> {
+  // Keep one exact request in memory while its commit outcome is uncertain.
+  const snapshot: ImageFormSaveOptions<T> = {
+    ...options,
+    payload: structuredClone(options.payload),
+    upload: options.upload ? { ...options.upload } : null,
+  };
+  return {
+    hasUpload: snapshot.upload !== null,
+    save: () => saveImageAwareForm(snapshot),
+    recover: () => saveImageAwareForm({ ...snapshot, recoverBeforeSave: true }),
+  };
+}
+
+export async function saveImageAwareForm<T>(options: ImageFormSaveOptions<T>): Promise<T> {
   if (!options.creating && !options.targetId) {
     throw new Error("ไม่พบรายการที่ต้องการแก้ไข กรุณาปิดและเปิดฟอร์มอีกครั้ง");
   }
@@ -596,8 +630,10 @@ export async function saveImageAwareForm<T>(options: {
         save,
         loadRecord: options.loadRecord,
         api: options.api,
+        recoverBeforeSave: options.recoverBeforeSave,
       });
   }
+  if (options.recoverBeforeSave) throw new ImageSaveOutcomeUnknownError();
   try {
     return await save();
   } catch (error) {

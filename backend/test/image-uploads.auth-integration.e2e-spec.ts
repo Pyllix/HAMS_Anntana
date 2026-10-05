@@ -34,7 +34,6 @@ const originalCompletionAttemptLimit =
   process.env.IMAGE_UPLOAD_MAX_COMPLETION_ATTEMPTS_PER_INTENT;
 const originalIntentLimit =
   process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR;
-const originalCrudAttachmentEnabled = process.env.IMAGE_CRUD_ATTACHMENT_ENABLED;
 const originalReadGrantSeconds =
   process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
 const fixedNow = new Date('2026-10-01T03:00:00.000Z');
@@ -372,7 +371,6 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     process.env.TWO_FACTOR_ENCRYPTION_KEY = 'a'.repeat(64);
     process.env.IMAGE_UPLOAD_MAX_COMPLETION_ATTEMPTS_PER_INTENT = '2';
     process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR = '100';
-    process.env.IMAGE_CRUD_ATTACHMENT_ENABLED = 'true';
     delete process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;
     csrfCookieName =
       process.env.NODE_ENV === 'production' ? '__Host-hams.csrf' : 'hams.csrf';
@@ -576,11 +574,6 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     } else {
       process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR =
         originalIntentLimit;
-    }
-    if (originalCrudAttachmentEnabled === undefined) {
-      delete process.env.IMAGE_CRUD_ATTACHMENT_ENABLED;
-    } else {
-      process.env.IMAGE_CRUD_ATTACHMENT_ENABLED = originalCrudAttachmentEnabled;
     }
     if (originalReadGrantSeconds === undefined) {
       delete process.env.IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS;

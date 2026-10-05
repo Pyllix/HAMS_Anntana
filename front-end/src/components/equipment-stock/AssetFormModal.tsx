@@ -29,7 +29,8 @@ import { useImageUploadSelection } from "../../hooks/useImageUploadSelection";
 import ImageUploadField from "../shared/ImageUploadField";
 import {
   imageOperationErrorMessage,
-  saveImageAwareForm,
+  createImageSaveAttempt,
+  type ImageFormSaveAttempt,
 } from "../../services/imageUploadService";
 
 export default function AssetFormModal() {
@@ -127,6 +128,12 @@ export default function AssetFormModal() {
   const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
   const initializedFormKeyRef = useRef<string | null>(null);
   const submitStartedRef = useRef(false);
+  const imageSaveAttemptRef = useRef<ImageFormSaveAttempt<Awaited<ReturnType<typeof createAsset>>> | null>(null);
+
+  useEffect(() => {
+    imageSaveAttemptRef.current = null;
+    setSaveOutcomeUnknown(false);
+  }, [accountId, isOpen, mode, selectedAsset?.id]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -138,6 +145,7 @@ export default function AssetFormModal() {
     initializedFormKeyRef.current = formKey;
     setErrorMsg("");
     setSaveOutcomeUnknown(false);
+    imageSaveAttemptRef.current = null;
       if (mode === "edit" && selectedAsset) {
         setFormData({
           noid: selectedAsset.noid || "",
@@ -248,6 +256,9 @@ export default function AssetFormModal() {
       if (useAuthStore.getState().user?.id !== accountId) {
         throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
       }
+      if (saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload) {
+        return imageSaveAttemptRef.current.recover();
+      }
       if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
         throw new Error("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
       }
@@ -295,7 +306,7 @@ export default function AssetFormModal() {
         riskLevel: formData.riskLevel || (selectedAsset as any)?.riskLevel || "LOW",
       };
 
-      return saveImageAwareForm({
+      const attempt = createImageSaveAttempt({
         creating: mode === "create",
         targetId: selectedAsset?.id,
         payload,
@@ -304,10 +315,13 @@ export default function AssetFormModal() {
         update: updateAsset,
         loadRecord: getAssetById,
       });
+      imageSaveAttemptRef.current = attempt;
+      return attempt.save();
     },
     onSuccess: (savedAsset) => {
       submitStartedRef.current = false;
       setSaveOutcomeUnknown(false);
+      imageSaveAttemptRef.current = null;
       imageSelection.clearSelection();
       clearSessionDraft(assetDraftKey);
       useEquipmentDetailModalStore.getState().updateSelectedAsset(savedAsset);
@@ -324,8 +338,10 @@ export default function AssetFormModal() {
     },
     onError: (err: any) => {
       submitStartedRef.current = false;
-      setSaveOutcomeUnknown(err?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN");
-      const code = err?.response?.data?.code;
+      const unknownOutcome = err?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN";
+      setSaveOutcomeUnknown(unknownOutcome);
+      if (!unknownOutcome) imageSaveAttemptRef.current = null;
+      const code = err?.response?.data?.code ?? err?.code;
       const message = imageOperationErrorMessage(err, "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
       if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
         imageSelection.markSelectionError(message);
@@ -337,6 +353,8 @@ export default function AssetFormModal() {
   const handleImageChange = (file: File) => {
     void imageSelection.selectFile(file);
   };
+
+  const canRecoverImageSave = saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload === true;
 
   if (!isOpen) return null;
 
@@ -366,13 +384,13 @@ export default function AssetFormModal() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (submitStartedRef.current || mutation.isPending || saveOutcomeUnknown) return;
+            if (submitStartedRef.current || mutation.isPending || (saveOutcomeUnknown && !canRecoverImageSave)) return;
             submitStartedRef.current = true;
             mutation.mutate();
           }}
           className="p-6 space-y-5"
         >
-          <fieldset disabled={mutation.isPending} className="contents">
+          <fieldset disabled={mutation.isPending || saveOutcomeUnknown} className="contents">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             {/* Section 1: ข้อมูลทั่วไปและรูปภาพ (Card 1 - 7 cols) */}
             <div className="lg:col-span-7 bg-slate-50/60 rounded-xl p-4 border border-slate-100 flex flex-col justify-between space-y-3">
@@ -824,10 +842,10 @@ export default function AssetFormModal() {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending || saveOutcomeUnknown}
+              disabled={mutation.isPending || (saveOutcomeUnknown && !canRecoverImageSave)}
               className="px-6 py-2 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
             >
-              {mutation.isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+              {mutation.isPending ? "กำลังบันทึก..." : canRecoverImageSave ? "ตรวจสอบและบันทึกอีกครั้ง" : "บันทึกข้อมูล"}
             </button>
           </div>
         </form>

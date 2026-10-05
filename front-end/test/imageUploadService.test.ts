@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildImageAttachmentFields,
+  createImageSaveAttempt,
   clearEmployeePhotoGrantCache,
   getEmployeePhotoBlob,
   ImageSaveOutcomeUnknownError,
@@ -373,4 +374,91 @@ test("retries the same verified pending claim once when the first save outcome w
   });
   assert.deepEqual(result, { id: "saved-on-retry" });
   assert.equal(saveCalls, 2);
+});
+
+
+test("manual recovery reuses the original pending upload and payload without uploading again", async () => {
+  let available = false;
+  const sent: Record<string, unknown>[] = [];
+  const events: string[] = [];
+  const payload = { name: "Original", nested: { value: "original" } };
+  const upload = { uploadId: "upload-original", creationContextToken: null };
+  const attempt = createImageSaveAttempt({
+    creating: false, targetId: "asset-1", payload, upload,
+    create: async () => { throw new Error("unexpected create"); },
+    update: async (_id, body) => {
+      events.push("save"); sent.push(body);
+      if (!available) throw { response: { status: 503 } };
+      return { id: "asset-1" };
+    },
+    loadRecord: async () => null,
+    api: { get: async () => { events.push("status"); return { data: { status: "VERIFIED_PENDING" } }; } } as never,
+  });
+  await assert.rejects(attempt.save, ImageSaveOutcomeUnknownError);
+  assert.equal(sent.length, 2);
+  payload.name = "Changed after failure";
+  payload.nested.value = "changed";
+  upload.uploadId = "different-upload";
+  available = true;
+  events.length = 0;
+  assert.deepEqual(await attempt.recover(), { id: "asset-1" });
+  assert.deepEqual(events, ["status", "save"]);
+  assert.deepEqual(sent[2], { name: "Original", nested: { value: "original" }, imageUploadId: "upload-original" });
+});
+
+test("manual recovery loads an already claimed result without creating a duplicate", async () => {
+  let readable = false;
+  let creates = 0;
+  const attempt = createImageSaveAttempt({
+    creating: true, payload: { name: "Original" }, upload: { uploadId: "upload-1", creationContextToken: "context-1" },
+    create: async () => { creates += 1; throw new TypeError("response lost"); },
+    update: async () => { throw new Error("unexpected update"); },
+    loadRecord: async (id) => ({ id }),
+    api: { get: async () => { if (!readable) throw new TypeError("offline"); return { data: { status: "CLAIMED", claimedTargetId: "created-1" } }; } } as never,
+  });
+  await assert.rejects(attempt.save, ImageSaveOutcomeUnknownError);
+  readable = true;
+  assert.deepEqual(await attempt.recover(), { id: "created-1" });
+  assert.equal(creates, 1);
+});
+
+test("manual recovery stays uncertain while status is unavailable and never blindly resubmits", async () => {
+  let writes = 0;
+  const attempt = createImageSaveAttempt({
+    creating: false, targetId: "asset-1", payload: {}, upload: { uploadId: "upload-1", creationContextToken: null },
+    create: async () => { throw new Error("unexpected create"); },
+    update: async () => { writes += 1; throw new TypeError("offline"); },
+    loadRecord: async () => null,
+    api: { get: async () => { throw new TypeError("offline"); } } as never,
+  });
+  await assert.rejects(attempt.save, ImageSaveOutcomeUnknownError);
+  await assert.rejects(attempt.recover, ImageSaveOutcomeUnknownError);
+  assert.equal(writes, 1);
+});
+
+test("manual recovery rejects expired uploads without extending their lifetime or resending", async () => {
+  let writes = 0;
+  const attempt = createImageSaveAttempt({
+    creating: false, targetId: "asset-1", payload: {}, upload: { uploadId: "upload-1", creationContextToken: null },
+    create: async () => { throw new Error("unexpected create"); },
+    update: async () => { writes += 1; return { id: "asset-1" }; },
+    loadRecord: async () => null,
+    api: { get: async () => ({ data: { status: "EXPIRED" } }) } as never,
+  });
+  await assert.rejects(attempt.recover, { code: "UPLOAD_EXPIRED" });
+  assert.equal(writes, 0);
+});
+
+test("an uncertain create without an upload has no automatic or manual duplicate submission", async () => {
+  let creates = 0;
+  const attempt = createImageSaveAttempt({
+    creating: true, payload: { email: "synthetic@example.test" }, upload: null,
+    create: async () => { creates += 1; throw new TypeError("response lost"); },
+    update: async () => { throw new Error("unexpected update"); },
+    loadRecord: async () => null,
+  });
+  assert.equal(attempt.hasUpload, false);
+  await assert.rejects(attempt.save, ImageSaveOutcomeUnknownError);
+  await assert.rejects(attempt.recover, ImageSaveOutcomeUnknownError);
+  assert.equal(creates, 1);
 });

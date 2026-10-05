@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
-import { KeyRound, ShieldAlert, X } from "lucide-react";
+import { ChevronRight, KeyRound, ShieldAlert, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { User } from "../../types/TypeUser";
 import { useAuthStore } from "../../stores/authStore";
@@ -139,70 +140,89 @@ export default function DialogAdminSecurityActions({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="admin-security-title" className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <div>
-            <h2 id="admin-security-title" className="text-xl font-bold text-slate-900">จัดการความปลอดภัยบัญชี</h2>
-            <p className="mt-1 text-sm text-slate-500">{user.firstname} {user.lastname} · {user.email}</p>
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-3 text-left whitespace-normal backdrop-blur-sm sm:p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="admin-security-title" className="flex max-h-[90dvh] w-full max-w-[600px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-8">
+          <div className="min-w-0 flex-1">
+            <h2 id="admin-security-title" className="text-lg font-bold leading-snug text-slate-900 sm:text-xl">จัดการความปลอดภัยบัญชี</h2>
+            <p className="mt-1 break-words text-sm leading-relaxed text-slate-500">{user.firstname} {user.lastname}</p>
+            <p className="break-words text-xs leading-relaxed text-slate-400">{user.email}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="ปิด" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+          <button type="button" disabled={busy} onClick={onClose} aria-label="ปิด" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"><X className="h-5 w-5 stroke-[2.5]" /></button>
         </div>
 
-        <div className="space-y-4 p-6">
+        <div className="min-h-0 space-y-4 overflow-y-auto p-5 sm:p-8">
           {isOwnAccount ? (
-            <p className="rounded-lg bg-indigo-50 p-4 text-sm text-indigo-900">บัญชีนี้เป็นบัญชีที่กำลังใช้งาน เปลี่ยนรหัสผ่านหรือ Authenticator ได้ที่เมนู “ความปลอดภัยบัญชี” ของตนเอง ส่วนการกู้ 2FA ต้องให้ ADMIN คนอื่นช่วย</p>
+            <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">บัญชีนี้เป็นบัญชีที่คุณกำลังใช้งาน เปลี่ยนรหัสผ่านหรือแอปยืนยันตัวตนได้ที่เมนู “ความปลอดภัยบัญชี” หากต้องรีเซ็ต 2FA ให้ผู้ดูแลระบบคนอื่นช่วยดำเนินการ</p>
           ) : action === null ? (
             <>
-              <p className="text-sm text-slate-600">รายการที่มีความเสี่ยงสูงต้องยืนยัน TOTP อีกครั้ง แม้ Browser นี้จะถูก Trusted</p>
-              <button type="button" onClick={() => { setAction("password"); setError(""); }} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 p-4 text-left hover:border-indigo-300 hover:bg-indigo-50"><KeyRound className="h-5 w-5 text-indigo-600" /><span><strong className="block text-slate-900">รีเซ็ตรหัสผ่าน</strong><span className="text-sm text-slate-500">เพิกถอน Session และ Trusted Browser ทั้งหมดของบัญชี</span></span></button>
-              <button type="button" onClick={() => { setAction("two-factor"); setError(""); }} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 p-4 text-left hover:border-amber-300 hover:bg-amber-50"><ShieldAlert className="h-5 w-5 text-amber-600" /><span><strong className="block text-slate-900">รีเซ็ต 2FA</strong><span className="text-sm text-slate-500">ต้องตรวจตัวตนเจ้าของบัญชีนอกระบบและระบุเหตุผล</span></span></button>
+              <p className="text-sm leading-relaxed text-slate-500">เลือกสิ่งที่ต้องการรีเซ็ต โดยต้องยืนยันตัวตนก่อนทำรายการ</p>
+              <div className="space-y-3">
+                <button type="button" onClick={() => { setAction("password"); setError(""); }} className="group flex w-full min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"><KeyRound className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1 break-words">
+                    <strong className="block text-sm font-semibold leading-6 text-slate-900">รีเซ็ตรหัสผ่าน</strong>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-500">ตั้งรหัสผ่านใหม่และให้ผู้ใช้ออกจากระบบทุกอุปกรณ์</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400 group-hover:text-emerald-600" />
+                </button>
+                <button type="button" onClick={() => { setAction("two-factor"); setError(""); }} className="group flex w-full min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"><ShieldAlert className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1 break-words">
+                    <strong className="block text-sm font-semibold leading-6 text-slate-900">รีเซ็ต 2FA</strong>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-500">ให้ผู้ใช้ตั้งค่าการยืนยันตัวตนสองขั้นตอนใหม่ หลังตรวจสอบเจ้าของบัญชีแล้ว</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400 group-hover:text-emerald-600" />
+                </button>
+              </div>
             </>
           ) : (
             <>
-              <button type="button" onClick={() => { setAction(null); setNeedsStepUp(false); setError(""); }} className="text-sm font-semibold text-indigo-700 hover:underline">← เลือกรายการอื่น</button>
+              <button type="button" disabled={busy} onClick={() => { setAction(null); setNeedsStepUp(false); setError(""); }} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 hover:underline disabled:opacity-50">← เลือกรายการอื่น</button>
               <form onSubmit={needsStepUp ? submitStepUp : submitAction} className="space-y-4">
-                <h3 className="font-semibold text-slate-900">{actionLabel}: {user.firstname} {user.lastname}</h3>
+                <h3 className="break-words font-semibold leading-relaxed text-slate-900">{actionLabel}: {user.firstname} {user.lastname}</h3>
                 {action === "password" ? (
                   <>
-                    <label className="block text-sm font-medium text-slate-700">รหัสผ่านใหม่<input required minLength={8} maxLength={128} autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-                    <label className="block text-sm font-medium text-slate-700">ยืนยันรหัสผ่านใหม่<input required minLength={8} maxLength={128} autoComplete="new-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-                    <p className="text-sm text-slate-600">ผู้ใช้จะต้องเข้าสู่ระบบใหม่ Session และ Trusted Browser เดิมทั้งหมดจะถูกเพิกถอน</p>
+                    <label className="block text-sm font-medium text-slate-700">รหัสผ่านใหม่<input required minLength={8} maxLength={128} autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    <label className="block text-sm font-medium text-slate-700">ยืนยันรหัสผ่านใหม่<input required minLength={8} maxLength={128} autoComplete="new-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
+                    <p className="text-xs leading-relaxed text-slate-500">เมื่อรีเซ็ตสำเร็จ ผู้ใช้ต้องเข้าสู่ระบบและยืนยันตัวตนใหม่ทุกอุปกรณ์</p>
                   </>
                 ) : (
                   <>
-                    <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">ตรวจยืนยันตัวจริงของเจ้าของบัญชีนอก HAMS ก่อนรีเซ็ต เมื่อสำเร็จผู้ใช้ต้องตั้งค่า Authenticator ใหม่</p>
-                    <label className="block text-sm font-medium text-slate-700">เหตุผลในการรีเซ็ต<textarea required minLength={10} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1.5 min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="ระบุเหตุผลโดยไม่ใส่รหัสผ่าน, TOTP หรือข้อมูลบัตรประชาชน" /></label>
-                    <label className="flex items-start gap-3 text-sm text-slate-700"><input type="checkbox" checked={identityVerified} onChange={(event) => setIdentityVerified(event.target.checked)} className="mt-0.5 h-4 w-4 accent-indigo-600" /><span>ยืนยันว่าตรวจสอบตัวตนเจ้าของบัญชีนอกระบบ HAMS แล้ว</span></label>
+                    <p className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">ตรวจสอบตัวตนเจ้าของบัญชีก่อนรีเซ็ต เมื่อสำเร็จ ผู้ใช้ต้องตั้งค่าแอปยืนยันตัวตนใหม่</p>
+                    <label className="block text-sm font-medium text-slate-700">เหตุผลในการรีเซ็ต<textarea required minLength={10} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1.5 min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" placeholder="ระบุเหตุผล โดยไม่ใส่รหัสผ่าน รหัสยืนยัน หรือเลขบัตรประชาชน" /></label>
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-700"><input type="checkbox" checked={identityVerified} onChange={(event) => setIdentityVerified(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600" /><span className="min-w-0 break-words leading-relaxed">ตรวจสอบตัวตนเจ้าของบัญชีแล้ว เช่น พบเจ้าตัวหรือยืนยันผ่านช่องทางของโรงพยาบาล</span></label>
                   </>
                 )}
 
                 {stepUpExpiresAt && isAdminStepUpActive() && !needsStepUp ? (
-                  <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">ยืนยัน TOTP แล้ว ใช้กับรายการ ADMIN ใน Session นี้ได้ถึง {new Date(stepUpExpiresAt).toLocaleTimeString("th-TH")}</p>
+                  <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">ยืนยันตัวตนแล้ว ทำรายการต่อได้ถึง {new Date(stepUpExpiresAt).toLocaleTimeString("th-TH")}</p>
                 ) : needsStepUp ? (
-                  <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-                    <p className="text-sm font-semibold text-indigo-900">ยืนยัน TOTP เพื่อเปิด Step-up 5 นาที</p>
-                    <label className="block text-sm font-medium text-indigo-900">TOTP ปัจจุบัน<input required inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={stepUpCode} onChange={(event) => setStepUpCode(event.target.value)} className="mt-1.5 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2.5" /></label>
+                  <div className="space-y-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                    <p className="text-sm font-semibold text-emerald-900">ยืนยันตัวตนก่อนทำรายการ</p>
+                    <p className="text-xs leading-relaxed text-emerald-800">ใช้รหัส 6 หลักของคุณจากแอปยืนยันตัวตน เมื่อยืนยันแล้วจะทำรายการต่อได้ 5 นาที</p>
+                    <label className="block text-sm font-medium text-emerald-900">รหัสยืนยัน<input required inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={stepUpCode} onChange={(event) => setStepUpCode(event.target.value)} className="mt-1.5 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2.5 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
                   </div>
                 ) : null}
 
-                {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-                <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-                  <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">ยกเลิก</button>
+                {error && <p role="alert" className="break-words rounded-xl bg-rose-50 p-3 text-sm leading-relaxed text-rose-800">{error}</p>}
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+                  <button type="button" disabled={busy} onClick={onClose} className="w-full rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">ยกเลิก</button>
                   {needsStepUp ? (
-                    <button disabled={busy || stepUpCode.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังตรวจสอบ..." : "ยืนยัน TOTP และทำรายการ"}</button>
+                    <button disabled={busy || stepUpCode.length !== 6} className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{busy ? "กำลังตรวจสอบ..." : "ยืนยันและทำรายการ"}</button>
                   ) : (
-                    <button disabled={busy || (action === "password" ? newPassword.length < 8 || confirmPassword.length < 8 : reason.trim().length < 10 || !identityVerified)} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "กำลังทำรายการ..." : "ยืนยันรายการ"}</button>
+                    <button disabled={busy || (action === "password" ? newPassword.length < 8 || confirmPassword.length < 8 : reason.trim().length < 10 || !identityVerified)} className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{busy ? "กำลังทำรายการ..." : "ยืนยันรายการ"}</button>
                   )}
                 </div>
               </form>
             </>
           )}
 
-          {error && action === null && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
+          {error && action === null && <p role="alert" className="break-words rounded-xl bg-rose-50 p-3 text-sm leading-relaxed text-rose-800">{error}</p>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -2,7 +2,7 @@
 
 **Source spec:** [Asset Image and Employee Photo — Cloudinary with Storage Abstraction](spec.md)
 
-**Status:** Ticket 01 complete on 2026-10-02 (live Cloudinary 23/23, authenticated API 11/11, adapter 6/6); Ticket 02 complete on 2026-10-03 (unit 435/435, auth/image HTTP + PostgreSQL 45/45, asset-status invariants 18/18); Tickets 03–07 remain pending. Not pushed.
+**Status — 2026-10-05:** Backend Tickets 01–05 are complete for the recorded handoff scope. Frontend 06–07 are implemented with automated checks; the user reports successful manual image addition against real Cloudinary. Full acceptance across failure/retry, expiry, session/account changes, and replacement remains incompletely recorded, and the latest changes need final review and commit. G4 remains the deferred wait-disposal compatibility decision for production release. Not pushed.
 
 **Delivery rule:** ทำ BE 01–05 ให้เสร็จทั้งหมดและผ่าน BE handoff gate ก่อนเริ่ม FE 06–07 ตามคำขอของผู้ใช้วันที่ 2026-10-01
 

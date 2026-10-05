@@ -59,7 +59,6 @@ describe('AssetService', () => {
     $transaction: jest.fn(),
   };
   const mockImageAttachmentService = {
-    assertFeatureActive: jest.fn(),
     assertAttachmentPayload: jest.fn(),
     committedTargetForRetry: jest.fn(),
     preflightClaim: jest.fn(),

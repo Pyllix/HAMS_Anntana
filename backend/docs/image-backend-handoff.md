@@ -4,10 +4,12 @@
 
 ## Backend audit — 2026-10-04
 
+**Runtime update — 2026-10-05:** the user requested removal of the CRUD attachment activation switch for local development. Image attachment is now always available through the existing permission and verified-upload checks. `IMAGE_CRUD_ATTACHMENT_ENABLED` is no longer read; the earlier flag policy below describes the 2026-10-04 baseline only. This change does not deploy the application or change the deferred wait-disposal form.
+
 | Ticket | Audit result | Remaining Backend/handoff work |
 | --- | --- | --- |
 | 01 — upload/normalization | Complete; prior live G1 evidence retained | No missing implementation identified in this audit; full G1 was not rerun |
-| 02 — CRUD attachment | Complete; current dedicated-DB HTTP acceptance passed | Keep activation gated; G4 is still open |
+| 02 — CRUD attachment | Complete; current dedicated-DB HTTP acceptance passed | Activation switch removed on 2026-10-05; G4 is still open for release |
 | 03 — read/cache | Complete; Backend/provider evidence plus approved no-store policy | Helper integration/UI acceptance belongs to 06/07 |
 | 04 — cleanup/recovery | Complete; current DB and live G3 acceptance passed | No pending required implementation/verification identified within the specified bounds |
 | 05 — handoff | Complete for isolated FE development/acceptance | G4 remains a production release blocker; no required Backend behavior is hidden in 06/07 |
@@ -23,7 +25,7 @@ The user approved separating isolated FE development/acceptance from production 
 
 ### Environment boundary for the FE handoff
 
-Use a separate local/test Backend process and disposable PostgreSQL database with only synthetic test data. Point that process's `DATABASE_URL` at the checked test database and its provider credentials at the separate test-only Cloudinary cloud; do not reuse the application database or provider cloud. Enable `IMAGE_CRUD_ATTACHMENT_ENABLED=true` only in that isolated process for integration acceptance. Keep the repository default and production activation policy at `false`; this document does not mutate settings or certify a deployed value. Track known test-upload identities and use scoped cleanup. No production deployment or real customer trial proceeds while G4 is unresolved.
+Use a separate local/test Backend process and disposable PostgreSQL database with only synthetic test data. Point that process's `DATABASE_URL` at the checked test database and its provider credentials at the separate test-only Cloudinary cloud; do not reuse the application database or provider cloud. CRUD image attachment is always available as of 2026-10-05 and requires no activation setting. Track known test-upload identities and use scoped cleanup. No production deployment or real customer trial proceeds while G4 is unresolved.
 
 ## Gate status
 
@@ -64,7 +66,7 @@ This is a read-only inventory. No Frontend files were changed.
 | User create/edit writes | [`DialogAddUser.tsx`](../../front-end/src/components/user-management/DialogAddUser.tsx), [`DialogEditUser.tsx`](../../front-end/src/components/user-management/DialogEditUser.tsx), [`userService.ts`](../../front-end/src/services/userService.ts), and [`TypeUser.tsx`](../../front-end/src/types/TypeUser.tsx) define the current forms, payloads, and API calls. | No current user create/edit photo writer was found: `UserDto`/`UserUpdateDto` carry no image field and the forms have no photo input. Employee Photo display still needs the managed read flow below. |
 | Employee Photo displays | [`Header.tsx`](../../front-end/src/layout/Header.tsx), [`TypeUser.tsx`](../../front-end/src/types/TypeUser.tsx), [`DialogDetailUser.tsx`](../../front-end/src/components/user-management/DialogDetailUser.tsx), [`DialogDelUser.tsx`](../../front-end/src/components/user-management/DialogDelUser.tsx), [`UserInfo.tsx`](../../front-end/src/components/user-management/table-compnent/UserInfo.tsx), and [`ConfirmRepairModal.tsx`](../../front-end/src/components/help-desk/ConfirmRepairModal.tsx) use `user.imageUrl`. | Managed Employee Photos return durable `imageUrl: null`; the Frontend types do not yet include `hasEmployeePhoto`/`photoRevision`, and these consumers do not request `GET /users/:id/photo`. The FE tickets need one grant/revision-aware display helper. |
 
-The repository default in `.env.example` keeps `IMAGE_CRUD_ATTACHMENT_ENABLED=false`. The deployed value was not inspected. Managed CRUD activation is permitted only in the separate test process for 06/07 acceptance; production activation stays behind G4 and coordinated release acceptance. Do not infer production configuration from the sample file.
+The activation switch was removed on 2026-10-05 at the user's request. `.env.example` no longer includes it, and any remaining local value is ignored. Production release still requires G4 and coordinated acceptance; the deferred wait-disposal incompatibility remains recorded above.
 
 On 2026-10-03, the user reconfirmed that the wait-disposal photo field must not be changed now; the team may remove it later. This leaves G4 open because a wait-disposal request that includes a changed Base64 `imageUrl` still conflicts with an Asset whose image is managed. No silent field ignore, temporary Base64 exception, or wait-disposal migration is authorized by this clarification.
 
@@ -84,7 +86,6 @@ Keep the following settings and checks in the BE-only configuration. Cloudinary 
 | `IMAGE_UPLOAD_SETTLEMENT_HORIZON_SECONDS` | Confirm late-upload reconciliation retention against the API contract | Retain tombstones for in-flight/late-upload reconciliation. |
 | `IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS` | Confirm short-lived grant policy and API contract | Employee Photo grants are issued on demand and are not durable URLs. |
 | Cleanup sweep settings | Review `IMAGE_CLEANUP_INTERVAL_SECONDS`, `IMAGE_CLEANUP_BATCH_SIZE`, `IMAGE_CLEANUP_PROVIDER_REQUEST_BUDGET`, `IMAGE_CLEANUP_LEASE_SECONDS`, `IMAGE_CLEANUP_MAX_BACKOFF_SECONDS`, and `IMAGE_CLEANUP_PROVIDER_TIMEOUT_MS` | Bound cleanup work, provider leases, retry delay, and requests. Validate request counts in G3 evidence. |
-| `IMAGE_CRUD_ATTACHMENT_ENABLED` | Enable only in the isolated test Backend for 06/07; keep production disabled until G4/release acceptance | The deployed value was not inspected or changed. |
 | `TEST_DATABASE_URL` | Disposable isolated PostgreSQL only | Required for the HTTP acceptance suite and Ticket 04 database lifecycle tests; never point these tests at a shared or production database. |
 | `RUN_CLOUDINARY_CONTRACTS` and `CLOUDINARY_CONTRACT_*` | Opt-in, separate test-only Cloudinary account | Required for G2/G3 real-provider checks and manifest-scoped test cleanup. The test account must differ from the configured application cloud. |
 

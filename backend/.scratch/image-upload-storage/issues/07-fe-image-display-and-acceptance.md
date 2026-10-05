@@ -19,6 +19,8 @@
 
 **Source spec:** [Image upload storage specification](../spec.md) — Implementation Decisions 8–9; FE acceptance; G5/Further Notes.
 
+**Manual report — 2026-10-05:** the user reports successful normal image addition against real Cloudinary. The local Frontend proxy now points to `http://localhost:3000` as inspected during diagnosis. Full browser acceptance for protected Employee Photos, account/session changes, expiry, replacement, and failure recovery is not established by this report. The 2026-10-05 save recovery regressions passed, but the latest UI changes still need final review; G4 remains deferred for production release.
+
 ## Acceptance criteria
 
 - [x] Inventory และย้าย in-scope image consumers ให้ครบ: asset cards/lists/details ที่ใช้ imageUrl และ Employee Photo ใน header/session, user list/details/selectors หรือ nested staff views ที่พบจริง ไม่อ้างครบจากการแก้เฉพาะ CRUD forms

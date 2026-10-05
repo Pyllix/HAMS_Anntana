@@ -4,13 +4,8 @@ import {
   IMAGE_SOURCE_ACCEPT,
   IMAGE_SOURCE_FORMAT_LABEL,
   IMAGE_SOURCE_MAX_BYTES,
-  IMAGE_SOURCE_MAX_PIXELS,
 } from "../../services/imageUploadService";
 import type { ImageSelectionState } from "../../hooks/useImageUploadSelection";
-
-function formatLimit(bytes: number): string {
-  return new Intl.NumberFormat("th-TH").format(bytes);
-}
 
 export interface ImageUploadFieldProps {
   label: string;
@@ -76,6 +71,9 @@ export default function ImageUploadField({
               <ImagePlus className="h-8 w-8 text-slate-400" />
             )}
             <span className="text-xs">{currentStatus === "missing" ? "ยังไม่มีรูป" : "เลือกรูปเพื่ออัปโหลด"}</span>
+            <span className="text-[11px] leading-relaxed text-slate-400">
+              {IMAGE_SOURCE_FORMAT_LABEL} · ไม่เกิน {IMAGE_SOURCE_MAX_BYTES / 1_000_000} MB
+            </span>
           </div>
         )}
         {isWorking && previewUrl && (
@@ -98,9 +96,6 @@ export default function ImageUploadField({
           aria-label={`เลือกรูปสำหรับ ${label}`}
         />
       </label>
-      <p className="text-xs text-slate-500">
-        {IMAGE_SOURCE_FORMAT_LABEL} ขนาดไม่เกิน {formatLimit(IMAGE_SOURCE_MAX_BYTES)} ไบต์ และ {formatLimit(IMAGE_SOURCE_MAX_PIXELS)} พิกเซล
-      </p>
       {state.fileName && (
         <p className="truncate text-xs text-slate-500" title={state.fileName}>
           {state.fileName}

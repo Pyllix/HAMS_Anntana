@@ -66,15 +66,6 @@ export function imagePublicIdForPurpose(
   return `hams-${prefix}-${uploadId}`;
 }
 
-export function imageCrudAttachmentEnabled(): boolean {
-  const configured = process.env.IMAGE_CRUD_ATTACHMENT_ENABLED;
-  if (configured === undefined || configured.trim() === '') return false;
-  const normalized = configured.trim().toLowerCase();
-  if (normalized === 'true') return true;
-  if (normalized === 'false') return false;
-  throw new Error('IMAGE_CRUD_ATTACHMENT_ENABLED must be true or false');
-}
-
 export function imageUploadPolicy(
   purpose: ImagePurpose,
   maxSourceBytes = configuredPositiveInteger(

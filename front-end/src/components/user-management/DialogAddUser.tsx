@@ -10,7 +10,8 @@ import { useImageUploadSelection } from "../../hooks/useImageUploadSelection";
 import ImageUploadField from "../shared/ImageUploadField";
 import {
   imageOperationErrorMessage,
-  saveImageAwareForm,
+  createImageSaveAttempt,
+  type ImageFormSaveAttempt,
   type VerifiedImageUpload,
 } from "../../services/imageUploadService";
 
@@ -69,9 +70,16 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   const [error, setError] = useState("");
   const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
   const submitStartedRef = useRef(false);
+  const imageSaveAttemptRef = useRef<ImageFormSaveAttempt<Awaited<ReturnType<typeof createUser>>> | null>(null);
 
   const queryClient = useQueryClient();
   const accountId = useAuthStore((state) => state.user?.id ?? null);
+
+  useEffect(() => {
+    imageSaveAttemptRef.current = null;
+    setSaveOutcomeUnknown(false);
+  }, [accountId, isOpenAdd]);
+
   const imageSelection = useImageUploadSelection({
     purpose: "EMPLOYEE_PHOTO",
     enabled: isOpenAdd,
@@ -81,6 +89,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
     if (isOpenAdd) {
       submitStartedRef.current = false;
       setSaveOutcomeUnknown(false);
+      imageSaveAttemptRef.current = null;
     }
   }, [isOpenAdd]);
 
@@ -91,11 +100,15 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
   });
 
   const { mutate: addUser, isPending } = useMutation({
-    mutationFn: async (input: { payload: UserDto; upload: VerifiedImageUpload | null }) => {
+    mutationFn: async (input: { recover: true } | { recover?: false; payload: UserDto; upload: VerifiedImageUpload | null }) => {
       if (!accountId || useAuthStore.getState().user?.id !== accountId) {
         throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
       }
-      return saveImageAwareForm({
+      if (input.recover === true) {
+        if (!imageSaveAttemptRef.current?.hasUpload) throw new Error("ไม่พบการบันทึกรูปที่รอตรวจสอบ");
+        return imageSaveAttemptRef.current.recover();
+      }
+      const attempt = createImageSaveAttempt({
         creating: true,
         payload: input.payload as unknown as Record<string, unknown>,
         upload: input.upload,
@@ -103,10 +116,13 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
         update: (id, payload) => updateUserById(id, payload as never),
         loadRecord: getUserById,
       });
+      imageSaveAttemptRef.current = attempt;
+      return attempt.save();
     },
     onSuccess: () => {
       submitStartedRef.current = false;
       setSaveOutcomeUnknown(false);
+      imageSaveAttemptRef.current = null;
       imageSelection.clearSelection();
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setForm(initialForm);
@@ -115,8 +131,11 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
     },
     onError: (error) => {
       submitStartedRef.current = false;
-      setSaveOutcomeUnknown((error as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN");
-      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const unknownOutcome = (error as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN";
+      setSaveOutcomeUnknown(unknownOutcome);
+      if (!unknownOutcome) imageSaveAttemptRef.current = null;
+      const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code
+        ?? (error as { code?: string })?.code;
       const message = imageOperationErrorMessage(error, "ไม่สามารถเพิ่มผู้ใช้งานได้ กรุณาลองใหม่");
       if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
         imageSelection.markSelectionError(message);
@@ -124,6 +143,8 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
       setError(message);
     },
   });
+
+  const canRecoverImageSave = saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload === true;
 
   if (!isOpenAdd) return null;
 
@@ -149,8 +170,13 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitStartedRef.current || isPending || saveOutcomeUnknown) return;
+    if (submitStartedRef.current || isPending || (saveOutcomeUnknown && !canRecoverImageSave)) return;
     setError("");
+    if (canRecoverImageSave) {
+      submitStartedRef.current = true;
+      addUser({ recover: true });
+      return;
+    }
 
     if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
       setError("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
@@ -215,7 +241,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-8 space-y-5"
         >
-          <fieldset disabled={isPending} className="contents">
+          <fieldset disabled={isPending || saveOutcomeUnknown} className="contents">
           {/* ชื่อ-นามสกุล */}
           <div>
             <label className="block text-sm font-bold text-[#1F2937] mb-1.5">
@@ -399,10 +425,10 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
             </button>
             <button
               type="submit"
-              disabled={isPending || saveOutcomeUnknown || ["uploading", "verifying", "error"].includes(imageSelection.state.status)}
+              disabled={isPending || (saveOutcomeUnknown ? !canRecoverImageSave : ["uploading", "verifying", "error"].includes(imageSelection.state.status))}
               className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+              {isPending ? "กำลังบันทึก..." : canRecoverImageSave ? "ตรวจสอบและบันทึกอีกครั้ง" : "บันทึกข้อมูล"}
             </button>
           </div>
         </form>

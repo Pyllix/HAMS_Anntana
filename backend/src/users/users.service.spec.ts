@@ -68,7 +68,6 @@ const mockPrismaService = {
 const mockAdminStepUpService = { requireActive: jest.fn() };
 const mockTwoFactorService = { requiresTwoFactor: jest.fn() };
 const mockImageAttachmentService = {
-  assertFeatureActive: jest.fn(),
   assertAttachmentPayload: jest.fn(),
   committedTargetForRetry: jest.fn(),
   preflightClaim: jest.fn(),

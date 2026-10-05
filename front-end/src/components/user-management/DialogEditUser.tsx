@@ -13,7 +13,8 @@ import ImageUploadField from "../shared/ImageUploadField";
 import {
   clearEmployeePhotoGrantCache,
   imageOperationErrorMessage,
-  saveImageAwareForm,
+  createImageSaveAttempt,
+  type ImageFormSaveAttempt,
   type VerifiedImageUpload,
 } from "../../services/imageUploadService";
 
@@ -58,10 +59,17 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   const [error, setError] = useState("");
   const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
   const submitStartedRef = useRef(false);
+  const imageSaveAttemptRef = useRef<ImageFormSaveAttempt<Awaited<ReturnType<typeof updateUserById>>> | null>(null);
   const wasOpenRef = useRef(false);
 
   const queryClient = useQueryClient();
   const accountId = useAuthStore((state) => state.user?.id ?? null);
+
+  useEffect(() => {
+    imageSaveAttemptRef.current = null;
+    setSaveOutcomeUnknown(false);
+  }, [accountId, isOpen, user.id]);
+
   const imageSelection = useImageUploadSelection({
     purpose: "EMPLOYEE_PHOTO",
     targetId: user.id,
@@ -81,6 +89,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       setError("");
       if (!wasOpenRef.current) {
         setSaveOutcomeUnknown(false);
+        imageSaveAttemptRef.current = null;
         submitStartedRef.current = false;
       }
     }
@@ -94,11 +103,15 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
   });
 
   const { mutate: editUser, isPending } = useMutation({
-    mutationFn: async (input: { payload: UserUpdateDto; upload: VerifiedImageUpload | null }) => {
+    mutationFn: async (input: { recover: true } | { recover?: false; payload: UserUpdateDto; upload: VerifiedImageUpload | null }) => {
       if (!accountId || useAuthStore.getState().user?.id !== accountId) {
         throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
       }
-      return saveImageAwareForm({
+      if (input.recover === true) {
+        if (!imageSaveAttemptRef.current?.hasUpload) throw new Error("ไม่พบการบันทึกรูปที่รอตรวจสอบ");
+        return imageSaveAttemptRef.current.recover();
+      }
+      const attempt = createImageSaveAttempt({
         creating: false,
         targetId: user.id,
         payload: input.payload as unknown as Record<string, unknown>,
@@ -107,10 +120,13 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
         update: (id, payload) => updateUserById(id, payload as never),
         loadRecord: getUserById,
       });
+      imageSaveAttemptRef.current = attempt;
+      return attempt.save();
     },
     onSuccess: async (savedUser) => {
       submitStartedRef.current = false;
       setSaveOutcomeUnknown(false);
+      imageSaveAttemptRef.current = null;
       imageSelection.clearSelection();
       clearEmployeePhotoGrantCache(accountId, user.id);
       if (accountId === user.id) {
@@ -125,8 +141,11 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
     },
     onError: (cause) => {
       submitStartedRef.current = false;
-      setSaveOutcomeUnknown((cause as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN");
-      const code = (cause as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      const unknownOutcome = (cause as { code?: string })?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN";
+      setSaveOutcomeUnknown(unknownOutcome);
+      if (!unknownOutcome) imageSaveAttemptRef.current = null;
+      const code = (cause as { response?: { data?: { code?: string } } })?.response?.data?.code
+        ?? (cause as { code?: string })?.code;
       const message = imageOperationErrorMessage(cause, editErrorMessage(cause));
       if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
         imageSelection.markSelectionError(message);
@@ -134,6 +153,8 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       setError(message);
     },
   });
+
+  const canRecoverImageSave = saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload === true;
 
   if (!isOpen) return null;
 
@@ -159,8 +180,13 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitStartedRef.current || isPending || saveOutcomeUnknown) return;
+    if (submitStartedRef.current || isPending || (saveOutcomeUnknown && !canRecoverImageSave)) return;
     setError("");
+    if (canRecoverImageSave) {
+      submitStartedRef.current = true;
+      editUser({ recover: true });
+      return;
+    }
 
     if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
       setError("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
@@ -227,7 +253,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-8 space-y-5"
         >
-          <fieldset disabled={isPending} className="contents">
+          <fieldset disabled={isPending || saveOutcomeUnknown} className="contents">
           <div className="grid grid-cols-2 gap-5">
             {/* ชื่อ */}
             <div>
@@ -358,23 +384,27 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
             </p>
           </div>
 
-          <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+          <label className="col-span-2 flex items-start gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
             <input
               type="checkbox"
               checked={form.banned}
               onChange={(event) =>
                 setForm((current) => ({ ...current, banned: event.target.checked }))
               }
-              className="h-4 w-4 accent-emerald-600"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
             />
-            <span>ระงับบัญชีผู้ใช้นี้</span>
+            <span className="min-w-0 space-y-1 break-words">
+              <span className="block font-medium">ระงับบัญชีผู้ใช้นี้</span>
+              <span className="block text-xs leading-relaxed text-gray-500">
+                บัญชีที่ระงับจะเข้าใช้งานไม่ได้
+              </span>
+              {securityChange && (
+                <span className="block text-xs leading-relaxed text-amber-700">
+                  เมื่อบันทึก ผู้ใช้จะออกจากระบบทุกอุปกรณ์
+                </span>
+              )}
+            </span>
           </label>
-
-          {securityChange && (
-            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-              การเปลี่ยน Role หรือสถานะจะออกจากระบบทุกอุปกรณ์และเพิกถอน Trusted Browser ของบัญชีนี้
-            </p>
-          )}
           {error && (
             <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
               {error}
@@ -395,10 +425,10 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
             </button>
             <button
               type="submit"
-              disabled={isPending || saveOutcomeUnknown || ["uploading", "verifying", "error"].includes(imageSelection.state.status)}
+              disabled={isPending || (saveOutcomeUnknown ? !canRecoverImageSave : ["uploading", "verifying", "error"].includes(imageSelection.state.status))}
               className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isPending ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+              {isPending ? "กำลังบันทึก..." : canRecoverImageSave ? "ตรวจสอบและบันทึกอีกครั้ง" : "บันทึกการแก้ไข"}
             </button>
           </div>
         </form>
