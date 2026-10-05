@@ -3,6 +3,15 @@ export type AuthBroadcastMessage =
   | { type: "SIGNED_OUT" }
   | { type: "ACCOUNT_CHANGED"; userId: string };
 
+export function shouldInvalidateAccountBoundState(
+  message: AuthBroadcastMessage,
+  accountId: string | null,
+): boolean {
+  return message.type === "SIGNED_OUT" ||
+    message.type === "SESSION_EXPIRED" ||
+    (message.type === "ACCOUNT_CHANGED" && message.userId !== accountId);
+}
+
 const CHANNEL_NAME = "hams-auth-session";
 const listeners = new Set<(message: AuthBroadcastMessage) => void>();
 let channel: BroadcastChannel | null = null;

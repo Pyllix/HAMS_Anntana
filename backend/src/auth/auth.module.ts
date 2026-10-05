@@ -5,8 +5,10 @@ import { TrustedBrowserService } from './trusted-browser.service';
 import { PreAuthService } from './pre-auth.service';
 import { AdminStepUpService } from './admin-step-up.service';
 import { PrismaService } from '../prisma.service';
+import { ImagesModule } from '../images/images.module';
 
 @Module({
+  imports: [ImagesModule],
   controllers: [AuthController],
   providers: [
     PrismaService,

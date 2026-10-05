@@ -84,3 +84,33 @@ enum BorrowExtensionStatus {
   REJECTED
   CANCELLED
 }
+
+enum ImageUploadPurpose {
+  ASSET_IMAGE
+  EMPLOYEE_PHOTO
+}
+
+enum ImageUploadStatus {
+  AUTHORIZED
+  VERIFIED_PENDING
+  CLAIMED
+  SUPERSEDED
+  EXPIRED
+  REJECTED
+}
+
+enum ImageCleanupStatus {
+  PENDING
+  LEASED
+  RETRY
+  COMPLETED
+  RETAINED
+}
+
+enum ImageCleanupReason {
+  SUPERSEDED_ATTACHMENT
+  EXPIRED_UPLOAD
+  REJECTED_UPLOAD
+  UNREPORTED_UPLOAD
+  LATE_UPLOAD
+}

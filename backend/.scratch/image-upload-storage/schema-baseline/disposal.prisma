@@ -1,0 +1,16 @@
+// Disposal model (การจำหน่ายครุภัณฑ์)
+
+model Disposal {
+  id            String    @id @default(uuid()) @map("disposal_id")
+  disposalDocNo String    @map("disposal_doc_no") @db.VarChar(255)
+  approvedDate  DateTime  @map("approved_date")
+  asset_id      String    @map("asset_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  // Relations
+  asset Asset @relation(fields: [asset_id], references: [id])
+
+  @@map("disposal")
+}

@@ -19,6 +19,7 @@ import type {
   UrgencyStatus,
   CreateRepairDto,
 } from "../../types/TypeRepair";
+import EmployeePhotoDisplay from "../shared/EmployeePhotoDisplay";
 
 export default function ConfirmRepairModal() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -37,7 +38,6 @@ export default function ConfirmRepairModal() {
     resetForm,
   } = useRepairStore();
 
-  const userAvatarUrl = user?.imageUrl || null;
   const userInitial = user?.firstname
     ? user.firstname.charAt(0).toUpperCase()
     : "-";
@@ -307,18 +307,18 @@ export default function ConfirmRepairModal() {
                         ผู้ทำรายการแจ้งซ่อม
                       </span>
                       <div className="flex items-center gap-3">
-                        {/* แสดงรูปโปรไฟล์จริงจาก imageUrl ถ้าไม่มีรูปจะใช้ Avatar ตัวอักษรแทน */}
-                        {userAvatarUrl ? (
-                          <img
-                            src={userAvatarUrl}
-                            alt={userFullName}
-                            className="w-9 h-9 rounded-full object-cover border border-emerald-300 shadow-xs shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-[#00A96E] text-white flex items-center justify-center font-bold text-sm shrink-0">
-                            {userInitial}
-                          </div>
-                        )}
+                        {/* รูปพนักงานใช้ grant แบบ no-store; หากไม่มีรูปหรือโหลดไม่ได้ให้แสดงตัวอักษรแทน */}
+                        <EmployeePhotoDisplay
+                          userId={user?.id}
+                          hasEmployeePhoto={user?.hasEmployeePhoto}
+                          photoRevision={user?.photoRevision}
+                          alt={userFullName}
+                          containerClassName="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-300 shadow-xs"
+                          imageClassName="h-full w-full object-cover"
+                          fallbackClassName="flex h-full w-full items-center justify-center rounded-full bg-[#00A96E] text-sm font-bold text-white"
+                          fallback={userInitial}
+                          enabled={Boolean(user?.id)}
+                        />
                         <div>
                           <p className="font-bold text-[#00A96E] text-xs leading-tight">
                             {userFullName}

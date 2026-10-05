@@ -1,0 +1,14 @@
+// Acquisition Type model (ประเภทการได้รับมา)
+
+model AcqType {
+  id          Int       @id @default(autoincrement()) @map("acq_type_id")
+  // Name uniqueness (trimmed and case-insensitive) is enforced by a partial SQL index.
+  name        String    @map("acq_type_name") @db.VarChar(100)
+  isActive    Boolean   @default(true) @map("is_active")
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@map("acq_type")
+}

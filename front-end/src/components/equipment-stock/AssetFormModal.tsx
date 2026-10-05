@@ -2,14 +2,16 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
   X,
-  UploadCloud,
   ChevronDown,
   Lock,
 } from "lucide-react";
 import { useEquipmentModalStore } from "../../stores/useEquipmentModalStore";
+import { useEquipmentDetailModalStore } from "../../stores/useEquipmentDetailModalStore";
+import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore";
 import {
   createAsset,
   updateAsset,
+  getAssetById,
   getAssetTypes,
   getAssetStatuses,
   getSections,
@@ -23,11 +25,23 @@ import { getAcqTypes } from "../../services/acqTypeService";
 import { useAuthStore } from "../../stores/authStore";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
 import { clearSessionDraft } from "../../services/sessionDraftStorage";
+import { useImageUploadSelection } from "../../hooks/useImageUploadSelection";
+import ImageUploadField from "../shared/ImageUploadField";
+import {
+  imageOperationErrorMessage,
+  createImageSaveAttempt,
+  type ImageFormSaveAttempt,
+} from "../../services/imageUploadService";
 
 export default function AssetFormModal() {
   const { isOpen, mode, selectedAsset, closeModal } = useEquipmentModalStore();
   const queryClient = useQueryClient();
   const accountId = useAuthStore((state) => state.user?.id);
+  const imageSelection = useImageUploadSelection({
+    purpose: "ASSET_IMAGE",
+    targetId: mode === "edit" ? selectedAsset?.id : undefined,
+    enabled: isOpen,
+  });
 
   // Queries for Dropdowns
   const { data: assetTypes = [] } = useQuery({
@@ -105,15 +119,21 @@ export default function AssetFormModal() {
     receivedDate: "",
     warrantyDate: "",
     remark: "",
-    imageUrl: "",
     pmType: "IM",
     calType: "IC",
     riskLevel: "LOW",
   });
 
-  const [imagePreview, setImagePreview] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [saveOutcomeUnknown, setSaveOutcomeUnknown] = useState(false);
   const initializedFormKeyRef = useRef<string | null>(null);
+  const submitStartedRef = useRef(false);
+  const imageSaveAttemptRef = useRef<ImageFormSaveAttempt<Awaited<ReturnType<typeof createAsset>>> | null>(null);
+
+  useEffect(() => {
+    imageSaveAttemptRef.current = null;
+    setSaveOutcomeUnknown(false);
+  }, [accountId, isOpen, mode, selectedAsset?.id]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -124,6 +144,8 @@ export default function AssetFormModal() {
     if (initializedFormKeyRef.current === formKey) return;
     initializedFormKeyRef.current = formKey;
     setErrorMsg("");
+    setSaveOutcomeUnknown(false);
+    imageSaveAttemptRef.current = null;
       if (mode === "edit" && selectedAsset) {
         setFormData({
           noid: selectedAsset.noid || "",
@@ -145,12 +167,10 @@ export default function AssetFormModal() {
           receivedDate: selectedAsset.receivedDate ? selectedAsset.receivedDate.split("T")[0] : "",
           warrantyDate: selectedAsset.warrantyDate ? selectedAsset.warrantyDate.split("T")[0] : "",
           remark: selectedAsset.remark || "",
-          imageUrl: selectedAsset.imageUrl || "",
           pmType: (selectedAsset as any)?.pmType || "IM",
           calType: (selectedAsset as any)?.calType || "IC",
           riskLevel: (selectedAsset as any)?.riskLevel || "LOW",
         });
-        setImagePreview(selectedAsset.imageUrl || "");
       } else {
         // Default create form: find "ใช้งานปกติ" (code === "NORMAL")
         const normalStatus = assetStatuses.find((s) => s.code === "NORMAL") || assetStatuses[0];
@@ -174,12 +194,10 @@ export default function AssetFormModal() {
           receivedDate: new Date().toISOString().split("T")[0],
           warrantyDate: "",
           remark: "",
-          imageUrl: "",
           pmType: "IM",
           calType: "IC",
           riskLevel: "LOW",
         });
-        setImagePreview("");
       }
       }, [isOpen, mode, selectedAsset?.id]);
 
@@ -201,8 +219,8 @@ export default function AssetFormModal() {
 
   const assetDraftKey = "asset:create";
   const assetDraft = useMemo(
-    () => ({ formData: { ...formData }, imagePreview }),
-    [formData, imagePreview],
+    () => ({ formData: { ...formData } }),
+    [formData],
   );
 
   useSessionDraft({
@@ -212,12 +230,13 @@ export default function AssetFormModal() {
     value: assetDraft,
     restore: (draft) => {
       if (!draft?.formData || typeof draft.formData !== "object") return;
+      const restoredFormData = { ...draft.formData };
+      delete (restoredFormData as Record<string, unknown>).imageUrl;
       setFormData((current) => ({
         ...current,
-        ...draft.formData,
-        imageUrl: "",
+        ...restoredFormData,
       }));
-      setImagePreview(typeof draft.imagePreview === "string" ? draft.imagePreview : "");
+      clearSessionDraft(assetDraftKey);
     },
     isEmpty: (draft) => {
       const data = draft.formData;
@@ -228,13 +247,21 @@ export default function AssetFormModal() {
         data.serialNo ||
         data.acqDoc ||
         data.price ||
-        data.remark ||
-        draft.imagePreview
+        data.remark
       );
     },
   });
   const mutation = useMutation({
     mutationFn: async () => {
+      if (useAuthStore.getState().user?.id !== accountId) {
+        throw new Error("เซสชันผู้ใช้เปลี่ยนแล้ว กรุณาเปิดฟอร์มอีกครั้งก่อนบันทึก");
+      }
+      if (saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload) {
+        return imageSaveAttemptRef.current.recover();
+      }
+      if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
+        throw new Error("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
+      }
       // Validate essentials
       if (!formData.name.trim()) throw new Error("กรุณากรอกชื่อครุภัณฑ์");
       if (!formData.model.trim()) throw new Error("กรุณากรอกรุ่นครุภัณฑ์");
@@ -251,7 +278,7 @@ export default function AssetFormModal() {
       const unavailableStatus = availStatuses.find((a) => a.code === "UNAVAILABLE");
       const autoAvailabilityId = isNormal ? availableStatus?.id : unavailableStatus?.id;
 
-      const payload: any = {
+      const payload = {
         noid: formData.noid.trim() || undefined,
         name: formData.name.trim(),
         model: formData.model.trim(),
@@ -265,7 +292,6 @@ export default function AssetFormModal() {
         isSpecial: Boolean(formData.isSpecial),
         isBackup: Boolean(formData.isBackup),
         remark: formData.remark.trim() || undefined,
-        imageUrl: imagePreview || formData.imageUrl || undefined,
         receivedDate: formData.receivedDate,
         section_id: formData.section_id,
         company_id: formData.company_id,
@@ -280,16 +306,30 @@ export default function AssetFormModal() {
         riskLevel: formData.riskLevel || (selectedAsset as any)?.riskLevel || "LOW",
       };
 
-      if (mode === "create") {
-        return await createAsset(payload);
-      } else {
-        return await updateAsset(selectedAsset!.id, payload);
-      }
+      const attempt = createImageSaveAttempt({
+        creating: mode === "create",
+        targetId: selectedAsset?.id,
+        payload,
+        upload: imageSelection.state.status === "ready" ? imageSelection.state.upload : null,
+        create: createAsset,
+        update: updateAsset,
+        loadRecord: getAssetById,
+      });
+      imageSaveAttemptRef.current = attempt;
+      return attempt.save();
     },
-    onSuccess: () => {
+    onSuccess: (savedAsset) => {
+      submitStartedRef.current = false;
+      setSaveOutcomeUnknown(false);
+      imageSaveAttemptRef.current = null;
+      imageSelection.clearSelection();
       clearSessionDraft(assetDraftKey);
+      useEquipmentDetailModalStore.getState().updateSelectedAsset(savedAsset);
+      useAssetDetailModalStore.getState().updateSelectedAsset(savedAsset);
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       queryClient.invalidateQueries({ queryKey: ["my-assets"] });
+      queryClient.invalidateQueries({ queryKey: ["equipment-assets-paginated"] });
+      queryClient.invalidateQueries({ queryKey: ["assetInfo"] });
       queryClient.invalidateQueries({ queryKey: ["kpi-total-assets"] });
       queryClient.invalidateQueries({ queryKey: ["kpi-normal-assets"] });
       queryClient.invalidateQueries({ queryKey: ["kpi-damaged-assets"] });
@@ -297,56 +337,24 @@ export default function AssetFormModal() {
       closeModal();
     },
     onError: (err: any) => {
-      const msg =
-        err?.response?.data?.message ||
-        (Array.isArray(err?.response?.data?.message)
-          ? err.response.data.message.join(", ")
-          : err.message) ||
-        "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
-      setErrorMsg(typeof msg === "string" ? msg : JSON.stringify(msg));
+      submitStartedRef.current = false;
+      const unknownOutcome = err?.code === "IMAGE_SAVE_OUTCOME_UNKNOWN";
+      setSaveOutcomeUnknown(unknownOutcome);
+      if (!unknownOutcome) imageSaveAttemptRef.current = null;
+      const code = err?.response?.data?.code ?? err?.code;
+      const message = imageOperationErrorMessage(err, "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      if (code === "UPLOAD_EXPIRED" || code === "UPLOAD_NOT_FOUND") {
+        imageSelection.markSelectionError(message);
+      }
+      setErrorMsg(message);
     },
   });
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          // Resize to max 800x800 for optimal Base64 payload storage
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.8);
-
-          setImagePreview(compressedDataUrl);
-          setFormData((prev) => ({ ...prev, imageUrl: compressedDataUrl }));
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleImageChange = (file: File) => {
+    void imageSelection.selectFile(file);
   };
+
+  const canRecoverImageSave = saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload === true;
 
   if (!isOpen) return null;
 
@@ -376,10 +384,13 @@ export default function AssetFormModal() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (submitStartedRef.current || mutation.isPending || (saveOutcomeUnknown && !canRecoverImageSave)) return;
+            submitStartedRef.current = true;
             mutation.mutate();
           }}
           className="p-6 space-y-5"
         >
+          <fieldset disabled={mutation.isPending || saveOutcomeUnknown} className="contents">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             {/* Section 1: ข้อมูลทั่วไปและรูปภาพ (Card 1 - 7 cols) */}
             <div className="lg:col-span-7 bg-slate-50/60 rounded-xl p-4 border border-slate-100 flex flex-col justify-between space-y-3">
@@ -393,34 +404,16 @@ export default function AssetFormModal() {
               </div>
 
               <div className="grid grid-cols-12 gap-3.5">
-                {/* Image Upload Box (4 cols) */}
-                <div className="col-span-12 sm:col-span-4 flex flex-col">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    รูปภาพครุภัณฑ์
-                  </label>
-                  <div className="relative flex-1 min-h-[160px] flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl bg-white hover:bg-emerald-50/20 hover:border-emerald-300 transition-all text-center group cursor-pointer overflow-hidden p-2">
-                    {imagePreview ? (
-                      <img
-                        src={imagePreview}
-                        alt="Asset preview"
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center space-y-1 text-slate-400 p-2">
-                        <UploadCloud className="h-6 w-6 stroke-[1.5] text-slate-400 group-hover:text-emerald-500 transition-colors" />
-                        <p className="text-[11px] text-slate-500 font-medium">
-                          คลิกเพื่ออัปโหลด
-                        </p>
-                        <p className="text-[9px] text-slate-400">JPG, PNG ไม่เกิน 10MB</p>
-                      </div>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                  </div>
+                <div className="col-span-12 sm:col-span-4">
+                  <ImageUploadField
+                    label="รูปภาพครุภัณฑ์"
+                    state={imageSelection.state}
+                    currentPreviewUrl={selectedAsset?.imageUrl || null}
+                    currentStatus="idle"
+                    onSelectFile={handleImageChange}
+                    onCancelSelection={imageSelection.clearSelection}
+                    disabled={mutation.isPending}
+                  />
                 </div>
 
                 {/* Primary Fields (8 cols) */}
@@ -835,6 +828,8 @@ export default function AssetFormModal() {
             </div>
           </div>
 
+          </fieldset>
+
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button
@@ -847,10 +842,10 @@ export default function AssetFormModal() {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || (saveOutcomeUnknown && !canRecoverImageSave)}
               className="px-6 py-2 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
             >
-              {mutation.isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+              {mutation.isPending ? "กำลังบันทึก..." : canRecoverImageSave ? "ตรวจสอบและบันทึกอีกครั้ง" : "บันทึกข้อมูล"}
             </button>
           </div>
         </form>

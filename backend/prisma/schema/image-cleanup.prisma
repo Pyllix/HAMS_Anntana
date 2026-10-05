@@ -1,0 +1,28 @@
+model ImageCleanup {
+  id               String             @id @default(uuid()) @db.Uuid
+  storageProvider  String             @map("storage_provider") @db.VarChar(40)
+  storageAccountId String             @map("storage_account_id") @db.VarChar(128)
+  publicId         String             @map("public_id") @db.VarChar(255)
+  uploadId         String?            @map("upload_id") @db.Uuid
+  version          Int?
+  resourceType     String             @map("resource_type") @db.VarChar(20)
+  deliveryType     String             @map("delivery_type") @db.VarChar(20)
+  reason           ImageCleanupReason
+  status           ImageCleanupStatus @default(PENDING)
+  eligibleAt       DateTime           @map("eligible_at")
+  attemptCount     Int                @default(0) @map("attempt_count")
+  nextAttemptAt    DateTime?          @map("next_attempt_at")
+  leaseToken       String?            @map("lease_token") @db.VarChar(80)
+  leaseExpiresAt   DateTime?          @map("lease_expires_at")
+  lastErrorCode    String?            @map("last_error_code") @db.VarChar(80)
+  completedAt      DateTime?          @map("completed_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@unique([storageProvider, storageAccountId, publicId, resourceType, deliveryType])
+  @@index([status, eligibleAt, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@index([uploadId])
+  @@index([storageProvider, storageAccountId, publicId])
+  @@map("image_cleanup")
+}

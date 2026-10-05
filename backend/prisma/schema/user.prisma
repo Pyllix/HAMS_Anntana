@@ -1,31 +1,38 @@
 // This file defines the User model and related models for authentication in the Prisma schema.
 
 model User {
-  id            String    @id
-  employeeId    String?   @unique @map("employee_id") @db.VarChar(50)
-  userName      String    @default("") @map("user_name") @db.VarChar(50)
-  firstname     String    @default("") @map("first_name") @db.VarChar(100)
-  lastname      String    @default("") @map("last_name") @db.VarChar(100)
-  email         String    @unique @db.VarChar(100)
-  emailVerified Boolean
-  imageUrl      String?
-  section_id    String?   @map("section_id")
-  role          UserRole  @default(DEPARTMENT_STAFF)
-  banned        Boolean?  @default(false)
-  banReason     String?
-  banExpires    DateTime?
-  createdAt     DateTime
-  updatedAt     DateTime
-  deletedAt     DateTime? @map("deleted_at")
+  id                    String    @id
+  employeeId            String?   @unique @map("employee_id") @db.VarChar(50)
+  userName              String    @default("") @map("user_name") @db.VarChar(50)
+  firstname             String    @default("") @map("first_name") @db.VarChar(100)
+  lastname              String    @default("") @map("last_name") @db.VarChar(100)
+  email                 String    @unique @db.VarChar(100)
+  emailVerified         Boolean
+  imageUrl              String?
+  // All-null or complete-value CHECK is maintained in a SQL migration.
+  imageStorageProvider  String?   @map("image_storage_provider") @db.VarChar(40)
+  imageStorageAccountId String?   @map("image_storage_account_id") @db.VarChar(128)
+  imagePublicId         String?   @map("image_public_id") @db.VarChar(255)
+  imageResourceType     String?   @map("image_resource_type") @db.VarChar(20)
+  imageDeliveryType     String?   @map("image_delivery_type") @db.VarChar(20)
+  imageVersion          Int?      @map("image_version")
+  section_id            String?   @map("section_id")
+  role                  UserRole  @default(DEPARTMENT_STAFF)
+  banned                Boolean?  @default(false)
+  banReason             String?
+  banExpires            DateTime?
+  createdAt             DateTime
+  updatedAt             DateTime
+  deletedAt             DateTime? @map("deleted_at")
 
   //Auth relations
-  sessions      Session[]
-  accounts      Account[]
+  sessions                    Session[]
+  accounts                    Account[]
   bootstrapCredentialDelivery BootstrapCredentialDelivery?
-  section       Section?  @relation(fields: [section_id], references: [id])
-  createdAssets Asset[]   @relation("CreatedBy")
-  updatedAssets Asset[]   @relation("UpdatedBy")
-  ownedAssets   Asset[]   @relation("AssetOwner")
+  section                     Section?                     @relation(fields: [section_id], references: [id])
+  createdAssets               Asset[]                      @relation("CreatedBy")
+  updatedAssets               Asset[]                      @relation("UpdatedBy")
+  ownedAssets                 Asset[]                      @relation("AssetOwner")
 
   //Transfer relations
   transfers Transfer[] @relation("TransferTransferredBy")
@@ -61,16 +68,16 @@ model User {
 
 // This model is used for managing user sessions, including session tokens and expiration times.
 model Session {
-  id             String   @id
+  id             String       @id
   expiresAt      DateTime
-  token          String   @unique
+  token          String       @unique
   createdAt      DateTime
   updatedAt      DateTime
   ipAddress      String?
   userAgent      String?
   userId         String
   impersonatedBy String?
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   adminStepUp    AdminStepUp?
 
   @@map("sessions")

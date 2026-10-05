@@ -29,6 +29,7 @@ import { CsrfGuard } from './auth/csrf.guard';
 import { SessionLifetimeService } from './auth/session-lifetime.service';
 import { MandatoryEnrollmentGuard } from './auth/mandatory-enrollment.guard';
 import { ForecastModule } from './forecast/forecast.module';
+import { ImagesModule } from './images/images.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ForecastModule } from './forecast/forecast.module';
     JobTypeModule,
     AssetViabilityModule,
     ForecastModule,
+    ImagesModule,
   ],
   controllers: [],
   providers: [

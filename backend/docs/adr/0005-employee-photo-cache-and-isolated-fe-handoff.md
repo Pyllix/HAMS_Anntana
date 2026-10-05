@@ -1,0 +1,7 @@
+# Employee Photo no-store retrieval and isolated Frontend handoff
+
+On 2026-10-04, the user approved the recommended Ticket 05 handoff: retain expiring authenticated Employee Photo grants and adopt direct browser fetch with `cache: 'no-store'`, explicit request `Cache-Control: no-store`, and session-memory Blob display, based on the [provider/browser evidence](../image-read-g2-verification.md). The user also approved completing the Backend handoff and starting Tickets 06/07 in an isolated test environment while G4 remains a production release blocker, allowing Frontend progress without changing the deferred wait-disposal flow. This supersedes the earlier rule requiring G4 production cutover resolution before any Frontend implementation; it does not approve production activation or claim that Cloudinary's response header changed.
+
+## Consequences
+
+Ticket 03/G2 closes on the existing Backend/provider evidence plus this scoped policy; shared helper implementation and actual UI lifecycle acceptance remain Tickets 06/07. The controlled HAMS retrieval path avoids HTTP-cache storage, while direct navigation to a copied grant does not inherit its request directives and downloaded bytes cannot be recalled. Test integration uses disposable data, a separate test-only provider cloud, and managed attachment activation only in the isolated Backend process; production activation stays disabled until G4 and coordinated release acceptance are resolved. See [the handoff baseline](../image-backend-handoff.md).

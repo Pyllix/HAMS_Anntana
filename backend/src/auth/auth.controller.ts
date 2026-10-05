@@ -57,6 +57,7 @@ import {
   VerifyTotpCodeDto,
 } from './dto/two-factor.dto';
 import { VerifyTwoFactorDto, RevokeTrustDto } from './dto/trusted-browser.dto';
+import { ImageReadService } from '../images/image-read.service';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -71,6 +72,7 @@ export class AuthController {
     private readonly trustedBrowserService: TrustedBrowserService,
     private readonly preAuthService: PreAuthService,
     private readonly adminStepUpService: AdminStepUpService,
+    private readonly imageReadService: ImageReadService,
   ) {}
   // ─── Sign In ───────────────────────────────────────────────────────────────
 
@@ -472,7 +474,7 @@ export class AuthController {
     @Session() session: UserSession<typeof auth> | BetterAuthSession | null,
     @Req() req: Request,
   ) {
-    req.res?.setHeader('Cache-Control', 'no-store');
+    req.res?.setHeader('Cache-Control', 'private, no-store');
 
     const challenge = await this.preAuthService.findChallenge(
       readCookie(req, PRE_AUTH_COOKIE),
@@ -487,6 +489,9 @@ export class AuthController {
             email: user.email,
             role: user.role,
             enrollmentComplete: challenge.state !== 'ENROLLMENT',
+            ...(await this.imageReadService.describeEmployeePhotoByUserId(
+              user.id,
+            )),
           },
           twoFactorRequired: challenge.state === 'TOTP',
         };
@@ -531,6 +536,9 @@ export class AuthController {
               name: userObj.name,
               enrollmentComplete:
                 await this.twoFactorService.hasCompletedEnrollment(userObj.id),
+              ...(await this.imageReadService.describeEmployeePhotoByUserId(
+                userObj.id,
+              )),
             },
           }
         : {}),

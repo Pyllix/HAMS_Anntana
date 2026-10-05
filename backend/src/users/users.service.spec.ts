@@ -12,6 +12,8 @@ import { AdminStepUpService } from '../auth/admin-step-up.service';
 import { TwoFactorService } from '../auth/two-factor.service';
 import { plainToInstance } from 'class-transformer';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ImageAttachmentService } from '../images/image-attachment.service';
+import { ImageReadService } from '../images/image-read.service';
 
 jest.mock('better-auth/crypto', () => ({
   hashPassword: jest.fn().mockResolvedValue('hashed-password'),
@@ -65,6 +67,21 @@ const mockPrismaService = {
 
 const mockAdminStepUpService = { requireActive: jest.fn() };
 const mockTwoFactorService = { requiresTwoFactor: jest.fn() };
+const mockImageAttachmentService = {
+  assertAttachmentPayload: jest.fn(),
+  committedTargetForRetry: jest.fn(),
+  preflightClaim: jest.fn(),
+  claimInTransaction: jest.fn(),
+  lockTargetRow: jest.fn(),
+};
+const mockImageReadService = {
+  projectUser: jest.fn((user: Record<string, unknown>) => ({
+    ...user,
+    imageUrl: null,
+    hasEmployeePhoto: false,
+    photoRevision: null,
+  })),
+};
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 const mockUser = {
@@ -91,6 +108,11 @@ describe('UsersService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: AdminStepUpService, useValue: mockAdminStepUpService },
         { provide: TwoFactorService, useValue: mockTwoFactorService },
+        {
+          provide: ImageAttachmentService,
+          useValue: mockImageAttachmentService,
+        },
+        { provide: ImageReadService, useValue: mockImageReadService },
       ],
     }).compile();
 
@@ -150,7 +172,6 @@ describe('UsersService', () => {
       email: 'john.doe@hospital.go.th',
       password: 'P@ssword123',
       role: UserRole.DEPARTMENT_STAFF,
-      imageUrl: undefined,
       sectionId: undefined,
     };
 
@@ -185,12 +206,15 @@ describe('UsersService', () => {
           firstname: createDto.firstname,
           lastname: createDto.lastname,
           role: createDto.role,
-          imageUrl: createDto.imageUrl,
           section_id: createDto.sectionId,
         },
         omit: { deletedAt: true },
       });
-      expect(result).toEqual(mockUser);
+      expect(result).toEqual({
+        ...mockUser,
+        hasEmployeePhoto: false,
+        photoRevision: null,
+      });
     });
 
     it('should use default role DEPARTMENT_STAFF when role is not provided', async () => {
@@ -414,7 +438,11 @@ describe('UsersService', () => {
         },
         omit: { deletedAt: true },
       });
-      expect(result).toEqual(mockUser);
+      expect(result).toEqual({
+        ...mockUser,
+        hasEmployeePhoto: false,
+        photoRevision: null,
+      });
     });
 
     it('should throw NotFoundException when user is not found', async () => {
@@ -490,7 +518,9 @@ describe('UsersService', () => {
       await expect(
         service.update(admin.id, { banned: true }, 'another-admin'),
       ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
@@ -508,7 +538,11 @@ describe('UsersService', () => {
         data: updateDto,
         omit: { deletedAt: true },
       });
-      expect(result).toEqual(updatedUser);
+      expect(result).toEqual({
+        ...updatedUser,
+        hasEmployeePhoto: false,
+        photoRevision: null,
+      });
     });
 
     it('should ignore employeeId in update payload to enforce immutability', async () => {
@@ -658,9 +692,9 @@ describe('UsersService', () => {
           details: { revokedSessions: 2, revokedTrustedDevices: 0 },
         }),
       });
-      expect(JSON.stringify(mockPrismaService.securityAuditLog.create.mock.calls)).not.toContain(
-        'NewPassword123',
-      );
+      expect(
+        JSON.stringify(mockPrismaService.securityAuditLog.create.mock.calls),
+      ).not.toContain('NewPassword123');
       expect(result).toEqual({
         message: 'Password for user jdoe has been successfully reset',
       });
@@ -763,7 +797,9 @@ describe('UsersService', () => {
           'admin-2',
           'session-2',
         ),
-      ).resolves.toMatchObject({ message: expect.stringContaining('must enroll') });
+      ).resolves.toMatchObject({
+        message: expect.stringContaining('must enroll'),
+      });
       expect(mockPrismaService.twoFactorAuth.delete).toHaveBeenCalledWith({
         where: { userId: target.id },
       });
@@ -790,7 +826,9 @@ describe('UsersService', () => {
           'session-2',
         ),
       ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.twoFactorAuth.delete).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
@@ -835,8 +873,12 @@ describe('UsersService', () => {
       mockPrismaService.user.findMany.mockResolvedValue([{ id: admin.id }]);
       mockPrismaService.twoFactorAuth.count.mockResolvedValue(1);
 
-      await expect(service.remove(admin.id, 'another-admin')).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'LAST_ACTIVE_ENROLLED_ADMIN' }),
+      await expect(
+        service.remove(admin.id, 'another-admin'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'LAST_ACTIVE_ENROLLED_ADMIN',
+        }),
       });
       expect(mockPrismaService.user.update).not.toHaveBeenCalled();
       expect(mockPrismaService.session.deleteMany).not.toHaveBeenCalled();
@@ -867,7 +909,11 @@ describe('UsersService', () => {
         data: { deletedAt: null },
         omit: { deletedAt: true },
       });
-      expect(result).toEqual(restoredUser);
+      expect(result).toEqual({
+        ...restoredUser,
+        hasEmployeePhoto: false,
+        photoRevision: null,
+      });
     });
 
     it('should throw NotFoundException when no soft-deleted user is found', async () => {

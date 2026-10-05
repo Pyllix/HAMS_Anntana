@@ -1,0 +1,99 @@
+// This file defines the UserRole enum for the Prisma schema.
+
+// The UserRole enum defines the different roles that a user can have in the system, such as ADMIN, MANAGER, PARCEL_STAFF, ASSET_CENTER_STAFF, DEPARTMENT_STAFF, and MAINTENANCE_STAFF. This enum is used in the User model to specify the role of each user.
+enum UserRole {
+  ADMIN
+  MANAGER
+  PARCEL_STAFF
+  ASSET_CENTER_STAFF
+  DEPARTMENT_STAFF
+  MAINTENANCE_HEAD
+  MAINTENANCE_STAFF
+}
+
+enum ReturnCondition {
+  Normal
+  Damage
+}
+
+enum ReturnMethod {
+  self_return
+  staff_pickup
+}
+
+enum RequestSource {
+  SELF_SERVICE
+  CENTER_SERVICE
+}
+
+enum DeliveryMethod {
+  PICKUP
+  DELIVERY
+}
+
+enum RiskLevel {
+  HIGH
+  MEDIUM
+  LOW
+  UNSPECIFIED
+}
+
+enum PmType {
+  IM
+  EM
+}
+
+enum CalType {
+  IC
+  EC
+}
+
+enum ReportType {
+  Repair
+  Maintenance
+}
+
+enum ActionType {
+  REPAIR
+  FABRICATE
+  MODIFY
+  PREVENTIVE
+}
+
+enum UrgencyStatus {
+  NORMAL
+  URGENT
+  EMERGENCY
+}
+
+enum StepActionType {
+  SELF_REPAIR
+  WITH_PARTS
+  OUTSOURCE
+  UNREPAIRABLE
+}
+
+enum BorrowExtensionType {
+  DESK
+  ONLINE
+}
+
+enum BorrowExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ImageUploadPurpose {
+  ASSET_IMAGE
+  EMPLOYEE_PHOTO
+}
+
+enum ImageUploadStatus {
+  AUTHORIZED
+  VERIFIED_PENDING
+  CLAIMED
+  EXPIRED
+  REJECTED
+}

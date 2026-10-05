@@ -5,6 +5,7 @@ interface EquipmentDetailModalState {
   isOpen: boolean;
   selectedAsset: Asset | null;
   openModal: (asset: Asset) => void;
+  updateSelectedAsset: (asset: Asset) => void;
   closeModal: () => void;
 }
 
@@ -16,6 +17,10 @@ export const useEquipmentDetailModalStore = create<EquipmentDetailModalState>((s
       isOpen: true,
       selectedAsset: asset,
     }),
+  updateSelectedAsset: (asset: Asset) =>
+    set((state) => state.selectedAsset?.id === asset.id
+      ? { selectedAsset: asset }
+      : state),
   closeModal: () =>
     set({
       isOpen: false,

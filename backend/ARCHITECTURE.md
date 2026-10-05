@@ -11,7 +11,8 @@ A single-hospital asset management platform consisting of:
 - A **React SPA** (frontend) served separately from the API
 - A **NestJS REST API** (backend) as the system core
 - A **PostgreSQL** database managed via Prisma ORM
-- A **File Storage** layer for asset-related documents and images
+- A **Cloudinary image storage** layer for managed Asset images and Employee Photos
+- Document storage for procurement and repair records remains undecided
 - **BetterAuth** handling authentication with JWT
 
 ```
@@ -24,8 +25,8 @@ A single-hospital asset management platform consisting of:
                                           │                   │                   │
                                           ▼                   ▼                   ▼
                                    ┌─────────────┐   ┌──────────────┐   ┌───────────────┐
-                                   │ PostgreSQL  │   │ File Storage │   │  BetterAuth   │
-                                   │ (Docker)    │   │    (TBD)     │   │  JWT Session  │
+                                   │ PostgreSQL  │   │Image Storage │   │  BetterAuth   │
+                                   │ (Docker)    │   │(Cloudinary)  │   │  JWT Session  │
                                    └─────────────┘   └──────────────┘   └───────────────┘
 ```
 
@@ -33,13 +34,14 @@ A single-hospital asset management platform consisting of:
 
 ## Deployment
 
-| Component    | Method         | Status     | Notes                          |
-|--------------|----------------|------------|--------------------------------|
-| PostgreSQL   | Docker         | Confirmed  | Containerized database         |
-| NestJS API   | TBD            | Pending    | Docker recommended             |
-| React SPA    | TBD            | Pending    | Static hosting or Docker       |
-| Reverse Proxy| TBD            | Pending    | Nginx recommended              |
-| File Storage | TBD            | Pending    | Local volume or object storage |
+| Component      | Method     | Status    | Notes                                                      |
+|----------------|------------|-----------|------------------------------------------------------------|
+| PostgreSQL     | Docker     | Confirmed | Containerized database                                     |
+| NestJS API     | TBD        | Pending   | Docker recommended                                         |
+| React SPA      | TBD        | Pending   | Static hosting or Docker                                   |
+| Reverse Proxy  | TBD        | Pending   | Nginx recommended                                          |
+| Managed Images | Cloudinary | Confirmed | Direct upload; backend signs and verifies; stores locators |
+| Documents      | TBD        | Pending   | Procurement and repair documents                           |
 
 > Single environment — no dev/staging/production separation currently planned.
 
@@ -79,9 +81,9 @@ HTTP Request
 ```
 
 **Rules:**
-- Controllers never call Prisma directly
-- Services never handle HTTP concerns (status codes, headers)
-- Guards are the only place that checks identity and role
+- Controllers never call Prisma directly; they handle HTTP requests, headers, status codes, and response mapping.
+- Services own business logic and data access, and may throw Nest `HttpException` subclasses for business errors. They do not construct HTTP responses or set headers.
+- Guards establish request identity and enforce coarse route-level roles. Services may recheck current account state and resource-purpose permission when business rules require it.
 - Common logic (logging, error formatting) handled by Interceptors and Filters in `common/`
 
 ---
@@ -139,7 +141,8 @@ HTTP Request
 | `maintenance`   | Repair requests, technician assignments, maintenance history, repair viability analysis (Phase 2) |
 | `spare-parts`   | Spare parts inventory, tracking and requisition                   |
 | `audits`        | Physical asset counting and system data comparison                |
-| `files`         | File upload and retrieval for asset documents and images          |
+| `files`         | File upload and retrieval for asset documents                      |
+| `images`        | Cloudinary direct upload, verification, and managed image metadata |
 | `reports`       | Aggregated data views for executives and supply officers          |
 | `common`        | Guards, interceptors, filters, decorators shared across modules   |
 
@@ -379,11 +382,10 @@ MAINTENANCE_STAFF                       PARCEL_STAFF
 
 ## File Storage
 
-- Used for: asset images, procurement documents, repair records
-- Strategy: **TBD** (options: local Docker volume, MinIO, or cloud object storage)
-- Files referenced in database by URL or path — not stored as blobs in PostgreSQL
-- Upload/download handled through `files` module
-- Access should be protected — files served only to authenticated users
+- Managed asset images and Employee Photos use Cloudinary through the `images` storage adapter.
+- Browsers upload image bytes directly to Cloudinary with short-lived server-signed instructions; NestJS verifies provider evidence and stores only image locators and metadata in PostgreSQL.
+- Asset images use versioned public URLs. Employee Photos use authenticated delivery and short-lived read grants.
+- Procurement and repair document storage remains undecided; document bytes are not handled by the image upload flow.
 
 ---
 
@@ -413,7 +415,7 @@ MAINTENANCE_STAFF                       PARCEL_STAFF
 
 - Deployment target for API and frontend (VPS, cloud, on-premise)
 - Reverse proxy setup (Nginx recommended)
-- File storage strategy (local volume vs MinIO vs cloud)
+- Procurement and repair document storage strategy (managed images use Cloudinary)
 - JWT expiry and refresh token strategy
 - Database backup and recovery plan
 - Whether Swagger UI should be disabled in production

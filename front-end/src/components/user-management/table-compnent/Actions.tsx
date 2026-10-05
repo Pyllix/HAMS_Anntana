@@ -34,7 +34,7 @@ export default function Actions({ row }: { row: User }) {
         title="จัดการความปลอดภัยบัญชี"
         aria-label={`จัดการความปลอดภัย ${row.firstname} ${row.lastname}`}
         onClick={() => setIsOpenSecurity(true)}
-        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-600"
+        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-emerald-600"
       >
         <KeyRound className="h-4 w-4" />
       </button>
