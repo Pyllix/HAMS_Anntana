@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   TrendingUp,
   Shield,
+  Scale,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../pages/AssetCenterBorrowReturn";
@@ -32,6 +33,7 @@ import PendingEvaluations from "../pages/PendingEvaluations";
 import UserManagement from "../pages/UserManagement";
 import DepartmentManagement from "../pages/DepartmentManagement";
 import EquipmentStock from "../pages/EquipmentStock";
+import AssetViabilityPage from "../pages/AssetViabilityPage";
 import UnrepairableReceipts from "../pages/UnrepairableReceipts";
 import SparePartApprovals from "../pages/SparePartApprovals";
 import OutsourceApprovals from "../pages/OutsourceApprovals";
@@ -125,6 +127,19 @@ export const APP_ROUTE: AppRote[] = [
     element: <EquipmentStock />,
     roles: [ROLES.PARCEL_STAFF],
     showInNav: false,
+  },
+  {
+    path: "asset-viability",
+    title: "ประเมินความคุ้มค่าครุภัณฑ์",
+    element: <AssetViabilityPage />,
+    icon: Scale,
+    roles: [
+      ROLES.PARCEL_STAFF,
+      ROLES.MAINTENANCE_HEAD,
+      ROLES.MANAGER,
+      ROLES.ADMIN,
+    ],
+    showInNav: true,
   },
   {
     path: "parcel-repair-operations",
