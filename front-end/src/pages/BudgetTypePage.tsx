@@ -185,18 +185,6 @@ export default function BudgetTypePage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-3 overflow-hidden">
-      {/* Top Action Button */}
-      <div className="flex items-center justify-end shrink-0 pr-2">
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>เพิ่มประเภทใหม่</span>
-        </button>
-      </div>
-
       {/* Filter / Search Bar */}
       <div className="flex flex-wrap items-center gap-4 bg-bg-component shadow-sm w-full rounded-sm p-4 shrink-0">
         {/* Search Input */}
@@ -233,6 +221,16 @@ export default function BudgetTypePage() {
             <option value="INACTIVE">ระงับการใช้งาน</option>
           </select>
         </div>
+
+        {/* Add Button */}
+        <button
+          type="button"
+          onClick={handleOpenCreate}
+          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 h-8 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer shrink-0 active:scale-95"
+        >
+          <Plus className="h-4 w-4 stroke-[2.5]" />
+          <span>เพิ่มประเภทใหม่</span>
+        </button>
       </div>
 
       {/* Table Container */}
