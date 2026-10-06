@@ -222,19 +222,22 @@ export function SparePartFormModal() {
   };
 
   const [form, setForm] = useState<CreateSparepartDto>(empty);
+  const [priceInput, setPriceInput] = useState<string>("");
 
   useEffect(() => {
     if (editItem) {
+      const currentPrice = editItem.price ?? 0;
       setForm({
         code: editItem.code,
         name: editItem.name,
         groupId: editItem.groupId || editItem.group?.id || (availableGroups[0]?.id ?? 1),
         category: editItem.category || editItem.group?.name || availableGroups[0]?.name || "ไฟฟ้า",
         unit: editItem.unit ?? "",
-        price: editItem.price || 0,
+        price: currentPrice,
         minStock: editItem.minStock || 0,
         qtyInStock: editItem.qtyInStock || 0,
       });
+      setPriceInput(currentPrice > 0 ? String(currentPrice) : "");
     } else {
       setForm({
         ...empty,
@@ -242,6 +245,7 @@ export function SparePartFormModal() {
         groupId: availableGroups[0]?.id ?? 1,
         category: availableGroups[0]?.name ?? "ไฟฟ้า",
       });
+      setPriceInput("");
     }
   }, [editItem, isOpen, groups]);
 
@@ -299,6 +303,32 @@ export function SparePartFormModal() {
     }
   };
 
+  const handlePriceChange = (val: string) => {
+    const clean = val.replace(/[^0-9.]/g, "");
+    const parts = clean.split(".");
+    if (parts.length > 2) return;
+    if (parts[1] && parts[1].length > 2) return;
+
+    setPriceInput(clean);
+    const parsed = parseFloat(clean);
+    setForm((f) => ({
+      ...f,
+      price: isNaN(parsed) ? 0 : parsed,
+    }));
+  };
+
+  const handlePriceBlur = () => {
+    if (!priceInput || priceInput === ".") {
+      setPriceInput("");
+      setForm((f) => ({ ...f, price: 0 }));
+      return;
+    }
+    const parsed = parseFloat(priceInput);
+    if (!isNaN(parsed)) {
+      setForm((f) => ({ ...f, price: parsed }));
+    }
+  };
+
   const handleDecimalKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (
       ["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"].includes(e.key) ||
@@ -314,7 +344,13 @@ export function SparePartFormModal() {
     }
     // Only allow one decimal point
     if (e.key === ".") {
-      if (e.currentTarget.value.includes(".")) {
+      const { selectionStart, selectionEnd, value } = e.currentTarget;
+      const selectedText =
+        selectionStart !== null && selectionEnd !== null
+          ? value.slice(selectionStart, selectionEnd)
+          : "";
+      const valueWithoutSelection = value.replace(selectedText, "");
+      if (valueWithoutSelection.includes(".")) {
         e.preventDefault();
       }
       return;
@@ -332,8 +368,8 @@ export function SparePartFormModal() {
   };
 
   const handleDecimalPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const paste = e.clipboardData.getData("text");
-    if (!/^\d+(\.\d{1,2})?$/.test(paste.trim())) {
+    const paste = e.clipboardData.getData("text").trim();
+    if (!/^\d*(\.\d{1,2})?$/.test(paste) && !/^\.\d{1,2}$/.test(paste)) {
       e.preventDefault();
     }
   };
@@ -391,11 +427,12 @@ export function SparePartFormModal() {
                 alert("กรุณากรอกชื่ออะไหล่");
                 return;
               }
-              if (Number(form.minStock) < 0 || Number(form.price) < 0 || Number(form.qtyInStock) < 0) {
+              const finalPrice = priceInput ? parseFloat(priceInput) || 0 : 0;
+              if (Number(form.minStock) < 0 || finalPrice < 0 || Number(form.qtyInStock) < 0) {
                 alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
                 return;
               }
-              mutation.mutate(form);
+              mutation.mutate({ ...form, price: finalPrice });
             }}
             className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
           >
@@ -577,8 +614,9 @@ export function SparePartFormModal() {
                       ราคาต่อหน่วย <span className="text-rose-500 font-bold ml-1">*</span>
                     </span>
                     <span className="font-bold text-slate-900 text-sm">
-                      {Number(form.price).toLocaleString("th-TH", {
+                      {(priceInput ? parseFloat(priceInput) || 0 : form.price || 0).toLocaleString("th-TH", {
                         minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
                       })}{" "}
                       บาท
                     </span>
@@ -587,17 +625,12 @@ export function SparePartFormModal() {
                     type="text"
                     inputMode="decimal"
                     placeholder="0.00"
-                    value={form.price === 0 ? "" : form.price}
+                    value={priceInput}
                     onFocus={(e) => e.target.select()}
                     onKeyDown={handleDecimalKeyDown}
                     onPaste={handleDecimalPaste}
-                    onChange={(e) => {
-                      const clean = e.target.value.replace(/[^0-9.]/g, "");
-                      setForm((f) => ({
-                        ...f,
-                        price: clean === "" ? 0 : parseFloat(clean) || 0,
-                      }));
-                    }}
+                    onBlur={handlePriceBlur}
+                    onChange={(e) => handlePriceChange(e.target.value)}
                     className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500"
                     required
                   />
@@ -656,11 +689,12 @@ export function SparePartFormModal() {
               alert("กรุณากรอกชื่ออะไหล่");
               return;
             }
-            if (Number(form.qtyInStock) < 0 || Number(form.minStock) < 0 || Number(form.price) < 0) {
+            const finalPrice = priceInput ? parseFloat(priceInput) || 0 : 0;
+            if (Number(form.qtyInStock) < 0 || Number(form.minStock) < 0 || finalPrice < 0) {
               alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
               return;
             }
-            mutation.mutate(form);
+            mutation.mutate({ ...form, price: finalPrice });
           }}
           className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
         >
@@ -796,17 +830,12 @@ export function SparePartFormModal() {
                       type="text"
                       inputMode="decimal"
                       placeholder="0.00"
-                      value={form.price === 0 ? "" : form.price}
+                      value={priceInput}
                       onFocus={(e) => e.target.select()}
                       onKeyDown={handleDecimalKeyDown}
                       onPaste={handleDecimalPaste}
-                      onChange={(e) => {
-                        const clean = e.target.value.replace(/[^0-9.]/g, "");
-                        setForm((f) => ({
-                          ...f,
-                          price: clean === "" ? 0 : parseFloat(clean) || 0,
-                        }));
-                      }}
+                      onBlur={handlePriceBlur}
+                      onChange={(e) => handlePriceChange(e.target.value)}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-3 pr-9 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       required
                     />

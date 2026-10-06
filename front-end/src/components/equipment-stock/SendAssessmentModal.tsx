@@ -157,8 +157,16 @@ export default function SendAssessmentModal() {
                 {asset.noid || asset.id}
               </span>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-              รอจำหน่าย
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                asset.status?.code === "DAMAGED"
+                  ? "bg-orange-100 text-orange-800"
+                  : asset.status?.code === "WAIT_DISPOSAL"
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-100 text-slate-800"
+              }`}
+            >
+              {asset.status?.name || "รอจำหน่าย"}
             </span>
           </div>
 
