@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Image as ImageIcon,
   XCircle,
+  ClipboardCheck,
 } from "lucide-react";
 import type { Asset } from "../../types/TypeAsset";
 import StockTablePagination from "./StockTablePagination";
@@ -39,7 +40,7 @@ export default function AssetTable({
 }: AssetTableProps) {
   const openDetail = useEquipmentDetailModalStore((state) => state.openModal);
   const openEdit = useEquipmentModalStore((state) => state.openEdit);
-  const { openWaitDisposal, openConfirmDisposal, openMarkLost } =
+  const { openWaitDisposal, openConfirmDisposal, openMarkLost, openSendAssessment } =
     useDisposalModalStore();
 
   const [openActionDropdown, setOpenActionDropdown] = useState<string | null>(
@@ -279,8 +280,7 @@ export default function AssetTable({
           const isReadOnly =
             row.status?.code === "DISPOSAL" ||
             row.status?.code === "LOST" ||
-            row.status?.code === "UNDER_REPAIR" ||
-            row.status?.code === "DAMAGED";
+            row.status?.code === "UNDER_REPAIR";
 
           if (isReadOnly) {
             return (
@@ -298,17 +298,20 @@ export default function AssetTable({
           }
 
           const isOpen = openActionDropdown === row.id;
+          const isDamaged = row.status?.code === "DAMAGED";
 
           return (
             <div className="flex items-center gap-2 whitespace-nowrap">
-              <button
-                type="button"
-                title="แก้ไข"
-                onClick={() => openEdit(row)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
+              {!isDamaged && (
+                <button
+                  type="button"
+                  title="แก้ไข"
+                  onClick={() => openEdit(row)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shrink-0"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 title="ดูรายละเอียด"
@@ -318,7 +321,7 @@ export default function AssetTable({
                 <Eye className="h-3.5 w-3.5" />
               </button>
 
-              {/* Action Dropdown for ดำเนินการ with 2 options */}
+              {/* Action Dropdown for ดำเนินการ */}
               <div className="relative">
                 <button
                   type="button"
@@ -337,29 +340,45 @@ export default function AssetTable({
                       className="fixed inset-0 z-20"
                       onClick={() => setOpenActionDropdown(null)}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenActionDropdown(null);
-                          openWaitDisposal(row);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-orange-50 hover:text-[#ea580c] transition-colors text-left cursor-pointer"
-                      >
-                        <Clock className="h-3.5 w-3.5 text-orange-500" />
-                        <span className="font-semibold">รอจำหน่าย</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenActionDropdown(null);
-                          openMarkLost(row);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left cursor-pointer"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="font-semibold">ปรับเป็นสูญหาย</span>
-                      </button>
+                    <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
+                      {isDamaged ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenActionDropdown(null);
+                            openSendAssessment(row);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="font-semibold">ส่งประเมิน</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openWaitDisposal(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-orange-50 hover:text-[#ea580c] transition-colors text-left cursor-pointer"
+                          >
+                            <Clock className="h-3.5 w-3.5 text-orange-500" />
+                            <span className="font-semibold">รอจำหน่าย</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openMarkLost(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left cursor-pointer"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="font-semibold">ปรับเป็นสูญหาย</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
@@ -377,6 +396,7 @@ export default function AssetTable({
     openWaitDisposal,
     openConfirmDisposal,
     openMarkLost,
+    openSendAssessment,
   ]);
 
   const table = useTable({

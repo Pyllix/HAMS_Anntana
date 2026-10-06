@@ -354,6 +354,14 @@ export default function AssetFormModal() {
     void imageSelection.selectFile(file);
   };
 
+  const currentStatusObj = useMemo(() => {
+    return (
+      assetStatuses.find((st) => String(st.id) === String(formData.asset_status_id)) ||
+      (selectedAsset?.status ? { ...selectedAsset.status, id: Number(selectedAsset.status.id) } : undefined)
+    );
+  }, [assetStatuses, formData.asset_status_id, selectedAsset?.status]);
+
+
   const canRecoverImageSave = saveOutcomeUnknown && imageSaveAttemptRef.current?.hasUpload === true;
 
   if (!isOpen) return null;
@@ -441,17 +449,22 @@ export default function AssetFormModal() {
                       </label>
                       <div className="relative">
                         <select
+                          disabled
                           value={formData.asset_status_id}
-                          onChange={(e) => setFormData({ ...formData, asset_status_id: e.target.value })}
-                          className="w-full h-8.5 rounded-lg border border-emerald-300 bg-emerald-50/60 px-2.5 pr-6 text-xs font-semibold text-emerald-700 appearance-none focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                          className="w-full h-8.5 rounded-lg border border-slate-200 bg-slate-100/80 px-2.5 pr-7 text-xs font-medium text-slate-600 appearance-none focus:outline-none cursor-not-allowed"
                         >
                           {assetStatuses.map((st) => (
                             <option key={st.id} value={st.id}>
                               {st.name}
                             </option>
                           ))}
+                          {!assetStatuses.some((st) => String(st.id) === String(formData.asset_status_id)) && (
+                            <option value={formData.asset_status_id}>
+                              {currentStatusObj?.name || "ใช้งานปกติ"}
+                            </option>
+                          )}
                         </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-600 pointer-events-none" />
+                        <Lock className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
                   </div>
