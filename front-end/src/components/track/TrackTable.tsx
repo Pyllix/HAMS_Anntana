@@ -5,16 +5,8 @@ import {
   createPaginatedRowModel,
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
-import { getRepairsHistory } from "../../services/trackingService";
 import type { TrackRes } from "../../services/trackingService";
-
-export interface JobStatusOption {
-  id: number;
-  code: string;
-  name: string;
-}
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -180,42 +172,17 @@ const columns: Array<ColumnDef<typeof features, TrackRes>> = [
 ];
 
 interface Props {
+  items?: TrackRes[];
   inputSearch: string;
-  statusCode: string;
-  onStatusOptionsChange?: (options: JobStatusOption[]) => void;
+  // null = ไม่กรองสถานะ
+  statusCodes: string[] | null;
 }
 
 export default function TrackTable({
+  items: repairsHistory,
   inputSearch,
-  statusCode,
-  onStatusOptionsChange,
+  statusCodes,
 }: Props) {
-  // backend ไม่มี endpoint แยกสำหรับดึงรายการสถานะทั้งหมด จึงดึงงานซ่อมแบบไม่กรองสถานะ
-  // (limit สูงสุดที่ backend อนุญาต) แล้วรวบรวมสถานะที่มีอยู่จริงจากงานซ่อม เพื่อใช้เป็นตัวเลือกใน dropdown
-  const { data: repairsHistory } = useQuery({
-    queryKey: ["repairsHistory"],
-    queryFn: () => getRepairsHistory(),
-  });
-
-  useEffect(() => {
-    if (!repairsHistory || !onStatusOptionsChange) return;
-
-    const uniqueStatuses = new Map<string, JobStatusOption>();
-    for (const item of repairsHistory) {
-      const jobStatus = item.jobStatus;
-      if (jobStatus?.code && !uniqueStatuses.has(jobStatus.code)) {
-        uniqueStatuses.set(jobStatus.code, {
-          id: jobStatus.id,
-          code: jobStatus.code,
-          name: jobStatus.name,
-        });
-      }
-    }
-
-    onStatusOptionsChange(
-      Array.from(uniqueStatuses.values()).sort((a, b) => a.id - b.id),
-    );
-  }, [repairsHistory, onStatusOptionsChange]);
 
   const filteredItems = useMemo(() => {
     if (!repairsHistory) {
@@ -226,9 +193,7 @@ export default function TrackTable({
 
     return repairsHistory.filter((item) => {
       const matchesStatus =
-        !statusCode ||
-        statusCode === "ALL" ||
-        item.jobStatus?.code === statusCode;
+        !statusCodes || statusCodes.includes(item.jobStatus?.code ?? "");
 
       if (!matchesStatus) return false;
       if (searchLower === "") return true;
@@ -243,7 +208,7 @@ export default function TrackTable({
         item.diagnosis?.toLowerCase().includes(searchLower)
       );
     });
-  }, [repairsHistory, inputSearch, statusCode]);
+  }, [repairsHistory, inputSearch, statusCodes]);
 
   const table = useTable({
     key: "assets-table",
@@ -257,6 +222,11 @@ export default function TrackTable({
       },
     },
   });
+
+  // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง ไม่ให้ค้างอยู่หน้าที่ไม่มีข้อมูล
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [repairsHistory, inputSearch, statusCodes]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">

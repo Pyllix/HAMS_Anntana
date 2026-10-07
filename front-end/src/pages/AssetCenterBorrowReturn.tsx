@@ -129,21 +129,14 @@ export default function AssetCenterBorrowReturn() {
   const statsSummary: StatCardData[] = useMemo(() => {
     const assetList = assets ?? [];
 
-    // 1. ฟังก์ชันช่วยค้นหาจำนวนนับตามชื่อสถานะ
-    const countByKeyword = (keyword: string): number => {
-      return assetList.filter((asset: any) => {
-        const availName = asset?.availabilityStatus?.name || "";
-        return availName.toLowerCase().includes(keyword.toLowerCase());
-      }).length;
-    };
+    // 1. ฟังก์ชันช่วยนับจำนวนตาม code ของสถานะ (ไม่ขึ้นกับชื่อที่แสดงผล)
+    const countByCode = (code: string): number =>
+      assetList.filter((asset) => asset.availabilityStatus?.code === code)
+        .length;
 
-    // 2. ฟังก์ชันช่วยดึงชื่อจริงจากตาราง availabilities มาเป็น filter key
-    const getExactName = (keyword: string) => {
-      const match = availabilities?.find((a: any) =>
-        a.name?.toLowerCase().includes(keyword.toLowerCase()),
-      );
-      return match ? match.name : keyword;
-    };
+    // 2. ดึงชื่อจริงจากตาราง availabilities มาเป็น filter key (ตารางกรองด้วยชื่อ)
+    const getNameByCode = (code: string) =>
+      availabilities?.find((a) => a.code === code)?.name ?? code;
 
     return [
       {
@@ -158,9 +151,9 @@ export default function AssetCenterBorrowReturn() {
       },
       {
         id: "normal",
-        filterKey: getExactName("ว่าง/พร้อมใช้งาน"),
+        filterKey: getNameByCode("AVAILABLE"),
         title: "ใช้งานได้ปกติ (รายการ)",
-        value: countByKeyword("ว่าง/พร้อมใช้งาน"),
+        value: countByCode("AVAILABLE"),
         icon: Check,
         iconBg: "bg-emerald-100",
         iconColor: "text-emerald-600",
@@ -168,9 +161,9 @@ export default function AssetCenterBorrowReturn() {
       },
       {
         id: "borrowed",
-        filterKey: getExactName("ถูกยืม"),
+        filterKey: getNameByCode("BORROWED"),
         title: "กำลังยืม",
-        value: countByKeyword("ถูกยืม"),
+        value: countByCode("BORROWED"),
         icon: Clock,
         iconBg: "bg-amber-100",
         iconColor: "text-amber-600",
@@ -178,9 +171,9 @@ export default function AssetCenterBorrowReturn() {
       },
       {
         id: "repair",
-        filterKey: getExactName("ไม่พร้อมใช้งาน"),
+        filterKey: getNameByCode("UNAVAILABLE"),
         title: "ไม่พร้อมใช้งาน",
-        value: countByKeyword("ไม่พร้อมใช้งาน"),
+        value: countByCode("UNAVAILABLE"),
         icon: X,
         iconBg: "bg-rose-100",
         iconColor: "text-rose-600",
@@ -188,9 +181,9 @@ export default function AssetCenterBorrowReturn() {
       },
       {
         id: "approval",
-        filterKey: getExactName("ถูงจอง/รออนุมัติ"),
+        filterKey: getNameByCode("RESERVED"),
         title: "รออนุมัติ",
-        value: countByKeyword("ถูงจอง/รออนุมัติ"),
+        value: countByCode("RESERVED"),
         icon: FileCheck,
         iconBg: "bg-sky-100",
         iconColor: "text-sky-600",
