@@ -5,11 +5,7 @@ import {
   createPaginatedRowModel,
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  getAllBorrowHistory,
-  type BorrowHistory,
-} from "../../services/borrowService";
-import { useQuery } from "@tanstack/react-query";
+import type { BorrowHistory } from "../../services/borrowService";
 import { useMemo } from "react";
 
 const features = tableFeatures({
@@ -117,12 +113,30 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
       const getStatusStyle = (statusCode?: string) => {
         switch (statusCode) {
           case "RETURNED":
+          case "RETURNED_OPERATIONAL":
             return {
               container: "bg-emerald-100 text-emerald-600", // คืนแล้ว (พื้นหลังเขียวอ่อน ตัวหนังสือเขียวเข้ม)
               dot: "bg-emerald-600",
             };
+          case "RETURNED_DAMAGED":
+            return {
+              container: "bg-orange-100 text-orange-600", // คืนแล้ว (ชำรุด)
+              dot: "bg-orange-500",
+            };
           case "BORROWED":
-          case "PENDING":
+          case "PENDING_VERIFICATION":
+            return {
+              container: "bg-blue-100 text-blue-600", // กำลังยืม / รอตรวจสอบสภาพ
+              dot: "bg-blue-500",
+            };
+          case "REJECTED":
+          case "CANCELLED":
+            return {
+              container: "bg-rose-100 text-rose-600", // ปฏิเสธ / ยกเลิก
+              dot: "bg-rose-500",
+            };
+          case "PENDING_APPROVAL":
+          case "APPROVED":
           default:
             return {
               container: "bg-amber-100 text-amber-600", // ยังไม่คืน (พื้นหลังเหลือง/ส้มอ่อน ตัวหนังสือส้มเข้ม)
@@ -146,42 +160,48 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
 ];
 
 interface Props {
+  items?: BorrowHistory[];
   inputSearch: string;
-  status: "ALL" | "BORROWED" | "RETURNED";
+  statusCodes: string[] | null; // null = ไม่กรองสถานะ
 }
 
-export default function AssetsHistoryTable({ inputSearch, status }: Props) {
-  const { data: borrowHistory } = useQuery({
-    queryKey: ["borrowHistory"],
-    queryFn: () => getAllBorrowHistory(),
-  });
-
+export default function AssetsHistoryTable({
+  items,
+  inputSearch,
+  statusCodes,
+}: Props) {
   const filteredItems = useMemo(() => {
-    if (!borrowHistory) {
-      console.log("borrowHistory is undefined at AssetsHistoryTable.tsx");
-      return [];
-    }
+    if (!items) return [];
 
-    return borrowHistory.filter((item) => {
-      const searchKeyword = inputSearch.toLowerCase();
+    return items.filter((item) => {
+      const searchKeyword = inputSearch
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+
+      // รวมชื่อ-นามสกุลเป็นชื่อเต็ม (ตรงกับที่แสดงในตาราง) เพื่อให้ค้นหาด้วยชื่อเต็มได้
+      const fullName = [item.borrower?.firstname, item.borrower?.lastname]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .toLowerCase();
 
       // ค้นหาจาก ชื่อครุภัณฑ์, รุ่น, ชื่อ-นามสกุลผู้ยืม, รหัสพนักงาน หรือรหัสการยืม
       const matchesSearch =
-        inputSearch === "" ||
+        searchKeyword === "" ||
         item.asset?.name?.toLowerCase().includes(searchKeyword) ||
         item.asset?.model?.toLowerCase().includes(searchKeyword) ||
-        item.borrower?.firstname?.toLowerCase().includes(searchKeyword) ||
-        item.borrower?.lastname?.toLowerCase().includes(searchKeyword) ||
+        fullName.includes(searchKeyword) ||
         item.borrower?.employeeId?.toLowerCase().includes(searchKeyword) ||
         item.id?.toLowerCase().includes(searchKeyword);
 
-      // กรองตามสถานะการยืม (เช่น ALL, BORROWED, RETURNED)
+      // กรองตามกลุ่มสถานะการยืมที่เลือกจากการ์ด / dropdown
       const matchesStatus =
-        status === "ALL" || item.borrowStatus?.code === status;
+        !statusCodes || statusCodes.includes(item.borrowStatus?.code ?? "");
 
       return matchesSearch && matchesStatus;
     });
-  }, [borrowHistory, inputSearch, status]);
+  }, [items, inputSearch, statusCodes]);
 
   const table = useTable({
     key: "assets-table",

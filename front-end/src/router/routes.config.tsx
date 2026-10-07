@@ -87,7 +87,7 @@ export const APP_ROUTE: AppRote[] = [
   },
   {
     path: "borrow-history",
-    title: "ประวัติการยืม",
+    title: "ประวัติการยืม-คืนครุภัณฑ์",
     element: <BorrowHistory />,
     icon: History,
     roles: [ROLES.ASSET_CENTER_STAFF],
