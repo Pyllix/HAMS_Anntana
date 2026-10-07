@@ -220,10 +220,10 @@ export const APP_ROUTE: AppRote[] = [
   },
   {
     path: "track-status",
-    title: "ติดตามสถานะ",
+    title: "ติดตามสถานะการแจ้งซ่อม",
     element: <TrackingAssetCenter />,
     icon: History,
-    roles: [ROLES.ASSET_CENTER_STAFF],
+    roles: [ROLES.ASSET_CENTER_STAFF, ROLES.DEPARTMENT_STAFF],
     showInNav: true,
   },
   // -------- สำหรับ ช่าง ------------

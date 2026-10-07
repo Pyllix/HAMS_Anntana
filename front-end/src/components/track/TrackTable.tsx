@@ -5,9 +5,7 @@ import {
   createPaginatedRowModel,
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { getRepairsHistory } from "../../services/trackingService";
+import { useEffect, useMemo } from "react";
 import type { TrackRes } from "../../services/trackingService";
 
 const features = tableFeatures({
@@ -174,18 +172,17 @@ const columns: Array<ColumnDef<typeof features, TrackRes>> = [
 ];
 
 interface Props {
+  items?: TrackRes[];
   inputSearch: string;
-  statusCode: string;
+  // null = ไม่กรองสถานะ
+  statusCodes: string[] | null;
 }
 
 export default function TrackTable({
+  items: repairsHistory,
   inputSearch,
-  statusCode,
+  statusCodes,
 }: Props) {
-  const { data: repairsHistory } = useQuery({
-    queryKey: ["repairsHistory"],
-    queryFn: () => getRepairsHistory(),
-  });
 
   const filteredItems = useMemo(() => {
     if (!repairsHistory) {
@@ -196,9 +193,7 @@ export default function TrackTable({
 
     return repairsHistory.filter((item) => {
       const matchesStatus =
-        !statusCode ||
-        statusCode === "ALL" ||
-        item.jobStatus?.code === statusCode;
+        !statusCodes || statusCodes.includes(item.jobStatus?.code ?? "");
 
       if (!matchesStatus) return false;
       if (searchLower === "") return true;
@@ -213,7 +208,7 @@ export default function TrackTable({
         item.diagnosis?.toLowerCase().includes(searchLower)
       );
     });
-  }, [repairsHistory, inputSearch, statusCode]);
+  }, [repairsHistory, inputSearch, statusCodes]);
 
   const table = useTable({
     key: "assets-table",
@@ -227,6 +222,11 @@ export default function TrackTable({
       },
     },
   });
+
+  // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง ไม่ให้ค้างอยู่หน้าที่ไม่มีข้อมูล
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [repairsHistory, inputSearch, statusCodes]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
