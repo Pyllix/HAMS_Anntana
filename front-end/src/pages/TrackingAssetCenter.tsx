@@ -1,16 +1,16 @@
 import { ChevronDown, Search } from "lucide-react";
 import TrackTable from "../components/track/TrackTable";
-import type { JobStatusOption } from "../components/track/TrackTable";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { getLookUp } from "../services/trackingService";
 
 export default function TrackingAssetCenter({}) {
-  // หมายเหตุ: /repairs/lookups/meta ไม่มี jobStatuses ให้ จึงให้ TrackTable รวบรวม
-  // รายการสถานะที่มีอยู่จริงจากงานซ่อมที่ดึงมา แล้วส่งกลับขึ้นมาผ่าน callback นี้แทน
-  const [statusOptions, setStatusOptions] = useState<JobStatusOption[]>([]);
-  const handleStatusOptionsChange = useCallback(
-    (options: JobStatusOption[]) => setStatusOptions(options),
-    [],
-  );
+  // ดึงรายการสถานะทั้งหมดจาก /repairs/lookups/meta (ไม่ขึ้นกับว่ามีงานซ่อมอยู่หรือไม่)
+  const { data: lookups } = useQuery({
+    queryKey: ["repairsLookups"],
+    queryFn: getLookUp,
+  });
+  const statusOptions = lookups?.jobStatuses ?? [];
 
   const [inputSearch, setInputSearch] = useState("");
   const [statusCode, setStatusCode] = useState("ALL");
@@ -121,7 +121,6 @@ export default function TrackingAssetCenter({}) {
         <TrackTable
           inputSearch={inputSearch}
           statusCode={statusCode}
-          onStatusOptionsChange={handleStatusOptionsChange}
         />
       </div>
     </div>

@@ -6,15 +6,9 @@ import {
 } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { getRepairsHistory } from "../../services/trackingService";
 import type { TrackRes } from "../../services/trackingService";
-
-export interface JobStatusOption {
-  id: number;
-  code: string;
-  name: string;
-}
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -182,40 +176,16 @@ const columns: Array<ColumnDef<typeof features, TrackRes>> = [
 interface Props {
   inputSearch: string;
   statusCode: string;
-  onStatusOptionsChange?: (options: JobStatusOption[]) => void;
 }
 
 export default function TrackTable({
   inputSearch,
   statusCode,
-  onStatusOptionsChange,
 }: Props) {
-  // backend ไม่มี endpoint แยกสำหรับดึงรายการสถานะทั้งหมด จึงดึงงานซ่อมแบบไม่กรองสถานะ
-  // (limit สูงสุดที่ backend อนุญาต) แล้วรวบรวมสถานะที่มีอยู่จริงจากงานซ่อม เพื่อใช้เป็นตัวเลือกใน dropdown
   const { data: repairsHistory } = useQuery({
     queryKey: ["repairsHistory"],
     queryFn: () => getRepairsHistory(),
   });
-
-  useEffect(() => {
-    if (!repairsHistory || !onStatusOptionsChange) return;
-
-    const uniqueStatuses = new Map<string, JobStatusOption>();
-    for (const item of repairsHistory) {
-      const jobStatus = item.jobStatus;
-      if (jobStatus?.code && !uniqueStatuses.has(jobStatus.code)) {
-        uniqueStatuses.set(jobStatus.code, {
-          id: jobStatus.id,
-          code: jobStatus.code,
-          name: jobStatus.name,
-        });
-      }
-    }
-
-    onStatusOptionsChange(
-      Array.from(uniqueStatuses.values()).sort((a, b) => a.id - b.id),
-    );
-  }, [repairsHistory, onStatusOptionsChange]);
 
   const filteredItems = useMemo(() => {
     if (!repairsHistory) {
