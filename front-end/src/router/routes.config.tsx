@@ -70,7 +70,7 @@ export const APP_ROUTE: AppRote[] = [
   // -------- สำหรับ แผนก/ผู้ใช้งานทั่วไป ------------
   {
     path: "borrow-request",
-    title: "ยืมครุภัณฑ์",
+    title: "ยืม-คืนครุภัณฑ์",
     element: <DepartMentBorrowReturn />,
     icon: Repeat,
     roles: [ROLES.DEPARTMENT_STAFF, ROLES.PARCEL_STAFF],
