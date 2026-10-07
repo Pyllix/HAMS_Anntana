@@ -19,3 +19,27 @@ export interface Borrow {
   delivery_method: string;
   createdAt: string;
 }
+
+// GET /borrowings/recommendations — จัดอันดับเครื่องรุ่นเดียวกันที่พร้อมยืมตามการหมุนเวียนใช้งาน
+export interface BorrowRecommendationCandidate {
+  assetId: string;
+  noid: string | null;
+  name: string;
+  model: string;
+  serialNo: string | null;
+  sectionName: string | null;
+  imageUrl: string | null;
+  usageDays90d: number;
+  idleDays: number;
+  borrowCount90d: number;
+  isRecommended: boolean;
+  recommendationReason: string;
+}
+
+export interface BorrowRecommendations {
+  model?: string;
+  equipmentTypeId?: number;
+  totalAvailable: number;
+  recommendedAssetId: string | null;
+  candidates: BorrowRecommendationCandidate[];
+}

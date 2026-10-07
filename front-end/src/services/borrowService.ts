@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import type { BorrowRecommendations } from "../types/TypeBorrow";
 
 // แปล error message ดิบจาก API ของ borrow ให้เป็นข้อความที่อ่านเข้าใจง่ายขึ้น
 // (ครอบคลุมเคสที่พบได้บ่อย เช่น สถานะเปลี่ยนไปแล้ว/ถูกดำเนินการไปก่อนหน้า)
@@ -278,4 +279,15 @@ export async function getAllBorrowHistory(params?: {
   });
 
   return res.data.data;
+}
+
+export async function getBorrowRecommendations(params: {
+  assetId: string;
+  limit?: number;
+}): Promise<BorrowRecommendations> {
+  const res = await apiClient.get<BorrowRecommendations>(
+    "/borrowings/recommendations",
+    { params },
+  );
+  return res.data;
 }
