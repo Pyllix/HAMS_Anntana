@@ -10,6 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getAssets, getSections } from "../../services/assetService";
 import { useMemo } from "react";
 import { useSelfBorrowModalStore } from "../../stores/useSelfBorrowModalStore";
+import { useBorrowRecommendationStore } from "../../stores/useBorrowRecommendationStore";
+import BorrowRecommendationDialog from "./BorrowRecommendationDialog";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -72,7 +74,8 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       return (
         <button
           type="button"
-          onClick={() => useSelfBorrowModalStore.getState().openForm(row)}
+          // เปิด Dialog แนะนำเครื่องก่อน แล้วค่อยเข้าสู่ขั้นตอนขอยืมปกติ
+          onClick={() => useBorrowRecommendationStore.getState().open(row)}
           className="w-24 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
         >
           ขอยืม
@@ -103,6 +106,22 @@ export default function AvailableAssetsTable({ search, typeFilter }: Props) {
     queryFn: () => getAssets(centerSectionId),
     enabled: !!centerSectionId,
   });
+
+  const isRecommendationOpen = useBorrowRecommendationStore(
+    (s) => !!s.clickedAsset,
+  );
+
+  // ขอบเขตของรายการแนะนำ: ครุภัณฑ์ศูนย์ฯ ที่ยืมได้ทั้งหมด (ไม่ขึ้นกับคำค้นหา/ประเภทที่กรองอยู่)
+  const borrowableAssets = useMemo(
+    () =>
+      (assets ?? []).filter(
+        (item) =>
+          item.section?.code === "CENTER" &&
+          item.availabilityStatus?.code === "AVAILABLE" &&
+          item.status?.code === "NORMAL",
+      ),
+    [assets],
+  );
 
   // เห็นเฉพาะครุภัณฑ์ของศูนย์ฯ ที่ "ว่าง" (AVAILABLE) และ "ใช้งานได้" (NORMAL) เท่านั้น
   const filteredAssets = useMemo(() => {
@@ -141,6 +160,15 @@ export default function AvailableAssetsTable({ search, typeFilter }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      {isRecommendationOpen && (
+        <BorrowRecommendationDialog
+          pool={borrowableAssets}
+          onProceed={(asset) =>
+            useSelfBorrowModalStore.getState().openForm(asset)
+          }
+        />
+      )}
+
       <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">

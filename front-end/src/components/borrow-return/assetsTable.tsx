@@ -12,6 +12,8 @@ import { useMemo } from "react";
 import { useBorrowModalStore } from "../../stores/useBorrowModalStore";
 import { useReturnModalStore } from "../../stores/useReturnModalStore";
 import { useAuthStore } from "../../stores/authStore";
+import { useBorrowRecommendationStore } from "../../stores/useBorrowRecommendationStore";
+import BorrowRecommendationDialog from "./BorrowRecommendationDialog";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -111,8 +113,9 @@ const columns: Array<ColumnDef<typeof features, Asset>> = [
       const row = info.row.original;
       const isAvailable = info.row.original.availabilityStatus?.code;
 
+      // เปิด Dialog แนะนำเครื่องก่อน แล้วค่อยเข้าสู่ขั้นตอนยืมปกติ
       const handleOpenBorrowModal = () =>
-        useBorrowModalStore.getState().openForm(row);
+        useBorrowRecommendationStore.getState().open(row);
       const handleOpenReturnModal = () =>
         useReturnModalStore.getState().openForm(row);
 
@@ -181,6 +184,21 @@ export default function AssetsTable({ search, category, type }: Props) {
     queryFn: () => getAssets(sectionId),
   });
 
+  const isRecommendationOpen = useBorrowRecommendationStore(
+    (s) => !!s.clickedAsset,
+  );
+
+  // ขอบเขตของรายการแนะนำ: เครื่องที่ยืมได้ทั้งหมด (ไม่ขึ้นกับคำค้นหา/ตัวกรองที่เลือกอยู่)
+  const borrowableAssets = useMemo(
+    () =>
+      (assets ?? []).filter(
+        (item) =>
+          item.availabilityStatus?.code === "AVAILABLE" &&
+          item.status?.code === "NORMAL",
+      ),
+    [assets],
+  );
+
   const filteredAssets = useMemo(() => {
     if (!assets) {
       console.log("assets is undefined at AssetsTable.tsx");
@@ -217,6 +235,13 @@ export default function AssetsTable({ search, category, type }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      {isRecommendationOpen && (
+        <BorrowRecommendationDialog
+          pool={borrowableAssets}
+          onProceed={(asset) => useBorrowModalStore.getState().openForm(asset)}
+        />
+      )}
+
       {/* พื้นที่ตาราง Scroll ได้ */}
       <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
