@@ -40,7 +40,10 @@ export default function Sidebar() {
               }
             >
               {Icon && <Icon className="w-5 h-5 shrink-0" />}
-              <span className="truncate">{item.title}</span>
+              {/* ชื่อเมนูยาวให้ขึ้นบรรทัดใหม่แทนการตัดเป็น ... */}
+              <span className="min-w-0 break-words leading-snug">
+                {item.title}
+              </span>
             </NavLink>
           );
         })}
