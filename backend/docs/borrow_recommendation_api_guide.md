@@ -17,9 +17,11 @@
 ## 🧮 2. อัลกอริทึมการจัดอันดับและเกณฑ์การแจ้งเตือน (Algorithm & Rules)
 
 ### 2.1 Balanced Usage Rotation Hierarchy
-ระบบคัดกรองเฉพาะเครื่องที่เป็นรุ่นเดียวกัน (`model` เดียวกัน) ที่มีสถานะ:
+ระบบคัดกรองเฉพาะเครื่องที่มีประเภทครุภัณฑ์หลักและรุ่นเดียวกัน (`type_id` และ `model` ตรงกันด้วยเงื่อนไข AND) ที่มีสถานะ:
 - `availabilityStatus = 'AVAILABLE'` (พร้อมให้ยืม)
 - `assetStatus = 'NORMAL'` (สภาพปกติ ไม่ชำรุด/รอซ่อม/แทงจำหน่าย)
+
+การเทียบรุ่นไม่สนใจตัวพิมพ์ใหญ่/เล็กและช่องว่างหัวท้าย แต่ไม่ใช้การค้นหาคำบางส่วนหรือชื่อคล้ายกัน เครื่องต่างรุ่นจะไม่ถูกเสนอเพื่อหมุนเวียน แม้อยู่หมวด `equipment_type_id` เดียวกัน
 
 จัดอันดับตามลำดับความสำคัญ (Zero N+1 Query ผ่าน CTE):
 1. **`usageDays90d` (ASC):** จำนวนวันใช้งานสุทธิในรอบ 90 วันล่าสุด (ยิ่งน้อยยิ่งได้อันดับดี)
@@ -41,16 +43,29 @@
 #### Query Parameters
 | Parameter | Type | Required | Default | คำอธิบาย |
 | :--- | :---: | :---: | :---: | :--- |
-| `model` | `string` | No* | - | ชื่อรุ่นครุภัณฑ์ เช่น `Puritan Bennett 840` |
-| `equipmentTypeId` | `number` | No* | - | รหัสประเภทเครื่องมือแพทย์ เช่น `1` |
-| `assetId` | `UUID` | No* | - | รหัส UUID ของครุภัณฑ์อ้างอิง (ถ้าระบุ ระบบจะดึง `model` และ `equipmentTypeId` ให้โดยอัตโนมัติ) |
+| `model` | `string` | No* | - | ชื่อรุ่นครุภัณฑ์ ต้องส่งร่วมกับ `assetTypeId` เมื่อไม่ส่ง `assetId` |
+| `assetTypeId` | `number` | No* | - | รหัสประเภทครุภัณฑ์หลัก (`Asset.type_id`) ต้องส่งร่วมกับ `model` เมื่อไม่ส่ง `assetId` |
+| `equipmentTypeId` | `number` | No | - | ตัวกรองหมวดเครื่องมือเพิ่มเติม ใช้ AND เพื่อจำกัดรายการ ไม่ใช้แทนประเภทและรุ่น |
+| `assetId` | `UUID` | No* | - | UUID ของเครื่องที่เลือก ระบบอ่าน `type_id` และ `model` ของเครื่องนั้นเป็นเกณฑ์หลัก แม้ส่งตัวกรองประเภทหรือรุ่นอื่นร่วมมา |
 | `limit` | `number` | No | `10` | จำนวนรายการที่ต้องการแสดง (1 - 50) |
 
-*\* แนะนำให้ส่ง `model` หรือ `assetId` อย่างใดอย่างหนึ่ง*
+*\* ต้องส่ง `assetId` หรือส่ง `assetTypeId` และ `model` ร่วมกัน*
+
+- FE เดิมส่ง `assetId` และ `limit` ต่อได้โดยไม่ต้องเพิ่ม field
+- คำขอที่ไม่มีประเภทหรือรุ่นครบถ้วน รวมถึงรุ่นว่าง ส่งกลับ `400 Bad Request` โดยไม่ขยายไปแนะนำทั้งหมวด
+- `assetId` ที่ไม่พบส่งกลับ `404 Not Found`
+- ถ้าไม่มีเครื่องอื่นที่ผ่านเกณฑ์ ระบบไม่หาเครื่องต่างรุ่นมาแทน และ `swap-check` คืน `hasBetterAlternative: false`
+- รูปแบบ response เดิมยังใช้ได้ `equipmentTypeId` เป็นข้อมูลหมวดของเครื่องอ้างอิงหรือตัวกรองหมวดที่ระบุ ไม่ใช่เกณฑ์ยืนยันการทดแทน
 
 #### ตัวอย่าง Request
 ```http
-GET /borrowings/recommendations?model=Puritan%20Bennett%20840&limit=5
+GET /borrowings/recommendations?assetTypeId=1&model=Puritan%20Bennett%20840&limit=5
+Authorization: Bearer <token>
+```
+
+สำหรับหน้าต่างยืมที่เลือกเครื่องไว้แล้ว ให้ใช้:
+```http
+GET /borrowings/recommendations?assetId=550e8400-e29b-41d4-a716-446655440003&limit=50
 Authorization: Bearer <token>
 ```
 
@@ -268,3 +283,15 @@ export const BorrowSelectionWithSwapCheck = ({
 - `ASSET_CENTER_STAFF`: เจ้าหน้าที่ศูนย์เครื่องมือแพทย์ (ผู้จัดเตรียมและจ่ายเครื่อง)
 - `PARCEL_STAFF`: เจ้าหน้าที่งานพัสดุ
 - `DEPARTMENT_STAFF`: เจ้าหน้าที่ประจำหอผู้ป่วย/วอร์ด (ผู้ยืมใช้งาน)
+
+## 6. การทดสอบการกรองประเภทและรุ่น
+
+Unit tests: `pnpm exec jest asset-borrow-recommendation.spec.ts --runInBand`
+
+SQL fixture tests: ตั้งค่า `TEST_DATABASE_URL` เป็น PostgreSQL สำหรับทดสอบ แล้วรันเฉพาะไฟล์นี้:
+
+```powershell
+pnpm exec jest --config test/jest-e2e.json --runInBand --runTestsByPath test/borrow-recommendation.e2e-spec.ts
+```
+
+ชุดทดสอบนี้เรียก `getBorrowRecommendations` และ `checkSwapRecommendation` จริง โดยใช้ CTE จำลองตารางภายใน SELECT และ `BEGIN READ ONLY` ไม่มีการสร้างตารางหรือเพิ่ม/แก้ไขข้อมูลฐานข้อมูล หากไม่มี `TEST_DATABASE_URL` จะข้ามชุดนี้ ทดสอบทั้งเครื่องต่างประเภท ต่างรุ่น สถานะไม่พร้อม หมวดเครื่องมือต่างกัน การจัดอันดับ และกรณีไม่มีเครื่องอื่นให้เลือก
