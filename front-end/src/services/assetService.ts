@@ -87,15 +87,20 @@ export async function getMySectionAssetsPaginated(params?: {
 export async function getAssets(
   section_id?: string | number,
 ): Promise<Asset[]> {
-
-  const res = await apiClient.get("/asset", {
-
-    params: {
-      ...(section_id && { section_id }),
-    },
-  });
-
-  return res.data.data;
+  const assets: Asset[] = [];
+  let page = 1;
+  while (true) {
+    const response = await getAssetsPaginated({
+      page,
+      limit: 100,
+      ...(section_id && { section_id: String(section_id) }),
+    });
+    assets.push(...response.data);
+    const hasNextPage = response.meta.hasNextPage ??
+      page < (response.meta.totalPages ?? page);
+    if (!hasNextPage) return assets;
+    page += 1;
+  }
 }
 
 export async function getAssetTypes(): Promise<AssetType[]> {
