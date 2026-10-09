@@ -80,6 +80,8 @@ pnpm run prisma:reset
 *(หมายเหตุ: สามารถใช้คำสั่ง `pnpm run prisma:studio` เพื่อเปิดหน้าเว็บสำหรับดูและแก้ไขข้อมูลใน Database ได้ตลอดเวลา)*
 
 ### 6. รัน Backend Server
+สำหรับข้อมูลนำเสนอที่มีประวัติยืม–คืน งานซ่อม และกราฟงบประมาณ ใช้ชุด seed แยกตาม [คู่มือเตรียมข้อมูลนำเสนอ](docs/presentation-seed-guide.md) ตรวจข้อมูลได้โดยไม่ต่อฐานด้วย `pnpm run prisma:seed:presentation --dry-run` และเลือกฐานเป้าหมายผ่าน `DEMO_DATABASE_URL` ก่อนรันจริง
+
 เริ่มการทำงานของ Backend API ในโหมด Development:
 ```bash
 pnpm run start:dev

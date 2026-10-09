@@ -40,31 +40,67 @@ const assetTypes = [
 ];
 
 const acquisitionTypes = [
-  { name: 'ติดมากับตึก', description: 'ครุภัณฑ์ที่ติดตั้งพร้อมการส่งมอบอาคารสถานที่' },
+  {
+    name: 'ติดมากับตึก',
+    description: 'ครุภัณฑ์ที่ติดตั้งพร้อมการส่งมอบอาคารสถานที่',
+  },
   { name: 'รับโอน', description: 'รับโอนจากหน่วยงานอื่นหรือกระทรวงสาธารณสุข' },
-  { name: 'ระเบียบเงินบริจาค', description: 'จัดหาตามระเบียบเงินบริจาคของโรงพยาบาล' },
+  {
+    name: 'ระเบียบเงินบริจาค',
+    description: 'จัดหาตามระเบียบเงินบริจาคของโรงพยาบาล',
+  },
   { name: 'คัดเลือก', description: 'จัดซื้อจัดจ้างโดยวิธีคัดเลือก' },
   { name: 'ไม่ระบุ', description: 'ไม่ระบุวิธีการได้มา' },
   { name: 'เฉพาะเจาะจง', description: 'จัดซื้อจัดจ้างโดยวิธีเฉพาะเจาะจง' },
-  { name: 'ประกวดราคาอิเล็กทรอนิกส์(e-bidding)', description: 'จัดซื้อจัดจ้างด้วยวิธีประกวดราคาอิเล็กทรอนิกส์' },
-  { name: 'ได้รับสนับสนุน', description: 'ได้รับการสนับสนุนจากโครงการหรือองค์กรภายนอก' },
+  {
+    name: 'ประกวดราคาอิเล็กทรอนิกส์(e-bidding)',
+    description: 'จัดซื้อจัดจ้างด้วยวิธีประกวดราคาอิเล็กทรอนิกส์',
+  },
+  {
+    name: 'ได้รับสนับสนุน',
+    description: 'ได้รับการสนับสนุนจากโครงการหรือองค์กรภายนอก',
+  },
   { name: 'ตกลงราคา', description: 'จัดซื้อจัดจ้างโดยวิธีตกลงราคา' },
   { name: 'ประกวดราคา', description: 'จัดซื้อจัดจ้างโดยวิธีประกวดราคา' },
   { name: 'สอบราคา', description: 'จัดซื้อจัดจ้างโดยวิธีสอบราคา' },
-  { name: 'ประมูลอิเล็กทรอนิกส์', description: 'จัดซื้อจัดจ้างโดยวิธีประมูลอิเล็กทรอนิกส์' },
-  { name: 'ช่างรพ.ทำเอง', description: 'สิ่งประดิษฐ์หรือครุภัณฑ์ที่โรงพยาบาลสร้างขึ้นเอง' },
+  {
+    name: 'ประมูลอิเล็กทรอนิกส์',
+    description: 'จัดซื้อจัดจ้างโดยวิธีประมูลอิเล็กทรอนิกส์',
+  },
+  {
+    name: 'ช่างรพ.ทำเอง',
+    description: 'สิ่งประดิษฐ์หรือครุภัณฑ์ที่โรงพยาบาลสร้างขึ้นเอง',
+  },
   { name: 'ของแถม', description: 'ได้รับเป็นของแถมจากการจัดซื้อรายการอื่น' },
   { name: 'บริจาค', description: 'ได้รับบริจาคจากบุคคลหรือองค์กร' },
   { name: 'ยืม', description: 'ยืมใช้งานจากหน่วยงานภายนอกหรือบริษัทคู่ค้า' },
 ];
 
 const equipmentTypes = [
-  { name: 'เครื่องมือช่วยชีวิต', description: 'อุปกรณ์สำหรับกู้ชีพและติดตามสัญญาณชีพ' },
-  { name: 'เครื่องมือเพื่อการรักษา', description: 'อุปกรณ์ที่ใช้ในกระบวนการรักษาและหัตถการ' },
-  { name: 'เครื่องมือตรวจวัด/วินิจฉัย', description: 'อุปกรณ์สำหรับตรวจวัด วิเคราะห์ และวินิจฉัย' },
-  { name: 'เครื่องมือฟื้นฟูสภาพ', description: 'อุปกรณ์เวชศาสตร์ฟื้นฟูและกายภาพบำบัด' },
-  { name: 'เครื่องมือสนับสนุน', description: 'อุปกรณ์สนับสนุนทางการแพทย์และห้องปฏิบัติการ' },
-  { name: 'อุปกรณ์อำนวยความสะดวก', description: 'อุปกรณ์อำนวยความสะดวกสำหรับผู้ป่วยและบุคลากร' },
+  {
+    name: 'เครื่องมือช่วยชีวิต',
+    description: 'อุปกรณ์สำหรับกู้ชีพและติดตามสัญญาณชีพ',
+  },
+  {
+    name: 'เครื่องมือเพื่อการรักษา',
+    description: 'อุปกรณ์ที่ใช้ในกระบวนการรักษาและหัตถการ',
+  },
+  {
+    name: 'เครื่องมือตรวจวัด/วินิจฉัย',
+    description: 'อุปกรณ์สำหรับตรวจวัด วิเคราะห์ และวินิจฉัย',
+  },
+  {
+    name: 'เครื่องมือฟื้นฟูสภาพ',
+    description: 'อุปกรณ์เวชศาสตร์ฟื้นฟูและกายภาพบำบัด',
+  },
+  {
+    name: 'เครื่องมือสนับสนุน',
+    description: 'อุปกรณ์สนับสนุนทางการแพทย์และห้องปฏิบัติการ',
+  },
+  {
+    name: 'อุปกรณ์อำนวยความสะดวก',
+    description: 'อุปกรณ์อำนวยความสะดวกสำหรับผู้ป่วยและบุคลากร',
+  },
 ];
 
 const jobStatuses = [
@@ -80,11 +116,7 @@ const jobStatuses = [
   { code: 'CANCELLED', name: 'ยกเลิกงานซ่อม' },
 ];
 
-const jobTypes = [
-  'ซ่อมเครื่องมือแพทย์',
-  'ซ่อมบำรุงทั่วไป',
-  'ซ่อมคอมพิวเตอร์',
-];
+const jobTypes = ['ซ่อมเครื่องมือแพทย์', 'ซ่อมบำรุงทั่วไป', 'ซ่อมคอมพิวเตอร์'];
 
 const causes = [
   { code: '01', name: 'เครื่องไม่มีคุณภาพ' },
@@ -125,41 +157,159 @@ const stepMasterTemplates: {
   actionType: StepActionType;
   label: string;
 }[] = [
-  { stepNumber: 1, actionType: StepActionType.SELF_REPAIR, label: 'วันแจ้งซ่อม' },
-  { stepNumber: 2, actionType: StepActionType.SELF_REPAIR, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
-  { stepNumber: 3, actionType: StepActionType.SELF_REPAIR, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
-  { stepNumber: 4, actionType: StepActionType.SELF_REPAIR, label: 'ซ่อมเองและทดสอบ' },
-  { stepNumber: 5, actionType: StepActionType.SELF_REPAIR, label: 'แล้วเสร็จ / รอส่งมอบ' },
-  { stepNumber: 6, actionType: StepActionType.SELF_REPAIR, label: 'ตรวจรับและปิด Job' },
-  { stepNumber: 1, actionType: StepActionType.WITH_PARTS, label: 'วันแจ้งซ่อม' },
-  { stepNumber: 2, actionType: StepActionType.WITH_PARTS, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
-  { stepNumber: 3, actionType: StepActionType.WITH_PARTS, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
-  { stepNumber: 4, actionType: StepActionType.WITH_PARTS, label: 'ขอเบิกอะไหล่ (ผสม In/Out)' },
-  { stepNumber: 5, actionType: StepActionType.WITH_PARTS, label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก' },
-  { stepNumber: 6, actionType: StepActionType.WITH_PARTS, label: 'ช่างรับอะไหล่ & ลงมือซ่อม' },
-  { stepNumber: 7, actionType: StepActionType.WITH_PARTS, label: 'แล้วเสร็จ / รอส่งมอบ' },
-  { stepNumber: 8, actionType: StepActionType.WITH_PARTS, label: 'ตรวจรับและปิด Job' },
+  {
+    stepNumber: 1,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'วันแจ้งซ่อม',
+  },
+  {
+    stepNumber: 2,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'หัวหน้าช่าง Triage & จ่ายงาน',
+  },
+  {
+    stepNumber: 3,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'ช่างตรวจเช็ค & วินิจฉัย',
+  },
+  {
+    stepNumber: 4,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'ซ่อมเองและทดสอบ',
+  },
+  {
+    stepNumber: 5,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'แล้วเสร็จ / รอส่งมอบ',
+  },
+  {
+    stepNumber: 6,
+    actionType: StepActionType.SELF_REPAIR,
+    label: 'ตรวจรับและปิด Job',
+  },
+  {
+    stepNumber: 1,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'วันแจ้งซ่อม',
+  },
+  {
+    stepNumber: 2,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'หัวหน้าช่าง Triage & จ่ายงาน',
+  },
+  {
+    stepNumber: 3,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'ช่างตรวจเช็ค & วินิจฉัย',
+  },
+  {
+    stepNumber: 4,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'ขอเบิกอะไหล่ (ผสม In/Out)',
+  },
+  {
+    stepNumber: 5,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'พัสดุจ่ายของ/สั่งซื้อภายนอก',
+  },
+  {
+    stepNumber: 6,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'ช่างรับอะไหล่ & ลงมือซ่อม',
+  },
+  {
+    stepNumber: 7,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'แล้วเสร็จ / รอส่งมอบ',
+  },
+  {
+    stepNumber: 8,
+    actionType: StepActionType.WITH_PARTS,
+    label: 'ตรวจรับและปิด Job',
+  },
   { stepNumber: 1, actionType: StepActionType.OUTSOURCE, label: 'วันแจ้งซ่อม' },
-  { stepNumber: 2, actionType: StepActionType.OUTSOURCE, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
-  { stepNumber: 3, actionType: StepActionType.OUTSOURCE, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
-  { stepNumber: 4, actionType: StepActionType.OUTSOURCE, label: 'ขอส่งซ่อมภายนอก (พัสดุจัดจ้าง)' },
-  { stepNumber: 5, actionType: StepActionType.OUTSOURCE, label: 'พัสดุส่งบริษัทภายนอกซ่อม' },
-  { stepNumber: 6, actionType: StepActionType.OUTSOURCE, label: 'รับเครื่องคืนและทดสอบ' },
-  { stepNumber: 7, actionType: StepActionType.OUTSOURCE, label: 'แล้วเสร็จ / รอส่งมอบ' },
-  { stepNumber: 8, actionType: StepActionType.OUTSOURCE, label: 'ตรวจรับและปิด Job' },
-  { stepNumber: 1, actionType: StepActionType.UNREPAIRABLE, label: 'วันแจ้งซ่อม' },
-  { stepNumber: 2, actionType: StepActionType.UNREPAIRABLE, label: 'หัวหน้าช่าง Triage & จ่ายงาน' },
-  { stepNumber: 3, actionType: StepActionType.UNREPAIRABLE, label: 'ช่างตรวจเช็ค & วินิจฉัย' },
-  { stepNumber: 4, actionType: StepActionType.UNREPAIRABLE, label: 'ยื่นเรื่องแทงชำรุด' },
-  { stepNumber: 5, actionType: StepActionType.UNREPAIRABLE, label: 'ช่างนำส่งเครื่องที่ห้องพัสดุ' },
-  { stepNumber: 6, actionType: StepActionType.UNREPAIRABLE, label: 'พัสดุกดยืนยันรับมอบเครื่อง' },
-  { stepNumber: 7, actionType: StepActionType.UNREPAIRABLE, label: 'สรุปส่งมอบเข้าคลังพัก' },
-  { stepNumber: 8, actionType: StepActionType.UNREPAIRABLE, label: 'ปรับเป็น WAIT_DISPOSAL' },
+  {
+    stepNumber: 2,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'หัวหน้าช่าง Triage & จ่ายงาน',
+  },
+  {
+    stepNumber: 3,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'ช่างตรวจเช็ค & วินิจฉัย',
+  },
+  {
+    stepNumber: 4,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'ขอส่งซ่อมภายนอก (พัสดุจัดจ้าง)',
+  },
+  {
+    stepNumber: 5,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'พัสดุส่งบริษัทภายนอกซ่อม',
+  },
+  {
+    stepNumber: 6,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'รับเครื่องคืนและทดสอบ',
+  },
+  {
+    stepNumber: 7,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'แล้วเสร็จ / รอส่งมอบ',
+  },
+  {
+    stepNumber: 8,
+    actionType: StepActionType.OUTSOURCE,
+    label: 'ตรวจรับและปิด Job',
+  },
+  {
+    stepNumber: 1,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'วันแจ้งซ่อม',
+  },
+  {
+    stepNumber: 2,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'หัวหน้าช่าง Triage & จ่ายงาน',
+  },
+  {
+    stepNumber: 3,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'ช่างตรวจเช็ค & วินิจฉัย',
+  },
+  {
+    stepNumber: 4,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'ยื่นเรื่องแทงชำรุด',
+  },
+  {
+    stepNumber: 5,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'ช่างนำส่งเครื่องที่ห้องพัสดุ',
+  },
+  {
+    stepNumber: 6,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'พัสดุกดยืนยันรับมอบเครื่อง',
+  },
+  {
+    stepNumber: 7,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'สรุปส่งมอบเข้าคลังพัก',
+  },
+  {
+    stepNumber: 8,
+    actionType: StepActionType.UNREPAIRABLE,
+    label: 'ปรับเป็น WAIT_DISPOSAL',
+  },
 ];
 
 let seedStage = 'connection';
 
-async function seedReferenceData(tx: Prisma.TransactionClient): Promise<void> {
+export async function seedReferenceData(
+  tx: Prisma.TransactionClient,
+): Promise<void> {
   seedStage = 'advisory-lock';
   await tx.$queryRaw`SELECT 1 AS acquired FROM pg_advisory_xact_lock(90260926)`;
 
@@ -279,25 +429,28 @@ async function main(): Promise<void> {
       maxWait: 10_000,
       timeout: 120_000,
     });
-    console.info('Production reference data is ready. No demo records were loaded.');
+    console.info(
+      'Production reference data is ready. No demo records were loaded.',
+    );
   } finally {
     await prisma.$disconnect();
     await pool.end();
   }
 }
 
-main().catch((error: unknown) => {
-  const code =
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    typeof error.code === 'string'
-      ? error.code
-      : error instanceof Error
-        ? error.name
-        : 'unknown';
-  console.error(
-    `Production reference seeding failed at ${seedStage} (code: ${code}). No demo seed was run.`,
-  );
-  process.exitCode = 1;
-});
+if (require.main === module)
+  main().catch((error: unknown) => {
+    const code =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      typeof error.code === 'string'
+        ? error.code
+        : error instanceof Error
+          ? error.name
+          : 'unknown';
+    console.error(
+      `Production reference seeding failed at ${seedStage} (code: ${code}). No demo seed was run.`,
+    );
+    process.exitCode = 1;
+  });
