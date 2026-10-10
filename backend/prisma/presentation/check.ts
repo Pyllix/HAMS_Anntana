@@ -143,6 +143,18 @@ export async function checkPresentation(
       errors.push(`Closed repair is incomplete: ${job.jobNo}`);
   }
   for (const part of parts) {
+    for (const receipt of part.sparepartAdds.filter(
+      (add) => add.deletedAt === null,
+    )) {
+      if (
+        !Number.isInteger(receipt.qty) ||
+        receipt.qty <= 0 ||
+        Number(receipt.totalPrice) < 0 ||
+        !receipt.sparepartAddDoc.trim() ||
+        !receipt.addBy
+      )
+        errors.push(`Invalid stock receipt: ${part.code}`);
+    }
     const received = part.sparepartAdds
       .filter((add) => add.deletedAt === null)
       .reduce((qty, add) => qty + add.qty, 0);

@@ -4,6 +4,7 @@ import { seedReferenceData } from '../seed-reference';
 import { originalProfile, originalUserPreparation } from './user-profiles';
 import { presentationSectionData } from './sections';
 import { presentationAssetImageUrl } from './images';
+import { createPartWithReceipts } from './parts';
 import {
   assetLabels,
   documentLabel,
@@ -655,51 +656,24 @@ export async function seedPresentation(
       });
       const parts = new Map<string, number>();
       for (const [partIndex, part] of fixture.parts.entries()) {
-        const result = await tx.sparepart.create({
-          data: {
-            code: partLabels[part.key].code,
-            name: part.name,
-            unit: 'ชิ้น',
-            price: part.price,
-            minStock: part.minStock,
-            qtyInStock: stockBalance(fixture, part),
-            groupId: group.id,
-          },
-        });
+        const result = await createPartWithReceipts(
+          tx,
+          part,
+          partIndex,
+          fixture.date,
+          group.id,
+          users.get('parcel')!,
+        );
         parts.set(part.key, result.id);
-        for (const [index, qty] of [
-          Math.floor(part.opening * 0.8),
-          part.opening - Math.floor(part.opening * 0.8),
-        ].entries()) {
-          if (qty === 0) continue;
-          const when = new Date(
-            fixture.date.getTime() - (650 - index * 20) * 86_400_000,
-          );
-          await tx.sparepartAdd.create({
-            data: {
-              sparepartId: result.id,
-              qty,
-              totalPrice: qty * part.price,
-              sparepartAddDoc: documentLabel(
-                'STK',
-                when,
-                partIndex * 2 + index,
-              ),
-              addBy: users.get('parcel')!,
-              createdAt: when,
-              updatedAt: when,
-            },
-          });
-        }
         manifest.rows.push({
           kind: 'part',
           key: part.key,
           id: result.id,
           document: result.code,
-          state: `stock=${result.qtyInStock}`,
+          state: `stock=${stockBalance(fixture, part)}`,
         });
       }
-      for (const txn of fixture.txns)
+      for (const txn of fixture.txns) {
         await tx.sparepartTxn.create({
           data: {
             sparepartId: parts.get(txn.part)!,
@@ -713,6 +687,17 @@ export async function seedPresentation(
             createdAt: txn.date,
           },
         });
+        if (txn.stock === 'INTERNAL' && txn.type !== 'PENDING_WITHDRAW')
+          await tx.sparepart.update({
+            where: { id: parts.get(txn.part)! },
+            data: {
+              qtyInStock: {
+                increment: txn.type === 'RETURN' ? txn.qty : -txn.qty,
+              },
+              updatedAt: fixture.date,
+            },
+          });
+      }
       for (const [transferIndex, transfer] of fixture.transfers.entries()) {
         const result = await tx.transfer.create({
           data: {

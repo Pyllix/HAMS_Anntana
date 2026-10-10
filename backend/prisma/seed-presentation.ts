@@ -19,6 +19,7 @@ import { restoreOriginalPresentationUsers } from './presentation/users';
 import { repairPresentationCenterSection } from './presentation/sections';
 import { attachPresentationSampleImages } from './presentation/images';
 import { relabelPresentation } from './presentation/relabel';
+import { extendPresentationParts } from './presentation/parts';
 
 export function assertPresentationTarget(
   url: string | undefined,
@@ -170,15 +171,27 @@ async function main(): Promise<void> {
           process.env.DEMO_PRESENTATION_PASSWORD ?? '',
         )
       : null;
-    const result = restored
-      ? { manifest: restored, created: false }
-      : existing
-        ? { manifest: existing, created: false }
-        : await seedPresentation(
-            prisma,
-            fixture,
-            process.env.DEMO_PRESENTATION_PASSWORD ?? '',
-          );
+    const extension = existing
+      ? await extendPresentationParts(
+          prisma,
+          buildPresentationFixture(presentationDate(existing.date)),
+        )
+      : null;
+    if (extension?.added)
+      console.info(
+        `Added ${extension.added} spare parts with receipt history; existing stock and repair records preserved.`,
+      );
+    const result = extension
+      ? { manifest: extension.manifest, created: false }
+      : restored
+        ? { manifest: restored, created: false }
+        : existing
+          ? { manifest: existing, created: false }
+          : await seedPresentation(
+              prisma,
+              fixture,
+              process.env.DEMO_PRESENTATION_PASSWORD ?? '',
+            );
     const warnings = await checkPresentation(prisma, result.manifest);
     await saveJson(output, result.manifest);
     console.info(

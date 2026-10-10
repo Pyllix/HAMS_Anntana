@@ -69,6 +69,51 @@ export const partLabels: Record<string, { code: string; name: string }> = {
     code: 'SP-MED-005',
     name: 'สายสัญญาณตรวจคลื่นไฟฟ้าหัวใจ',
   },
+  'spo2-cable': {
+    code: 'SP-MED-006',
+    name: 'สายต่อเซนเซอร์วัดออกซิเจนปลายนิ้ว',
+  },
+  'nibp-cuff-adult': {
+    code: 'SP-MED-007',
+    name: 'ผ้าพันแขนวัดความดันสำหรับผู้ใหญ่',
+  },
+  'nibp-cuff-child': {
+    code: 'SP-MED-008',
+    name: 'ผ้าพันแขนวัดความดันสำหรับเด็ก',
+  },
+  'nibp-hose': { code: 'SP-MED-009', name: 'สายลมเครื่องวัดความดันโลหิต' },
+  'temperature-probe': {
+    code: 'SP-MED-010',
+    name: 'หัววัดอุณหภูมิสำหรับเครื่องติดตามสัญญาณชีพ',
+  },
+  'infusion-battery': {
+    code: 'SP-MED-011',
+    name: 'แบตเตอรี่เครื่องให้สารละลายทางหลอดเลือด',
+  },
+  'infusion-door': {
+    code: 'SP-MED-012',
+    name: 'ชุดฝาปิดเครื่องให้สารละลายทางหลอดเลือด',
+  },
+  'syringe-drive': {
+    code: 'SP-MED-013',
+    name: 'ชุดขับเคลื่อนเครื่องควบคุมการให้ยา',
+  },
+  'suction-tube': {
+    code: 'SP-MED-014',
+    name: 'สายซิลิโคนสำหรับเครื่องดูดเสมหะ',
+  },
+  'suction-jar': {
+    code: 'SP-MED-015',
+    name: 'ขวดรองรับสารคัดหลั่งสำหรับเครื่องดูดเสมหะ',
+  },
+  'suction-seal': { code: 'SP-MED-016', name: 'ซีลยางฝาขวดเครื่องดูดเสมหะ' },
+  'ventilator-valve': { code: 'SP-MED-017', name: 'วาล์วควบคุมการหายใจออก' },
+  'nebulizer-filter': {
+    code: 'SP-MED-018',
+    name: 'แผ่นกรองอากาศเครื่องพ่นละอองยา',
+  },
+  'power-cord': { code: 'SP-MED-019', name: 'สายไฟสำหรับอุปกรณ์การแพทย์' },
+  'ceramic-fuse': { code: 'SP-MED-020', name: 'ฟิวส์เซรามิก 10A 250V' },
 };
 export const supplementalUsers: Record<
   string,
