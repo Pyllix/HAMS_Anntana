@@ -123,22 +123,14 @@ export class SparePartsService {
             ],
           }
         : {}),
+      ...(query.lowStock
+        ? {
+            qtyInStock: {
+              lte: this.prisma.sparepart.fields.minStock,
+            },
+          }
+        : {}),
     };
-
-    if (query.lowStock) {
-      const lowStockIds = await this.prisma.$queryRaw<
-        { sparepart_id: number }[]
-      >`
-        SELECT sparepart_id FROM spareparts
-        WHERE deleted_at IS NULL
-          AND qty_in_stock <= min_stock
-          ${query.groupId ? Prisma.sql`AND group_id = ${Number(query.groupId)}` : Prisma.empty}
-          ${search ? Prisma.sql`AND (sparepart_code ILIKE ${`%${search}%`} OR name ILIKE ${`%${search}%`})` : Prisma.empty}
-      `;
-
-      const ids = lowStockIds.map((item) => item.sparepart_id);
-      where.id = { in: ids };
-    }
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.sparepart.findMany({
@@ -167,24 +159,25 @@ export class SparePartsService {
     const lowStockParts = await this.prisma.sparepart.findMany({
       where: {
         deletedAt: null,
+        qtyInStock: {
+          lte: this.prisma.sparepart.fields.minStock,
+        },
       },
       include: {
         group: { select: { id: true, name: true } },
       },
-      orderBy: { qtyInStock: 'asc' },
+      orderBy: [{ qtyInStock: 'asc' }, { id: 'asc' }],
     });
 
-    const filtered = lowStockParts
-      .filter((p) => p.qtyInStock <= p.minStock)
-      .map((p) => ({
-        ...p,
-        isLowStock: true,
-        deficit: p.minStock - p.qtyInStock,
-      }));
+    const items = lowStockParts.map((part) => ({
+      ...part,
+      isLowStock: true,
+      deficit: part.minStock - part.qtyInStock,
+    }));
 
     return {
-      totalLowStockCount: filtered.length,
-      items: filtered,
+      totalLowStockCount: items.length,
+      items,
     };
   }
 

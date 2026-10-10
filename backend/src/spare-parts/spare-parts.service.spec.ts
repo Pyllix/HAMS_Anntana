@@ -21,6 +21,7 @@ describe('SparePartsService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
+      fields: { minStock: { name: 'minStock' } },
     },
     sparepartAdd: {
       create: jest.fn(),
@@ -202,20 +203,90 @@ describe('SparePartsService', () => {
       expect(capturedCode).toBe('SP02-0005');
     });
 
-    it('should return low stock summary correctly', async () => {
+    it('filters low-stock results in the database while keeping list filters and pagination', async () => {
+      const part = {
+        id: 1,
+        code: 'SP01-0001',
+        name: 'Fuse 10A',
+        unit: 'ชิ้น',
+        price: 50,
+        minStock: 5,
+        qtyInStock: 2,
+        groupId: 2,
+        group: { id: 2, name: 'Electrical' },
+      };
+      mockPrismaService.sparepart.findMany.mockResolvedValue([part]);
+      mockPrismaService.sparepart.count.mockResolvedValue(1);
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+      mockPrismaService.$transaction.mockImplementation(async (operations) =>
+        Promise.all(operations),
+      );
+
+      const result = await service.findAll({
+        page: 2,
+        limit: 10,
+        lowStock: true,
+        groupId: 2,
+        search: ' Fuse ',
+      });
+
+      const where = {
+        deletedAt: null,
+        groupId: 2,
+        OR: [
+          { code: { contains: 'Fuse', mode: 'insensitive' } },
+          { name: { contains: 'Fuse', mode: 'insensitive' } },
+        ],
+        qtyInStock: {
+          lte: mockPrismaService.sparepart.fields.minStock,
+        },
+      };
+      expect(mockPrismaService.sparepart.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where, skip: 10, take: 10 }),
+      );
+      expect(mockPrismaService.sparepart.count).toHaveBeenCalledWith({ where });
+      expect(mockPrismaService.$queryRaw).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        data: [expect.objectContaining({ id: 1, isLowStock: true })],
+        meta: {
+          page: 2,
+          limit: 10,
+          total: 1,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPrevPage: true,
+        },
+      });
+    });
+
+    it('queries the low-stock summary directly and preserves its threshold and order', async () => {
       mockPrismaService.sparepart.findMany.mockResolvedValue([
+        { id: 3, name: 'Part C', minStock: 0, qtyInStock: 0 },
+        { id: 4, name: 'Part D', minStock: 3, qtyInStock: 0 },
         { id: 1, name: 'Part A', minStock: 10, qtyInStock: 2 },
         { id: 2, name: 'Part B', minStock: 5, qtyInStock: 5 },
-        { id: 3, name: 'Part C', minStock: 5, qtyInStock: 10 },
       ]);
 
       const summary = await service.findLowStockSummary();
-      expect(summary.totalLowStockCount).toBe(2);
-      expect(summary.items).toHaveLength(2);
-      expect(summary.items[0].id).toBe(1);
-      expect(summary.items[0].deficit).toBe(8);
-      expect(summary.items[1].id).toBe(2);
-      expect(summary.items[1].deficit).toBe(0);
+      expect(mockPrismaService.sparepart.findMany).toHaveBeenCalledWith({
+        where: {
+          deletedAt: null,
+          qtyInStock: {
+            lte: mockPrismaService.sparepart.fields.minStock,
+          },
+        },
+        include: { group: { select: { id: true, name: true } } },
+        orderBy: [{ qtyInStock: 'asc' }, { id: 'asc' }],
+      });
+      expect(summary.totalLowStockCount).toBe(4);
+      expect(summary.items.map(({ id, deficit }) => ({ id, deficit }))).toEqual(
+        [
+          { id: 3, deficit: 0 },
+          { id: 4, deficit: 3 },
+          { id: 1, deficit: 8 },
+          { id: 2, deficit: 0 },
+        ],
+      );
     });
   });
 
