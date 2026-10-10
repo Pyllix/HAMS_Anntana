@@ -21,7 +21,7 @@
 
 ## 2. อัลกอริทึมหมุนเวียนการใช้งาน (Balanced Usage Rotation Algorithm)
 
-ระบบจะพิจารณาเฉพาะเครื่องที่เป็น **รุ่นเดียวกัน (`model` เดียวกัน)** และมีสถานะพร้อมใช้งาน (`availabilityStatus = 'AVAILABLE'` และ `assetStatus = 'NORMAL'`)
+ระบบจะพิจารณาเฉพาะเครื่องที่มี **ประเภทครุภัณฑ์หลักและรุ่นเดียวกัน (`type_id` AND `model`)** และมีสถานะพร้อมใช้งาน (`availabilityStatus = 'AVAILABLE'` และ `assetStatus = 'NORMAL'`) การเทียบรุ่นไม่สนใจตัวพิมพ์ใหญ่/เล็กและช่องว่างหัวท้าย
 
 ```mermaid
 flowchart TD
@@ -74,7 +74,8 @@ WITH candidate_assets AS (
   JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
   JOIN availability_status avs ON avs.availability_status_id = a.availability_status_id
   LEFT JOIN sections s ON s.section_id = a.section_id
-  WHERE a.model = $1
+  WHERE LOWER(BTRIM(a.model)) = LOWER(BTRIM($1))
+    AND a.type_id = $2
     AND ast.status_code = 'NORMAL'
     AND avs.status_code = 'AVAILABLE'
 ),
@@ -118,7 +119,8 @@ ORDER BY
 ## 4. สัญญา API (API Contracts)
 
 ### 4.1 `GET /borrowings/recommendations`
-- **Query:** `model?: string`, `equipmentTypeId?: number`
+- **Query:** `assetId?: string` หรือ `assetTypeId: number` ร่วมกับ `model: string`; `equipmentTypeId?: number` ใช้เป็นตัวกรองเพิ่มเติมเท่านั้น
+- ถ้าระบุ `assetId` ให้ยึดประเภทและรุ่นจากเครื่องอ้างอิง คำขอที่ข้อมูลไม่ครบส่ง `400` และเครื่องอ้างอิงที่ไม่พบส่ง `404` ไม่มีการขยายรายการไปหาเครื่องต่างรุ่น
 - **Response:**
   ```json
   {

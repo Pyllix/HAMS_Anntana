@@ -1810,23 +1810,32 @@ export class AssetBorrowService {
     query: QueryBorrowRecommendationsDto,
   ): Promise<BorrowRecommendationsResponseDto> {
     let model = query.model?.trim();
+    let assetTypeId = query.assetTypeId;
     let equipmentTypeId = query.equipmentTypeId;
 
-    // If assetId is provided, lookup reference asset to auto-derive model and equipmentTypeId
-    if (query.assetId && (!model || equipmentTypeId === undefined)) {
+    // Reference assets define the asset type and model used for rotation.
+    if (query.assetId) {
       const refAsset = await this.prisma.asset.findUnique({
         where: { id: query.assetId },
-        select: { model: true, equipment_type_id: true },
+        select: { model: true, type_id: true, equipment_type_id: true },
       });
-      if (refAsset) {
-        if (!model) model = refAsset.model;
-        if (
-          equipmentTypeId === undefined &&
-          refAsset.equipment_type_id !== null
-        ) {
-          equipmentTypeId = refAsset.equipment_type_id;
-        }
+      if (!refAsset) {
+        throw new NotFoundException(`Asset #${query.assetId} not found`);
       }
+      model = refAsset.model.trim();
+      assetTypeId = refAsset.type_id;
+      if (
+        equipmentTypeId === undefined &&
+        refAsset.equipment_type_id !== null
+      ) {
+        equipmentTypeId = refAsset.equipment_type_id;
+      }
+    }
+
+    if (!model || assetTypeId === undefined) {
+      throw new BadRequestException(
+        'Provide assetId or both assetTypeId and model for borrow recommendations',
+      );
     }
 
     const limit = Math.min(50, Math.max(1, query.limit ?? 10));
@@ -1835,16 +1844,14 @@ export class AssetBorrowService {
     const filterConditions: Prisma.Sql[] = [
       Prisma.sql`ast.status_code = 'NORMAL'`,
       Prisma.sql`avs.status_code = 'AVAILABLE'`,
+      Prisma.sql`a.type_id = ${assetTypeId}`,
+      Prisma.sql`LOWER(BTRIM(a.model)) = ${model.toLowerCase()}`,
     ];
 
-    if (model && equipmentTypeId !== undefined) {
+    if (query.equipmentTypeId !== undefined) {
       filterConditions.push(
-        Prisma.sql`(a.model = ${model} OR a.equipment_type = ${equipmentTypeId})`,
+        Prisma.sql`a.equipment_type = ${query.equipmentTypeId}`,
       );
-    } else if (model) {
-      filterConditions.push(Prisma.sql`a.model = ${model}`);
-    } else if (equipmentTypeId !== undefined) {
-      filterConditions.push(Prisma.sql`a.equipment_type = ${equipmentTypeId}`);
     }
 
     const whereClause = Prisma.sql`WHERE ${Prisma.join(filterConditions, ' AND ')}`;
@@ -2007,10 +2014,10 @@ export class AssetBorrowService {
       idleDays: selectedIdleDays,
     };
 
-    // Query available candidates of the same model or equipment type
+    // Rotate within the selected asset type and model.
     const recommendations = await this.getBorrowRecommendations({
       model: asset.model,
-      equipmentTypeId: asset.equipment_type_id ?? undefined,
+      assetTypeId: asset.type_id,
       limit: 10,
     });
 

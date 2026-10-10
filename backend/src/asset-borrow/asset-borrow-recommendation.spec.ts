@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
 import { AssetBorrowController } from './asset-borrow.controller';
 import { PrismaService } from '../prisma.service';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
   let service: AssetBorrowService;
@@ -34,6 +34,50 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
   });
 
   describe('AssetBorrowService.getBorrowRecommendations', () => {
+    it('rejects an unscoped request instead of recommending unrelated assets', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([]);
+
+      await expect(service.getBorrowRecommendations({})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects an unknown reference asset even when explicit filters are provided', async () => {
+      prisma.asset.findUnique.mockResolvedValueOnce(null);
+      prisma.$queryRaw.mockResolvedValueOnce([]);
+
+      await expect(
+        service.getBorrowRecommendations({
+          assetId: 'missing-asset',
+          assetTypeId: 1,
+          model: 'PB840',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it.each([
+      { model: 'PB840' },
+      { assetTypeId: 1 },
+      { equipmentTypeId: 1 },
+      { assetTypeId: 1, model: '   ' },
+    ])('rejects incomplete type and model filters: %j', async (query) => {
+      await expect(service.getBorrowRecommendations(query)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a reference asset with a blank model instead of widening the pool', async () => {
+      prisma.asset.findUnique.mockResolvedValueOnce({
+        model: '   ',
+        type_id: 1,
+        equipment_type_id: 5,
+      });
+
+      await expect(
+        service.getBorrowRecommendations({ assetId: 'blank-model' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('TC-01: should return candidates sorted by usageDays90d ASC and mark the first as recommended', async () => {
       const mockDbRows = [
         {
@@ -68,7 +112,10 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       prisma.$queryRaw.mockResolvedValueOnce(mockDbRows);
 
-      const result = await service.getBorrowRecommendations({ model: 'PB840' });
+      const result = await service.getBorrowRecommendations({
+        assetTypeId: 1,
+        model: 'PB840',
+      });
 
       expect(result.model).toBe('PB840');
       expect(result.totalAvailable).toBe(2);
@@ -116,7 +163,10 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       prisma.$queryRaw.mockResolvedValueOnce(mockDbRows);
 
-      const result = await service.getBorrowRecommendations({ model: 'PB840' });
+      const result = await service.getBorrowRecommendations({
+        assetTypeId: 1,
+        model: 'PB840',
+      });
 
       expect(result.recommendedAssetId).toBe('asset-rested');
       expect(result.candidates[0].idleDays).toBe(30.0);
@@ -159,7 +209,10 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       prisma.$queryRaw.mockResolvedValueOnce(mockDbRows);
 
-      const result = await service.getBorrowRecommendations({ model: 'PB840' });
+      const result = await service.getBorrowRecommendations({
+        assetTypeId: 1,
+        model: 'PB840',
+      });
 
       expect(result.recommendedAssetId).toBe('asset-fewer-borrows');
       expect(result.candidates[0].borrowCount90d).toBe(1);
@@ -199,7 +252,10 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       prisma.$queryRaw.mockResolvedValueOnce(mockDbRows);
 
-      const result = await service.getBorrowRecommendations({ model: 'PB840' });
+      const result = await service.getBorrowRecommendations({
+        assetTypeId: 1,
+        model: 'PB840',
+      });
 
       expect(result.recommendedAssetId).toBe('asset-a');
       expect(result.candidates[0].noid).toBe('MD-01');
@@ -225,16 +281,20 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       prisma.$queryRaw.mockResolvedValueOnce(mockDbRows);
 
-      const result = await service.getBorrowRecommendations({ model: 'PB840' });
+      const result = await service.getBorrowRecommendations({
+        assetTypeId: 1,
+        model: 'PB840',
+      });
 
       expect(result.candidates[0].recommendationReason).toBe(
         '🌟 แนะนำเครื่องนี้: ครุภัณฑ์ใหม่พร้อมใช้งาน ยังไม่มีประวัติการยืมในรอบ 90 วัน',
       );
     });
 
-    it('TC-06: should auto-derive model and equipmentTypeId when assetId is provided', async () => {
+    it('TC-06: should derive the model and asset type from the reference asset', async () => {
       prisma.asset.findUnique.mockResolvedValueOnce({
         model: 'DerivedModel',
+        type_id: 7,
         equipment_type_id: 42,
       });
 
@@ -246,7 +306,7 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
 
       expect(prisma.asset.findUnique).toHaveBeenCalledWith({
         where: { id: 'ref-uuid' },
-        select: { model: true, equipment_type_id: true },
+        select: { model: true, type_id: true, equipment_type_id: true },
       });
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     });
@@ -260,6 +320,7 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
         noid: 'MD-SEL-01',
         name: 'Ventilator PB840',
         model: 'PB840',
+        type_id: 1,
         equipment_type_id: 1,
         receivedDate: new Date('2025-01-01'),
       });
@@ -332,6 +393,7 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
         noid: 'MD-SEL-01',
         name: 'Ventilator PB840',
         model: 'PB840',
+        type_id: 1,
         equipment_type_id: 1,
         receivedDate: new Date('2025-01-01'),
       });
@@ -379,6 +441,7 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
         noid: 'MD-OPT-01',
         name: 'Ventilator PB840',
         model: 'PB840',
+        type_id: 1,
         equipment_type_id: 1,
         receivedDate: new Date('2025-01-01'),
       });
@@ -437,6 +500,7 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
         noid: 'MD-SOLE-01',
         name: 'Ventilator PB840',
         model: 'PB840',
+        type_id: 1,
         equipment_type_id: 1,
         receivedDate: new Date('2025-01-01'),
       });

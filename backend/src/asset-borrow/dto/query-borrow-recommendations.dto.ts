@@ -12,7 +12,19 @@ export class QueryBorrowRecommendationsDto {
   model?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter candidates by equipment type ID',
+    description:
+      'Asset type ID (Asset.type_id). Required with model when assetId is not provided.',
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  readonly assetTypeId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional additional equipment category filter. Cannot replace assetTypeId and model.',
     example: 1,
   })
   @IsOptional()
@@ -22,7 +34,7 @@ export class QueryBorrowRecommendationsDto {
 
   @ApiPropertyOptional({
     description:
-      'Optional reference asset UUID. If provided, model and equipmentTypeId will be auto-derived from this asset.',
+      'Reference asset UUID. Its assetTypeId and model define the recommendation pool.',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()
