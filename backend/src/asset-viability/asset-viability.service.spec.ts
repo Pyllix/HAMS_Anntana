@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { AssetViabilityService } from './asset-viability.service';
 import { PrismaService } from 'src/prisma.service';
 import {
@@ -8,14 +9,33 @@ import {
 } from './dto/query-asset-viability.dto';
 
 describe('AssetViabilityService', () => {
-  let service: AssetViabilityService;
-  let prisma: PrismaService;
-
-  const mockPrismaService = {
-    $queryRaw: jest.fn(),
+  interface MockPrismaService {
+    $queryRaw: jest.Mock<Promise<unknown>, [Prisma.Sql]>;
+    $transaction: jest.Mock<
+      Promise<unknown>,
+      [(transaction: MockPrismaService) => Promise<unknown>]
+    >;
     asset: {
+      findMany: jest.Mock<Promise<unknown>, [unknown]>;
+      findUnique: jest.Mock;
+      update: jest.Mock<Promise<unknown>, [unknown]>;
+    };
+    assetStatus: { findUnique: jest.Mock };
+    availabilityStatus: { findUnique: jest.Mock };
+  }
+
+  let service: AssetViabilityService;
+
+  const mockPrismaService: MockPrismaService = {
+    $queryRaw: jest.fn<Promise<unknown>, [Prisma.Sql]>(),
+    $transaction: jest.fn<
+      Promise<unknown>,
+      [(transaction: MockPrismaService) => Promise<unknown>]
+    >(),
+    asset: {
+      findMany: jest.fn<Promise<unknown>, [unknown]>(),
       findUnique: jest.fn(),
-      update: jest.fn(),
+      update: jest.fn<Promise<unknown>, [unknown]>(),
     },
     assetStatus: {
       findUnique: jest.fn(),
@@ -23,6 +43,12 @@ describe('AssetViabilityService', () => {
     availabilityStatus: {
       findUnique: jest.fn(),
     },
+  };
+
+  const getCapturedSqlQuery = (index: number): Prisma.Sql => {
+    const query = mockPrismaService.$queryRaw.mock.calls[index]?.[0];
+    if (query) return query;
+    throw new Error(`Expected Prisma SQL query at call ${index}`);
   };
 
   beforeEach(async () => {
@@ -34,8 +60,11 @@ describe('AssetViabilityService', () => {
     }).compile();
 
     service = module.get<AssetViabilityService>(AssetViabilityService);
-    prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
+    mockPrismaService.$transaction.mockImplementation(
+      async (callback: (transaction: typeof mockPrismaService) => unknown) =>
+        await callback(mockPrismaService),
+    );
   });
 
   it('should be defined', () => {
@@ -244,55 +273,430 @@ describe('AssetViabilityService', () => {
   // ─── 2. Service Method findAll Tests ───────────────────────────────────────
 
   describe('findAll', () => {
+    const makeCandidate = (
+      id: string,
+      price: string,
+      receivedDate: string,
+      repairCost: string,
+      repairCount: number,
+    ) => ({
+      asset_id: id,
+      price,
+      receive_date: receivedDate,
+      warranty_date: null,
+      created_at: receivedDate,
+      useful_life_years: 5,
+      total_repair_count: repairCount,
+      recent_repair_count: 0,
+      cumulative_repair_cost: repairCost,
+    });
+
+    const makeAssetDetail = (id: string) => ({
+      id,
+      noid: `MD-${id}`,
+      name: `Asset ${id}`,
+      model: 'Model 1',
+      serialNo: `SN-${id}`,
+      type: { id: 1, name: 'เครื่องมือแพทย์' },
+      section: { id: 'sec-1', name: 'ICU' },
+      status: { id: 1, code: 'NORMAL', name: 'ใช้งานปกติ' },
+    });
+
+    it('should preserve summary values and fetch display details for the requested page only', async () => {
+      const mockRows = [
+        makeCandidate(
+          'asset-viable',
+          '100000',
+          '2025-01-01T00:00:00.000Z',
+          '10000',
+          1,
+        ),
+        makeCandidate(
+          'asset-unviable',
+          '50000',
+          '2020-01-01T00:00:00.000Z',
+          '40000',
+          4,
+        ),
+        makeCandidate(
+          'asset-warning',
+          '100000',
+          '2025-01-01T00:00:00.000Z',
+          '55000',
+          1,
+        ),
+      ];
+
+      mockPrismaService.$queryRaw.mockResolvedValueOnce(mockRows);
+      mockPrismaService.asset.findMany.mockResolvedValueOnce([
+        makeAssetDetail('asset-unviable'),
+      ]);
+
+      const result = await service.findAll({
+        page: 1,
+        limit: 1,
+        viabilityStatus: ViabilityStatusFilter.ALL,
+        sortBy: ViabilitySortBy.COST_RATIO,
+      });
+
+      expect(mockPrismaService.$transaction.mock.calls.length).toBe(1);
+      expect(mockPrismaService.$queryRaw.mock.calls.length).toBe(1);
+      expect(mockPrismaService.asset.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['asset-unviable'] } },
+        select: {
+          id: true,
+          noid: true,
+          name: true,
+          model: true,
+          serialNo: true,
+          type: { select: { id: true, name: true } },
+          section: { select: { id: true, name: true } },
+          status: { select: { id: true, code: true, name: true } },
+        },
+      });
+      expect(result.summary).toEqual({
+        totalEvaluated: 3,
+        viableCount: 1,
+        warningCount: 1,
+        unviableCount: 1,
+        totalCumulativeRepairCost: 105000,
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        id: 'asset-unviable',
+        name: 'Asset asset-unviable',
+        viabilityStatus: 'UNVIABLE',
+        metrics: { cumulativeRepairCost: 40000 },
+      });
+      expect(result.items[0].viabilityReason).toContain(
+        'คิดเป็น 80.0% ของราคาจัดซื้อ',
+      );
+      expect(result.pagination).toEqual({
+        total: 3,
+        page: 1,
+        limit: 1,
+        totalPages: 3,
+        hasNext: true,
+        hasPrev: false,
+      });
+    });
+
+    it('should keep summary scoped before viability-status filtering', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        makeCandidate(
+          'asset-viable',
+          '100000',
+          '2025-01-01T00:00:00.000Z',
+          '10000',
+          1,
+        ),
+        makeCandidate(
+          'asset-unviable',
+          '50000',
+          '2020-01-01T00:00:00.000Z',
+          '40000',
+          4,
+        ),
+      ]);
+      mockPrismaService.asset.findMany.mockResolvedValueOnce([
+        makeAssetDetail('asset-unviable'),
+      ]);
+
+      const result = await service.findAll({
+        viabilityStatus: ViabilityStatusFilter.UNVIABLE,
+      });
+
+      expect(result.summary).toEqual({
+        totalEvaluated: 2,
+        viableCount: 1,
+        warningCount: 0,
+        unviableCount: 1,
+        totalCumulativeRepairCost: 50000,
+      });
+      expect(result.items.map((item) => item.id)).toEqual(['asset-unviable']);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('should preserve list evaluations for warranty, zero price, date, useful-life, and cost boundaries', async () => {
+      const now = new Date();
+      const fiveYearsAgo = new Date(
+        now.getTime() - 5 * 365.25 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const futureDate = new Date(
+        now.getTime() + 2 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const rows = [
+        {
+          ...makeCandidate(
+            'asset-warranty',
+            '100000',
+            '2016-01-01T00:00:00.000Z',
+            '70000',
+            4,
+          ),
+          warranty_date: '2099-01-01',
+        },
+        {
+          ...makeCandidate(
+            'asset-zero-price-old-date',
+            '0',
+            fiveYearsAgo,
+            '0',
+            3,
+          ),
+        },
+        {
+          ...makeCandidate(
+            'asset-zero-price-no-receive-date',
+            '0',
+            fiveYearsAgo,
+            '0',
+            3,
+          ),
+          receive_date: null,
+          created_at: fiveYearsAgo,
+        },
+        {
+          ...makeCandidate(
+            'asset-cost-50',
+            '100000',
+            now.toISOString(),
+            '50000',
+            0,
+          ),
+          useful_life_years: 10,
+        },
+        {
+          ...makeCandidate(
+            'asset-cost-70',
+            '100000',
+            now.toISOString(),
+            '70000',
+            0,
+          ),
+          useful_life_years: 10,
+        },
+        makeCandidate('asset-future-receipt', '100000', futureDate, '0', 0),
+        {
+          ...makeCandidate(
+            'asset-useful-life-cutoff',
+            '100000',
+            fiveYearsAgo,
+            '0',
+            0,
+          ),
+          useful_life_years: 5,
+        },
+      ];
+
+      mockPrismaService.$queryRaw.mockResolvedValueOnce(rows);
+      mockPrismaService.asset.findMany.mockResolvedValueOnce(
+        rows.map(({ asset_id }) => makeAssetDetail(asset_id)),
+      );
+
+      const result = await service.findAll({
+        viabilityStatus: ViabilityStatusFilter.ALL,
+      });
+      const itemsById = new Map(result.items.map((item) => [item.id, item]));
+
+      expect(result.summary).toEqual({
+        totalEvaluated: 7,
+        viableCount: 3,
+        warningCount: 2,
+        unviableCount: 2,
+        totalCumulativeRepairCost: 190000,
+      });
+      expect(itemsById.get('asset-warranty')).toMatchObject({
+        viabilityStatus: 'VIABLE',
+        isWarrantyActive: true,
+        metrics: { costRatioPercentage: 70 },
+      });
+      expect(itemsById.get('asset-zero-price-old-date')).toMatchObject({
+        viabilityStatus: 'UNVIABLE',
+        metrics: {
+          costRatioPercentage: null,
+          ageYears: 5,
+          isUsefulLifeExceeded: true,
+        },
+      });
+      expect(itemsById.get('asset-zero-price-no-receive-date')).toMatchObject({
+        viabilityStatus: 'VIABLE',
+        receivedDate: fiveYearsAgo,
+        metrics: { costRatioPercentage: null, ageYears: 0 },
+      });
+      expect(itemsById.get('asset-cost-50')).toMatchObject({
+        viabilityStatus: 'WARNING',
+        metrics: { costRatioPercentage: 50 },
+      });
+      expect(itemsById.get('asset-cost-70')).toMatchObject({
+        viabilityStatus: 'UNVIABLE',
+        metrics: { costRatioPercentage: 70 },
+      });
+      expect(itemsById.get('asset-future-receipt')).toMatchObject({
+        viabilityStatus: 'VIABLE',
+        metrics: { ageYears: 0, isUsefulLifeExceeded: false },
+      });
+      expect(itemsById.get('asset-useful-life-cutoff')).toMatchObject({
+        viabilityStatus: 'WARNING',
+        metrics: { ageYears: 5, isUsefulLifeExceeded: true },
+      });
+    });
+
+    it('should avoid fetching asset display details when the filtered page is empty', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        makeCandidate(
+          'asset-viable',
+          '100000',
+          '2025-01-01T00:00:00.000Z',
+          '10000',
+          1,
+        ),
+      ]);
+
+      const result = await service.findAll({
+        viabilityStatus: ViabilityStatusFilter.UNVIABLE,
+      });
+
+      expect(result.items).toEqual([]);
+      expect(mockPrismaService.$queryRaw.mock.calls.length).toBe(1);
+      expect(mockPrismaService.asset.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should use repair summary candidate filtering before repair aggregation', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+
+      await service.findAll({ sectionId: 'sec-icu' });
+
+      const query = getCapturedSqlQuery(0);
+      const sql = query.sql;
+      expect(sql).toContain('candidate_assets AS MATERIALIZED');
+      expect(sql.indexOf('candidate_assets AS MATERIALIZED')).toBeLessThan(
+        sql.indexOf('repair_cost_per_job'),
+      );
+      expect(sql).toContain('JOIN candidate_assets');
+    });
+
+    it('should preserve the unfiltered all-assets aggregation plan', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+
+      await service.findAll({});
+
+      const sql = getCapturedSqlQuery(0).sql;
+      expect(sql).not.toContain(
+        'JOIN candidate_assets ca ON ca.asset_id = rj.asset_id',
+      );
+      expect(sql).toContain('FROM repair_job rj');
+    });
+
+    it('should apply asset filters before repair aggregation and respect includeDisposed', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+
+      await service.findAll({
+        sectionId: 'section-icu',
+        assetTypeId: 4,
+        search: 'monitor',
+      });
+      await service.findAll({ includeDisposed: true });
+
+      const filteredQuery = getCapturedSqlQuery(0);
+      expect(filteredQuery.sql).toContain('a.section_id =');
+      expect(filteredQuery.sql).toContain('a.type_id =');
+      expect(filteredQuery.sql).toContain('a.name ILIKE');
+      expect(filteredQuery.sql).toContain(
+        "ast.status_code NOT IN ('DISPOSAL', 'LOST')",
+      );
+      expect(filteredQuery.values).toEqual(
+        expect.arrayContaining(['section-icu', 4, '%monitor%']),
+      );
+
+      const includeDisposedQuery = getCapturedSqlQuery(1);
+      expect(includeDisposedQuery.sql).not.toContain(
+        "ast.status_code NOT IN ('DISPOSAL', 'LOST')",
+      );
+    });
+
+    it('should preserve every supported sort order before slicing a page', async () => {
+      const candidates = [
+        makeCandidate(
+          'asset-a',
+          '100000',
+          '2020-01-01T00:00:00.000Z',
+          '80000',
+          5,
+        ),
+        makeCandidate(
+          'asset-b',
+          '100000',
+          '2022-01-01T00:00:00.000Z',
+          '50000',
+          1,
+        ),
+        makeCandidate(
+          'asset-c',
+          '200000',
+          '2024-01-01T00:00:00.000Z',
+          '30000',
+          3,
+        ),
+      ].map((candidate) => ({ ...candidate, useful_life_years: 20 }));
+      for (let index = 0; index < 5; index++) {
+        mockPrismaService.$queryRaw.mockResolvedValueOnce(candidates);
+        mockPrismaService.asset.findMany.mockResolvedValueOnce([
+          makeAssetDetail('asset-c'),
+          makeAssetDetail('asset-b'),
+          makeAssetDetail('asset-a'),
+        ]);
+      }
+
+      const cases = [
+        [ViabilitySortBy.COST_RATIO, ['asset-a', 'asset-b', 'asset-c']],
+        [ViabilitySortBy.CUMULATIVE_COST, ['asset-a', 'asset-b', 'asset-c']],
+        [ViabilitySortBy.REPAIR_COUNT, ['asset-a', 'asset-c', 'asset-b']],
+        [ViabilitySortBy.AGE, ['asset-a', 'asset-b', 'asset-c']],
+        [ViabilitySortBy.CREATED_AT, ['asset-c', 'asset-b', 'asset-a']],
+      ] as const;
+
+      for (const [sortBy, expectedIds] of cases) {
+        const result = await service.findAll({
+          sortBy,
+          limit: 3,
+        });
+
+        expect(result.items.map((item) => item.id)).toEqual(expectedIds);
+      }
+    });
+
     it('should query assets via CTE and aggregate KPI summary correctly', async () => {
       const mockRows = [
         {
           asset_id: 'asset-1',
-          noid: 'MD-001',
-          name: 'Ventilator 1',
-          model: 'PB840',
-          serial_no: 'SN1',
           price: '100000',
           receive_date: '2025-01-01T00:00:00.000Z',
           warranty_date: null,
           created_at: '2025-01-01T00:00:00.000Z',
-          asset_type_id: 1,
-          asset_type_name: 'เครื่องมือแพทย์',
           useful_life_years: 5,
-          section_id: 'sec-1',
-          section_name: 'ICU',
-          asset_status_id: 1,
-          asset_status_code: 'NORMAL',
-          asset_status_name: 'ใช้งานปกติ',
           total_repair_count: 1,
           recent_repair_count: 1,
           cumulative_repair_cost: '10000',
         },
         {
           asset_id: 'asset-2',
-          noid: 'MD-002',
-          name: 'Ventilator 2',
-          model: 'PB840',
-          serial_no: 'SN2',
           price: '50000',
           receive_date: '2020-01-01T00:00:00.000Z',
           warranty_date: null,
           created_at: '2020-01-01T00:00:00.000Z',
-          asset_type_id: 1,
-          asset_type_name: 'เครื่องมือแพทย์',
           useful_life_years: 5,
-          section_id: 'sec-1',
-          section_name: 'ICU',
-          asset_status_id: 1,
-          asset_status_code: 'NORMAL',
-          asset_status_name: 'ใช้งานปกติ',
           total_repair_count: 4,
           recent_repair_count: 2,
           cumulative_repair_cost: '40000', // 80% -> UNVIABLE
         },
       ];
 
-      mockPrismaService.$queryRaw.mockResolvedValue(mockRows);
+      mockPrismaService.$queryRaw.mockResolvedValueOnce(mockRows);
+      mockPrismaService.asset.findMany.mockResolvedValueOnce([
+        makeAssetDetail('asset-1'),
+        makeAssetDetail('asset-2'),
+      ]);
 
       const result = await service.findAll({
         page: 1,
@@ -301,7 +705,7 @@ describe('AssetViabilityService', () => {
         sortBy: ViabilitySortBy.COST_RATIO,
       });
 
-      expect(prisma.$queryRaw).toHaveBeenCalled();
+      expect(mockPrismaService.$queryRaw.mock.calls.length).toBeGreaterThan(0);
       expect(result.summary.totalEvaluated).toBe(2);
       expect(result.summary.viableCount).toBe(1);
       expect(result.summary.unviableCount).toBe(1);
@@ -334,7 +738,10 @@ describe('AssetViabilityService', () => {
         },
       ];
 
-      mockPrismaService.$queryRaw.mockResolvedValue(mockRows);
+      mockPrismaService.$queryRaw.mockResolvedValueOnce(mockRows);
+      mockPrismaService.asset.findMany.mockResolvedValueOnce([
+        makeAssetDetail('asset-2'),
+      ]);
 
       const result = await service.findAll({
         viabilityStatus: ViabilityStatusFilter.UNVIABLE,
@@ -486,16 +893,16 @@ describe('AssetViabilityService', () => {
       expect(result.success).toBe(true);
       expect(result.asset.status.code).toBe('WAIT_DISPOSAL');
       expect(result.asset.availabilityStatus.code).toBe('UNAVAILABLE');
-      expect(mockPrismaService.asset.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'asset-1' },
-          data: expect.objectContaining({
-            asset_status_id: 4,
-            availability_status_id: 13,
-            updatedBy: 'user-1',
-          }),
-        }),
-      );
+      const updateCall: unknown =
+        mockPrismaService.asset.update.mock.calls[0]?.[0];
+      expect(updateCall).toMatchObject({
+        where: { id: 'asset-1' },
+        data: {
+          asset_status_id: 4,
+          availability_status_id: 13,
+          updatedBy: 'user-1',
+        },
+      });
     });
 
     it('should reject when asset is currently BORROWED', async () => {

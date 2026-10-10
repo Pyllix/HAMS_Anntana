@@ -8,7 +8,6 @@ import { PrismaService } from 'src/prisma.service';
 import {
   QueryAssetViabilityDto,
   ViabilitySortBy,
-  ViabilityStatusFilter,
   SortOrder,
 } from './dto/query-asset-viability.dto';
 import { RequestDisposalDto } from './dto/request-disposal.dto';
@@ -40,6 +39,29 @@ export interface ViabilityEvaluationResult {
   isUsefulLifeExceeded: boolean;
   isWarrantyActive: boolean;
   costRatioPercentage: number | null;
+}
+
+interface ViabilityCandidateRow {
+  asset_id: string;
+  price: Prisma.Decimal | number | string | null;
+  receive_date: Date | string | null;
+  warranty_date: string | null;
+  created_at: Date | string;
+  useful_life_years: number | null;
+  total_repair_count: number;
+  recent_repair_count: number;
+  cumulative_repair_cost: Prisma.Decimal | number | string;
+}
+
+interface EvaluatedViabilityCandidate {
+  row: ViabilityCandidateRow;
+  price: number;
+  cumulativeRepairCost: number;
+  totalRepairCount: number;
+  recentRepairCount: number;
+  usefulLifeYears: number;
+  receivedDate: Date | null;
+  evaluation: ViabilityEvaluationResult;
 }
 
 @Injectable()
@@ -224,7 +246,8 @@ export class AssetViabilityService {
     const assetTypeId = query.assetTypeId;
     const search = query.search?.trim();
 
-    // 1. Build dynamic filters for PostgreSQL CTE
+    // 1. Build filters for the candidate set. Repair aggregation must not scan
+    // unrelated assets when the list is restricted to a section/type/search.
     const whereConditions: Prisma.Sql[] = [];
 
     if (!query.includeDisposed) {
@@ -252,203 +275,273 @@ export class AssetViabilityService {
       whereConditions.length > 0
         ? Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`
         : Prisma.empty;
+    const repairCandidateJoin =
+      sectionId || (assetTypeId !== undefined && !isNaN(assetTypeId)) || search
+        ? Prisma.sql`JOIN candidate_assets ca ON ca.asset_id = rj.asset_id`
+        : Prisma.empty;
 
-    // 2. Query aggregate metrics per asset using PostgreSQL CTE (Zero N+1)
-    const rawRows = await this.prisma.$queryRaw<any[]>(Prisma.sql`
-      WITH repair_cost_per_job AS (
-        SELECT 
-          rj.job_id,
-          rj.asset_id,
-          rj.repair_cost,
-          rj.created_at,
-          COALESCE(SUM(
-            CASE 
-              WHEN st.txn_type = 'WITHDRAW' THEN st.qty * st.unit_price
-              WHEN st.txn_type = 'RETURN' THEN - (st.qty * st.unit_price)
-              ELSE 0 
-            END
-          ), 0) AS parts_cost
-        FROM repair_job rj
-        LEFT JOIN sparepart_txns st ON st.job_id = rj.job_id
-        GROUP BY rj.job_id, rj.asset_id, rj.repair_cost, rj.created_at
-      ),
-      asset_repair_summary AS (
-        SELECT 
-          asset_id,
-          COUNT(job_id) AS total_repair_count,
-          COUNT(CASE WHEN created_at >= NOW() - INTERVAL '1 year' THEN 1 END) AS recent_repair_count,
-          COALESCE(SUM(COALESCE(repair_cost, 0) + parts_cost), 0) AS cumulative_repair_cost
-        FROM repair_cost_per_job
-        GROUP BY asset_id
-      )
-      SELECT 
-        a.asset_id,
-        a.noid,
-        a.name,
-        a.model,
-        a.serial_no,
-        a.price,
-        a.receive_date,
-        a.warranty_date,
-        a.created_at,
-        t.asset_type_id AS asset_type_id,
-        t.name AS asset_type_name,
-        COALESCE(t.useful_life, 8) AS useful_life_years,
-        s.section_id AS section_id,
-        s.name AS section_name,
-        ast.asset_status_id AS asset_status_id,
-        ast.status_code AS asset_status_code,
-        ast.status_name AS asset_status_name,
-        COALESCE(ars.total_repair_count, 0)::int AS total_repair_count,
-        COALESCE(ars.recent_repair_count, 0)::int AS recent_repair_count,
-        COALESCE(ars.cumulative_repair_cost, 0)::numeric AS cumulative_repair_cost
-      FROM asset a
-      LEFT JOIN asset_repair_summary ars ON ars.asset_id = a.asset_id
-      LEFT JOIN asset_type t ON t.asset_type_id = a.type_id
-      LEFT JOIN sections s ON s.section_id = a.section_id
-      LEFT JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
-      ${whereClause};
-    `);
+    // Keep candidate metrics and page details on one database snapshot. The
+    // summary still needs a compact row per candidate, but display-only asset
+    // fields are fetched only for the page returned to the client.
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const rows = await transaction.$queryRaw<ViabilityCandidateRow[]>(
+          Prisma.sql`
+            WITH candidate_assets AS MATERIALIZED (
+              SELECT
+                a.asset_id,
+                a.price,
+                a.receive_date,
+                a.warranty_date,
+                a.created_at,
+                COALESCE(t.useful_life, 8) AS useful_life_years
+              FROM asset a
+              LEFT JOIN asset_type t ON t.asset_type_id = a.type_id
+              LEFT JOIN asset_status ast ON ast.asset_status_id = a.asset_status_id
+              ${whereClause}
+            ),
+            repair_cost_per_job AS (
+              SELECT
+                rj.job_id,
+                rj.asset_id,
+                rj.repair_cost,
+                rj.created_at,
+                COALESCE(SUM(
+                  CASE
+                    WHEN st.txn_type = 'WITHDRAW' THEN st.qty * st.unit_price
+                    WHEN st.txn_type = 'RETURN' THEN -(st.qty * st.unit_price)
+                    ELSE 0
+                  END
+                ), 0) AS parts_cost
+              FROM repair_job rj
+              ${repairCandidateJoin}
+              LEFT JOIN sparepart_txns st ON st.job_id = rj.job_id
+              GROUP BY rj.job_id, rj.asset_id, rj.repair_cost, rj.created_at
+            ),
+            asset_repair_summary AS (
+              SELECT
+                asset_id,
+                COUNT(job_id)::int AS total_repair_count,
+                COUNT(*) FILTER (
+                  WHERE created_at >= NOW() - INTERVAL '1 year'
+                )::int AS recent_repair_count,
+                COALESCE(
+                  SUM(COALESCE(repair_cost, 0) + parts_cost),
+                  0
+                )::numeric AS cumulative_repair_cost
+              FROM repair_cost_per_job
+              GROUP BY asset_id
+            )
+            SELECT
+              ca.asset_id,
+              ca.price,
+              ca.receive_date,
+              ca.warranty_date,
+              ca.created_at,
+              ca.useful_life_years,
+              COALESCE(ars.total_repair_count, 0)::int AS total_repair_count,
+              COALESCE(ars.recent_repair_count, 0)::int AS recent_repair_count,
+              COALESCE(ars.cumulative_repair_cost, 0)::numeric AS cumulative_repair_cost
+            FROM candidate_assets ca
+            LEFT JOIN asset_repair_summary ars ON ars.asset_id = ca.asset_id;
+          `,
+        );
 
-    // 3. Evaluate each asset through the Decision Tree and collect metrics
-    const evaluatedItems: AssetViabilityItemDto[] = rawRows.map((row) => {
-      const price = Number(row.price) || 0;
-      const cumulativeRepairCost = Number(row.cumulative_repair_cost) || 0;
-      const totalRepairCount = Number(row.total_repair_count) || 0;
-      const recentRepairCount = Number(row.recent_repair_count) || 0;
-      const usefulLifeYears = Number(row.useful_life_years) || 8;
-      const receivedDate = row.receive_date ? new Date(row.receive_date) : null;
-      const warrantyDate = row.warranty_date || null;
+        const evaluationNow = new Date();
+        const evaluatedCandidates: EvaluatedViabilityCandidate[] = rows.map(
+          (row) => {
+            const price = Number(row.price) || 0;
+            const cumulativeRepairCost =
+              Number(row.cumulative_repair_cost) || 0;
+            const totalRepairCount = Number(row.total_repair_count) || 0;
+            const recentRepairCount = Number(row.recent_repair_count) || 0;
+            const usefulLifeYears = Number(row.useful_life_years) || 8;
+            const receivedDate = row.receive_date
+              ? new Date(row.receive_date)
+              : null;
+            const evaluation = this.evaluateViability({
+              price,
+              receivedDate,
+              warrantyDate: row.warranty_date || null,
+              usefulLifeYears,
+              cumulativeRepairCost,
+              totalRepairCount,
+              recentRepairCount,
+              now: evaluationNow,
+            });
 
-      const evalResult = this.evaluateViability({
-        price,
-        receivedDate,
-        warrantyDate,
-        usefulLifeYears,
-        cumulativeRepairCost,
-        totalRepairCount,
-        recentRepairCount,
-      });
+            return {
+              row,
+              price,
+              cumulativeRepairCost,
+              totalRepairCount,
+              recentRepairCount,
+              usefulLifeYears,
+              receivedDate,
+              evaluation,
+            };
+          },
+        );
 
-      return {
-        id: row.asset_id,
-        noid: row.noid,
-        name: row.name,
-        model: row.model,
-        serialNo: row.serial_no,
-        price,
-        receivedDate: receivedDate
-          ? receivedDate.toISOString()
-          : new Date(row.created_at).toISOString(),
-        warrantyDate,
-        isWarrantyActive: evalResult.isWarrantyActive,
-        assetType: {
-          id: row.asset_type_id,
-          name: row.asset_type_name || 'ไม่ระบุประเภท',
-          usefulLife: usefulLifeYears,
-        },
-        section: {
-          id: row.section_id,
-          name: row.section_name || 'ไม่ระบุแผนก',
-        },
-        assetStatus: {
-          id: row.asset_status_id,
-          code: row.asset_status_code,
-          name: row.asset_status_name,
-        },
-        metrics: {
-          ageYears: evalResult.ageYears,
-          usefulLifeYears: evalResult.usefulLifeYears,
-          isUsefulLifeExceeded: evalResult.isUsefulLifeExceeded,
-          cumulativeRepairCost,
-          costRatioPercentage: evalResult.costRatioPercentage,
-          totalRepairCount,
-          recentRepairCount,
-        },
-        viabilityStatus: evalResult.viabilityStatus,
-        viabilityReason: evalResult.viabilityReason,
-      };
-    });
+        // Summary uses the original filtered asset scope and is independent of
+        // viability-status filtering, sort order, and page selection.
+        const summary: AssetViabilitySummaryDto = {
+          totalEvaluated: evaluatedCandidates.length,
+          viableCount: evaluatedCandidates.filter(
+            ({ evaluation }) => evaluation.viabilityStatus === 'VIABLE',
+          ).length,
+          warningCount: evaluatedCandidates.filter(
+            ({ evaluation }) => evaluation.viabilityStatus === 'WARNING',
+          ).length,
+          unviableCount: evaluatedCandidates.filter(
+            ({ evaluation }) => evaluation.viabilityStatus === 'UNVIABLE',
+          ).length,
+          totalCumulativeRepairCost: evaluatedCandidates.reduce(
+            (acc, candidate) => acc + candidate.cumulativeRepairCost,
+            0,
+          ),
+        };
 
-    // 4. Calculate Summary KPI Counters (Across all evaluated assets matching initial query)
-    const summary: AssetViabilitySummaryDto = {
-      totalEvaluated: evaluatedItems.length,
-      viableCount: evaluatedItems.filter((i) => i.viabilityStatus === 'VIABLE')
-        .length,
-      warningCount: evaluatedItems.filter(
-        (i) => i.viabilityStatus === 'WARNING',
-      ).length,
-      unviableCount: evaluatedItems.filter(
-        (i) => i.viabilityStatus === 'UNVIABLE',
-      ).length,
-      totalCumulativeRepairCost: evaluatedItems.reduce(
-        (acc, i) => acc + i.metrics.cumulativeRepairCost,
-        0,
-      ),
-    };
+        // Status evaluation remains in the existing pure rule function; only
+        // candidates are materialized in application memory for exact results.
+        let filteredCandidates = evaluatedCandidates;
+        const requestedStatus = query.viabilityStatus?.toString();
+        if (requestedStatus && requestedStatus !== 'ALL') {
+          filteredCandidates = evaluatedCandidates.filter(
+            ({ evaluation }) => evaluation.viabilityStatus === requestedStatus,
+          );
+        }
 
-    // 5. Filter by viabilityStatus if requested
-    let filteredItems = evaluatedItems;
-    if (
-      query.viabilityStatus &&
-      query.viabilityStatus !== ViabilityStatusFilter.ALL
-    ) {
-      filteredItems = evaluatedItems.filter(
-        (i) => i.viabilityStatus === query.viabilityStatus,
-      );
-    }
+        // Sort the compact evaluated set, then hydrate display fields only for
+        // the selected page. The ID tie-breaker makes page boundaries stable.
+        const sortBy = query.sortBy ?? ViabilitySortBy.COST_RATIO;
+        const sortOrder = query.sortOrder ?? SortOrder.DESC;
+        const multiplier = sortOrder === SortOrder.DESC ? -1 : 1;
+        filteredCandidates.sort((a, b) => {
+          let comparison = 0;
+          switch (sortBy) {
+            case ViabilitySortBy.COST_RATIO:
+              comparison =
+                (a.evaluation.costRatioPercentage ?? -1) -
+                (b.evaluation.costRatioPercentage ?? -1);
+              break;
+            case ViabilitySortBy.CUMULATIVE_COST:
+              comparison = a.cumulativeRepairCost - b.cumulativeRepairCost;
+              break;
+            case ViabilitySortBy.REPAIR_COUNT:
+              comparison = a.totalRepairCount - b.totalRepairCount;
+              break;
+            case ViabilitySortBy.AGE:
+              comparison = a.evaluation.ageYears - b.evaluation.ageYears;
+              break;
+            case ViabilitySortBy.CREATED_AT:
+            default:
+              comparison =
+                new Date(a.receivedDate ?? a.row.created_at).getTime() -
+                new Date(b.receivedDate ?? b.row.created_at).getTime();
+              break;
+          }
+          return comparison === 0
+            ? a.row.asset_id.localeCompare(b.row.asset_id)
+            : comparison * multiplier;
+        });
 
-    // 6. Sort items
-    const sortBy = query.sortBy ?? ViabilitySortBy.COST_RATIO;
-    const sortOrder = query.sortOrder ?? SortOrder.DESC;
-    const multiplier = sortOrder === SortOrder.DESC ? -1 : 1;
+        const total = filteredCandidates.length;
+        const totalPages = Math.ceil(total / limit);
+        const startIndex = (page - 1) * limit;
+        const paginatedCandidates = filteredCandidates.slice(
+          startIndex,
+          startIndex + limit,
+        );
+        const pageIds = paginatedCandidates.map(({ row }) => row.asset_id);
+        const displayAssets = pageIds.length
+          ? await transaction.asset.findMany({
+              where: { id: { in: pageIds } },
+              select: {
+                id: true,
+                noid: true,
+                name: true,
+                model: true,
+                serialNo: true,
+                type: { select: { id: true, name: true } },
+                section: { select: { id: true, name: true } },
+                status: { select: { id: true, code: true, name: true } },
+              },
+            })
+          : [];
+        const displayAssetsById = new Map(
+          displayAssets.map((asset) => [asset.id, asset]),
+        );
 
-    filteredItems.sort((a, b) => {
-      let comparison = 0;
-      switch (sortBy) {
-        case ViabilitySortBy.COST_RATIO:
-          comparison =
-            (a.metrics.costRatioPercentage ?? -1) -
-            (b.metrics.costRatioPercentage ?? -1);
-          break;
-        case ViabilitySortBy.CUMULATIVE_COST:
-          comparison =
-            a.metrics.cumulativeRepairCost - b.metrics.cumulativeRepairCost;
-          break;
-        case ViabilitySortBy.REPAIR_COUNT:
-          comparison = a.metrics.totalRepairCount - b.metrics.totalRepairCount;
-          break;
-        case ViabilitySortBy.AGE:
-          comparison = a.metrics.ageYears - b.metrics.ageYears;
-          break;
-        case ViabilitySortBy.CREATED_AT:
-        default:
-          comparison =
-            new Date(a.receivedDate).getTime() -
-            new Date(b.receivedDate).getTime();
-          break;
-      }
-      return comparison * multiplier;
-    });
+        const items: AssetViabilityItemDto[] = paginatedCandidates.map(
+          (candidate) => {
+            const asset = displayAssetsById.get(candidate.row.asset_id);
+            if (!asset) {
+              throw new Error(
+                `Asset ${candidate.row.asset_id} disappeared from the viability snapshot`,
+              );
+            }
 
-    // 7. Paginate
-    const total = filteredItems.length;
-    const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const paginatedItems = filteredItems.slice(startIndex, startIndex + limit);
+            const { evaluation } = candidate;
+            const receivedDate = candidate.receivedDate
+              ? candidate.receivedDate.toISOString()
+              : new Date(candidate.row.created_at).toISOString();
+            const warrantyDate = candidate.row.warranty_date || null;
 
-    return {
-      summary,
-      items: paginatedItems,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
+            return {
+              id: asset.id,
+              noid: asset.noid,
+              name: asset.name,
+              model: asset.model,
+              serialNo: asset.serialNo,
+              price: candidate.price,
+              receivedDate,
+              warrantyDate,
+              isWarrantyActive: evaluation.isWarrantyActive,
+              assetType: {
+                id: asset.type.id,
+                name: asset.type.name || 'ไม่ระบุประเภท',
+                usefulLife: candidate.usefulLifeYears,
+              },
+              section: {
+                id: asset.section.id,
+                name: asset.section.name || 'ไม่ระบุแผนก',
+              },
+              assetStatus: {
+                id: asset.status.id,
+                code: asset.status.code,
+                name: asset.status.name,
+              },
+              metrics: {
+                ageYears: evaluation.ageYears,
+                usefulLifeYears: evaluation.usefulLifeYears,
+                isUsefulLifeExceeded: evaluation.isUsefulLifeExceeded,
+                cumulativeRepairCost: candidate.cumulativeRepairCost,
+                costRatioPercentage: evaluation.costRatioPercentage,
+                totalRepairCount: candidate.totalRepairCount,
+                recentRepairCount: candidate.recentRepairCount,
+              },
+              viabilityStatus: evaluation.viabilityStatus,
+              viabilityReason: evaluation.viabilityReason,
+            };
+          },
+        );
+
+        return {
+          summary,
+          items,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages,
+            hasNext: page < totalPages,
+            hasPrev: page > 1,
+          },
+        };
       },
-    };
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   /**
