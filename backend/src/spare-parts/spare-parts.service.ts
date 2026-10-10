@@ -28,6 +28,27 @@ type SparepartHistoryRow = {
   timestamp: Date | null;
 };
 
+type StockInHistorySearchRow = {
+  total: bigint;
+  id: number | null;
+  sparepartId: number | null;
+  qty: number | null;
+  totalPrice: Prisma.Decimal | null;
+  sparepartAddDoc: string | null;
+  addBy: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
+  partId: number | null;
+  partCode: string | null;
+  partName: string | null;
+  partUnit: string | null;
+  userId: string | null;
+  userFirstname: string | null;
+  userLastname: string | null;
+  userEmail: string | null;
+};
+
 @Injectable()
 export class SparePartsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -505,6 +526,12 @@ export class SparePartsService {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
 
+    // The measured short-term case is broad and slower through the UNION plan;
+    // keep short patterns on the ordered Prisma query that can stop at the page.
+    if (query.search && [...query.search].length >= 3) {
+      return this.findStockInHistoryBySearch(query, page, limit);
+    }
+
     const where: Prisma.SparepartAddWhereInput = {
       deletedAt: null,
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
@@ -572,5 +599,161 @@ export class SparePartsService {
     ]);
 
     return paginate(adds, total, page, limit);
+  }
+
+  private async findStockInHistoryBySearch(
+    query: QueryStockInHistoryDto,
+    page: number,
+    limit: number,
+  ) {
+    const offset = (page - 1) * limit;
+    const prefixLimit = offset + limit;
+    const searchPattern = `%${query.search}%`;
+    const sparepartIdFilter = query.sparepartId
+      ? Prisma.sql`AND a."sparepart_id" = ${Number(query.sparepartId)}`
+      : Prisma.empty;
+    const addByFilter = query.addBy
+      ? Prisma.sql`AND a."add_by" = ${query.addBy}`
+      : Prisma.empty;
+    const documentFilter = query.sparepartAddDoc
+      ? Prisma.sql`AND a."sparepart_add_doc" ILIKE ${`%${query.sparepartAddDoc}%`}`
+      : Prisma.empty;
+    const startDateFilter = query.startDate
+      ? Prisma.sql`AND a."createdAt" >= ${new Date(`${query.startDate}T00:00:00.000Z`)}`
+      : Prisma.empty;
+    const endDateFilter = query.endDate
+      ? Prisma.sql`AND a."createdAt" <= ${new Date(`${query.endDate}T23:59:59.999Z`)}`
+      : Prisma.empty;
+    const commonFilters = Prisma.sql`
+      ${sparepartIdFilter}
+      ${addByFilter}
+      ${documentFilter}
+      ${startDateFilter}
+      ${endDateFilter}
+    `;
+
+    const rows = await this.prisma.$queryRaw<
+      StockInHistorySearchRow[]
+    >(Prisma.sql`
+      WITH matching_rows AS (
+        SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+        FROM "sparepart_adds" AS a
+        WHERE a."deleted_at" IS NULL
+          ${commonFilters}
+          AND a."sparepart_add_doc" ILIKE ${searchPattern}
+
+        UNION
+
+        SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+        FROM "spareparts" AS p
+        JOIN "sparepart_adds" AS a
+          ON a."sparepart_id" = p."sparepart_id"
+        WHERE a."deleted_at" IS NULL
+          ${commonFilters}
+          AND (
+            p."sparepart_code" ILIKE ${searchPattern}
+            OR p."name" ILIKE ${searchPattern}
+          )
+      ),
+      total_count AS (
+        SELECT COUNT(*) AS total FROM matching_rows
+      ),
+      page_candidates AS (
+        (
+          SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+          FROM "sparepart_adds" AS a
+          WHERE a."deleted_at" IS NULL
+            ${commonFilters}
+            AND a."sparepart_add_doc" ILIKE ${searchPattern}
+          ORDER BY a."createdAt" DESC, a."sparepart_add_id" DESC
+          LIMIT ${prefixLimit}
+        )
+
+        UNION
+
+        (
+          SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+          FROM "spareparts" AS p
+          JOIN "sparepart_adds" AS a
+            ON a."sparepart_id" = p."sparepart_id"
+          WHERE a."deleted_at" IS NULL
+            ${commonFilters}
+            AND (
+              p."sparepart_code" ILIKE ${searchPattern}
+              OR p."name" ILIKE ${searchPattern}
+            )
+          ORDER BY a."createdAt" DESC, a."sparepart_add_id" DESC
+          LIMIT ${prefixLimit}
+        )
+      ),
+      history_page AS (
+        SELECT id, created_at
+        FROM page_candidates
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      )
+      SELECT
+        total_count.total,
+        a."sparepart_add_id" AS id,
+        a."sparepart_id" AS "sparepartId",
+        a.qty,
+        a."total_price" AS "totalPrice",
+        a."sparepart_add_doc" AS "sparepartAddDoc",
+        a."add_by" AS "addBy",
+        a."createdAt",
+        a."updatedAt",
+        a."deleted_at" AS "deletedAt",
+        p."sparepart_id" AS "partId",
+        p."sparepart_code" AS "partCode",
+        p.name AS "partName",
+        p.unit AS "partUnit",
+        u.id AS "userId",
+        u."first_name" AS "userFirstname",
+        u."last_name" AS "userLastname",
+        u.email AS "userEmail"
+      FROM total_count
+      LEFT JOIN history_page AS page ON TRUE
+      LEFT JOIN "sparepart_adds" AS a
+        ON a."sparepart_add_id" = page.id
+      LEFT JOIN "spareparts" AS p
+        ON p."sparepart_id" = a."sparepart_id"
+      LEFT JOIN "users" AS u
+        ON u.id = a."add_by"
+      ORDER BY page.created_at DESC NULLS LAST, page.id DESC NULLS LAST
+    `);
+
+    const data = rows.flatMap((row) => {
+      if (row.id === null) return [];
+
+      return [
+        {
+          id: row.id,
+          sparepartId: row.sparepartId!,
+          qty: row.qty!,
+          totalPrice: row.totalPrice!,
+          sparepartAddDoc: row.sparepartAddDoc!,
+          addBy: row.addBy!,
+          createdAt: row.createdAt!,
+          updatedAt: row.updatedAt!,
+          deletedAt: row.deletedAt,
+          sparepart: {
+            id: row.partId!,
+            code: row.partCode!,
+            name: row.partName!,
+            unit: row.partUnit!,
+          },
+          user: {
+            id: row.userId!,
+            firstname: row.userFirstname!,
+            lastname: row.userLastname!,
+            email: row.userEmail!,
+          },
+        },
+      ];
+    });
+
+    const total = Number(rows[0]?.total ?? 0);
+    return paginate(data, total, page, limit);
   }
 }

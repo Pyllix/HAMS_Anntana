@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SparePartsService } from './spare-parts.service';
 import { PrismaService } from 'src/prisma.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 describe('SparePartsService', () => {
   let service: SparePartsService;
@@ -435,7 +436,7 @@ describe('SparePartsService', () => {
   });
 
   describe('findStockInHistory', () => {
-    it('should return paginated stock-in history with filters and search applied', async () => {
+    it('should return paginated stock-in history with filters and short search applied', async () => {
       const mockAdds = [
         {
           id: 1,
@@ -467,7 +468,7 @@ describe('SparePartsService', () => {
         sparepartAddDoc: 'PO-999',
         startDate: '2026-08-01',
         endDate: '2026-08-31',
-        search: 'Fuse',
+        search: 'PO',
         page: 1,
         limit: 10,
       });
@@ -484,13 +485,9 @@ describe('SparePartsService', () => {
               lte: new Date('2026-08-31T23:59:59.999Z'),
             },
             OR: [
-              { sparepartAddDoc: { contains: 'Fuse', mode: 'insensitive' } },
-              {
-                sparepart: { code: { contains: 'Fuse', mode: 'insensitive' } },
-              },
-              {
-                sparepart: { name: { contains: 'Fuse', mode: 'insensitive' } },
-              },
+              { sparepartAddDoc: { contains: 'PO', mode: 'insensitive' } },
+              { sparepart: { code: { contains: 'PO', mode: 'insensitive' } } },
+              { sparepart: { name: { contains: 'PO', mode: 'insensitive' } } },
             ],
           }),
           skip: 0,
@@ -510,6 +507,80 @@ describe('SparePartsService', () => {
           hasPrevPage: false,
         },
       });
+    });
+
+    it('uses a parameterized database query for cross-table contains search', async () => {
+      const createdAt = new Date('2026-08-15T10:00:00.000Z');
+      const updatedAt = new Date('2026-08-16T10:00:00.000Z');
+      const row = {
+        total: 2n,
+        id: 1,
+        sparepartId: 10,
+        qty: 20,
+        totalPrice: new Prisma.Decimal('1000.00'),
+        sparepartAddDoc: 'PO-999',
+        addBy: 'user-uuid-1',
+        createdAt,
+        updatedAt,
+        deletedAt: null,
+        partId: 10,
+        partCode: 'SP01-0001',
+        partName: 'Fuse 10A',
+        partUnit: 'ชิ้น',
+        userId: 'user-uuid-1',
+        userFirstname: 'John',
+        userLastname: 'Doe',
+        userEmail: 'john@example.com',
+      };
+      mockPrismaService.$transaction.mockReset();
+      mockPrismaService.$queryRaw.mockResolvedValue([row]);
+
+      const result = await service.findStockInHistory({
+        search: 'Fuse',
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.data).toEqual([
+        {
+          id: 1,
+          sparepartId: 10,
+          qty: 20,
+          totalPrice: new Prisma.Decimal('1000.00'),
+          sparepartAddDoc: 'PO-999',
+          addBy: 'user-uuid-1',
+          createdAt,
+          updatedAt,
+          deletedAt: null,
+          sparepart: {
+            id: 10,
+            code: 'SP01-0001',
+            name: 'Fuse 10A',
+            unit: 'ชิ้น',
+          },
+          user: {
+            id: 'user-uuid-1',
+            firstname: 'John',
+            lastname: 'Doe',
+            email: 'john@example.com',
+          },
+        },
+      ]);
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 2,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false,
+      });
+
+      const query = mockPrismaService.$queryRaw.mock.calls[0][0] as {
+        sql: string;
+        values: unknown[];
+      };
+      expect(query.sql).not.toContain('Fuse');
+      expect(query.values).toContain('%Fuse%');
     });
   });
 });
