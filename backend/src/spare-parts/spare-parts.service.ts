@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +13,20 @@ import { StockInSparepartDto } from './dto/stock-in-spare-part.dto';
 import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
 import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 import { Prisma } from '@prisma/client';
+
+type SparepartHistoryRow = {
+  total: bigint;
+  source: 'ADD' | 'TXN' | null;
+  recordId: number | null;
+  qty: number | null;
+  amountBase: string | null;
+  transactionType: string | null;
+  docOrJob: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  timestamp: Date | null;
+};
 
 @Injectable()
 export class SparePartsService {
@@ -295,78 +308,149 @@ export class SparePartsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async findSparepartHistory(sparepartId: number, query: PaginationDto) {
-    await this.findOne(sparepartId);
+    const sparepart = await this.prisma.sparepart.findFirst({
+      where: { id: sparepartId, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!sparepart) {
+      throw new NotFoundException(`Spare part #${sparepartId} not found`);
+    }
 
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
+    const offset = (page - 1) * limit;
+    // A global prefix of K items can contain at most K items from either source;
+    // fetch that prefix from each source, then apply the requested page once globally.
+    const rows = await this.prisma.$queryRaw<SparepartHistoryRow[]>(Prisma.sql`
+      WITH metadata AS (
+        SELECT
+          (SELECT COUNT(*)
+           FROM "sparepart_adds"
+           WHERE "sparepart_id" = ${sparepartId}
+             AND "deleted_at" IS NULL)
+          +
+          (SELECT COUNT(*)
+           FROM "sparepart_txns"
+           WHERE "sparepart_id" = ${sparepartId}) AS total
+      ),
+      timeline AS (
+        SELECT
+          'ADD'::text AS source,
+          0::integer AS source_order,
+          latest_stock_ins."sparepart_add_id" AS record_id,
+          latest_stock_ins."createdAt" AS created_at
+        FROM (
+          SELECT "sparepart_add_id", "createdAt"
+          FROM "sparepart_adds"
+          WHERE "sparepart_id" = ${sparepartId}
+            AND "deleted_at" IS NULL
+          ORDER BY "createdAt" DESC, "sparepart_add_id" DESC
+          LIMIT ${offset + limit}
+        ) AS latest_stock_ins
 
-    const [adds, txns] = await Promise.all([
-      this.prisma.sparepartAdd.findMany({
-        where: { sparepartId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
+        UNION ALL
+
+        SELECT
+          'TXN'::text AS source,
+          1::integer AS source_order,
+          latest_transactions."txn_id" AS record_id,
+          latest_transactions."createdAt" AS created_at
+        FROM (
+          SELECT "txn_id", "createdAt"
+          FROM "sparepart_txns"
+          WHERE "sparepart_id" = ${sparepartId}
+          ORDER BY "createdAt" DESC, "txn_id" DESC
+          LIMIT ${offset + limit}
+        ) AS latest_transactions
+      ),
+      page AS (
+        SELECT source, source_order, record_id, created_at
+        FROM timeline
+        ORDER BY created_at DESC, source_order ASC, record_id DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      )
+      SELECT
+        metadata.total,
+        page.source,
+        page.record_id AS "recordId",
+        CASE WHEN page.source = 'ADD' THEN stock_in.qty ELSE txn.qty END AS qty,
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in.total_price::text
+          ELSE txn.unit_price::text
+        END AS "amountBase",
+        txn.txn_type AS "transactionType",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in.sparepart_add_doc
+          ELSE txn.job_id
+        END AS "docOrJob",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in_actor.id
+          ELSE txn_actor.id
+        END AS "actorId",
+        CASE
+          WHEN page.source = 'ADD'
+            THEN TRIM(stock_in_actor.first_name || ' ' || stock_in_actor.last_name)
+          ELSE TRIM(txn_actor.first_name || ' ' || txn_actor.last_name)
+        END AS "actorName",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in_actor.email
+          ELSE txn_actor.email
+        END AS "actorEmail",
+        page.created_at AS timestamp
+      FROM metadata
+      LEFT JOIN page ON TRUE
+      LEFT JOIN "sparepart_adds" AS stock_in
+        ON page.source = 'ADD'
+        AND stock_in.sparepart_add_id = page.record_id
+      LEFT JOIN "users" AS stock_in_actor
+        ON stock_in_actor.id = stock_in.add_by
+      LEFT JOIN "sparepart_txns" AS txn
+        ON page.source = 'TXN'
+        AND txn.txn_id = page.record_id
+      LEFT JOIN "users" AS txn_actor
+        ON txn_actor.id = txn.txn_by
+      ORDER BY
+        page.created_at DESC NULLS LAST,
+        page.source_order ASC NULLS LAST,
+        page.record_id DESC NULLS LAST
+    `);
+
+    const data = rows.flatMap((row) => {
+      if (
+        row.source === null ||
+        row.recordId === null ||
+        row.qty === null ||
+        row.amountBase === null ||
+        row.actorId === null ||
+        row.actorName === null ||
+        row.actorEmail === null ||
+        row.timestamp === null
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          id: `${row.source === 'ADD' ? 'ADD' : 'TXN'}-${row.recordId}`,
+          activityType: row.source === 'ADD' ? 'STOCK_IN' : 'TXN',
+          type: row.source === 'ADD' ? 'RESTOCK' : row.transactionType!,
+          qty: row.qty,
+          amount: Number(row.amountBase) * (row.source === 'TXN' ? row.qty : 1),
+          docOrJob: row.docOrJob,
+          actor: {
+            id: row.actorId,
+            name: row.actorName,
+            email: row.actorEmail,
           },
+          timestamp: row.timestamp,
         },
-      }),
-      this.prisma.sparepartTxn.findMany({
-        where: { sparepartId },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
-          },
-        },
-      }),
-    ]);
+      ];
+    });
 
-    type TimelineItem = {
-      id: string;
-      activityType: 'STOCK_IN' | 'TXN';
-      type: string;
-      qty: number;
-      amount: number;
-      docOrJob: string | null;
-      actor: { id: string; name: string; email: string };
-      timestamp: Date;
-    };
-
-    const combined: TimelineItem[] = [
-      ...adds.map((a) => ({
-        id: `ADD-${a.id}`,
-        activityType: 'STOCK_IN' as const,
-        type: 'RESTOCK',
-        qty: a.qty,
-        amount: Number(a.totalPrice),
-        docOrJob: a.sparepartAddDoc,
-        actor: {
-          id: a.user.id,
-          name: `${a.user.firstname} ${a.user.lastname}`.trim(),
-          email: a.user.email,
-        },
-        timestamp: a.createdAt,
-      })),
-      ...txns.map((t) => ({
-        id: `TXN-${t.id}`,
-        activityType: 'TXN' as const,
-        type: t.txnType,
-        qty: t.qty,
-        amount: Number(t.unitPrice) * t.qty,
-        docOrJob: t.jobId,
-        actor: {
-          id: t.user.id,
-          name: `${t.user.firstname} ${t.user.lastname}`.trim(),
-          email: t.user.email,
-        },
-        timestamp: t.createdAt,
-      })),
-    ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    const total = combined.length;
-    const paginatedItems = combined.slice((page - 1) * limit, page * limit);
-
-    return paginate(paginatedItems, total, page, limit);
+    const total = Number(rows[0]?.total ?? 0);
+    return paginate(data, total, page, limit);
   }
 
   async findAllTransactions(query: QuerySparepartTxnDto) {

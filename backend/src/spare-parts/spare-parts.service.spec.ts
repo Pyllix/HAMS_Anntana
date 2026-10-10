@@ -1,11 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SparePartsService } from './spare-parts.service';
 import { PrismaService } from 'src/prisma.service';
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('SparePartsService', () => {
   let service: SparePartsService;
@@ -366,6 +362,75 @@ describe('SparePartsService', () => {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
+    });
+  });
+
+  describe('findSparepartHistory', () => {
+    it('uses a stable order for equal timestamps across stock-in and transaction history', async () => {
+      const timestamp = new Date('2026-10-01T10:00:00.000Z');
+      mockPrismaService.sparepart.findFirst.mockResolvedValue({
+        id: 10,
+      });
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        {
+          total: 4n,
+          source: 'ADD',
+          recordId: 12,
+          qty: 5,
+          amountBase: '50.00',
+          transactionType: null,
+          docOrJob: 'PO-12',
+          actorId: 'user-1',
+          actorName: 'Ada One',
+          actorEmail: 'ada@example.com',
+          timestamp,
+        },
+        {
+          total: 4n,
+          source: 'ADD',
+          recordId: 11,
+          qty: 4,
+          amountBase: '40.00',
+          transactionType: null,
+          docOrJob: 'PO-11',
+          actorId: 'user-1',
+          actorName: 'Ada One',
+          actorEmail: 'ada@example.com',
+          timestamp,
+        },
+        {
+          total: 4n,
+          source: 'TXN',
+          recordId: 22,
+          qty: 3,
+          amountBase: '10.00',
+          transactionType: 'RETURN',
+          docOrJob: null,
+          actorId: 'user-1',
+          actorName: 'Ada One',
+          actorEmail: 'ada@example.com',
+          timestamp,
+        },
+      ]);
+
+      const result = await service.findSparepartHistory(10, {
+        page: 1,
+        limit: 3,
+      });
+
+      expect(result.data.map(({ id }) => id)).toEqual([
+        'ADD-12',
+        'ADD-11',
+        'TXN-22',
+      ]);
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 3,
+        total: 4,
+        totalPages: 2,
+        hasNextPage: true,
+        hasPrevPage: false,
+      });
     });
   });
 
