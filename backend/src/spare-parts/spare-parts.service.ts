@@ -397,7 +397,7 @@ export class SparePartsService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: {
           sparepart: {
             select: { id: true, code: true, name: true, unit: true },
@@ -474,7 +474,7 @@ export class SparePartsService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: {
           sparepart: {
             select: { id: true, code: true, name: true, unit: true },

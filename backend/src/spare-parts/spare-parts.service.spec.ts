@@ -363,6 +363,7 @@ describe('SparePartsService', () => {
               lte: new Date('2026-08-31T23:59:59.999Z'),
             },
           }),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
     });
@@ -429,7 +430,7 @@ describe('SparePartsService', () => {
           }),
           skip: 0,
           take: 10,
-          orderBy: { createdAt: 'desc' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
 
