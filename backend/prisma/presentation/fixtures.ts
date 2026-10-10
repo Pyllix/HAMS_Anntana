@@ -101,6 +101,7 @@ export interface DemoPartTxn {
 export interface DemoPart {
   key: string;
   name: string;
+  unit?: string;
   price: number;
   minStock: number;
   opening: number;
@@ -585,6 +586,32 @@ export function buildPresentationFixture(date: Date): PresentationFixture {
       opening: 5,
     },
   );
+  for (const [key, price, minStock, opening, unit] of [
+    ['spo2-cable', 850, 5, 24, 'เส้น'],
+    ['nibp-cuff-adult', 650, 5, 30, 'ชิ้น'],
+    ['nibp-cuff-child', 550, 3, 12, 'ชิ้น'],
+    ['nibp-hose', 450, 5, 20, 'เส้น'],
+    ['temperature-probe', 1800, 3, 8, 'ชิ้น'],
+    ['infusion-battery', 2400, 3, 2, 'ก้อน'],
+    ['infusion-door', 1250, 2, 6, 'ชุด'],
+    ['syringe-drive', 4200, 3, 2, 'ชุด'],
+    ['suction-tube', 180, 10, 40, 'เส้น'],
+    ['suction-jar', 750, 3, 10, 'ใบ'],
+    ['suction-seal', 120, 5, 15, 'ชิ้น'],
+    ['ventilator-valve', 3200, 2, 5, 'ชุด'],
+    ['nebulizer-filter', 90, 10, 50, 'ชิ้น'],
+    ['power-cord', 350, 5, 5, 'เส้น'],
+    ['ceramic-fuse', 45, 10, 60, 'ตัว'],
+  ] as const) {
+    fixture.parts.push({
+      key,
+      name: partLabels[key].name,
+      price,
+      minStock,
+      opening,
+      unit,
+    });
+  }
   const txn = (
     key: string,
     job: string,

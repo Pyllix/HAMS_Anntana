@@ -165,7 +165,8 @@ export async function relabelPresentation(
       for (const part of fixture.parts) {
         const row = manifest.rows.find(
           (entry) => entry.kind === 'part' && entry.key === part.key,
-        )!;
+        );
+        if (!row) continue;
         const id = Number(row.id);
         const labels = partLabels[part.key];
         const current = await tx.sparepart.findUniqueOrThrow({ where: { id } });

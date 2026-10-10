@@ -18,6 +18,8 @@ import { AssetViabilityService } from '../src/asset-viability/asset-viability.se
 import type { PrismaService } from '../src/prisma.service';
 import { presentationSectionData } from '../prisma/presentation/sections';
 import { originalUsers } from '../prisma/demo-identities';
+import { partReceiptPlan } from '../prisma/presentation/parts';
+import { partLabels } from '../prisma/presentation/labels';
 import {
   originalPresentationUsers,
   originalProfile,
@@ -25,6 +27,39 @@ import {
 
 const build = (date = '2026-10-09') =>
   buildPresentationFixture(presentationDate(date));
+
+void test('expanded spare-part catalog has priced receipt lots, documents and consistent stock', () => {
+  const fixture = build();
+  assert.equal(fixture.parts.length, 20);
+  const documents: string[] = [];
+  for (const [index, part] of fixture.parts.entries()) {
+    const receipts = partReceiptPlan(part, index, fixture.date);
+    assert.equal(
+      receipts.reduce((qty, receipt) => qty + receipt.qty, 0),
+      part.opening,
+    );
+    for (const receipt of receipts) {
+      assert.ok(receipt.qty > 0);
+      assert.equal(receipt.totalPrice, receipt.qty * part.price);
+      assert.ok(receipt.date <= fixture.date);
+      documents.push(receipt.document);
+    }
+    if (index >= 5) {
+      assert.equal(receipts.length, 2);
+      assert.ok(receipts[0].date < receipts[1].date);
+      assert.equal(stockBalance(fixture, part), part.opening);
+      assert.equal(part.name, partLabels[part.key].name);
+      assert.ok(part.unit);
+    }
+  }
+  assert.equal(new Set(documents).size, documents.length);
+  assert.ok(
+    fixture.users.some(
+      (user) => user.key === 'parcel' && user.role === 'PARCEL_STAFF',
+    ),
+  );
+  validateFixture(fixture);
+});
 
 void test('presentation center can be found by the ready-assets UI and borrow API', () => {
   const fixture = build();
