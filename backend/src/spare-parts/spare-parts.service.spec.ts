@@ -460,7 +460,24 @@ describe('SparePartsService', () => {
           },
         },
       ];
-      mockPrismaService.$transaction.mockResolvedValue([mockAdds, 1]);
+      mockPrismaService.sparepartAdd.findMany.mockResolvedValue(mockAdds);
+      mockPrismaService.sparepartAdd.count.mockResolvedValue(1);
+
+      const expectedWhere = {
+        deletedAt: null,
+        sparepartId: 10,
+        addBy: 'user-uuid-1',
+        sparepartAddDoc: { contains: 'PO-999', mode: 'insensitive' },
+        createdAt: {
+          gte: new Date('2026-08-01T00:00:00.000Z'),
+          lte: new Date('2026-08-31T23:59:59.999Z'),
+        },
+        OR: [
+          { sparepartAddDoc: { contains: 'PO', mode: 'insensitive' } },
+          { sparepart: { code: { contains: 'PO', mode: 'insensitive' } } },
+          { sparepart: { name: { contains: 'PO', mode: 'insensitive' } } },
+        ],
+      };
 
       const result = await service.findStockInHistory({
         sparepartId: 10,
@@ -475,26 +492,16 @@ describe('SparePartsService', () => {
 
       expect(mockPrismaService.sparepartAdd.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            deletedAt: null,
-            sparepartId: 10,
-            addBy: 'user-uuid-1',
-            sparepartAddDoc: { contains: 'PO-999', mode: 'insensitive' },
-            createdAt: {
-              gte: new Date('2026-08-01T00:00:00.000Z'),
-              lte: new Date('2026-08-31T23:59:59.999Z'),
-            },
-            OR: [
-              { sparepartAddDoc: { contains: 'PO', mode: 'insensitive' } },
-              { sparepart: { code: { contains: 'PO', mode: 'insensitive' } } },
-              { sparepart: { name: { contains: 'PO', mode: 'insensitive' } } },
-            ],
-          }),
+          where: expectedWhere,
           skip: 0,
           take: 10,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
+      expect(mockPrismaService.sparepartAdd.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
 
       expect(result).toEqual({
         data: mockAdds,

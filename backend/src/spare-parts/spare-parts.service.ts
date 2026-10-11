@@ -580,22 +580,28 @@ export class SparePartsService {
         : {}),
     };
 
-    const [adds, total] = await this.prisma.$transaction([
-      this.prisma.sparepartAdd.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        include: {
-          sparepart: {
-            select: { id: true, code: true, name: true, unit: true },
-          },
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
-          },
+    const stockInRowsPromise = this.prisma.sparepartAdd.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        sparepart: {
+          select: { id: true, code: true, name: true, unit: true },
         },
-      }),
-      this.prisma.sparepartAdd.count({ where }),
+        user: {
+          select: { id: true, firstname: true, lastname: true, email: true },
+        },
+      },
+    });
+    const totalCountPromise = this.prisma.sparepartAdd.count({ where });
+
+    // The list and exact count share one filter but do not depend on each
+    // other's result. Run them concurrently; keep relation includes on the
+    // page query only so the count remains a lightweight database operation.
+    const [adds, total] = await Promise.all([
+      stockInRowsPromise,
+      totalCountPromise,
     ]);
 
     return paginate(adds, total, page, limit);

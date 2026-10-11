@@ -48,6 +48,7 @@ lerna-debug.log*
 # temp directory
 .temp
 .tmp
+/.scratch/
 
 # Runtime data
 pids

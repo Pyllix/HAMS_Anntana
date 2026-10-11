@@ -24,7 +24,14 @@ type StockInHistoryResponse = {
     sparepart?: { code?: string };
     user?: { id: string; firstname: string; lastname: string };
   }>;
-  meta: { total: number; totalPages: number; hasPrevPage: boolean };
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
 };
 
 function asStockInHistoryResponse(value: unknown): StockInHistoryResponse {
@@ -47,6 +54,7 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
   let alphaOtherId: number;
   let betaId: number;
   let deletedStockInId: number;
+  const dynamicAddIds: number[] = [];
   let specialPatternIds: number[];
   let tieIds: number[];
 
@@ -110,7 +118,6 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
       },
     });
     userId = user.id;
-
     const group = await prisma.sparepartGroup.create({
       data: { name: `Ticket 05 ${unique}` },
     });
@@ -181,6 +188,7 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
         alphaOtherId,
         betaId,
         deletedStockInId,
+        ...dynamicAddIds,
         ...(specialPatternIds ?? []),
         ...(tieIds ?? []),
       ].filter((id): id is number => Number.isInteger(id));
@@ -200,6 +208,129 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
       if (userId) await prisma.user.deleteMany({ where: { id: userId } });
       await prisma.$disconnect();
     }
+  });
+
+  it('keeps exact totals and stable pages on the database-filtered query path', async () => {
+    const query = {
+      sparepartId: alphaPartId,
+      addBy: userId,
+      startDate: '2026-10-01',
+      endDate: '2026-10-01',
+      limit: 2,
+    };
+
+    const firstPage = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ ...query, page: 1 })
+          .expect(200)
+      ).body,
+    );
+    const secondPage = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ ...query, page: 2 })
+          .expect(200)
+      ).body,
+    );
+    const expectedTieOrder = tieIds.slice().sort((a, b) => b - a);
+
+    expect(firstPage.data.map(({ id }) => id)).toEqual(
+      expectedTieOrder.slice(0, 2),
+    );
+    expect(secondPage.data.map(({ id }) => id)).toEqual(
+      expectedTieOrder.slice(2),
+    );
+    expect(firstPage.meta).toEqual({
+      page: 1,
+      limit: 2,
+      total: 3,
+      totalPages: 2,
+      hasNextPage: true,
+      hasPrevPage: false,
+    });
+    expect(secondPage.meta).toEqual({
+      page: 2,
+      limit: 2,
+      total: 3,
+      totalPages: 2,
+      hasNextPage: false,
+      hasPrevPage: true,
+    });
+
+    const added = await createStockIn(
+      alphaPartId,
+      `TICKET-07-${randomUUID()}`,
+      date(1),
+    );
+    dynamicAddIds.push(added.id);
+
+    const afterInsert = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ ...query, page: 1 })
+          .expect(200)
+      ).body,
+    );
+    expect(afterInsert.meta).toMatchObject({ total: 4, totalPages: 2 });
+
+    await prisma.sparepartAdd.update({
+      where: { id: added.id },
+      data: { deletedAt: new Date() },
+    });
+    const afterSoftDelete = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ ...query, page: 1 })
+          .expect(200)
+      ).body,
+    );
+    expect(afterSoftDelete.meta).toMatchObject({ total: 3, totalPages: 2 });
+
+    const outOfRangePage = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ ...query, page: 3 })
+          .expect(200)
+      ).body,
+    );
+    expect(outOfRangePage.data).toEqual([]);
+    expect(outOfRangePage.meta).toEqual({
+      page: 3,
+      limit: 2,
+      total: 3,
+      totalPages: 2,
+      hasNextPage: false,
+      hasPrevPage: true,
+    });
+
+    const noMatches = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({
+            sparepartId: alphaPartId,
+            startDate: '2027-01-01',
+            endDate: '2027-01-01',
+            limit: 100,
+          })
+          .expect(200)
+      ).body,
+    );
+    expect(noMatches.data).toEqual([]);
+    expect(noMatches.meta).toEqual({
+      page: 1,
+      limit: 100,
+      total: 0,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: false,
+    });
   });
 
   it('keeps contains matching across documents and part fields without OR duplicates', async () => {
