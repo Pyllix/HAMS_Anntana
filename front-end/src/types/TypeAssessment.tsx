@@ -2,7 +2,11 @@ export type UrgencyStatus = "NORMAL" | "URGENT" | "EMERGENCY";
 
 export type PriorityFilter = "ALL" | UrgencyStatus;
 
-export type AssessmentTab = "PENDING" | "REPAIR_LIST" | "CONFIRM_REPAIR";
+export type AssessmentTab =
+  | "PENDING"
+  | "REPAIR_LIST"
+  | "CONFIRM_REPAIR"
+  | "REPORTS";
 
 export type StepActionType =
   | "SELF_REPAIR"   
