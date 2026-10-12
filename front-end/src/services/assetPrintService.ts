@@ -303,8 +303,10 @@ function documentShell(
     .department-header-bar .dept-badges {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       font-size: 10px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
     }
     .dept-badge {
       display: inline-flex;
@@ -316,6 +318,9 @@ function documentShell(
       border-radius: 999px;
       color: #334155;
       font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+      line-height: 1.2;
     }
     @media screen {
       body { background: #f1f5f9; padding: 24px; }
@@ -843,12 +848,12 @@ export function printAssetStockGroupedByDepartmentReport(
           <div class="department-header-bar">
             <div>
               <h3>ลำดับที่ ${gIdx + 1}. แผนก: ${escapeHtml(grp.sectionName)}</h3>
-              ${grp.building ? `<small style="color: #64748b;">สถานที่/อาคาร: อาคาร${escapeHtml(grp.building)}</small>` : ""}
+              ${grp.building ? `<small style="color: #64748b;">สถานที่/อาคาร: ${grp.building.startsWith("อาคาร") ? "" : "อาคาร"}${escapeHtml(grp.building)}</small>` : ""}
             </div>
             <div class="dept-badges">
-              <span class="dept-badge">รวม: <strong>${grp.assets.length}</strong> รายการ</span>
+              <span class="dept-badge">รวม: <strong>${grp.assets.length}</strong></span>
               <span class="dept-badge" style="color: #047857;">ปกติ: <strong>${grp.normalCount}</strong></span>
-              ${grp.underRepairCount > 0 ? `<span class="dept-badge" style="color: #0284c7;">กำลังซ่อม: <strong>${grp.underRepairCount}</strong></span>` : ""}
+              ${grp.underRepairCount > 0 ? `<span class="dept-badge" style="color: #0284c7;">ซ่อม: <strong>${grp.underRepairCount}</strong></span>` : ""}
               ${grp.damagedCount > 0 ? `<span class="dept-badge" style="color: #be123c;">ชำรุด: <strong>${grp.damagedCount}</strong></span>` : ""}
               <span class="dept-badge" style="color: #047857;">มูลค่า: <strong>${money(grp.totalCost)}</strong> บ.</span>
             </div>
