@@ -135,9 +135,9 @@ export default function OutsourceApprovalDialog({
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <div><dt className="text-xs text-slate-500">เลขที่ใบงานซ่อม</dt><dd className="mt-1 font-semibold text-sky-600">{request.jobNo}</dd></div>
               <div><dt className="text-xs text-slate-500">ช่างผู้ขอส่งซ่อม</dt><dd className="mt-1 font-medium">{request.requester}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">อาการที่แจ้ง</dt><dd className="mt-1 whitespace-pre-wrap">{request.symptom}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">ผลการวินิจฉัย</dt><dd className="mt-1 whitespace-pre-wrap">{request.diagnosis}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">แนวทางดำเนินการ</dt><dd className="mt-1 whitespace-pre-wrap">{request.solution}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">อาการเสีย</dt><dd className="mt-1 whitespace-pre-wrap">{request.symptom}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">ผลการประเมิน</dt><dd className="mt-1 whitespace-pre-wrap">{request.diagnosis}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-xs text-slate-500">วิธีการแก้ไข</dt><dd className="mt-1 whitespace-pre-wrap">{request.solution}</dd></div>
             </dl>
 
             {mode === "APPROVE" && (
