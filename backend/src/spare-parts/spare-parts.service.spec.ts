@@ -340,29 +340,232 @@ describe('SparePartsService', () => {
   });
 
   describe('findAllTransactions', () => {
-    it('should filter transactions by userId, startDate, and endDate', async () => {
+    it('returns a minimal transaction row and excludes pending withdrawals by default', async () => {
+      const txnDate = new Date('2026-08-31T10:00:00.000Z');
+      const transaction = {
+        id: 7,
+        sparepartId: 3,
+        jobId: 'job-uuid-1',
+        txnType: 'WITHDRAW',
+        stockType: 'INTERNAL',
+        qty: 2,
+        unitPrice: '25.00',
+        txnDate,
+        txnBy: 'user-uuid-1',
+        createdAt: new Date('2026-08-20T10:00:00.000Z'),
+        sparepart: {
+          id: 3,
+          code: 'FUSE-10A',
+          name: 'Fuse 10A',
+          unit: 'ชิ้น',
+        },
+        repairJob: { id: 'job-uuid-1', jobNo: 'REP-001' },
+        user: {
+          id: 'user-uuid-1',
+          firstname: ' Somchai ',
+          lastname: ' Jai Dee ',
+          email: 'private@example.com',
+        },
+      };
+      mockPrismaService.$transaction.mockResolvedValue([[transaction], 36]);
+
+      const result = await service.findAllTransactions({ page: 1, limit: 20 });
+
+      expect(mockPrismaService.sparepartTxn.findMany).toHaveBeenCalledWith({
+        where: { txnType: { in: ['WITHDRAW', 'RETURN'] } },
+        skip: 0,
+        take: 20,
+        orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
+        select: expect.objectContaining({
+          id: true,
+          txnType: true,
+          stockType: true,
+          txnDate: true,
+          qty: true,
+          sparepart: {
+            select: { id: true, code: true, name: true, unit: true },
+          },
+          repairJob: { select: { id: true, jobNo: true } },
+          user: { select: { id: true, firstname: true, lastname: true } },
+        }),
+      });
+      expect(mockPrismaService.sparepartTxn.count).toHaveBeenCalledWith({
+        where: { txnType: { in: ['WITHDRAW', 'RETURN'] } },
+      });
+      expect(result.data).toEqual([
+        {
+          id: 7,
+          txnType: 'WITHDRAW',
+          stockType: 'INTERNAL',
+          txnDate,
+          qty: 2,
+          sparepart: {
+            id: 3,
+            code: 'FUSE-10A',
+            name: 'Fuse 10A',
+            unit: 'ชิ้น',
+          },
+          repairJob: { id: 'job-uuid-1', jobNo: 'REP-001' },
+          recordedBy: { id: 'user-uuid-1', name: 'Somchai Jai Dee' },
+        },
+      ]);
+      expect(result.data[0]).not.toHaveProperty('unitPrice');
+      expect(result.data[0]).not.toHaveProperty('createdAt');
+      expect(result.data[0]).not.toHaveProperty('sparepartId');
+      expect(result.data[0]).not.toHaveProperty('jobId');
+      expect(result.data[0]).not.toHaveProperty('txnBy');
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 20,
+        total: 36,
+        totalPages: 2,
+        hasNextPage: true,
+        hasPrevPage: false,
+      });
+    });
+
+    it('keeps transactions without a repair job and null source in the list response', async () => {
+      mockPrismaService.$transaction.mockResolvedValue([
+        [
+          {
+            id: 8,
+            txnType: 'RETURN',
+            stockType: null,
+            txnDate: new Date('2026-08-31T10:00:00.000Z'),
+            qty: 1,
+            sparepart: {
+              id: 3,
+              code: 'FUSE-10A',
+              name: 'Fuse 10A',
+              unit: 'ชิ้น',
+            },
+            repairJob: null,
+            user: { id: 'user-uuid-1', firstname: 'Ada', lastname: 'Lovelace' },
+          },
+        ],
+        1,
+      ]);
+
+      const result = await service.findAllTransactions({});
+
+      expect(result.data[0]).toMatchObject({
+        id: 8,
+        txnType: 'RETURN',
+        stockType: null,
+        repairJob: null,
+        recordedBy: { id: 'user-uuid-1', name: 'Ada Lovelace' },
+      });
+    });
+
+    it('searches part code, part name, and job number while filtering inclusive Bangkok dates', async () => {
+      mockPrismaService.$transaction.mockResolvedValue([[], 36]);
+
+      const result = await service.findAllTransactions({
+        sparepartId: 3,
+        jobId: 'job-uuid-1',
+        txnType: 'RETURN',
+        userId: 'user-uuid-1',
+        search: '  Fuse  ',
+        startDate: '2026-08-31',
+        endDate: '2026-08-31',
+        page: 2,
+        limit: 10,
+      });
+
+      const expectedWhere = {
+        sparepartId: 3,
+        jobId: 'job-uuid-1',
+        txnType: 'RETURN',
+        txnBy: 'user-uuid-1',
+        txnDate: {
+          gte: new Date('2026-08-30T17:00:00.000Z'),
+          lt: new Date('2026-08-31T17:00:00.000Z'),
+        },
+        OR: [
+          {
+            sparepart: {
+              code: { contains: 'Fuse', mode: 'insensitive' },
+            },
+          },
+          {
+            sparepart: {
+              name: { contains: 'Fuse', mode: 'insensitive' },
+            },
+          },
+          {
+            repairJob: {
+              jobNo: { contains: 'Fuse', mode: 'insensitive' },
+            },
+          },
+        ],
+      };
+
+      expect(mockPrismaService.sparepartTxn.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+          skip: 10,
+          take: 10,
+          orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
+        }),
+      );
+      expect(mockPrismaService.sparepartTxn.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+      expect(result.meta).toEqual({
+        page: 2,
+        limit: 10,
+        total: 36,
+        totalPages: 4,
+        hasNextPage: true,
+        hasPrevPage: true,
+      });
+    });
+
+    it('treats whitespace-only search as empty and uses default pagination', async () => {
+      mockPrismaService.$transaction.mockResolvedValue([[], 0]);
+
+      await service.findAllTransactions({ search: '   ' });
+
+      expect(mockPrismaService.sparepartTxn.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { txnType: { in: ['WITHDRAW', 'RETURN'] } },
+          skip: 0,
+          take: 20,
+        }),
+      );
+    });
+
+    it('filters pending withdrawals by txnDate when explicitly requested', async () => {
       mockPrismaService.$transaction.mockResolvedValue([[], 0]);
 
       await service.findAllTransactions({
-        userId: 'user-uuid-1',
-        startDate: '2026-08-01',
+        txnType: 'PENDING_WITHDRAW',
+        startDate: '2026-08-31',
         endDate: '2026-08-31',
-        page: 1,
-        limit: 10,
       });
 
       expect(mockPrismaService.sparepartTxn.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            txnBy: 'user-uuid-1',
-            createdAt: {
-              gte: new Date('2026-08-01T00:00:00.000Z'),
-              lte: new Date('2026-08-31T23:59:59.999Z'),
+          where: {
+            txnType: 'PENDING_WITHDRAW',
+            txnDate: {
+              gte: new Date('2026-08-30T17:00:00.000Z'),
+              lt: new Date('2026-08-31T17:00:00.000Z'),
             },
-          }),
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          },
+          orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
         }),
       );
+    });
+
+    it('rejects an inverted date range before querying transactions', async () => {
+      await expect(
+        service.findAllTransactions({
+          startDate: '2026-09-01',
+          endDate: '2026-08-31',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
     });
   });
 

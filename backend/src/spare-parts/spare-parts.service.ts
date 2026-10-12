@@ -13,6 +13,7 @@ import { StockInSparepartDto } from './dto/stock-in-spare-part.dto';
 import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
 import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 import { Prisma } from '@prisma/client';
+import { DEFAULT_SPAREPART_HISTORY_TYPES } from './spare-part-transaction.constants';
 
 type SparepartHistoryRow = {
   total: bigint;
@@ -49,6 +50,34 @@ type StockInHistorySearchRow = {
   userFirstname: string | null;
   userLastname: string | null;
   userEmail: string | null;
+};
+
+const SPAREPART_TRANSACTION_LIST_SELECT = {
+  id: true,
+  txnType: true,
+  stockType: true,
+  txnDate: true,
+  qty: true,
+  sparepart: {
+    select: { id: true, code: true, name: true, unit: true },
+  },
+  repairJob: {
+    select: { id: true, jobNo: true },
+  },
+  user: {
+    select: { id: true, firstname: true, lastname: true },
+  },
+} satisfies Prisma.SparepartTxnSelect;
+
+type SparepartTransactionListRecord = Prisma.SparepartTxnGetPayload<{
+  select: typeof SPAREPART_TRANSACTION_LIST_SELECT;
+}>;
+
+type SparepartTransactionListItem = Omit<
+  SparepartTransactionListRecord,
+  'user'
+> & {
+  recordedBy: { id: string; name: string };
 };
 
 export interface SparePartStockSummary {
@@ -548,25 +577,59 @@ export class SparePartsService {
     return paginate(data, total, page, limit);
   }
 
-  async findAllTransactions(query: QuerySparepartTxnDto) {
+  async findAllTransactions(
+    query: QuerySparepartTxnDto,
+  ): Promise<PaginatedResult<SparepartTransactionListItem>> {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
+    const search = query.search?.trim();
+
+    if (query.startDate && query.endDate && query.startDate > query.endDate) {
+      throw new BadRequestException('startDate must be on or before endDate');
+    }
+
+    const startDate = query.startDate
+      ? new Date(`${query.startDate}T00:00:00.000+07:00`)
+      : undefined;
+    const endDateExclusive = query.endDate
+      ? new Date(`${query.endDate}T00:00:00.000+07:00`)
+      : undefined;
+    endDateExclusive?.setUTCDate(endDateExclusive.getUTCDate() + 1);
 
     const where: Prisma.SparepartTxnWhereInput = {
+      txnType: query.txnType
+        ? query.txnType
+        : { in: [...DEFAULT_SPAREPART_HISTORY_TYPES] },
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
       ...(query.jobId ? { jobId: query.jobId } : {}),
-      ...(query.txnType ? { txnType: query.txnType } : {}),
       ...(query.userId ? { txnBy: query.userId } : {}),
       ...(query.startDate || query.endDate
         ? {
-            createdAt: {
-              ...(query.startDate
-                ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
-                : {}),
-              ...(query.endDate
-                ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
-                : {}),
+            txnDate: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDateExclusive ? { lt: endDateExclusive } : {}),
             },
+          }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                sparepart: {
+                  code: { contains: search, mode: 'insensitive' },
+                },
+              },
+              {
+                sparepart: {
+                  name: { contains: search, mode: 'insensitive' },
+                },
+              },
+              {
+                repairJob: {
+                  jobNo: { contains: search, mode: 'insensitive' },
+                },
+              },
+            ],
           }
         : {}),
     };
@@ -576,20 +639,39 @@ export class SparePartsService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        include: {
-          sparepart: {
-            select: { id: true, code: true, name: true, unit: true },
-          },
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
-          },
-        },
+        orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
+        select: SPAREPART_TRANSACTION_LIST_SELECT,
       }),
       this.prisma.sparepartTxn.count({ where }),
     ]);
 
-    return paginate(txns, total, page, limit);
+    const data: SparepartTransactionListItem[] = txns.map((transaction) => ({
+      id: transaction.id,
+      txnType: transaction.txnType,
+      stockType: transaction.stockType,
+      txnDate: transaction.txnDate,
+      qty: transaction.qty,
+      sparepart: {
+        id: transaction.sparepart.id,
+        code: transaction.sparepart.code,
+        name: transaction.sparepart.name,
+        unit: transaction.sparepart.unit,
+      },
+      repairJob: transaction.repairJob
+        ? {
+            id: transaction.repairJob.id,
+            jobNo: transaction.repairJob.jobNo,
+          }
+        : null,
+      recordedBy: {
+        id: transaction.user.id,
+        name: `${transaction.user.firstname} ${transaction.user.lastname}`
+          .trim()
+          .replace(/\s+/g, ' '),
+      },
+    }));
+
+    return paginate(data, total, page, limit);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
