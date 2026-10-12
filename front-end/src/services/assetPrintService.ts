@@ -874,3 +874,530 @@ export function printAssetStockGroupedByDepartmentReport(
     documentShell(title, body, context.preparedBy, context.preparedAt || new Date()),
   );
 }
+
+// -------------------------------------------------------------
+// Report 4: รายงานสต็อกครุภัณฑ์สำหรับฝ่ายพัสดุ (Equipment Stock - Parcel)
+// -------------------------------------------------------------
+export interface EquipmentStockPrintRequest {
+  title?: string;
+  subtitle?: string;
+  reportRef?: string;
+  activeTab?: "ALL" | "WAIT_DISPOSAL" | "DISPOSAL" | "LOST";
+  filters?: {
+    search?: string;
+    typeName?: string;
+    statusName?: string;
+    dateLabel?: string;
+  };
+  stats?: AssetPrintSummaryStats;
+  assets: Asset[];
+  context: {
+    preparedBy: string;
+    preparedAt?: Date;
+  };
+}
+
+export function printEquipmentStockReport(
+  request: EquipmentStockPrintRequest,
+): boolean {
+  const {
+    activeTab = "ALL",
+    reportRef,
+    filters,
+    stats,
+    assets,
+    context,
+  } = request;
+
+  let defaultTitle = "รายงานทะเบียนคุมสต็อกครุภัณฑ์ (งานพัสดุ)";
+  let defaultSubtitle = "ฝ่ายพัสดุและบำรุงรักษา • ทะเบียนคุมพัสดุและสินทรัพย์ถาวร";
+
+  if (activeTab === "WAIT_DISPOSAL") {
+    defaultTitle = "บัญชีรายการครุภัณฑ์รอจำหน่าย (ขออนุมัติจำหน่าย)";
+    defaultSubtitle = "ฝ่ายพัสดุและบำรุงรักษา • บัญชีสำรวจครุภัณฑ์ชำรุดเสื่อมสภาพเพื่อขออนุมัติแทงจำหน่าย";
+  } else if (activeTab === "DISPOSAL") {
+    defaultTitle = "บัญชีรายการครุภัณฑ์ที่จำหน่ายแล้ว (ตัดจำหน่ายออกจากบัญชี)";
+    defaultSubtitle = "ฝ่ายพัสดุและบำรุงรักษา • ทะเบียนคุมการตัดจำหน่ายพัสดุและสินทรัพย์ถาวร";
+  } else if (activeTab === "LOST") {
+    defaultTitle = "รายงานสรุปรายการครุภัณฑ์สูญหาย";
+    defaultSubtitle = "ฝ่ายพัสดุและบำรุงรักษา • บัญชีตรวจสอบและรายงานครุภัณฑ์สูญหาย";
+  }
+
+  const title = request.title || defaultTitle;
+  const subtitle = request.subtitle || defaultSubtitle;
+  const refCode =
+    reportRef ||
+    `PCL-${activeTab.slice(0, 3)}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+
+  let filterBarHtml = "";
+  if (filters) {
+    const filterItems: string[] = [];
+    if (filters.search) filterItems.push(`คำค้นหา: <strong>${escapeHtml(filters.search)}</strong>`);
+    if (filters.typeName && filters.typeName !== "ทั้งหมด") filterItems.push(`ประเภท: <strong>${escapeHtml(filters.typeName)}</strong>`);
+    if (filters.statusName && filters.statusName !== "ทั้งหมด") filterItems.push(`สถานะ: <strong>${escapeHtml(filters.statusName)}</strong>`);
+    if (filters.dateLabel && filters.dateLabel !== "ทั้งหมด") filterItems.push(`วันที่: <strong>${escapeHtml(filters.dateLabel)}</strong>`);
+
+    if (filterItems.length > 0) {
+      filterBarHtml = `<div class="filter-bar"><span>ตัวกรองที่ระบุ: </span>${filterItems.map((item) => `<span>${item}</span>`).join(" • ")}</div>`;
+    }
+  }
+
+  let summaryHtml = "";
+  if (stats) {
+    const isSpecialTab = activeTab !== "ALL";
+    summaryHtml = `<div class="summary-grid ${isSpecialTab ? "cols-3" : ""}">
+      <div>
+        <span>จำนวนรายการทั้งหมด</span>
+        <strong>${stats.total.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>สภาพปกติ (พร้อมใช้)</span>
+        <strong style="color: #047857;">${stats.normal.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>ชำรุด / ส่งซ่อม</span>
+        <strong style="color: #b45309;">${stats.repair.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      ${
+        !isSpecialTab && stats.disposal !== undefined
+          ? `<div>
+              <span>รอจำหน่าย / จำหน่าย</span>
+              <strong style="color: #475569;">${stats.disposal.toLocaleString()}</strong>
+              <small>รายการ</small>
+            </div>`
+          : ""
+      }
+    </div>`;
+  }
+
+  let tableHeaderHtml = "";
+  let tableRowsHtml = "";
+
+  if (activeTab === "WAIT_DISPOSAL") {
+    tableHeaderHtml = `<tr>
+      <th class="center" style="width: 35px;">ลำดับ</th>
+      <th style="width: 120px;">รหัสครุภัณฑ์ (PID)</th>
+      <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
+      <th class="center" style="width: 105px;">หมายเลขเครื่อง (S/N)</th>
+      <th style="width: 130px;">หน่วยงานที่ส่งคืน</th>
+      <th style="width: 150px;">เหตุผลการขอจำหน่าย</th>
+      <th class="center" style="width: 85px;">วันที่รับเข้า</th>
+      <th class="number" style="width: 90px;">ราคาจัดซื้อ (บ.)</th>
+    </tr>`;
+
+    tableRowsHtml = assets.length
+      ? assets
+          .map((a, idx) => {
+            const pid = a.noid || a.id;
+            const brandModel = [a.model, a.company?.name].filter(Boolean).join(" / ");
+            const reason = a.remark || "ซ่อมไม่คุ้มค่า / เสื่อมสภาพตามอายุการใช้งาน";
+            return `<tr>
+              <td class="center">${idx + 1}</td>
+              <td style="font-family: monospace; font-weight: 600;">${escapeHtml(pid)}</td>
+              <td>
+                <strong>${escapeHtml(a.name || "-")}</strong>
+                ${brandModel ? `<small>ยี่ห้อ/รุ่น: ${escapeHtml(brandModel)}</small>` : ""}
+              </td>
+              <td class="center">${escapeHtml(a.serialNo || "-")}</td>
+              <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
+              <td><span style="color: #b45309; font-weight: 500;">${escapeHtml(reason)}</span></td>
+              <td class="center">${formatDate(a.receivedDate)}</td>
+              <td class="number">${a.price ? money(a.price) : "-"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="empty">ไม่พบรายการครุภัณฑ์รอจำหน่าย</td></tr>`;
+  } else if (activeTab === "DISPOSAL") {
+    tableHeaderHtml = `<tr>
+      <th class="center" style="width: 35px;">ลำดับ</th>
+      <th style="width: 125px;">รหัสครุภัณฑ์ (PID)</th>
+      <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
+      <th class="center" style="width: 110px;">หมายเลขเครื่อง (S/N)</th>
+      <th style="width: 130px;">หน่วยงานเดิม</th>
+      <th class="center" style="width: 100px;">วิธีการจำหน่าย</th>
+      <th class="center" style="width: 90px;">วันที่จำหน่าย</th>
+      <th class="number" style="width: 95px;">ราคาทุน (บ.)</th>
+    </tr>`;
+
+    tableRowsHtml = assets.length
+      ? assets
+          .map((a, idx) => {
+            const pid = a.noid || a.id;
+            const brandModel = [a.model, a.company?.name].filter(Boolean).join(" / ");
+            const method = a.remark || "ตัดจำหน่ายออกจากบัญชี";
+            return `<tr>
+              <td class="center">${idx + 1}</td>
+              <td style="font-family: monospace; font-weight: 600;">${escapeHtml(pid)}</td>
+              <td>
+                <strong>${escapeHtml(a.name || "-")}</strong>
+                ${brandModel ? `<small>ยี่ห้อ/รุ่น: ${escapeHtml(brandModel)}</small>` : ""}
+              </td>
+              <td class="center">${escapeHtml(a.serialNo || "-")}</td>
+              <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
+              <td class="center"><span class="badge badge-disposal">${escapeHtml(method)}</span></td>
+              <td class="center">${formatDate(a.updatedAt || a.receivedDate)}</td>
+              <td class="number">${a.price ? money(a.price) : "-"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="empty">ไม่พบรายการครุภัณฑ์ที่จำหน่ายแล้ว</td></tr>`;
+  } else if (activeTab === "LOST") {
+    tableHeaderHtml = `<tr>
+      <th class="center" style="width: 35px;">ลำดับ</th>
+      <th style="width: 125px;">รหัสครุภัณฑ์ (PID)</th>
+      <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
+      <th class="center" style="width: 110px;">หมายเลขเครื่อง (S/N)</th>
+      <th style="width: 140px;">หน่วยงานที่รับผิดชอบ</th>
+      <th class="center" style="width: 95px;">วันที่บันทึก</th>
+      <th style="width: 140px;">หมายเหตุ</th>
+      <th class="number" style="width: 95px;">ราคาทุน (บ.)</th>
+    </tr>`;
+
+    tableRowsHtml = assets.length
+      ? assets
+          .map((a, idx) => {
+            const pid = a.noid || a.id;
+            const brandModel = [a.model, a.company?.name].filter(Boolean).join(" / ");
+            return `<tr>
+              <td class="center">${idx + 1}</td>
+              <td style="font-family: monospace; font-weight: 600;">${escapeHtml(pid)}</td>
+              <td>
+                <strong>${escapeHtml(a.name || "-")}</strong>
+                ${brandModel ? `<small>ยี่ห้อ/รุ่น: ${escapeHtml(brandModel)}</small>` : ""}
+              </td>
+              <td class="center">${escapeHtml(a.serialNo || "-")}</td>
+              <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
+              <td class="center">${formatDate(a.updatedAt || a.receivedDate)}</td>
+              <td><span style="color: #be123c;">${escapeHtml(a.remark || "แจ้งสูญหาย")}</span></td>
+              <td class="number">${a.price ? money(a.price) : "-"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="empty">ไม่พบรายการครุภัณฑ์สูญหาย</td></tr>`;
+  } else {
+    // Standard ALL tab
+    tableHeaderHtml = `<tr>
+      <th class="center" style="width: 35px;">ลำดับ</th>
+      <th style="width: 120px;">รหัสครุภัณฑ์ (PID)</th>
+      <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
+      <th class="center" style="width: 105px;">หมายเลขเครื่อง (S/N)</th>
+      <th style="width: 130px;">หน่วยงานที่รับผิดชอบ</th>
+      <th class="center" style="width: 85px;">วันที่รับเข้า</th>
+      <th class="center" style="width: 90px;">สถานะ</th>
+      <th class="number" style="width: 90px;">ราคา (บ.)</th>
+    </tr>`;
+
+    tableRowsHtml = assets.length
+      ? assets
+          .map((a, idx) => {
+            const pid = a.noid || a.id;
+            const brandModel = [a.model, a.company?.name].filter(Boolean).join(" / ");
+            return `<tr>
+              <td class="center">${idx + 1}</td>
+              <td style="font-family: monospace; font-weight: 600;">${escapeHtml(pid)}</td>
+              <td>
+                <strong>${escapeHtml(a.name || "-")}</strong>
+                ${brandModel ? `<small>ยี่ห้อ/รุ่น: ${escapeHtml(brandModel)}</small>` : ""}
+              </td>
+              <td class="center">${escapeHtml(a.serialNo || "-")}</td>
+              <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
+              <td class="center">${formatDate(a.receivedDate)}</td>
+              <td class="center">${getBadgeHtml(a.status?.name, a.status?.code)}</td>
+              <td class="number">${a.price ? money(a.price) : "-"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="empty">ไม่พบรายการครุภัณฑ์ตามเงื่อนไขที่เลือก</td></tr>`;
+  }
+
+  const totalAmount = assets.reduce((sum, item) => sum + Number(item.price || 0), 0);
+
+  let signaturesHtml = "";
+  if (activeTab === "WAIT_DISPOSAL") {
+    signaturesHtml = `
+      <div class="signatures cols-3" style="margin-top: 20px;">
+        ${signature("เจ้าหน้าที่พัสดุ (ผู้สำรวจ/รวบรวม)", context.preparedBy)}
+        ${signature("หัวหน้างานพัสดุและบำรุงรักษา (ผู้ตรวจสอบ)")}
+        ${signature("ผู้อำนวยการ / ผู้มีอำนาจสั่งการ (ผู้อนุมัติ)")}
+      </div>
+    `;
+  } else if (activeTab === "DISPOSAL") {
+    signaturesHtml = `
+      <div class="signatures" style="margin-top: 20px;">
+        ${signature("เจ้าหน้าที่พัสดุ (ผู้ตัดจำหน่าย)", context.preparedBy)}
+        ${signature("หัวหน้างานพัสดุและบำรุงรักษา (ผู้รับรอง)")}
+      </div>
+    `;
+  } else {
+    signaturesHtml = `
+      <div class="signatures" style="margin-top: 20px;">
+        ${signature("เจ้าหน้าที่พัสดุ (ผู้จัดทำรายงาน)", context.preparedBy)}
+        ${signature("หัวหน้างานพัสดุและบำรุงรักษา (ผู้ตรวจสอบ)")}
+      </div>
+    `;
+  }
+
+  const body = `
+    <header class="document-header">
+      <div class="brand-mark">H</div>
+      <div class="brand-copy">
+        <p>โรงพยาบาลและหน่วยงานในสังกัด</p>
+        <h1>${escapeHtml(title)}</h1>
+        <span>${escapeHtml(subtitle)}</span>
+      </div>
+      <div class="document-ref">
+        <span>เลขที่อ้างอิง</span>
+        <strong>${escapeHtml(refCode)}</strong>
+      </div>
+    </header>
+
+    ${filterBarHtml}
+    ${summaryHtml}
+
+    <section class="table-section">
+      <h2>รายการครุภัณฑ์ (${assets.length} รายการ)</h2>
+      <table>
+        <thead>
+          ${tableHeaderHtml}
+        </thead>
+        <tbody>
+          ${tableRowsHtml}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="report-summary-signatures" style="break-inside: avoid; page-break-inside: avoid; margin-top: 24px;">
+      ${
+        assets.length > 0 && totalAmount > 0
+          ? `<section style="margin: 0 0 24px 0; padding: 12px; border: 2px solid #059669; border-radius: 8px; background: #ecfdf5; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 13px; font-weight: 700; color: #065f46;">มูลค่ารวมครุภัณฑ์ทั้งหมด (${assets.length.toLocaleString()} รายการ)</span>
+              <strong style="font-size: 16px; color: #047857;">${money(totalAmount)} บาท</strong>
+            </section>`
+          : ""
+      }
+
+      ${signaturesHtml}
+    </div>
+  `;
+
+  return openPrintWindow(
+    title,
+    documentShell(title, body, context.preparedBy, context.preparedAt || new Date()),
+  );
+}
+
+// -------------------------------------------------------------
+// Report 5: รายงานสต็อกครุภัณฑ์พัสดุแยกตามสถานะวงจรชีวิต (Grouped by Lifecycle/Status)
+// -------------------------------------------------------------
+export interface EquipmentGroupedByStatusPrintRequest {
+  title?: string;
+  subtitle?: string;
+  reportRef?: string;
+  assets: Asset[];
+  context: {
+    preparedBy: string;
+    preparedAt?: Date;
+  };
+}
+
+export function printEquipmentStockGroupedByStatusReport(
+  request: EquipmentGroupedByStatusPrintRequest,
+): boolean {
+  const {
+    title = "รายงานสต็อกครุภัณฑ์แยกตามสถานะวงจรชีวิต (งานพัสดุ)",
+    subtitle = "ฝ่ายพัสดุและบำรุงรักษา • สรุปรายการตามกลุ่มสถานะการใช้งานและการจำหน่าย",
+    reportRef,
+    assets,
+    context,
+  } = request;
+
+  const refCode =
+    reportRef ||
+    `PCL-STS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+
+  interface StatusGroup {
+    groupKey: string;
+    groupName: string;
+    badgeClass: string;
+    assets: Asset[];
+    totalCost: number;
+  }
+
+  const groups: StatusGroup[] = [
+    {
+      groupKey: "NORMAL",
+      groupName: "ครุภัณฑ์ใช้งานปกติ (พร้อมใช้งาน)",
+      badgeClass: "badge-normal",
+      assets: [],
+      totalCost: 0,
+    },
+    {
+      groupKey: "REPAIR",
+      groupName: "ครุภัณฑ์ชำรุด / อยู่ระหว่างส่งซ่อม",
+      badgeClass: "badge-repair",
+      assets: [],
+      totalCost: 0,
+    },
+    {
+      groupKey: "WAIT_DISPOSAL",
+      groupName: "ครุภัณฑ์รอการจำหน่าย (ชำรุด/เสื่อมสภาพ)",
+      badgeClass: "badge-damaged",
+      assets: [],
+      totalCost: 0,
+    },
+    {
+      groupKey: "DISPOSAL_LOST",
+      groupName: "ครุภัณฑ์จำหน่ายแล้ว / สูญหาย",
+      badgeClass: "badge-disposal",
+      assets: [],
+      totalCost: 0,
+    },
+  ];
+
+  for (const asset of assets) {
+    const code = (asset.status?.code || "").toUpperCase();
+    let target = groups[0]; // normal default
+    if (code === "NORMAL") {
+      target = groups[0];
+    } else if (code === "DAMAGED" || code === "UNDER_REPAIR") {
+      target = groups[1];
+    } else if (code === "WAIT_DISPOSAL") {
+      target = groups[2];
+    } else if (code === "DISPOSAL" || code === "DISPOSED" || code === "LOST") {
+      target = groups[3];
+    }
+
+    target.assets.push(asset);
+    target.totalCost += Number(asset.price || 0);
+  }
+
+  const totalAssetsCount = assets.length;
+  const totalAmount = assets.reduce(
+    (sum, item) => sum + Number(item.price || 0),
+    0,
+  );
+
+  const statusBlocksHtml = groups
+    .filter((grp) => grp.assets.length > 0)
+    .map((grp, gIdx) => {
+      const rows = grp.assets
+        .map((a, rIdx) => {
+          const pid = a.noid || a.id;
+          const brandModel = [a.model, a.company?.name].filter(Boolean).join(" / ");
+          return `<tr>
+            <td class="center">${rIdx + 1}</td>
+            <td style="font-family: monospace; font-weight: 600;">${escapeHtml(pid)}</td>
+            <td>
+              <strong>${escapeHtml(a.name || "-")}</strong>
+              ${brandModel ? `<small>ยี่ห้อ/รุ่น: ${escapeHtml(brandModel)}</small>` : ""}
+            </td>
+            <td class="center">${escapeHtml(a.serialNo || "-")}</td>
+            <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
+            <td class="center">${getBadgeHtml(a.status?.name, a.status?.code)}</td>
+            <td class="number">${a.price ? money(a.price) : "-"}</td>
+          </tr>`;
+        })
+        .join("");
+
+      return `
+        <div class="department-block">
+          <div class="department-header-bar">
+            <div>
+              <h3>กลุ่มที่ ${gIdx + 1}: ${escapeHtml(grp.groupName)}</h3>
+            </div>
+            <div class="dept-badges">
+              <span class="dept-badge">จำนวน: <strong>${grp.assets.length}</strong> รายการ</span>
+              <span class="dept-badge" style="color: #047857;">มูลค่า: <strong>${money(grp.totalCost)}</strong> บ.</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th class="center" style="width: 38px;">ลำดับ</th>
+                <th style="width: 130px;">รหัสครุภัณฑ์ (PID)</th>
+                <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
+                <th class="center" style="width: 110px;">หมายเลขเครื่อง (S/N)</th>
+                <th style="width: 140px;">หน่วยงานที่รับผิดชอบ</th>
+                <th class="center" style="width: 95px;">สถานะ</th>
+                <th class="number" style="width: 95px;">ราคา (บาท)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+              ${
+                grp.totalCost > 0
+                  ? `<tr style="background: #f8fafc; font-weight: 700; break-inside: avoid; page-break-inside: avoid;">
+                      <td colspan="6" style="text-align: right; padding-right: 12px;">รวมกลุ่ม ${escapeHtml(grp.groupName)} (${grp.assets.length} รายการ)</td>
+                      <td class="number" style="color: #047857;">${money(grp.totalCost)}</td>
+                    </tr>`
+                  : ""
+              }
+            </tbody>
+          </table>
+        </div>
+      `;
+    })
+    .join("");
+
+  const body = `
+    <header class="document-header">
+      <div class="brand-mark">H</div>
+      <div class="brand-copy">
+        <p>โรงพยาบาลและหน่วยงานในสังกัด</p>
+        <h1>${escapeHtml(title)}</h1>
+        <span>${escapeHtml(subtitle)}</span>
+      </div>
+      <div class="document-ref">
+        <span>เลขที่อ้างอิง</span>
+        <strong>${escapeHtml(refCode)}</strong>
+      </div>
+    </header>
+
+    <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 16px;">
+      <div>
+        <span>ครุภัณฑ์รวมทั้งหมด</span>
+        <strong>${totalAssetsCount.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>พร้อมใช้งาน</span>
+        <strong style="color: #047857;">${groups[0].assets.length.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>ชำรุด / ส่งซ่อม</span>
+        <strong style="color: #b45309;">${groups[1].assets.length.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>รอจำหน่าย / ตัดจำหน่าย</span>
+        <strong style="color: #475569;">${(groups[2].assets.length + groups[3].assets.length).toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+    </div>
+
+    ${statusBlocksHtml}
+
+    <div class="report-summary-signatures" style="break-inside: avoid; page-break-inside: avoid; margin-top: 24px;">
+      <section style="margin: 0 0 24px 0; padding: 12px; border: 2px solid #059669; border-radius: 8px; background: #ecfdf5; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 13px; font-weight: 700; color: #065f46;">มูลค่ารวมครุภัณฑ์ทั้งหมดทุกสถานะ (${totalAssetsCount.toLocaleString()} รายการ)</span>
+        <strong style="font-size: 16px; color: #047857;">${money(totalAmount)} บาท</strong>
+      </section>
+
+      <div class="signatures" style="margin-top: 20px;">
+        ${signature("เจ้าหน้าที่พัสดุ (ผู้จัดทำรายงาน)", context.preparedBy)}
+        ${signature("หัวหน้างานพัสดุและบำรุงรักษา (ผู้ตรวจสอบ)")}
+      </div>
+    </div>
+  `;
+
+  return openPrintWindow(
+    title,
+    documentShell(title, body, context.preparedBy, context.preparedAt || new Date()),
+  );
+}
+
