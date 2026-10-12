@@ -7,6 +7,7 @@ import { useAssessmentStore } from "../stores/useAssessmentModalStore";
 import { useAuthStore } from "../stores/authStore";
 import RepairHistory from "./RepairHistory";
 import ConfirmRepair from "./ConfirmRepair";
+import MaintenanceReports from "./MaintenanceReports";
 
 const PRIORITY_OPTIONS: readonly { value: PriorityFilter; label: string }[] = [
   { value: "ALL", label: "ทั้งหมด" },
@@ -19,6 +20,7 @@ const TABS: readonly { id: AssessmentTab; label: string }[] = [
   { id: "PENDING", label: "งานแจ้งซ่อม" },
   { id: "REPAIR_LIST", label: "รายการงานซ่อม" },
   { id: "CONFIRM_REPAIR", label: "ยืนยันการซ่อม" },
+  { id: "REPORTS", label: "รายงานและเอกสาร" },
 ];
 
 export default function PendingEvaluationsPage() {
@@ -143,6 +145,9 @@ export default function PendingEvaluationsPage() {
 
         {/* ยืนยันการซ่อม */}
         {activeTab === "CONFIRM_REPAIR" && <ConfirmRepair />}
+
+        {/* รายงานและเอกสารสำหรับช่าง */}
+        {activeTab === "REPORTS" && <MaintenanceReports />}
       </div>
     </div>
   );
