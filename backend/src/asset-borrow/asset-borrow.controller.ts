@@ -15,6 +15,7 @@ import { RequestReturnBorrowDto } from './dto/request-return-borrow.dto';
 import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { RejectBorrowDto } from './dto/reject-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
+import { BorrowSummaryFilterDto } from './dto/borrow-summary-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { CreateBorrowExtensionDto } from './dto/create-borrow-extension.dto';
 import { ReviewBorrowExtensionDto } from './dto/review-borrow-extension.dto';
@@ -393,11 +394,41 @@ export class AssetBorrowController {
   @ApiQuery({ name: 'assetId', required: false, type: String })
   @ApiQuery({ name: 'borrowerId', required: false, type: String })
   @ApiQuery({ name: 'borrowStatusId', required: false, type: Number })
+  @ApiQuery({
+    name: 'statusCodes',
+    required: false,
+    type: [String],
+    description: 'Comma-separated or repeated borrow status codes',
+  })
   async findAll(
     @Query() query: BorrowFilterDto,
     @Session() session: UserSession,
-  ) {
+  ): ReturnType<AssetBorrowService['findAll']> {
     return this.assetBorrowService.findAll(query, session.user);
+  }
+
+  @Get('summary')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Return exact borrow transaction totals grouped by status code',
+  })
+  @ApiQuery({ name: 'sectionId', required: false, type: String })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Database counts for each borrow status plus the overdue borrowed count',
+  })
+  async getSummary(
+    @Query() query: BorrowSummaryFilterDto,
+    @Session() session: UserSession,
+  ): ReturnType<AssetBorrowService['getStatusSummary']> {
+    return this.assetBorrowService.getStatusSummary(query, session.user);
   }
 
   // Get Borrowing By ID

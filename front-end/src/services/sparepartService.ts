@@ -1,3 +1,5 @@
+import { getPage } from "./pagedApi";
+import type { Filters, Page } from "./pagedApi";
 import { apiClient } from "./apiClient";
 import { isSessionExpiredApiError } from "./serviceErrorPolicy";
 import type {
@@ -57,17 +59,10 @@ const defaultGroups: SparepartGroup[] = [
 ];
 
 export async function getSparepartGroups(): Promise<SparepartGroup[]> {
-  try {
-    const res = await apiClient.get(
-      `/spare-part-groups?limit=100`,
-    );
-    const data = res.data;
-    const items = Array.isArray(data) ? data : (data?.data ?? []);
-    return items.length > 0 ? items : defaultGroups;
-  } catch (err) {
-    console.warn("Using default spare part groups:", err);
-    return defaultGroups;
-  }
+  const { data } = await apiClient.get<SparepartGroup[] | { data: SparepartGroup[] }>("/spare-part-groups");
+  const groups = Array.isArray(data) ? data : data.data;
+  if (!Array.isArray(groups)) throw new Error("API ส่งหมวดหมู่อะไหล่ไม่ถูกต้อง");
+  return groups;
 }
 
 const TIMESTAMPS_KEY = "hams_spareparts_timestamps_v1";
@@ -245,6 +240,7 @@ export async function updateSparepart(
     );
     const updated: Sparepart = {
       ...res.data,
+      localDraft: false,
       ...dto,
       createdAt: res.data?.createdAt || createdAt,
       updatedAt: res.data?.updatedAt || now,
@@ -264,6 +260,7 @@ export async function updateSparepart(
     saveSparepartTimestamp(id, { createdAt, updatedAt: now });
     const exists = localSpareparts.some((i) => i.id === id);
     const fallback = {
+      localDraft: true,
       id,
       ...dto,
       createdAt,
@@ -271,7 +268,7 @@ export async function updateSparepart(
     } as Sparepart;
     if (exists) {
       localSpareparts = localSpareparts.map((i) =>
-        i.id === id ? ({ ...i, ...dto, createdAt, updatedAt: now } as Sparepart) : i,
+        i.id === id ? ({ ...i, ...dto, localDraft: true, createdAt, updatedAt: now } as Sparepart) : i,
       );
     } else {
       localSpareparts = [fallback, ...localSpareparts];
@@ -331,7 +328,13 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
   const query = jobNo.trim();
 
   try {
-    const res = await apiClient.get(`/repairs?limit=100`);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query)) {
+      const detail = (await apiClient.get("/repairs/" + query)).data;
+      const completedJobsKey = getAccountStorageKey("completed_return_jobs");
+      const completedJobs: string[] = JSON.parse((completedJobsKey && localStorage.getItem(completedJobsKey)) || "[]");
+      return { ...detail, isCompleted: completedJobs.includes(query) };
+    }
+    const res = await apiClient.get("/repairs", { params: { search: query.replace(/^(REQ|OUT)-/i, "REP-"), page: 1, limit: 20 } });
     const data = res.data;
     const items = Array.isArray(data) ? data : (data?.data ?? []);
 
@@ -340,7 +343,8 @@ export async function getRepairByJobNo(jobNo: string): Promise<any> {
         String(item.id) === query ||
         item.jobNo === query ||
         item.code === query ||
-        item.repairCode === query,
+        item.repairCode === query ||
+        String(item.jobNo ?? "").replace(/^REP-/i, "") === query.replace(/^(REQ|OUT|REP)-/i, ""),
     );
 
     if (!found) {
@@ -413,4 +417,12 @@ export async function returnSparepart(
     payload,
   );
   return res.data;
+}
+
+export async function getSparePartsPage(filters: Filters, signal?: AbortSignal): Promise<Page<Sparepart>> {
+  return getPage<Sparepart>("/spare-parts", filters, signal);
+}
+export function getLocalSparepartDrafts(): Sparepart[] {
+  ensureLocalSparepartsForCurrentAccount();
+  return localSpareparts.filter((part) => part.localDraft === true || part.id >= 1_000_000_000_000);
 }

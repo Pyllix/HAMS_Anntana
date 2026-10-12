@@ -473,6 +473,11 @@ describe('SparePartsService', () => {
           lte: new Date('2026-08-31T23:59:59.999Z'),
         },
         OR: [
+          {
+            sparepart: {
+              group: { name: { contains: 'PO', mode: 'insensitive' } },
+            },
+          },
           { sparepartAddDoc: { contains: 'PO', mode: 'insensitive' } },
           { sparepart: { code: { contains: 'PO', mode: 'insensitive' } } },
           { sparepart: { name: { contains: 'PO', mode: 'insensitive' } } },
@@ -534,6 +539,8 @@ describe('SparePartsService', () => {
         partCode: 'SP01-0001',
         partName: 'Fuse 10A',
         partUnit: 'ชิ้น',
+        partGroupId: 2,
+        partGroupName: 'Electrical',
         userId: 'user-uuid-1',
         userFirstname: 'John',
         userLastname: 'Doe',
@@ -564,6 +571,7 @@ describe('SparePartsService', () => {
             code: 'SP01-0001',
             name: 'Fuse 10A',
             unit: 'ชิ้น',
+            group: { id: 2, name: 'Electrical' },
           },
           user: {
             id: 'user-uuid-1',

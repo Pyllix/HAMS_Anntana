@@ -10,6 +10,7 @@ import { ReturnAssetBorrowDto } from './dto/return-asset-borrow.dto';
 import { RequestReturnBorrowDto } from './dto/request-return-borrow.dto';
 import { CompleteReturnBorrowDto } from './dto/complete-return-borrow.dto';
 import { BorrowFilterDto } from './dto/borrow-filter.dto';
+import { BorrowSummaryFilterDto } from './dto/borrow-summary-filter.dto';
 import { CancelBorrowDto } from './dto/cancel-borrow.dto';
 import { CreateBorrowExtensionDto } from './dto/create-borrow-extension.dto';
 import { ReviewBorrowExtensionDto } from './dto/review-borrow-extension.dto';
@@ -30,6 +31,12 @@ import {
   BorrowExtensionStatus,
   Prisma,
 } from '@prisma/client';
+
+export interface BorrowStatusSummary {
+  total: number;
+  byStatusCode: Record<string, number>;
+  overdueCount: number;
+}
 
 /** Shared selection projection for Asset within BorrowTransaction */
 export const BORROW_ASSET_SELECT = {
@@ -1164,10 +1171,25 @@ export class AssetBorrowService {
       where.OR = [
         { borrowNo: { contains: search, mode: 'insensitive' } },
         { asset: { name: { contains: search, mode: 'insensitive' } } },
+        { asset: { model: { contains: search, mode: 'insensitive' } } },
+        { asset: { serialNo: { contains: search, mode: 'insensitive' } } },
+        { id: { contains: search.replace(/^BR-/i, ''), mode: 'insensitive' } },
         { borrower: { employeeId: { contains: search, mode: 'insensitive' } } },
         { borrower: { firstname: { contains: search, mode: 'insensitive' } } },
         { borrower: { lastname: { contains: search, mode: 'insensitive' } } },
       ];
+      if (search.split(/\s+/).length > 1) {
+        where.OR.push({
+          borrower: {
+            AND: search.split(/\s+/).map((term) => ({
+              OR: [
+                { firstname: { contains: term, mode: 'insensitive' } },
+                { lastname: { contains: term, mode: 'insensitive' } },
+              ],
+            })),
+          },
+        });
+      }
     }
 
     if (user?.role === UserRole.DEPARTMENT_STAFF) {
@@ -1200,6 +1222,9 @@ export class AssetBorrowService {
     }
 
     if (query.borrowStatusId) where.borrow_status_id = query.borrowStatusId;
+    if (query.statusCodes?.length) {
+      where.borrowStatus = { code: { in: query.statusCodes } };
+    }
 
     if (query.startDate || query.endDate) {
       where.createdAt = {
@@ -1259,7 +1284,7 @@ export class AssetBorrowService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: BORROW_TRANSACTION_INCLUDE,
       }),
       this.prisma.borrowTransaction.count({ where }),
@@ -1267,6 +1292,64 @@ export class AssetBorrowService {
 
     const enrichedData = data.map((item) => this.enrichBorrowItem(item));
     return paginate(enrichedData, total, page, limit);
+  }
+
+  async getStatusSummary(
+    query: BorrowSummaryFilterDto,
+    user?: { id: string; role?: string | string[]; section_id?: string | null },
+  ): Promise<BorrowStatusSummary> {
+    const where: Prisma.BorrowTransactionWhereInput = {};
+
+    const isDepartmentStaff = Array.isArray(user?.role)
+      ? user.role.includes(UserRole.DEPARTMENT_STAFF)
+      : user?.role === UserRole.DEPARTMENT_STAFF;
+    if (isDepartmentStaff && user) {
+      const callerSectionId = await this.getCallerSectionId(user);
+      if (callerSectionId) {
+        where.borrower = { section_id: callerSectionId };
+      } else {
+        where.borrower_id = user.id;
+      }
+    } else if (query.sectionId) {
+      where.borrower = { section_id: query.sectionId };
+    }
+
+    const overdueWhere: Prisma.BorrowTransactionWhereInput = {
+      ...where,
+      borrowStatus: { code: 'BORROWED' },
+      expectedReturnDate: { lt: new Date() },
+    };
+
+    const [statuses, countsByStatus, overdueCount] =
+      await this.prisma.$transaction([
+        this.prisma.borrowStatus.findMany({
+          select: { id: true, code: true },
+        }),
+        this.prisma.borrowTransaction.groupBy({
+          by: ['borrow_status_id'],
+          where,
+          orderBy: { borrow_status_id: 'asc' },
+          _count: { id: true },
+        }),
+        this.prisma.borrowTransaction.count({ where: overdueWhere }),
+      ]);
+
+    const countByStatusId = new Map(
+      countsByStatus.map(({ borrow_status_id, _count }) => [
+        borrow_status_id,
+        _count && typeof _count === 'object' ? (_count.id ?? 0) : 0,
+      ]),
+    );
+    const byStatusCode = Object.fromEntries(
+      statuses.map(({ id, code }) => [code, countByStatusId.get(id) ?? 0]),
+    );
+    const total = countsByStatus.reduce(
+      (sum, { _count }) =>
+        sum + (_count && typeof _count === 'object' ? (_count.id ?? 0) : 0),
+      0,
+    );
+
+    return { total, byStatusCode, overdueCount };
   }
 
   async findOne(idOrBorrowNo: string, user?: any) {

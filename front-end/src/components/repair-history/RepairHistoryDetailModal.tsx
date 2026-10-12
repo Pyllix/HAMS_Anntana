@@ -1,3 +1,6 @@
+import { useForegroundQuery } from "../../hooks/useServerPage";
+import { getRepairHistoryById } from "../../services/repairHistoryService";
+import QueryStatus from "../shared/QueryStatus";
 import { useEffect } from "react";
 import { ClipboardList, Package, PenLine, X } from "lucide-react";
 import { useRepairHistoryModalStore } from "../../stores/useRepairHistoryModalStore";
@@ -48,7 +51,12 @@ function personName(
 }
 
 export default function RepairHistoryDetailModal() {
-  const { isOpen, selectedJob: job, closeModal } = useRepairHistoryModalStore();
+  const { isOpen, selectedJob: selectedJob, closeModal } = useRepairHistoryModalStore();
+
+  const selectedJobId = selectedJob?.jobId ?? "";
+  const detailQuery = useForegroundQuery(["repairHistory", "detail", selectedJobId],
+    (signal) => getRepairHistoryById(selectedJobId, signal), false, isOpen && !!selectedJob);
+  const job = detailQuery.data ?? selectedJob;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -97,6 +105,7 @@ export default function RepairHistoryDetailModal() {
         </header>
 
         <div className="space-y-5 px-6 py-5 sm:px-8">
+          <QueryStatus query={detailQuery} />
           <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="border-l-4 border-blue-500 pl-4">
               <p className="font-mono text-xs font-bold text-blue-600">

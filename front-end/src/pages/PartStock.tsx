@@ -1,3 +1,8 @@
+import { useForegroundQuery } from "../hooks/useServerPage";
+import { getSummary } from "../services/pagedApi";
+import type { SpareSummary } from "../services/pagedApi";
+import QueryStatus from "../components/shared/QueryStatus";
+import { getLocalSparepartDrafts } from "../services/sparepartService";
 import { useMemo, useState } from "react";
 import {
   Search,
@@ -12,7 +17,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getSparepartGroups, getSpareParts } from "../services/sparepartService";
 import { getSparePartStatus } from "../types/TypeSparePart";
-import SparePartTable from "../components/spare-part/SparePartTable";
+import SparePartTable, { LocalSpareDraftTable } from "../components/spare-part/SparePartTable";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
 import {
@@ -42,19 +47,13 @@ export default function PartStock() {
   });
 
   // query key เดียวกับ SparePartTable จึงแชร์ cache กัน ไม่ยิงซ้ำ
-  const { data: spareParts } = useQuery({
-    queryKey: ["spareParts"],
-    queryFn: getSpareParts,
-  });
+  const summaryQuery = useForegroundQuery(["spareParts", "summary"],
+    (signal) => getSummary<SpareSummary>("/spare-parts/summary", {}, signal), true);
+  const stockSummary = summaryQuery.data;
+  const draftsQuery = useForegroundQuery(["spareParts", "local-drafts"], () => Promise.resolve(getLocalSparepartDrafts()));
+  const localDrafts = draftsQuery.data ?? [];
 
-  const defaultGroups = [
-    { id: 1, name: "ไฟฟ้า" },
-    { id: 2, name: "เครื่องมือแพทย์" },
-    { id: 3, name: "อิเล็กทรอนิกส์" },
-    { id: 4, name: "กลไก/เครื่องกล" },
-  ];
-
-  const availableGroups = groups && groups.length > 0 ? groups : defaultGroups;
+  const availableGroups = groups ?? [];
 
   const stockStatusOptions = [
     { value: "ALL", label: "ทั้งหมด" },
@@ -64,16 +63,14 @@ export default function PartStock() {
   ];
 
   const statsSummary: StatCardData[] = useMemo(() => {
-    const list = spareParts ?? [];
-    const countByStatus = (status: string) =>
-      list.filter((item) => getSparePartStatus(item) === status).length;
+    const countByStatus = (status: string) => stockSummary?.byStockStatus[status] ?? (stockSummary ? 0 : undefined);
 
     return [
       {
         id: "total",
         filterKey: "ALL",
         title: "อะไหล่ทั้งหมด",
-        value: list.length,
+        value: stockSummary?.total,
         icon: Package,
         iconBg: "bg-slate-100",
         iconColor: "text-slate-600",
@@ -110,10 +107,15 @@ export default function PartStock() {
         valueColor: "text-rose-600",
       },
     ];
-  }, [spareParts]);
+  }, [stockSummary]);
 
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      <QueryStatus query={summaryQuery} />
+      {localDrafts.length > 0 && <div role="status" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+        <p>ข้อมูลอะไหล่ที่บันทึกในเครื่อง ยังไม่ยืนยันกับเซิร์ฟเวอร์ (ไม่นับรวมในยอด)</p>
+        <LocalSpareDraftTable rows={localDrafts} />
+      </div>}
       {/* Stat Cards */}
       <div className="shrink-0">
         <StatCards

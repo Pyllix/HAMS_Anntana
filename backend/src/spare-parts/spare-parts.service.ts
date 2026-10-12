@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { paginate } from 'src/common/utils/paginate.util';
+import { paginate, type PaginatedResult } from 'src/common/utils/paginate.util';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { CreateSparepartDto } from './dto/create-spare-part.dto';
 import { UpdateSparepartDto } from './dto/update-spare-part.dto';
@@ -43,10 +43,29 @@ type StockInHistorySearchRow = {
   partCode: string | null;
   partName: string | null;
   partUnit: string | null;
+  partGroupId: number | null;
+  partGroupName: string | null;
   userId: string | null;
   userFirstname: string | null;
   userLastname: string | null;
   userEmail: string | null;
+};
+
+export interface SparePartStockSummary {
+  total: number;
+  byStockStatus: Record<'NORMAL' | 'LOW' | 'OUT', number>;
+}
+
+const SPAREPART_LIST_INCLUDE = {
+  group: {
+    select: { id: true, name: true },
+  },
+};
+
+type SparepartListRow = Prisma.SparepartGetPayload<{
+  include: typeof SPAREPART_LIST_INCLUDE;
+}> & {
+  isLowStock: boolean;
 };
 
 @Injectable()
@@ -141,7 +160,9 @@ export class SparePartsService {
     });
   }
 
-  async findAll(query: QuerySparepartDto) {
+  async findAll(
+    query: QuerySparepartDto,
+  ): Promise<PaginatedResult<SparepartListRow>> {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
     const search = query.search?.trim();
@@ -164,6 +185,31 @@ export class SparePartsService {
             },
           }
         : {}),
+      ...(query.stockStatus === 'NORMAL'
+        ? {
+            AND: [
+              { qtyInStock: { gt: 0 } },
+              {
+                qtyInStock: {
+                  gt: this.prisma.sparepart.fields.minStock,
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(query.stockStatus === 'LOW'
+        ? {
+            AND: [
+              { qtyInStock: { gt: 0 } },
+              {
+                qtyInStock: {
+                  lte: this.prisma.sparepart.fields.minStock,
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(query.stockStatus === 'OUT' ? { qtyInStock: { lte: 0 } } : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -172,11 +218,7 @@ export class SparePartsService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { id: 'asc' },
-        include: {
-          group: {
-            select: { id: true, name: true },
-          },
-        },
+        include: SPAREPART_LIST_INCLUDE,
       }),
       this.prisma.sparepart.count({ where }),
     ]);
@@ -187,6 +229,38 @@ export class SparePartsService {
     }));
 
     return paginate(formatted, total, page, limit);
+  }
+
+  async getStockSummary(): Promise<SparePartStockSummary> {
+    const [counts] = await this.prisma.$queryRaw<
+      Array<{
+        total: bigint | number;
+        normal: bigint | number;
+        low: bigint | number;
+        out: bigint | number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE "qty_in_stock" > 0 AND "qty_in_stock" > "min_stock"
+        ) AS normal,
+        COUNT(*) FILTER (
+          WHERE "qty_in_stock" > 0 AND "qty_in_stock" <= "min_stock"
+        ) AS low,
+        COUNT(*) FILTER (WHERE "qty_in_stock" <= 0) AS out
+      FROM "spareparts"
+      WHERE "deleted_at" IS NULL
+    `);
+
+    return {
+      total: Number(counts?.total ?? 0),
+      byStockStatus: {
+        NORMAL: Number(counts?.normal ?? 0),
+        LOW: Number(counts?.low ?? 0),
+        OUT: Number(counts?.out ?? 0),
+      },
+    };
   }
 
   async findLowStockSummary() {
@@ -534,6 +608,7 @@ export class SparePartsService {
 
     const where: Prisma.SparepartAddWhereInput = {
       deletedAt: null,
+      ...(query.groupId ? { sparepart: { groupId: query.groupId } } : {}),
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
       ...(query.addBy ? { addBy: query.addBy } : {}),
       ...(query.sparepartAddDoc
@@ -559,6 +634,13 @@ export class SparePartsService {
       ...(query.search
         ? {
             OR: [
+              {
+                sparepart: {
+                  group: {
+                    name: { contains: query.search, mode: 'insensitive' },
+                  },
+                },
+              },
               {
                 sparepartAddDoc: {
                   contains: query.search,
@@ -587,7 +669,13 @@ export class SparePartsService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       include: {
         sparepart: {
-          select: { id: true, code: true, name: true, unit: true },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            unit: true,
+            group: { select: { id: true, name: true } },
+          },
         },
         user: {
           select: { id: true, firstname: true, lastname: true, email: true },
@@ -636,6 +724,15 @@ export class SparePartsService {
       ${documentFilter}
       ${startDateFilter}
       ${endDateFilter}
+      ${
+        query.groupId
+          ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM "spareparts" AS grouped_part
+        WHERE grouped_part."sparepart_id" = a."sparepart_id"
+          AND grouped_part."group_id" = ${query.groupId}
+      )`
+          : Prisma.empty
+      }
     `;
 
     const rows = await this.prisma.$queryRaw<
@@ -659,6 +756,9 @@ export class SparePartsService {
           AND (
             p."sparepart_code" ILIKE ${searchPattern}
             OR p."name" ILIKE ${searchPattern}
+            OR EXISTS (SELECT 1 FROM "sparepart_groups" AS search_group
+              WHERE search_group."group_id" = p."group_id"
+                AND search_group.name ILIKE ${searchPattern})
           )
       ),
       total_count AS (
@@ -687,6 +787,9 @@ export class SparePartsService {
             AND (
               p."sparepart_code" ILIKE ${searchPattern}
               OR p."name" ILIKE ${searchPattern}
+            OR EXISTS (SELECT 1 FROM "sparepart_groups" AS search_group
+              WHERE search_group."group_id" = p."group_id"
+                AND search_group.name ILIKE ${searchPattern})
             )
           ORDER BY a."createdAt" DESC, a."sparepart_add_id" DESC
           LIMIT ${prefixLimit}
@@ -714,6 +817,8 @@ export class SparePartsService {
         p."sparepart_code" AS "partCode",
         p.name AS "partName",
         p.unit AS "partUnit",
+        p."group_id" AS "partGroupId",
+        g.name AS "partGroupName",
         u.id AS "userId",
         u."first_name" AS "userFirstname",
         u."last_name" AS "userLastname",
@@ -726,6 +831,8 @@ export class SparePartsService {
         ON p."sparepart_id" = a."sparepart_id"
       LEFT JOIN "users" AS u
         ON u.id = a."add_by"
+      LEFT JOIN "sparepart_groups" AS g
+        ON g."group_id" = p."group_id"
       ORDER BY page.created_at DESC NULLS LAST, page.id DESC NULLS LAST
     `);
 
@@ -748,6 +855,7 @@ export class SparePartsService {
             code: row.partCode!,
             name: row.partName!,
             unit: row.partUnit!,
+            group: { id: row.partGroupId!, name: row.partGroupName! },
           },
           user: {
             id: row.userId!,

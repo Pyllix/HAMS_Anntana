@@ -13,6 +13,7 @@ import {
 import {
   ApiCookieAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -55,14 +56,37 @@ export class SparePartsController {
     UserRole.PARCEL_STAFF,
     UserRole.ASSET_CENTER_STAFF,
     UserRole.MAINTENANCE_STAFF,
+    UserRole.MAINTENANCE_HEAD,
   )
   @ApiOperation({
     summary: 'Find all Spare Parts (paginated)',
     description:
       'ดึงรายการอะไหล่พร้อม pagination, ค้นหารหัส/ชื่อ, กรองกลุ่ม หรือกรองเฉพาะที่สต็อกต่ำ',
   })
-  findAll(@Query() query: QuerySparepartDto) {
+  @ApiQuery({
+    name: 'stockStatus',
+    required: false,
+    enum: ['NORMAL', 'LOW', 'OUT'],
+  })
+  findAll(
+    @Query() query: QuerySparepartDto,
+  ): ReturnType<SparePartsService['findAll']> {
     return this.sparePartsService.findAll(query);
+  }
+
+  @Get('summary')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.PARCEL_STAFF,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Return exact spare-part type counts by stock state',
+  })
+  getStockSummary(): ReturnType<SparePartsService['getStockSummary']> {
+    return this.sparePartsService.getStockSummary();
   }
 
   @Get('low-stock')

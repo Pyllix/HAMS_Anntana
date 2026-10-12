@@ -1,3 +1,7 @@
+import { useServerPage, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage, getSummary, statusCount } from "../../services/pagedApi";
+import type { StatusSummary } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import {
   tableFeatures,
   useTable,
@@ -141,40 +145,27 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
 ];
 
 export default function PendingHandoverTable() {
-  const { data: borrowHistory } = useQuery({
-    queryKey: ["borrowHistory", "pendingHandover"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
-
-  const pendingItems = useMemo(() => {
-    if (!borrowHistory) return [];
-    return borrowHistory.filter(
-      (item) => item.borrowStatus?.code === "APPROVED",
-    );
-  }, [borrowHistory]);
-
+  const listQuery = useServerPage<BorrowHistory>("borrowHistory", { statusCodes: ["APPROVED"] },
+    (filters, signal) => getPage("/borrowings", filters, signal), true);
+  const pendingItems = listQuery.rows;
   const table = useTable({
     key: "pending-handover-table",
     features,
     columns,
     data: pendingItems,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 5,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-slate-200 bg-cyan-50/60">
         <span className="flex h-2 w-2 rounded-full bg-cyan-500" />
         <h2 className="text-sm font-semibold text-slate-800">
           รายการรอส่งมอบครุภัณฑ์
         </h2>
         <span className="ml-1 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-cyan-500 text-white text-xs font-semibold">
-          {pendingItems.length}
+          {listQuery.data ? listQuery.total : "—"}
         </span>
       </div>
 

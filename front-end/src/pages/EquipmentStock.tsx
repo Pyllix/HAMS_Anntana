@@ -1,3 +1,9 @@
+import { useServerPage, useForegroundQuery } from "../hooks/useServerPage";
+import { getPage, getSummary } from "../services/pagedApi";
+import type { AssetSummary } from "../services/pagedApi";
+import type { Asset } from "../types/TypeAsset";
+import { assetDateRange } from "../services/assetDateRange";
+import QueryStatus from "../components/shared/QueryStatus";
 import { useState, useMemo, useEffect } from "react";
 import {
   Search,
@@ -42,7 +48,7 @@ type TabKey = "ALL" | "WAIT_DISPOSAL" | "DISPOSAL" | "LOST";
 
 export default function EquipmentStock() {
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
-  const [page, setPage] = useState(1);
+
   const pageSize = 10;
   const [inputSearch, setInputSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -129,25 +135,13 @@ export default function EquipmentStock() {
     return undefined;
   }, [activeTab, selectedStatus, assetStatuses]);
 
-  // Main Assets Query
-  const { data: assetResponse, isLoading } = useQuery({
-    queryKey: [
-      "equipment-assets-paginated",
-      page,
-      pageSize,
-      debouncedSearch,
-      effectiveStatusId,
-      selectedType,
-    ],
-    queryFn: () =>
-      getAssetsPaginated({
-        page,
-        limit: pageSize,
-        search: debouncedSearch,
-        asset_status_id: effectiveStatusId,
-        asset_type_id: selectedType !== "ALL" ? Number(selectedType) : undefined,
-      }),
-  });
+  const dateRange = assetDateRange(selectedDate, dateFilterLabel, activeTab !== "ALL");
+  const listQuery = useServerPage<Asset>("equipment-assets-paginated", {
+    search: debouncedSearch, asset_status_id: effectiveStatusId,
+    asset_type_id: selectedType !== "ALL" ? Number(selectedType) : undefined,
+    ...dateRange,
+  }, (filters, signal) => getPage("/asset", filters, signal), false, true, pageSize);
+  const { data: assetResponse, isLoading, page, setPage } = listQuery;
 
   // KPI Status Counts
   const normalId = assetStatuses.find((s) => s.code === "NORMAL")?.id;
@@ -157,99 +151,19 @@ export default function EquipmentStock() {
   const disposalId = assetStatuses.find((s) => s.code === "DISPOSAL")?.id;
   const lostId = assetStatuses.find((s) => s.code === "LOST")?.id;
 
-  const { data: totalAllRes } = useQuery({
-    queryKey: ["kpi-status", "TOTAL"],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1 }),
-  });
-  const { data: lostRes } = useQuery({
-    queryKey: ["kpi-status", "LOST", lostId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: lostId }),
-    enabled: Boolean(lostId),
-  });
-  const { data: underRepairRes } = useQuery({
-    queryKey: ["kpi-status", "UNDER_REPAIR", underRepairId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: underRepairId }),
-    enabled: Boolean(underRepairId),
-  });
-  const { data: normalRes } = useQuery({
-    queryKey: ["kpi-status", "NORMAL", normalId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: normalId }),
-    enabled: Boolean(normalId),
-  });
-  const { data: damagedRes } = useQuery({
-    queryKey: ["kpi-status", "DAMAGED", damagedId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: damagedId }),
-    enabled: Boolean(damagedId),
-  });
-  const { data: waitDisposalRes } = useQuery({
-    queryKey: ["kpi-status", "WAIT_DISPOSAL", waitDisposalId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: waitDisposalId }),
-    enabled: Boolean(waitDisposalId),
-  });
-  const { data: disposalRes } = useQuery({
-    queryKey: ["kpi-status", "DISPOSAL", disposalId],
-    queryFn: () => getAssetsPaginated({ page: 1, limit: 1, asset_status_id: disposalId }),
-    enabled: Boolean(disposalId),
-  });
-
-  const lostCount = lostRes?.meta?.total ?? 0;
-  const underRepairCount = underRepairRes?.meta?.total ?? 0;
-  const normalCount = normalRes?.meta?.total ?? 0;
-  const damagedCount = damagedRes?.meta?.total ?? 0;
-  const waitDisposalCount = waitDisposalRes?.meta?.total ?? 0;
-  const disposalCount = disposalRes?.meta?.total ?? 0;
-  const totalAssets = totalAllRes?.meta?.total ?? assetResponse?.meta?.total ?? 0;
-
-  // Filter assets on client for date filter when in WAIT_DISPOSAL tab
-  const displayedAssets = useMemo(() => {
-    let list = assetResponse?.data || [];
-
-    if (
-      activeTab === "WAIT_DISPOSAL" ||
-      activeTab === "DISPOSAL" ||
-      activeTab === "LOST"
-    ) {
-      if (selectedDate) {
-        list = list.filter((item) => {
-          const dateStr = item.updatedAt || item.receivedDate || item.createdAt;
-          if (!dateStr) return false;
-          const d = new Date(dateStr);
-          return (
-            d.getDate() === selectedDate.getDate() &&
-            d.getMonth() === selectedDate.getMonth() &&
-            d.getFullYear() === selectedDate.getFullYear()
-          );
-        });
-      } else if (dateFilterLabel === "เดือนนี้") {
-        const now = new Date();
-        list = list.filter((item) => {
-          const dateStr = item.updatedAt || item.receivedDate || item.createdAt;
-          if (!dateStr) return true;
-          const d = new Date(dateStr);
-          return (
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
-          );
-        });
-      }
-    }
-
-    return list;
-  }, [assetResponse?.data, activeTab, selectedDate, dateFilterLabel]);
-
-  const isClientFiltered =
-    (activeTab === "WAIT_DISPOSAL" ||
-      activeTab === "DISPOSAL" ||
-      activeTab === "LOST") &&
-    Boolean(selectedDate || (dateFilterLabel !== "ทั้งหมด" && dateFilterLabel !== ""));
-
-  const totalDisplayItems = isClientFiltered
-    ? displayedAssets.length
-    : (assetResponse?.meta?.total ?? 0);
-
-  const totalDisplayPages = isClientFiltered
-    ? Math.ceil(displayedAssets.length / pageSize) || 1
-    : (assetResponse?.meta?.totalPages ?? 1);
+  const summaryQuery = useForegroundQuery(["equipment-assets-paginated", "summary"],
+    (signal) => getSummary<AssetSummary>("/asset/summary", {}, signal));
+  const counts = summaryQuery.data?.byAssetStatusCode;
+  const lostCount = counts ? (counts.LOST ?? 0) : undefined;
+  const underRepairCount = counts ? (counts.UNDER_REPAIR ?? 0) : undefined;
+  const normalCount = counts ? (counts.NORMAL ?? 0) : undefined;
+  const damagedCount = counts ? (counts.DAMAGED ?? 0) : undefined;
+  const waitDisposalCount = counts ? (counts.WAIT_DISPOSAL ?? 0) : undefined;
+  const disposalCount = counts ? (counts.DISPOSAL ?? 0) : undefined;
+  const totalAssets = summaryQuery.data?.total;
+  const displayedAssets = listQuery.rows;
+  const totalDisplayItems = listQuery.total;
+  const totalDisplayPages = listQuery.totalPages;
 
   // Show 'เพิ่มครุภัณฑ์' button only on "รายการทั้งหมด" and "ใช้งานปกติ" (Approach 1)
   const canCreateAsset =
@@ -360,6 +274,8 @@ export default function EquipmentStock() {
 
   return (
     <div className="flex flex-col h-full space-y-4">
+      <QueryStatus query={listQuery} />
+      <QueryStatus query={summaryQuery} />
       {/* Stat Cards */}
       <div className="shrink-0">
         <StatCards

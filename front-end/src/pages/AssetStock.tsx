@@ -1,3 +1,8 @@
+import { useServerPage, useForegroundQuery } from "../hooks/useServerPage";
+import { getPage, getSummary } from "../services/pagedApi";
+import type { AssetSummary } from "../services/pagedApi";
+import type { Asset } from "../types/TypeAsset";
+import QueryStatus from "../components/shared/QueryStatus";
 import { useState, useMemo, useEffect } from "react";
 import { Search, ChevronDown, Plus, Check, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +22,7 @@ import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
 
 export default function AssetStock() {
-  const [page, setPage] = useState(1);
+
   const pageSize = 10;
   const [inputSearch, setInputSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -38,36 +43,13 @@ export default function AssetStock() {
     return () => clearTimeout(timer);
   }, [inputSearch]);
 
-  const { data: assetResponse, isLoading } = useQuery({
-    queryKey: [
-      "assets",
-      isAssetCenter ? "all" : (user?.section_id || "my-section"),
-      page,
-      pageSize,
-      debouncedSearch,
-      typeId,
-      sectionId,
-      statusId,
-    ],
-    queryFn: () => {
-      if (isAssetCenter) {
-        return getAssetsPaginated({
-          page,
-          limit: pageSize,
-          search: debouncedSearch || undefined,
-          section_id: sectionId !== "ALL" ? sectionId : undefined,
-          asset_type_id: typeId !== "ALL" ? Number(typeId) : undefined,
-          asset_status_id: statusId !== "ALL" ? Number(statusId) : undefined,
-        });
-      }
-      return getMySectionAssetsPaginated({
-        page,
-        limit: pageSize,
-        search: debouncedSearch || undefined,
-      });
-    },
-  });
-
+  const listQuery = useServerPage<Asset>("assets", {
+    search: debouncedSearch,
+    section_id: isAssetCenter && sectionId !== "ALL" ? sectionId : undefined,
+    asset_type_id: typeId !== "ALL" ? Number(typeId) : undefined,
+    asset_status_id: statusId !== "ALL" ? Number(statusId) : undefined,
+  }, (filters, signal) => getPage(isAssetCenter ? "/asset" : "/asset/my-section", filters, signal), false, true, pageSize);
+  const { data: assetResponse, isLoading, page, setPage } = listQuery;
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
     queryFn: getAssetTypes,
@@ -84,77 +66,13 @@ export default function AssetStock() {
     enabled: isAssetCenter,
   });
 
-  // Query KPI Counts accurately from server
   const normalStatus = assetStatuses?.find((s) => s.code === "NORMAL");
   const damagedStatus = assetStatuses?.find((s) => s.code === "DAMAGED");
-
-  const { data: totalCountRes } = useQuery({
-    queryKey: [
-      "kpi-total-assets",
-      isAssetCenter ? "all" : (user?.section_id || "my-section"),
-    ],
-    queryFn: () => {
-      if (isAssetCenter) {
-        return getAssetsPaginated({
-          page: 1,
-          limit: 1,
-        });
-      }
-      return getMySectionAssetsPaginated({
-        page: 1,
-        limit: 1,
-      });
-    },
-  });
-
-  const { data: normalCountRes } = useQuery({
-    queryKey: [
-      "kpi-normal-assets",
-      isAssetCenter ? "all" : user?.section_id,
-      normalStatus?.id,
-    ],
-    queryFn: () => {
-      if (isAssetCenter) {
-        return getAssetsPaginated({
-          page: 1,
-          limit: 1,
-          asset_status_id: normalStatus?.id,
-        });
-      }
-      return getMySectionAssetsPaginated({
-        page: 1,
-        limit: 1,
-      });
-    },
-    enabled: Boolean(normalStatus?.id),
-  });
-
-  const { data: damagedCountRes } = useQuery({
-    queryKey: [
-      "kpi-damaged-assets",
-      isAssetCenter ? "all" : user?.section_id,
-      damagedStatus?.id,
-    ],
-    queryFn: () => {
-      if (isAssetCenter) {
-        return getAssetsPaginated({
-          page: 1,
-          limit: 1,
-          asset_status_id: damagedStatus?.id,
-        });
-      }
-      return getMySectionAssetsPaginated({
-        page: 1,
-        limit: 1,
-      });
-    },
-    enabled: Boolean(damagedStatus?.id),
-  });
-
-  // Calculate KPIs dynamically (Total assets stays fixed, not affected by search query)
-  const totalAssets = totalCountRes?.meta?.total ?? assetResponse?.meta?.total ?? 0;
-  const normalAssets = normalCountRes?.meta?.total ?? 0;
-  const damagedAssets = damagedCountRes?.meta?.total ?? 0;
+  const summaryQuery = useForegroundQuery(["assets", "summary", isAssetCenter ? "all" : "my-section"],
+    (signal) => getSummary<AssetSummary>(isAssetCenter ? "/asset/summary" : "/asset/my-section/summary", {}, signal));
+  const totalAssets = summaryQuery.data?.total;
+  const normalAssets = summaryQuery.data ? (summaryQuery.data.byAssetStatusCode.NORMAL ?? 0) : undefined;
+  const damagedAssets = summaryQuery.data ? (summaryQuery.data.byAssetStatusCode.DAMAGED ?? 0) : undefined;
 
   const selectedTypeName = useMemo(() => {
     if (typeId === "ALL") return "ทั้งหมด";
@@ -213,20 +131,15 @@ export default function AssetStock() {
 
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      <QueryStatus query={listQuery} />
+      <QueryStatus query={summaryQuery} />
       {/* Stat Cards */}
       <div className="shrink-0">
         <StatCards
           stats={statsSummary}
           // กรองสถานะได้เฉพาะศูนย์ครุภัณฑ์ / Admin (API ของแผนกไม่รองรับตัวกรองสถานะ)
-          selectedCategory={isAssetCenter ? statusId : undefined}
-          onSelectCategory={
-            isAssetCenter
-              ? (key) => {
-                  setStatusId(key);
-                  setPage(1);
-                }
-              : undefined
-          }
+          selectedCategory={statusId}
+          onSelectCategory={(key) => { setStatusId(key); setPage(1); }}
           gridClassName="grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
         />
       </div>

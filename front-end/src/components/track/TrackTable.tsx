@@ -1,3 +1,6 @@
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import {
   tableFeatures,
   useTable,
@@ -176,60 +179,34 @@ interface Props {
   inputSearch: string;
   // null = ไม่กรองสถานะ
   statusCodes: string[] | null;
+  sectionId?: string;
 }
 
 export default function TrackTable({
   items: repairsHistory,
   inputSearch,
   statusCodes,
+  sectionId,
 }: Props) {
 
-  const filteredItems = useMemo(() => {
-    if (!repairsHistory) {
-      return [];
-    }
-
-    const searchLower = inputSearch?.trim().toLowerCase() || "";
-
-    return repairsHistory.filter((item) => {
-      const matchesStatus =
-        !statusCodes || statusCodes.includes(item.jobStatus?.code ?? "");
-
-      if (!matchesStatus) return false;
-      if (searchLower === "") return true;
-
-      // ค้นหาจาก รหัสแจ้งซ่อม, รหัสครุภัณฑ์ (noid), ชื่อครุภัณฑ์, Serial No และอาการ
-      return (
-        item.jobNo?.toLowerCase().includes(searchLower) ||
-        item.asset?.noid?.toLowerCase().includes(searchLower) ||
-        item.asset?.name?.toLowerCase().includes(searchLower) ||
-        item.asset?.serialNo?.toLowerCase().includes(searchLower) ||
-        item.symptom?.toLowerCase().includes(searchLower) ||
-        item.diagnosis?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [repairsHistory, inputSearch, statusCodes]);
-
+  const term = useDebouncedSearch(inputSearch);
+  const listQuery = useServerPage<TrackRes>("repairsHistory", { sectionId, search: term, statusCodes: statusCodes ?? undefined },
+    (filters, signal) => getPage("/repairs", filters, signal), true);
+  const filteredItems = listQuery.rows;
   const table = useTable({
     key: "assets-table",
     features,
     columns,
     data: filteredItems ?? [],
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   // กลับไปหน้าแรกเมื่อเปลี่ยนตัวกรอง ไม่ให้ค้างอยู่หน้าที่ไม่มีข้อมูล
-  useEffect(() => {
-    table.setPageIndex(0);
-  }, [repairsHistory, inputSearch, statusCodes]);
+
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       {/* พื้นที่ตาราง Scroll ได้ */}
       <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">

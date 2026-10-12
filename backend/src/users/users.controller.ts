@@ -105,9 +105,15 @@ export class UsersController {
     type: String,
     description: 'Filter by Section/Department UUID',
   })
+  @ApiQuery({
+    name: 'banned',
+    required: false,
+    type: Boolean,
+    description: 'Filter accounts by ban state',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of users' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@Query() query: QueryUserDto) {
+  findAll(@Query() query: QueryUserDto): ReturnType<UsersService['findAll']> {
     return this.usersService.findAll(query);
   }
 

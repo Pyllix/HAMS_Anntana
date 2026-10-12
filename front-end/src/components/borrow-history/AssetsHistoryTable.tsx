@@ -1,3 +1,8 @@
+import { useServerPage, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage, getSummary, statusCount } from "../../services/pagedApi";
+import type { StatusSummary } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
+import { useDebouncedSearch } from "../../hooks/useServerPage";
 import {
   tableFeatures,
   useTable,
@@ -125,6 +130,8 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
             };
           case "BORROWED":
           case "PENDING_VERIFICATION":
+          case "PENDING_RETURN":
+          case "IN_PICKUP":
             return {
               container: "bg-blue-100 text-blue-600", // กำลังยืม / รอตรวจสอบสภาพ
               dot: "bg-blue-500",
@@ -135,7 +142,7 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
               container: "bg-rose-100 text-rose-600", // ปฏิเสธ / ยกเลิก
               dot: "bg-rose-500",
             };
-          case "PENDING_APPROVAL":
+          case "PENDING_APPROVE":
           case "APPROVED":
           default:
             return {
@@ -170,54 +177,22 @@ export default function AssetsHistoryTable({
   inputSearch,
   statusCodes,
 }: Props) {
-  const filteredItems = useMemo(() => {
-    if (!items) return [];
-
-    return items.filter((item) => {
-      const searchKeyword = inputSearch
-        .trim()
-        .replace(/\s+/g, " ")
-        .toLowerCase();
-
-      // รวมชื่อ-นามสกุลเป็นชื่อเต็ม (ตรงกับที่แสดงในตาราง) เพื่อให้ค้นหาด้วยชื่อเต็มได้
-      const fullName = [item.borrower?.firstname, item.borrower?.lastname]
-        .filter(Boolean)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .toLowerCase();
-
-      // ค้นหาจาก ชื่อครุภัณฑ์, รุ่น, ชื่อ-นามสกุลผู้ยืม, รหัสพนักงาน หรือรหัสการยืม
-      const matchesSearch =
-        searchKeyword === "" ||
-        item.asset?.name?.toLowerCase().includes(searchKeyword) ||
-        item.asset?.model?.toLowerCase().includes(searchKeyword) ||
-        fullName.includes(searchKeyword) ||
-        item.borrower?.employeeId?.toLowerCase().includes(searchKeyword) ||
-        item.id?.toLowerCase().includes(searchKeyword);
-
-      // กรองตามกลุ่มสถานะการยืมที่เลือกจากการ์ด / dropdown
-      const matchesStatus =
-        !statusCodes || statusCodes.includes(item.borrowStatus?.code ?? "");
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [items, inputSearch, statusCodes]);
+  const search = useDebouncedSearch(inputSearch);
+  const listQuery = useServerPage<BorrowHistory>("borrowHistory", { search, statusCodes: statusCodes ?? undefined },
+    (filters, signal) => getPage("/borrowings", filters, signal));
+  const filteredItems = listQuery.rows;
 
   const table = useTable({
     key: "assets-table",
     features,
     columns,
     data: filteredItems ?? [],
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       {/* พื้นที่ตาราง Scroll ได้ */}
       <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">

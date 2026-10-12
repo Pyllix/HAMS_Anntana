@@ -1,3 +1,5 @@
+import { getPage } from "./pagedApi";
+import type { Filters, Page } from "./pagedApi";
 import { apiClient } from "./apiClient";
 import { isSessionExpiredApiError } from "./serviceErrorPolicy";
 import type {
@@ -293,4 +295,28 @@ export async function createPartOrder(data: {
   localOrders = updated;
   saveOrdersToStorage(updated);
   return newOrder;
+}
+
+interface StockInRow {
+  id: number; sparepartId: number; qty: number; totalPrice: string | number;
+  sparepartAddDoc: string; createdAt: string;
+  sparepart?: { name: string; unit: string; group?: { name: string } };
+  user?: { firstname: string; lastname: string };
+}
+export async function getPartOrdersPage(filters: Filters, signal?: AbortSignal): Promise<Page<PartOrder>> {
+  const result = await getPage<StockInRow>("/spare-parts/stock-in-history", filters, signal);
+  return { ...result, data: result.data.map((item) => ({
+    id: item.id, orderNo: item.sparepartAddDoc || "PO-" + item.id,
+    partName: item.sparepart?.name || "ไม่ระบุชื่ออะไหล่", quantity: item.qty,
+    unit: item.sparepart?.unit || "ชิ้น", category: item.sparepart?.group?.name || "ทั่วไป",
+    urgency: "NORMAL", requesterName: [item.user?.firstname, item.user?.lastname].filter(Boolean).join(" "),
+    department: "แผนกพัสดุ", sparepart_id: item.sparepartId,
+    unitPrice: item.qty ? Number(item.totalPrice) / item.qty : 0,
+    totalPrice: Number(item.totalPrice), sparepart_add_doc: item.sparepartAddDoc,
+    orderDate: item.createdAt.slice(0, 10), status: "RECEIVED", createdAt: item.createdAt,
+  })) };
+}
+export function getLocalPartOrderDrafts(): PartOrder[] {
+  ensureLocalOrdersForCurrentAccount();
+  return localOrders.filter((order) => order.id >= 1_000_000_000_000);
 }

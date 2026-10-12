@@ -15,6 +15,7 @@ import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { CreateAssetTransferDto } from './dto/create-asset-transfer.dto';
 import { AssetFilterDto } from './dto/asset-filter.dto';
+import { AssetSummaryFilterDto } from './dto/asset-summary-filter.dto';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
 import {
@@ -76,10 +77,44 @@ export class AssetController {
     type: String,
     description: 'Filter by Section ID',
   })
+  @ApiQuery({ name: 'assetStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'availabilityStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'updatedAtFrom', required: false, type: String })
+  @ApiQuery({ name: 'updatedAtTo', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Paginated list of assets' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@Query() query: AssetFilterDto) {
+  findAll(@Query() query: AssetFilterDto): ReturnType<AssetService['findAll']> {
     return this.assetService.findAll(query);
+  }
+
+  @Get('summary')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary:
+      'Return exact asset totals grouped by physical and availability status',
+  })
+  @ApiQuery({
+    name: 'section_id',
+    required: false,
+    type: String,
+    description:
+      'Limit results to a section; department staff are always scoped to their own section',
+  })
+  findSummary(
+    @Query() query: AssetSummaryFilterDto,
+    @Session() session: UserSession,
+  ): ReturnType<AssetService['getSummary']> {
+    return this.assetService.getSummary(query, {
+      id: session.user.id,
+      role: session.user.role,
+    });
   }
 
   @Get('disposal')
@@ -127,6 +162,14 @@ export class AssetController {
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'asset_status_id', required: false, type: Number })
+  @ApiQuery({ name: 'assetStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'availability_status_id', required: false, type: Number })
+  @ApiQuery({ name: 'availabilityStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'asset_type_id', required: false, type: Number })
+  @ApiQuery({ name: 'equipment_type_id', required: false, type: Number })
+  @ApiQuery({ name: 'updatedAtFrom', required: false, type: String })
+  @ApiQuery({ name: 'updatedAtTo', required: false, type: String })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of transfer records',
@@ -169,6 +212,14 @@ export class AssetController {
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'asset_status_id', required: false, type: Number })
+  @ApiQuery({ name: 'assetStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'availability_status_id', required: false, type: Number })
+  @ApiQuery({ name: 'availabilityStatusCode', required: false, type: String })
+  @ApiQuery({ name: 'asset_type_id', required: false, type: Number })
+  @ApiQuery({ name: 'equipment_type_id', required: false, type: Number })
+  @ApiQuery({ name: 'updatedAtFrom', required: false, type: String })
+  @ApiQuery({ name: 'updatedAtTo', required: false, type: String })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of assets in user section',
@@ -176,10 +227,28 @@ export class AssetController {
   @ApiResponse({ status: 400, description: 'User not assigned to a section' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findMySectionAssets(
-    @Query() query: PaginationDto,
+    @Query() query: AssetFilterDto,
     @Session() session: UserSession,
-  ) {
+  ): ReturnType<AssetService['findMySectionAssets']> {
     return this.assetService.findMySectionAssets(session.user.id, query);
+  }
+
+  @Get('my-section/summary')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.DEPARTMENT_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Return status totals for the caller’s own section',
+  })
+  findMySectionSummary(
+    @Session() session: UserSession,
+  ): ReturnType<AssetService['getMySectionSummary']> {
+    return this.assetService.getMySectionSummary(session.user.id);
   }
 
   @Get('section/:sectionId')

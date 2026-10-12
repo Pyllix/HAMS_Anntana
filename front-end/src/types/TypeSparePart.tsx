@@ -10,6 +10,8 @@ export interface SparepartGroup {
 // ─── Spare Part Item ──────────────────────────────────────────────────────────
 
 export interface Sparepart {
+  /** Pending local changes, excluded from server counts. */
+  localDraft?: boolean;
   id: number;
   code: string;
   name: string;

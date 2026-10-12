@@ -475,9 +475,11 @@ export async function fetchRepairJobSummaries(
 
 export async function fetchRepairJobDetail(
   jobId: string,
+  signal?: AbortSignal,
 ): Promise<ApiRepairJob> {
   const response = await apiClient.get<ApiRepairJob>(
     `/repairs/${jobId}`,
+    { signal },
   );
   return response.data;
 }

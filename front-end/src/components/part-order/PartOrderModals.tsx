@@ -1,3 +1,9 @@
+import { useServerPage, useDebouncedSearch, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import type { Sparepart } from "../../types/TypeSparePart";
+import { apiClient } from "../../services/apiClient";
+import { isSessionExpiredApiError } from "../../services/serviceErrorPolicy";
+import QueryStatus from "../shared/QueryStatus";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -26,11 +32,7 @@ export function PartOrderCreateModal() {
     usePartOrderModalStore();
   const queryClient = useQueryClient();
 
-  const { data: spareParts } = useQuery({
-    queryKey: ["spareParts"],
-    queryFn: getSpareParts,
-    enabled: isCreateModalOpen,
-  });
+
 
   const [selectedSparepartId, setSelectedSparepartId] = useState<number>(0);
   const [qty, setQty] = useState<number | "">(1);
@@ -40,7 +42,15 @@ export function PartOrderCreateModal() {
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentPart = spareParts?.find((p) => p.id === selectedSparepartId);
+  const term = useDebouncedSearch(searchPartTerm);
+  const partsQuery = useServerPage<Sparepart>("spareParts", { search: term },
+    (filters, signal) => getPage("/spare-parts", filters, signal), false, isCreateModalOpen && isDropdownOpen);
+  const spareParts = partsQuery.rows;
+  const selectedQuery = useForegroundQuery(["spareParts", "detail", selectedSparepartId],
+    async (signal) => (await apiClient.get<Sparepart>("/spare-parts/" + selectedSparepartId, { signal })).data,
+    false, isCreateModalOpen && selectedSparepartId > 0);
+  const autoPricedPart = useRef<number>(0);
+  const currentPart = selectedQuery.data ?? spareParts.find((p) => p.id === selectedSparepartId);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -58,7 +68,8 @@ export function PartOrderCreateModal() {
 
   useEffect(() => {
     if (isCreateModalOpen) {
-      const initialId = preselectedSparepartId || spareParts?.[0]?.id || 0;
+      const initialId = preselectedSparepartId || 0;
+      autoPricedPart.current = 0;
       setSelectedSparepartId(initialId);
       setOrderNo("");
       setQty(1);
@@ -67,27 +78,28 @@ export function PartOrderCreateModal() {
       const matched = spareParts?.find((p) => p.id === initialId);
       setTotalPrice(matched ? Number(matched.price) : 0);
     }
-  }, [isCreateModalOpen, preselectedSparepartId, spareParts]);
+  }, [isCreateModalOpen, preselectedSparepartId]);
+
+  useEffect(() => {
+    if (currentPart && autoPricedPart.current !== selectedSparepartId) {
+      autoPricedPart.current = selectedSparepartId;
+      setTotalPrice(Number(currentPart.price) * (typeof qty === "number" ? qty : 0));
+    }
+  }, [selectedSparepartId, currentPart?.price]);
 
   const handlePartChange = (id: number) => {
     setSelectedSparepartId(id);
     const matched = spareParts?.find((p) => p.id === id);
     if (matched) {
       const currentQty = typeof qty === "number" ? qty : 0;
+      autoPricedPart.current = id;
       setTotalPrice(Number(matched.price) * currentQty);
     }
     setIsDropdownOpen(false);
     setSearchPartTerm("");
   };
 
-  const filteredParts = (spareParts || []).filter((p) => {
-    const term = searchPartTerm.toLowerCase().trim();
-    if (!term) return true;
-    const nameMatch = p.name.toLowerCase().includes(term);
-    const codeMatch = (p.code || "").toLowerCase().includes(term);
-    const catMatch = (p.group?.name || p.category || "").toLowerCase().includes(term);
-    return nameMatch || codeMatch || catMatch;
-  });
+  const filteredParts = spareParts;
 
   const handleQtyChange = (valStr: string) => {
     if (valStr === "") {
@@ -121,19 +133,14 @@ export function PartOrderCreateModal() {
       try {
         await stockInSparepart(dto);
       } catch (err) {
-        console.warn("Backend stockIn warning:", err);
+        if (isSessionExpiredApiError(err)) throw err;
+        await createPartOrder({
+          sparepartId: currentPart.id, partName: currentPart.name,
+          category: currentPart.group?.name || currentPart.category || "ทั่วไป",
+          unit: currentPart.unit || "ชิ้น", quantity: Number(qty),
+          unitPrice: Number(currentPart.price), totalPrice: Number(totalPrice), orderNo: orderNo.trim(),
+        });
       }
-
-      await createPartOrder({
-        sparepartId: currentPart.id,
-        partName: currentPart.name,
-        category: currentPart.group?.name || currentPart.category || "ทั่วไป",
-        unit: currentPart.unit || "ชิ้น",
-        quantity: Number(qty),
-        unitPrice: Number(currentPart.price),
-        totalPrice: Number(totalPrice),
-        orderNo: orderNo.trim(),
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["spareParts"] });
@@ -241,11 +248,18 @@ export function PartOrderCreateModal() {
                     );
                   })
                 )}
+                <QueryStatus query={partsQuery} />
+                <nav aria-label="หน้าอะไหล่" className="flex items-center justify-between gap-2 border-t p-2 text-xs">
+  <button type="button" disabled={partsQuery.page === 1 || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page - 1)}>ก่อนหน้า</button>
+  <span>หน้า {partsQuery.page} / {partsQuery.totalPages} ({partsQuery.total} รายการ)</span>
+  <button type="button" disabled={partsQuery.page >= partsQuery.totalPages || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page + 1)}>ถัดไป</button>
+</nav>
               </div>
             )}
           </div>
 
           {/* สรุปข้อมูลอะไหล่ที่เลือก (Fixed layout to avoid jumping) */}
+          <QueryStatus query={selectedQuery} />
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 min-h-[58px] flex items-center justify-between text-slate-600">
             {currentPart ? (
               <>
@@ -319,7 +333,7 @@ export function PartOrderCreateModal() {
                   required
                   value={totalPrice === 0 ? "" : totalPrice}
                   onFocus={(e) => e.target.select()}
-                  onChange={(e) => setTotalPrice(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => { autoPricedPart.current = selectedSparepartId; setTotalPrice(parseFloat(e.target.value) || 0); }}
                   className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs font-mono font-bold text-emerald-700 focus:border-emerald-500 focus:outline-hidden transition-all shadow-2xs"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-slate-400 font-medium">

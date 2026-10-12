@@ -8,10 +8,11 @@ import { UpdateAssetDto } from './dto/update-asset.dto';
 import { CreateAssetDisposalDto } from './dto/create-asset-disposal.dto';
 import { CreateAssetTransferDto } from './dto/create-asset-transfer.dto';
 import { AssetFilterDto } from './dto/asset-filter.dto';
+import { AssetSummaryFilterDto } from './dto/asset-summary-filter.dto';
 import { PrismaService } from 'src/prisma.service';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { paginate, PaginatedResult } from 'src/common/utils/paginate.util';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import {
   ImageAttachmentService,
@@ -19,6 +20,12 @@ import {
   managedImageLocator,
   type ImageClaimRequest,
 } from '../images/image-attachment.service';
+
+export interface AssetStatusSummary {
+  total: number;
+  byAssetStatusCode: Record<string, number>;
+  byAvailabilityStatusCode: Record<string, number>;
+}
 
 /**
  * Asset Status Transition Map
@@ -260,6 +267,12 @@ export class AssetService {
       ...(query.availability_status_id && {
         availability_status_id: query.availability_status_id,
       }),
+      ...(query.assetStatusCode && {
+        status: { code: query.assetStatusCode },
+      }),
+      ...(query.availabilityStatusCode && {
+        availabilityStatus: { code: query.availabilityStatusCode },
+      }),
       ...(query.asset_type_id && { type_id: query.asset_type_id }),
       ...(query.equipment_type_id && {
         equipment_type_id: query.equipment_type_id,
@@ -276,11 +289,25 @@ export class AssetService {
         : {}),
     };
 
+    if (query.updatedAtFrom || query.updatedAtTo) {
+      const from = this.parseExplicitOffsetDate(query.updatedAtFrom);
+      const to = this.parseExplicitOffsetDate(query.updatedAtTo);
+      if (from && to && from > to) {
+        throw new BadRequestException(
+          'updatedAtFrom must not be later than updatedAtTo',
+        );
+      }
+      where.updatedAt = {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lte: to } : {}),
+      };
+    }
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.asset.findMany({
         where,
         include: ASSET_INCLUDE,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
@@ -294,6 +321,104 @@ export class AssetService {
       page,
       limit,
     );
+  }
+
+  private parseExplicitOffsetDate(value?: string): Date | undefined {
+    if (!value) return undefined;
+    if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) {
+      throw new BadRequestException(
+        'Asset date filters must include an explicit timezone offset',
+      );
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException('Asset date filter is invalid');
+    }
+    return date;
+  }
+
+  async getSummary(
+    query: AssetSummaryFilterDto,
+    caller?: { id: string; role?: string | string[] },
+  ): Promise<AssetStatusSummary> {
+    const where: Prisma.AssetWhereInput = {};
+    const callerIsDepartmentStaff = Array.isArray(caller?.role)
+      ? caller.role.includes(UserRole.DEPARTMENT_STAFF)
+      : caller?.role === UserRole.DEPARTMENT_STAFF;
+    if (callerIsDepartmentStaff && caller) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: caller.id },
+        select: { section_id: true },
+      });
+      if (!user?.section_id) {
+        throw new BadRequestException('ผู้ใช้งานไม่ได้สังกัดแผนกใดๆ');
+      }
+      where.section_id = user.section_id;
+    } else if (query.section_id) {
+      where.section_id = query.section_id;
+    }
+    const [assetStatuses, availabilityStatuses, statusGroups] =
+      await this.prisma.$transaction([
+        this.prisma.assetStatus.findMany({ select: { id: true, code: true } }),
+        this.prisma.availabilityStatus.findMany({
+          select: { id: true, code: true },
+        }),
+        this.prisma.asset.groupBy({
+          by: ['asset_status_id', 'availability_status_id'],
+          where,
+          orderBy: [
+            { asset_status_id: 'asc' },
+            { availability_status_id: 'asc' },
+          ],
+          _count: { id: true },
+        }),
+      ]);
+
+    const assetCodeById = new Map(
+      assetStatuses.map(({ id, code }) => [id, code]),
+    );
+    const availabilityCodeById = new Map(
+      availabilityStatuses.map(({ id, code }) => [id, code]),
+    );
+    const byAssetStatusCode: Record<string, number> = Object.fromEntries(
+      assetStatuses.map(({ code }) => [code, 0]),
+    );
+    const byAvailabilityStatusCode: Record<string, number> = {
+      ...Object.fromEntries(availabilityStatuses.map(({ code }) => [code, 0])),
+      UNASSIGNED: 0,
+    };
+    let total = 0;
+
+    for (const group of statusGroups) {
+      const count =
+        group._count && typeof group._count === 'object'
+          ? (group._count.id ?? 0)
+          : 0;
+      const assetCode = assetCodeById.get(group.asset_status_id);
+      const availabilityCode = group.availability_status_id
+        ? availabilityCodeById.get(group.availability_status_id)
+        : 'UNASSIGNED';
+
+      if (assetCode) byAssetStatusCode[assetCode] += count;
+      if (availabilityCode) {
+        byAvailabilityStatusCode[availabilityCode] =
+          (byAvailabilityStatusCode[availabilityCode] ?? 0) + count;
+      }
+      total += count;
+    }
+
+    return { total, byAssetStatusCode, byAvailabilityStatusCode };
+  }
+
+  async getMySectionSummary(userId: string): Promise<AssetStatusSummary> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { section_id: true },
+    });
+    if (!user?.section_id) {
+      throw new BadRequestException('ผู้ใช้งานไม่ได้สังกัดแผนกใดๆ');
+    }
+    return this.getSummary({ section_id: user.section_id });
   }
 
   /**
@@ -317,7 +442,7 @@ export class AssetService {
    */
   async findMySectionAssets(
     userId: string,
-    query: PaginationDto,
+    query: AssetFilterDto,
   ): Promise<PaginatedResult<Record<string, unknown>>> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

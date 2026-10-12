@@ -1,3 +1,7 @@
+import { getSparepartGroups } from "../../services/sparepartService";
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useMemo, useState, useEffect } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -199,47 +203,13 @@ export default function SparePartTable({
   category = "ALL",
   stockStatus = "ALL",
 }: SparePartTableProps) {
-  const { data: spareParts, isLoading } = useQuery({
-    queryKey: ["spareParts"],
-    queryFn: getSpareParts,
-  });
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, category, stockStatus]);
-
-  const filteredData = useMemo(() => {
-    if (!spareParts) return [];
-    return spareParts.filter((item) => {
-      const sl = search.toLowerCase();
-      const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(sl) ||
-        item.code?.toLowerCase().includes(sl);
-      const matchesCategory =
-        category === "ALL" ||
-        item.category === category ||
-        item.group?.name === category;
-      const matchesStatus =
-        stockStatus === "ALL" || getSparePartStatus(item) === stockStatus;
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  }, [spareParts, search, category, stockStatus]);
-
-  const totalItems = filteredData.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-  const paginatedData = useMemo(
-    () =>
-      filteredData.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize,
-      ),
-    [filteredData, currentPage],
-  );
-
+  const term = useDebouncedSearch(search);
+  const { data: groups } = useQuery({ queryKey: ["sparepartGroups"], queryFn: getSparepartGroups });
+  const listQuery = useServerPage<Sparepart>("spareParts", {
+    search: term, stockStatus, groupId: category !== "ALL" ? groups?.find((g) => g.name === category)?.id : undefined,
+  }, (filters, signal) => getPage("/spare-parts", filters, signal), true);
+  const { isLoading, page: currentPage, setPage: setCurrentPage, pageSize, total: totalItems, totalPages } = listQuery;
+  const paginatedData = listQuery.rows;
   const table = useTable({
     key: "spare-part-table",
     features,
@@ -249,6 +219,7 @@ export default function SparePartTable({
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       <div className="flex-1 min-h-0 table-scroll">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
@@ -308,4 +279,12 @@ export default function SparePartTable({
       />
     </div>
   );
+}
+
+export function LocalSpareDraftTable({ rows }: { rows: Sparepart[] }) {
+  const table = useTable({ key: "LocalSpareDraftTable", features, columns, data: rows });
+  return <div className="overflow-auto"><table className="w-full text-left text-sm">
+    <thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} className="px-4 py-2"><table.FlexRender header={header} /></th>)}</tr>)}</thead>
+    <tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id} className="px-4 py-2"><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody>
+  </table></div>;
 }

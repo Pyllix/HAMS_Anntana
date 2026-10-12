@@ -1,3 +1,4 @@
+import { queryFamiliesForWrite } from "./queryRefreshPolicy";
 import axios, {
   AxiosError,
   type AxiosInstance,
@@ -110,7 +111,15 @@ function handleResponseError(error: AxiosError): Promise<never> {
 
 function configureClient(client: AxiosInstance): AxiosInstance {
   client.interceptors.request.use(prepareRequest);
-  client.interceptors.response.use((response) => response, handleResponseError);
+  client.interceptors.response.use((response) => {
+    if (typeof window !== "undefined" && ["post", "put", "patch", "delete"].includes(response.config.method ?? "")) {
+      const families = queryFamiliesForWrite(apiPath(response.config) ?? "");
+      if (families.length) window.dispatchEvent(new CustomEvent("hams:data-changed", {
+        detail: { families, completedAt: Date.now() },
+      }));
+    }
+    return response;
+  }, handleResponseError);
   return client;
 }
 

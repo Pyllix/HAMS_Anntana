@@ -90,6 +90,7 @@ describe('RepairsService', () => {
       create: jest.fn(),
       deleteMany: jest.fn(),
       count: jest.fn(),
+      groupBy: jest.fn(),
     },
     sparepart: {
       findUnique: jest.fn(),
@@ -381,15 +382,30 @@ describe('RepairsService', () => {
           role: UserRole.MAINTENANCE_HEAD,
         },
       ]);
-      mockPrisma.mechanicRepair.count
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(1);
+      mockPrisma.mechanicRepair.groupBy.mockResolvedValue([
+        { userId: 'mech-1', jobId: 'job-1' },
+        { userId: 'mech-1', jobId: 'job-2' },
+        { userId: 'head-1', jobId: 'job-3' },
+      ]);
 
       const result = await service.getMechanicWorkloads();
 
       expect(result).toHaveLength(2);
-      expect(result[0].activeJobsCount).toBe(3);
+      expect(result[0].activeJobsCount).toBe(2);
       expect(result[1].activeJobsCount).toBe(1);
+      expect(mockPrisma.mechanicRepair.groupBy).toHaveBeenCalledWith({
+        by: ['userId', 'jobId'],
+        where: {
+          deleteAt: null,
+          job: {
+            jobStatus: {
+              code: { notIn: ['COMPLETED', 'CANCELLED'] },
+            },
+          },
+        },
+        orderBy: [{ userId: 'asc' }, { jobId: 'asc' }],
+      });
+      expect(mockPrisma.mechanicRepair.count).not.toHaveBeenCalled();
     });
   });
 

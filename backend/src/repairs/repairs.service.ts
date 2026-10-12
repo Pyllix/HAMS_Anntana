@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { paginate } from 'src/common/utils/paginate.util';
+import { paginate, type PaginatedResult } from 'src/common/utils/paginate.util';
 import { CreateRepairRequestDto } from './dto/create-repair-request.dto';
 import { DiagnoseRepairJobDto } from './dto/diagnose-repair-job.dto';
 import { UpdateRepairStepDto } from './dto/update-repair-step.dto';
@@ -14,12 +14,159 @@ import { RejectRepairStepDto } from './dto/reject-repair-step.dto';
 import { CancelRepairJobDto } from './dto/cancel-repair-job.dto';
 import { ReturnRepairSparePartDto } from './dto/return-repair-spare-part.dto';
 import { QueryRepairJobDto } from './dto/query-repair-job.dto';
+import { RepairSummaryFilterDto } from './dto/repair-summary-filter.dto';
 import { AssignRepairJobDto } from './dto/assign-repair-job.dto';
 import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
 import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
 import { ActionType, Prisma, StepActionType, UserRole } from '@prisma/client';
 
 export const REJECTED_STEP_PREFIX = '[ไม่อนุมัติ]';
+
+export interface RepairStatusSummary {
+  total: number;
+  byStatusCode: Record<string, number>;
+}
+
+type RepairCaller = {
+  id: string;
+  role?: string | string[];
+  section_id?: string | null;
+};
+
+const MECHANIC_WORKLOAD_SELECT = {
+  id: true,
+  employeeId: true,
+  firstname: true,
+  lastname: true,
+  email: true,
+  role: true,
+  imageUrl: true,
+  section_id: true,
+  section: { select: { id: true, name: true } },
+};
+
+type MechanicWorkload = Prisma.UserGetPayload<{
+  select: typeof MECHANIC_WORKLOAD_SELECT;
+}> & {
+  activeJobsCount: number;
+};
+
+const REPAIR_JOB_LIST_INCLUDE = {
+  asset: {
+    select: {
+      id: true,
+      noid: true,
+      name: true,
+      model: true,
+      serialNo: true,
+      imageUrl: true,
+      section_id: true,
+      type: { select: { id: true, name: true } },
+      status: { select: { code: true } },
+      availabilityStatus: { select: { code: true } },
+    },
+  },
+  section: { select: { id: true, code: true, name: true } },
+  reporter: {
+    select: { id: true, firstname: true, lastname: true, email: true },
+  },
+  receiver: {
+    select: {
+      id: true,
+      employeeId: true,
+      firstname: true,
+      lastname: true,
+      section_id: true,
+    },
+  },
+  jobStatus: true,
+  jobType: true,
+  cause: true,
+  techCategory: true,
+  company: true,
+  mechanicRepairs: {
+    where: { deleteAt: null },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      user: {
+        select: {
+          id: true,
+          employeeId: true,
+          firstname: true,
+          lastname: true,
+          section_id: true,
+        },
+      },
+    },
+  },
+  repairJobSteps: {
+    orderBy: [{ stepMaster: { stepNumber: 'asc' } }, { id: 'asc' }],
+    include: {
+      stepMaster: {
+        select: {
+          id: true,
+          stepNumber: true,
+          actionType: true,
+          label: true,
+        },
+      },
+      user: {
+        select: {
+          id: true,
+          employeeId: true,
+          firstname: true,
+          lastname: true,
+          section_id: true,
+        },
+      },
+    },
+  },
+  sparepartTxns: {
+    where: {
+      txnType: { in: ['PENDING_WITHDRAW', 'WITHDRAW', 'RETURN'] },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      sparepartId: true,
+      jobId: true,
+      txnType: true,
+      stockType: true,
+      qty: true,
+      unitPrice: true,
+      txnDate: true,
+      txnBy: true,
+      createdAt: true,
+      sparepart: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          unit: true,
+          qtyInStock: true,
+        },
+      },
+      user: {
+        select: {
+          id: true,
+          firstname: true,
+          lastname: true,
+          email: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.RepairJobInclude;
+
+type RepairJobListRow = Prisma.RepairJobGetPayload<{
+  include: typeof REPAIR_JOB_LIST_INCLUDE;
+}> & {
+  workflowStep: number;
+  isRejected: boolean;
+  rejectReason: string | null;
+  isOverdue: boolean;
+  overdueDays: number;
+};
 
 @Injectable()
 export class RepairsService {
@@ -71,7 +218,9 @@ export class RepairsService {
     return `${prefix}${String(nextSeq).padStart(4, '0')}`;
   }
 
-  private async getCallerSectionId(user: any): Promise<string | null> {
+  private async getCallerSectionId(
+    user: Pick<RepairCaller, 'id' | 'section_id'>,
+  ): Promise<string | null> {
     if (user.section_id) {
       return user.section_id;
     }
@@ -260,45 +409,42 @@ export class RepairsService {
   // 2. Workload Balancing & Assignment (หัวหน้าช่าง Triage & Dispatch)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async getMechanicWorkloads() {
-    const mechanics = await this.prisma.user.findMany({
-      where: {
-        role: { in: [UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD] },
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        employeeId: true,
-        firstname: true,
-        lastname: true,
-        email: true,
-        role: true,
-        imageUrl: true,
-        section_id: true,
-        section: { select: { id: true, name: true } },
-      },
-      orderBy: { firstname: 'asc' },
-    });
-
-    return Promise.all(
-      mechanics.map(async (mech) => {
-        const activeJobsCount = await this.prisma.mechanicRepair.count({
-          where: {
-            userId: mech.id,
-            job: {
-              jobStatus: {
-                code: { notIn: ['COMPLETED', 'CANCELLED'] },
-              },
+  async getMechanicWorkloads(): Promise<MechanicWorkload[]> {
+    const [mechanics, activeAssignments] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          role: { in: [UserRole.MAINTENANCE_STAFF, UserRole.MAINTENANCE_HEAD] },
+          deletedAt: null,
+        },
+        select: MECHANIC_WORKLOAD_SELECT,
+        orderBy: [{ firstname: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.mechanicRepair.groupBy({
+        by: ['userId', 'jobId'],
+        where: {
+          deleteAt: null,
+          job: {
+            jobStatus: {
+              code: { notIn: ['COMPLETED', 'CANCELLED'] },
             },
           },
-        });
-
-        return {
-          ...mech,
-          activeJobsCount,
-        };
+        },
+        orderBy: [{ userId: 'asc' }, { jobId: 'asc' }],
       }),
-    );
+    ]);
+
+    const activeJobsByMechanic = new Map<string, number>();
+    for (const assignment of activeAssignments) {
+      activeJobsByMechanic.set(
+        assignment.userId,
+        (activeJobsByMechanic.get(assignment.userId) ?? 0) + 1,
+      );
+    }
+
+    return mechanics.map((mechanic) => ({
+      ...mechanic,
+      activeJobsCount: activeJobsByMechanic.get(mechanic.id) ?? 0,
+    }));
   }
 
   async assignJob(jobId: string, dto: AssignRepairJobDto, user: any) {
@@ -1505,7 +1651,10 @@ export class RepairsService {
     };
   }
 
-  async findAll(query: QueryRepairJobDto, user: any) {
+  async findAll(
+    query: QueryRepairJobDto,
+    user: RepairCaller,
+  ): Promise<PaginatedResult<RepairJobListRow>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const where: Prisma.RepairJobWhereInput = {};
@@ -1514,11 +1663,127 @@ export class RepairsService {
       const sectionId = await this.getCallerSectionId(user);
       if (sectionId) {
         where.sectionId = sectionId;
+      } else {
+        where.reporterId = user.id;
+      }
+    } else if (query.sectionId) {
+      where.sectionId = query.sectionId;
+    }
+
+    const additionalFilters: Prisma.RepairJobWhereInput[] = [];
+    if (query.statusCode) {
+      additionalFilters.push({ jobStatus: { code: query.statusCode } });
+    }
+    if (query.statusCodes?.length) {
+      additionalFilters.push({
+        jobStatus: { code: { in: query.statusCodes } },
+      });
+    }
+    if (query.evaluatedOnly !== undefined) {
+      additionalFilters.push(
+        query.evaluatedOnly
+          ? { diagnosis: { not: '' } }
+          : { OR: [{ diagnosis: null }, { diagnosis: '' }] },
+      );
+    }
+    if (query.assetTypeId !== undefined) {
+      additionalFilters.push({ asset: { type_id: query.assetTypeId } });
+    }
+    if (query.assignmentScope) {
+      const ownAssignment: Prisma.RepairJobWhereInput = {
+        mechanicRepairs: { some: { userId: user.id, deleteAt: null } },
+      };
+      const includeUnassigned =
+        query.assignmentScope === 'MINE_OR_UNASSIGNED' &&
+        user.role === UserRole.MAINTENANCE_HEAD;
+      additionalFilters.push(
+        includeUnassigned
+          ? {
+              OR: [
+                ownAssignment,
+                { mechanicRepairs: { none: { deleteAt: null } } },
+              ],
+            }
+          : ownAssignment,
+      );
+    }
+
+    if (query.workflowStep !== undefined) {
+      const actionTypeFilter = query.stepActionType
+        ? { actionType: query.stepActionType }
+        : undefined;
+      if (query.workflowStep === 0) {
+        additionalFilters.push({
+          repairJobSteps: {
+            none: {
+              completeAt: { not: null },
+            },
+          },
+        });
+      } else {
+        additionalFilters.push({
+          repairJobSteps: {
+            some: {
+              completeAt: { not: null },
+              stepMaster: {
+                stepNumber: query.workflowStep,
+                ...actionTypeFilter,
+              },
+            },
+          },
+        });
+        additionalFilters.push({
+          repairJobSteps: {
+            none: {
+              completeAt: { not: null },
+              stepMaster: {
+                stepNumber: { gt: query.workflowStep },
+              },
+            },
+          },
+        });
       }
     }
 
-    if (query.statusCode) {
-      where.jobStatus = { code: query.statusCode };
+    if (query.hasPendingSparepartWithdrawal !== undefined) {
+      additionalFilters.push({
+        sparepartTxns: query.hasPendingSparepartWithdrawal
+          ? { some: { txnType: 'PENDING_WITHDRAW' } }
+          : { none: { txnType: 'PENDING_WITHDRAW' } },
+      });
+    }
+
+    if (query.sparepartSource && query.sparepartSource !== 'ALL') {
+      const pendingInternal = {
+        txnType: 'PENDING_WITHDRAW',
+        stockType: 'INTERNAL',
+      };
+      const pendingExternal = {
+        txnType: 'PENDING_WITHDRAW',
+        stockType: 'EXTERNAL',
+      };
+      if (query.sparepartSource === 'INTERNAL') {
+        additionalFilters.push({
+          sparepartTxns: { some: pendingInternal, none: pendingExternal },
+        });
+      } else if (query.sparepartSource === 'EXTERNAL') {
+        additionalFilters.push({
+          sparepartTxns: { some: pendingExternal, none: pendingInternal },
+        });
+      } else {
+        additionalFilters.push(
+          { sparepartTxns: { some: pendingInternal } },
+          { sparepartTxns: { some: pendingExternal } },
+        );
+      }
+    }
+
+    if (query.isRejected !== undefined) {
+      additionalFilters.push({
+        repairJobSteps: query.isRejected
+          ? { some: { note: { startsWith: REJECTED_STEP_PREFIX } } }
+          : { none: { note: { startsWith: REJECTED_STEP_PREFIX } } },
+      });
     }
 
     if (query.actionType) {
@@ -1541,10 +1806,6 @@ export class RepairsService {
       where.reportType = query.reportType;
     }
 
-    if (query.sectionId) {
-      where.sectionId = query.sectionId;
-    }
-
     if (query.assetId) {
       where.assetId = query.assetId;
     }
@@ -1555,7 +1816,7 @@ export class RepairsService {
 
     if (query.mechanicId) {
       where.mechanicRepairs = {
-        some: { userId: query.mechanicId },
+        some: { userId: query.mechanicId, deleteAt: null },
       };
     }
 
@@ -1586,26 +1847,112 @@ export class RepairsService {
     if (query.isOverdue) {
       const now = new Date();
       where.dueDate = { lt: now };
-      where.jobStatus = {
-        code: { notIn: ['COMPLETED', 'CANCELLED'] },
-      };
+      additionalFilters.push({
+        jobStatus: { code: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      });
+    }
+
+    if (additionalFilters.length > 0) {
+      where.AND = [
+        ...((where.AND as Prisma.RepairJobWhereInput[]) ?? []),
+        ...additionalFilters,
+      ];
     }
 
     const search = query.search?.trim();
     if (search) {
-      const searchCondition = [
-        { jobNo: { contains: search, mode: 'insensitive' as const } },
-        { symptom: { contains: search, mode: 'insensitive' as const } },
-        { diagnosis: { contains: search, mode: 'insensitive' as const } },
-        { asset: { name: { contains: search, mode: 'insensitive' as const } } },
-        { asset: { noid: { contains: search, mode: 'insensitive' as const } } },
+      const searchTerms = [
+        search,
+        ...(/^(REQ|OUT)-/i.test(search) ? [`REP-${search.slice(4)}`] : []),
       ];
-      if (where.OR) {
-        where.AND = [{ OR: where.OR }, { OR: searchCondition }];
-        delete where.OR;
-      } else {
-        where.OR = searchCondition;
+      const searchCondition: Prisma.RepairJobWhereInput[] = searchTerms.flatMap(
+        (term) => [
+          { jobNo: { contains: term, mode: 'insensitive' as const } },
+          { symptom: { contains: term, mode: 'insensitive' as const } },
+          { diagnosis: { contains: term, mode: 'insensitive' as const } },
+          { asset: { name: { contains: term, mode: 'insensitive' as const } } },
+          { asset: { noid: { contains: term, mode: 'insensitive' as const } } },
+          {
+            asset: { model: { contains: term, mode: 'insensitive' as const } },
+          },
+          {
+            asset: {
+              serialNo: { contains: term, mode: 'insensitive' as const },
+            },
+          },
+          {
+            mechanicRepairs: {
+              some: {
+                deleteAt: null,
+                user: {
+                  OR: [
+                    {
+                      firstname: {
+                        contains: term,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                    {
+                      lastname: {
+                        contains: term,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            sparepartTxns: {
+              some: {
+                txnType: 'PENDING_WITHDRAW',
+                sparepart: {
+                  OR: [
+                    { code: { contains: term, mode: 'insensitive' as const } },
+                    { name: { contains: term, mode: 'insensitive' as const } },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      );
+      if (search.split(/\s+/).length > 1) {
+        searchCondition.push({
+          mechanicRepairs: {
+            some: {
+              deleteAt: null,
+              user: {
+                AND: search.split(/\s+/).map((term) => ({
+                  OR: [
+                    {
+                      firstname: {
+                        contains: term,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                    {
+                      lastname: {
+                        contains: term,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  ],
+                })),
+              },
+            },
+          },
+        });
       }
+      const existingAnd = Array.isArray(where.AND)
+        ? where.AND
+        : where.AND
+          ? [where.AND]
+          : [];
+      const existingOr = where.OR ? [{ OR: where.OR }] : [];
+      where.AND = [...existingAnd, ...existingOr, { OR: searchCondition }];
+      delete where.OR;
     }
 
     const [items, total] = await this.prisma.$transaction([
@@ -1613,54 +1960,89 @@ export class RepairsService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          asset: {
-            select: {
-              id: true,
-              noid: true,
-              name: true,
-              model: true,
-              serialNo: true,
-              imageUrl: true,
-            },
-          },
-          section: { select: { id: true, code: true, name: true } },
-          reporter: {
-            select: { id: true, firstname: true, lastname: true, email: true },
-          },
-          jobStatus: true,
-          jobType: true,
-          cause: true,
-          techCategory: true,
-          company: true,
-          mechanicRepairs: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  firstname: true,
-                  lastname: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: REPAIR_JOB_LIST_INCLUDE,
       }),
       this.prisma.repairJob.count({ where }),
     ]);
 
     const enrichedItems = items.map((job) => {
       const overdueInfo = this.calculateOverdueInfo(job);
+      const rejectedStep = job.repairJobSteps.find((step) =>
+        step.note?.startsWith(REJECTED_STEP_PREFIX),
+      );
+      const workflowStep = job.repairJobSteps.reduce(
+        (highest, step) =>
+          step.completeAt
+            ? Math.max(highest, step.stepMaster.stepNumber)
+            : highest,
+        0,
+      );
       return {
         ...job,
+        workflowStep,
+        isRejected: Boolean(rejectedStep),
+        rejectReason: rejectedStep?.note
+          ? rejectedStep.note.replace(
+              new RegExp(`^\\${REJECTED_STEP_PREFIX}\\s*`),
+              '',
+            )
+          : null,
         isOverdue: overdueInfo.isOverdue,
         overdueDays: overdueInfo.overdueDays,
       };
     });
 
     return paginate(enrichedItems, total, page, limit);
+  }
+
+  async getStatusSummary(
+    query: RepairSummaryFilterDto,
+    user: RepairCaller,
+  ): Promise<RepairStatusSummary> {
+    const where: Prisma.RepairJobWhereInput = {};
+    const isDepartmentStaff = Array.isArray(user.role)
+      ? user.role.includes(UserRole.DEPARTMENT_STAFF)
+      : user.role === UserRole.DEPARTMENT_STAFF;
+    if (isDepartmentStaff) {
+      const sectionId = await this.getCallerSectionId(user);
+      if (sectionId) {
+        where.sectionId = sectionId;
+      } else {
+        where.reporterId = user.id;
+      }
+    } else if (query.sectionId) {
+      where.sectionId = query.sectionId;
+    }
+    if (query.evaluatedOnly) {
+      where.diagnosis = { not: '' };
+    }
+
+    const [statuses, groupedCounts] = await this.prisma.$transaction([
+      this.prisma.jobStatus.findMany({ select: { id: true, code: true } }),
+      this.prisma.repairJob.groupBy({
+        by: ['jobStatusId'],
+        where,
+        orderBy: { jobStatusId: 'asc' },
+        _count: { id: true },
+      }),
+    ]);
+    const countByStatusId = new Map(
+      groupedCounts.map(({ jobStatusId, _count }) => [
+        jobStatusId,
+        _count && typeof _count === 'object' ? (_count.id ?? 0) : 0,
+      ]),
+    );
+    const byStatusCode = Object.fromEntries(
+      statuses.map(({ id, code }) => [code, countByStatusId.get(id) ?? 0]),
+    );
+    const total = groupedCounts.reduce(
+      (sum, { _count }) =>
+        sum + (_count && typeof _count === 'object' ? (_count.id ?? 0) : 0),
+      0,
+    );
+
+    return { total, byStatusCode };
   }
 
   async findOne(id: string, tx?: Prisma.TransactionClient) {

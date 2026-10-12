@@ -1,3 +1,8 @@
+import { getPartOrdersPage, getLocalPartOrderDrafts } from "../../services/partOrderService";
+import { getSparepartGroups } from "../../services/sparepartService";
+import { useServerPage, useDebouncedSearch, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useMemo, useState, useEffect } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -159,79 +164,18 @@ export default function PartOrderTable({
   dateFilter = "ALL",
   categoryFilter = "ALL",
 }: PartOrderTableProps) {
-  const { data: spareParts = [], isLoading: isPartsLoading } = useQuery({
-    queryKey: ["spareParts"],
-    queryFn: getSpareParts,
-  });
-
-  const { data: orders = [], isLoading: isOrdersLoading } = useQuery({
-    queryKey: ["partOrders"],
-    queryFn: getPartOrders,
-  });
-
-  const isLoading = isPartsLoading || isOrdersLoading;
-
-  // รายการคำสั่งซื้ออะไหล่ทั้งหมด (เรียงรายการใหม่ล่าสุดไว้บนสุด และ map หมวดหมู่จาก spareParts)
-  const realOrders: PartOrder[] = useMemo(() => {
-    const partsMap = new Map(spareParts.map((p) => [p.id, p]));
-    return orders.map((o) => {
-      const part = o.sparepart_id ? partsMap.get(o.sparepart_id) : undefined;
-      const realCategory =
-        part?.group?.name ||
-        part?.category ||
-        (o.category && o.category !== "ทั่วไป" ? o.category : undefined) ||
-        "ทั่วไป";
-
-      return {
-        ...o,
-        category: realCategory,
-      };
-    });
-  }, [orders, spareParts]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, dateFilter, categoryFilter]);
-
-  const filteredData = useMemo(() => {
-    return realOrders.filter((item) => {
-      const sl = search.toLowerCase();
-      const matchesSearch =
-        search === "" ||
-        item.orderNo?.toLowerCase().includes(sl) ||
-        item.partName?.toLowerCase().includes(sl) ||
-        item.category?.toLowerCase().includes(sl);
-
-      const matchesDate =
-        !dateFilter ||
-        dateFilter === "ALL" ||
-        item.orderDate === dateFilter ||
-        (item.orderDate && item.orderDate.startsWith(dateFilter));
-
-      const matchesCategory =
-        !categoryFilter ||
-        categoryFilter === "ALL" ||
-        item.category === categoryFilter;
-
-      return matchesSearch && matchesDate && matchesCategory;
-    });
-  }, [realOrders, search, dateFilter, categoryFilter]);
-
-  const totalItems = filteredData.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-
-  const paginatedData = useMemo(
-    () =>
-      filteredData.slice(
-        (currentPage - 1) * pageSize,
-        currentPage * pageSize,
-      ),
-    [filteredData, currentPage],
-  );
-
+  const term = useDebouncedSearch(search);
+  const { data: groups } = useQuery({ queryKey: ["sparepartGroups"], queryFn: getSparepartGroups });
+  const listQuery = useServerPage<PartOrder>("partOrders", {
+    search: term,
+    startDate: dateFilter && dateFilter !== "ALL" ? dateFilter : undefined,
+    endDate: dateFilter && dateFilter !== "ALL" ? dateFilter : undefined,
+    groupId: categoryFilter !== "ALL" ? groups?.find((g) => g.name === categoryFilter)?.id : undefined,
+  }, getPartOrdersPage);
+  const { isLoading, page: currentPage, setPage: setCurrentPage, pageSize, total: totalItems, totalPages } = listQuery;
+  const paginatedData = listQuery.rows;
+  const draftsQuery = useForegroundQuery(["partOrders", "local-drafts"], () => Promise.resolve(getLocalPartOrderDrafts()));
+  const localDrafts = draftsQuery.data ?? [];
   const table = useTable({
     key: "part-order-table",
     features,
@@ -241,6 +185,11 @@ export default function PartOrderTable({
 
   return (
     <div className="w-full flex-1 flex flex-col min-h-0">
+      <QueryStatus query={listQuery} />
+      {localDrafts.length > 0 && <details className="border-b border-amber-200 bg-amber-50 p-3 text-xs">
+        <summary>ข้อมูลรับเข้าในเครื่อง ยังไม่ยืนยันกับเซิร์ฟเวอร์ (ไม่นับในยอด)</summary>
+        <LocalPartOrderDraftTable rows={localDrafts} />
+      </details>}
       <div className="flex-1 overflow-auto min-h-0">
         <table className="w-full text-left border-collapse">
           <thead className="border-b border-slate-200 bg-white sticky top-0 z-10">
@@ -340,4 +289,12 @@ export default function PartOrderTable({
       </div>
     </div>
   );
+}
+
+export function LocalPartOrderDraftTable({ rows }: { rows: PartOrder[] }) {
+  const table = useTable({ key: "LocalPartOrderDraftTable", features, columns, data: rows });
+  return <div className="overflow-auto"><table className="w-full text-left text-sm">
+    <thead>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} className="px-4 py-2"><table.FlexRender header={header} /></th>)}</tr>)}</thead>
+    <tbody>{table.getRowModel().rows.map((row) => <tr key={row.id}>{row.getAllCells().map((cell) => <td key={cell.id} className="px-4 py-2"><table.FlexRender cell={cell} /></td>)}</tr>)}</tbody>
+  </table></div>;
 }

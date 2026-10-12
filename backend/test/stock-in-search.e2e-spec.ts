@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 import type { Server } from 'http';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { Test } from '@nestjs/testing';
 import { Prisma, PrismaClient, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -9,6 +11,7 @@ import request from 'supertest';
 import { PrismaService } from '../src/prisma.service';
 import { SparePartsController } from '../src/spare-parts/spare-parts.controller';
 import { SparePartsService } from '../src/spare-parts/spare-parts.service';
+import { RolesGuard } from '../src/common/guards/roles.guard';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
@@ -34,6 +37,11 @@ type StockInHistoryResponse = {
   };
 };
 
+type SparePartListResponse = {
+  data: Array<{ qtyInStock: number; minStock: number }>;
+  meta: { total: number; totalPages: number };
+};
+
 function asStockInHistoryResponse(value: unknown): StockInHistoryResponse {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Expected a stock-in history response object');
@@ -50,11 +58,13 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
   let alphaPartId: number;
   let betaPartId: number;
   let gammaPartId: number;
+  let lookupPartId: number;
   let alphaDocId: number;
   let alphaOtherId: number;
   let betaId: number;
   let deletedStockInId: number;
   const dynamicAddIds: number[] = [];
+  const summaryPartIds: number[] = [];
   let specialPatternIds: number[];
   let tieIds: number[];
 
@@ -62,13 +72,18 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
   const date = (day: number) =>
     new Date(`2026-10-${String(day).padStart(2, '0')}T10:00:00.000Z`);
 
-  async function createPart(code: string, name: string) {
+  async function createPart(
+    code: string,
+    name: string,
+    stock?: { qtyInStock: number; minStock: number },
+  ) {
     return prisma.sparepart.create({
       data: {
         code: `T05-${code}-${randomUUID()}`,
         name,
         price: new Prisma.Decimal('12.50'),
         groupId,
+        ...stock,
       },
     });
   }
@@ -130,6 +145,38 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
     betaPartId = beta.id;
     gammaPartId = gamma.id;
 
+    const stockFixtures = [
+      ...Array.from({ length: 35 }, (_, index) => ({
+        name: `Ticket 08 normal ${index}`,
+        stock: { qtyInStock: 10, minStock: 5 },
+      })),
+      ...Array.from({ length: 30 }, (_, index) => ({
+        name: `Ticket 08 low ${index}`,
+        stock: { qtyInStock: 5, minStock: 5 },
+      })),
+      ...Array.from({ length: 40 }, (_, index) => ({
+        name: `Ticket 08 out ${index}`,
+        stock: { qtyInStock: 0, minStock: 0 },
+      })),
+    ];
+    const summaryParts = await Promise.all(
+      stockFixtures.map((fixture, index) =>
+        createPart(
+          `SUMMARY-${String(index).padStart(3, '0')}`,
+          fixture.name,
+          fixture.stock,
+        ),
+      ),
+    );
+    summaryPartIds.push(...summaryParts.map(({ id }) => id));
+    const lookupPart = await createPart(
+      'LOOKUP-AFTER-100',
+      'Ticket 08 lookup marker after one hundred parts',
+      { qtyInStock: 10, minStock: 5 },
+    );
+    lookupPartId = lookupPart.id;
+    summaryPartIds.push(lookupPartId);
+
     const alphaDoc = await createStockIn(alphaPartId, 'PO-2026-QX-92', date(5));
     const alphaOther = await createStockIn(
       alphaPartId,
@@ -162,6 +209,17 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
       ])
     ).map(({ id }) => id);
 
+    const paginatedStockIns = await Promise.all(
+      Array.from({ length: 105 }, (_, index) =>
+        createStockIn(
+          gammaPartId,
+          `T08-PAGINATION-${String(index).padStart(3, '0')}`,
+          date(6),
+        ),
+      ),
+    );
+    dynamicAddIds.push(...paginatedStockIns.map(({ id }) => id));
+
     const moduleRef = await Test.createTestingModule({
       controllers: [SparePartsController],
       providers: [
@@ -174,6 +232,14 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    app.useGlobalGuards(new RolesGuard(moduleRef.get(Reflector)));
+    app.use((req: Request, _res: Response, next: NextFunction) => {
+      const testRequest = req as Request & {
+        user?: { id: string; role: UserRole };
+      };
+      testRequest.user = { id: userId, role: UserRole.PARCEL_STAFF };
+      next();
+    });
     app.useGlobalPipes(
       new ValidationPipe({ transform: true, whitelist: true }),
     );
@@ -192,9 +258,12 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
         ...(specialPatternIds ?? []),
         ...(tieIds ?? []),
       ].filter((id): id is number => Number.isInteger(id));
-      const partIds = [alphaPartId, betaPartId, gammaPartId].filter(
-        (id): id is number => Number.isInteger(id),
-      );
+      const partIds = [
+        alphaPartId,
+        betaPartId,
+        gammaPartId,
+        ...summaryPartIds,
+      ].filter((id): id is number => Number.isInteger(id));
 
       if (addIds.length > 0) {
         await prisma.sparepartAdd.deleteMany({ where: { id: { in: addIds } } });
@@ -333,6 +402,24 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
     });
   });
 
+  it('searches and paginates more than 100 stock-in rows without omissions', async () => {
+    const pageIds: number[] = [];
+    for (let page = 1; page <= 6; page += 1) {
+      const response = await request(server())
+        .get('/spare-parts/stock-in-history')
+        .query({ search: 'T08-PAGINATION-', page, limit: 20 })
+        .expect(200);
+      const body = asStockInHistoryResponse(response.body);
+
+      expect(body.meta).toMatchObject({ total: 105, totalPages: 6 });
+      expect(body.data).toHaveLength(page === 6 ? 5 : 20);
+      pageIds.push(...body.data.map(({ id }) => id));
+    }
+
+    expect(pageIds).toHaveLength(105);
+    expect(new Set(pageIds).size).toBe(105);
+  });
+
   it('keeps contains matching across documents and part fields without OR duplicates', async () => {
     const response = await request(server())
       .get('/spare-parts/stock-in-history')
@@ -456,5 +543,163 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
     expect(body.data.map((row) => row.id)).toEqual(
       expected.map(({ id }) => id),
     );
+  });
+
+  it('returns exact NORMAL/LOW/OUT counts and applies stock filters before paging', async () => {
+    const summary = await request(server())
+      .get('/spare-parts/summary')
+      .expect(200);
+    expect(summary.body).toMatchObject({
+      total: 109,
+      byStockStatus: { NORMAL: 36, LOW: 30, OUT: 43 },
+    });
+
+    const page = await request(server())
+      .get('/spare-parts')
+      .query({ stockStatus: 'LOW', page: 2, limit: 10 })
+      .expect(200);
+    expect(page.body.meta).toMatchObject({ total: 30, totalPages: 3 });
+    expect(page.body.data).toHaveLength(10);
+    const lowStockPage = page.body as SparePartListResponse;
+    expect(
+      lowStockPage.data.every(
+        (part) => part.qtyInStock > 0 && part.qtyInStock <= part.minStock,
+      ),
+    ).toBe(true);
+
+    const legacyLowStock = await request(server())
+      .get('/spare-parts')
+      .query({ lowStock: true, limit: 100 })
+      .expect(200);
+    expect(legacyLowStock.body.meta.total).toBe(73);
+  });
+
+  it('can find an option beyond the first 100 items using server search', async () => {
+    const response = await request(server())
+      .get('/spare-parts')
+      .query({ search: 'LOOKUP-AFTER-100', limit: 20 })
+      .expect(200);
+
+    expect(response.body.meta.total).toBe(1);
+    expect(response.body.data.map(({ id }: { id: number }) => id)).toEqual([
+      lookupPartId,
+    ]);
+
+    const selectedOption = await request(server())
+      .get(`/spare-parts/${lookupPartId}`)
+      .expect(200);
+    expect(selectedOption.body).toMatchObject({
+      id: lookupPartId,
+      code: expect.stringContaining('LOOKUP-AFTER-100'),
+    });
+  });
+
+  it('updates the exact stock summary and history after an API stock-in write', async () => {
+    const before = (
+      await request(server()).get('/spare-parts/summary').expect(200)
+    ).body as {
+      total: number;
+      byStockStatus: { NORMAL: number; LOW: number; OUT: number };
+    };
+    const partBefore = await prisma.sparepart.findUniqueOrThrow({
+      where: { id: alphaPartId },
+    });
+    const previousBucket =
+      partBefore.qtyInStock <= 0
+        ? 'OUT'
+        : partBefore.qtyInStock > partBefore.minStock
+          ? 'NORMAL'
+          : 'LOW';
+
+    const created = await request(server())
+      .post('/spare-parts/stock-in')
+      .send({
+        sparepartId: alphaPartId,
+        qty: 2,
+        sparepartAddDoc: 'T08-WRITE-STOCK-IN-REFRESH',
+      })
+      .expect(201);
+    dynamicAddIds.push(created.body.stockInRecord.id as number);
+
+    const partAfter = await prisma.sparepart.findUniqueOrThrow({
+      where: { id: alphaPartId },
+    });
+    const nextBucket =
+      partAfter.qtyInStock <= 0
+        ? 'OUT'
+        : partAfter.qtyInStock > partAfter.minStock
+          ? 'NORMAL'
+          : 'LOW';
+    const expected = { ...before.byStockStatus };
+    if (previousBucket !== nextBucket) {
+      expected[previousBucket] -= 1;
+      expected[nextBucket] += 1;
+    }
+
+    const after = (
+      await request(server()).get('/spare-parts/summary').expect(200)
+    ).body as typeof before;
+    expect(after.total).toBe(before.total);
+    expect(after.byStockStatus).toEqual(expected);
+
+    const history = asStockInHistoryResponse(
+      (
+        await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ search: 'T08-WRITE-STOCK-IN-REFRESH' })
+          .expect(200)
+      ).body,
+    );
+    expect(history.meta.total).toBe(1);
+    expect(history.data[0]).toMatchObject({
+      id: created.body.stockInRecord.id,
+      qty: 2,
+    });
+  });
+  it('filters category before paging and keeps category projection/search on both query paths', async () => {
+    const group = await prisma.sparepartGroup.update({
+      where: { id: groupId },
+      data: { name: 'Ticket09-category-XZ' },
+    });
+    const expected = await prisma.sparepartAdd.findMany({
+      where: { deletedAt: null, sparepart: { groupId } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    expect(expected.length).toBeGreaterThan(100);
+    for (const search of [undefined, 'XZ', 'category-XZ']) {
+      const ids: number[] = [];
+      for (let page = 1; page <= Math.ceil(expected.length / 20); page++) {
+        const response = await request(server())
+          .get('/spare-parts/stock-in-history')
+          .query({ groupId, search, page, limit: 20 })
+          .expect(200);
+        const body = asStockInHistoryResponse(response.body);
+        expect(body.meta.total).toBe(expected.length);
+        expect(body.meta.totalPages).toBe(Math.ceil(expected.length / 20));
+        for (const row of response.body.data as Array<{
+          id: number;
+          sparepart: { group: { id: number; name: string } };
+        }>) {
+          expect(row.sparepart.group).toEqual({
+            id: group.id,
+            name: group.name,
+          });
+          ids.push(row.id);
+        }
+      }
+      expect(ids).toEqual(expected.map(({ id }) => id));
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+    await request(server())
+      .get('/spare-parts/stock-in-history')
+      .query({ groupId: -1 })
+      .expect(400);
+    const empty = await request(server())
+      .get('/spare-parts/stock-in-history')
+      .query({ groupId: 9999999, search: 'category-XZ' })
+      .expect(200);
+    expect(empty.body.meta.total).toBe(0);
+    expect(empty.body.data).toEqual([]);
   });
 });
