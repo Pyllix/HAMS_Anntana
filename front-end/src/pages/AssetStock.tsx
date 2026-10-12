@@ -249,18 +249,18 @@ export default function AssetStock() {
               ))}
             </select>
           </div>
-
-          {/* ปุ่มพิมพ์รายงาน */}
-          <button
-            type="button"
-            onClick={() => setIsPrintDialogOpen(true)}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors shadow-xs cursor-pointer ml-auto"
-            title="พิมพ์รายงานสต็อกครุภัณฑ์"
-          >
-            <Printer className="h-4 w-4" />
-            <span>พิมพ์รายงาน</span>
-          </button>
         </div>
+
+        {/* ปุ่มพิมพ์รายงาน (ชิดขวาสุด) */}
+        <button
+          type="button"
+          onClick={() => setIsPrintDialogOpen(true)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors shadow-xs cursor-pointer ml-auto w-full sm:w-auto justify-center"
+          title="พิมพ์รายงานสต็อกครุภัณฑ์"
+        >
+          <Printer className="h-4 w-4" />
+          <span>พิมพ์รายงาน</span>
+        </button>
       </div>
 
       {/* Table */}
