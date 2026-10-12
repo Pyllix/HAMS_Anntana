@@ -1,6 +1,7 @@
 export const SPAREPART_TXN_TYPES = [
   'WITHDRAW',
   'RETURN',
+  'ADJUST',
   'PENDING_WITHDRAW',
 ] as const;
 

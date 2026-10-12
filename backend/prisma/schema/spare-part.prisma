@@ -57,7 +57,7 @@ model SparepartTxn {
   id          Int      @id @default(autoincrement()) @map("txn_id")
   sparepartId Int      @map("sparepart_id")
   jobId       String?  @map("job_id")
-  txnType     String   @map("txn_type") @db.VarChar(100) // Active: WITHDRAW / RETURN / PENDING_WITHDRAW; legacy rows may contain ADJUST
+  txnType     String   @map("txn_type") @db.VarChar(100) // WITHDRAW / RETURN / ADJUST
   stockType   String?  @map("stock_type") @db.VarChar(20) // INTERNAL / EXTERNAL
   qty         Int
   unitPrice   Decimal  @map("unit_price") @db.Decimal(15, 2)
