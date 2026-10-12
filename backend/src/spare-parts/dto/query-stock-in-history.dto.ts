@@ -11,6 +11,15 @@ import {
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class QueryStockInHistoryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    description: 'Filter by spare-part group before pagination',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  readonly groupId?: number;
+
   @ApiPropertyOptional({ example: 1, description: 'กรองตาม ID อะไหล่' })
   @IsOptional()
   @Type(() => Number)

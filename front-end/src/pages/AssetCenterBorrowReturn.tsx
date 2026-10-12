@@ -1,3 +1,7 @@
+import { useForegroundQuery } from "../hooks/useServerPage";
+import { getSummary, statusCount } from "../services/pagedApi";
+import type { AssetSummary, StatusSummary } from "../services/pagedApi";
+import QueryStatus from "../components/shared/QueryStatus";
 import {
   Check,
   ChevronDown,
@@ -41,10 +45,9 @@ export default function AssetCenterBorrowReturn() {
   const user = useAuthStore((state) => state.user);
   const sectionId = user?.section_id;
 
-  const { data: assets } = useQuery({
-    queryKey: ["assets", sectionId],
-    queryFn: () => getAssets(sectionId),
-  });
+  const assetSummaryQuery = useForegroundQuery(["assets", "summary", sectionId],
+    (signal) => getSummary<AssetSummary>("/asset/summary", { section_id: sectionId }, signal), true);
+  const assetSummary = assetSummaryQuery.data;
 
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
@@ -56,44 +59,10 @@ export default function AssetCenterBorrowReturn() {
     queryFn: getAvailabilities,
   });
 
-  // ดึงข้อมูลเดียวกับที่ PendingApprovalTable / PendingHandoverTable ใช้ (query key ตรงกัน
-  // จึงแชร์ cache กัน ไม่ยิงซ้ำ) เพื่อเอามาโชว์จำนวนค้างดำเนินการเป็น badge บนแท็บ
-  const { data: pendingApprovalData } = useQuery({
-    queryKey: ["borrowHistory", "pendingApproval"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
-  const { data: pendingHandoverData } = useQuery({
-    queryKey: ["borrowHistory", "pendingHandover"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
-  const { data: pendingPickupData } = useQuery({
-    queryKey: ["borrowHistory", "pendingPickup"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
-  const { data: pendingCompleteReturnData } = useQuery({
-    queryKey: ["borrowHistory", "pendingCompleteReturn"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
-
-  const pendingApproveCount = useMemo(() => {
-    const approvalCount = (pendingApprovalData ?? []).filter(
-      (item) => item.borrowStatus?.code === "PENDING_APPROVE",
-    ).length;
-    const handoverCount = (pendingHandoverData ?? []).filter(
-      (item) => item.borrowStatus?.code === "APPROVED",
-    ).length;
-    return approvalCount + handoverCount;
-  }, [pendingApprovalData, pendingHandoverData]);
-
-  const pendingReturnCount = useMemo(() => {
-    const pickupCount = (pendingPickupData ?? []).filter(
-      (item) => item.borrowStatus?.code === "PENDING_RETURN",
-    ).length;
-    const completeCount = (pendingCompleteReturnData ?? []).filter(
-      (item) => item.borrowStatus?.code === "IN_PICKUP",
-    ).length;
-    return pickupCount + completeCount;
-  }, [pendingPickupData, pendingCompleteReturnData]);
+  const borrowSummaryQuery = useForegroundQuery(["borrowHistory", "summary"],
+    (signal) => getSummary<StatusSummary>("/borrowings/summary", {}, signal), true);
+  const pendingApproveCount = statusCount(borrowSummaryQuery.data, ["PENDING_APPROVE", "APPROVED"]);
+  const pendingReturnCount = statusCount(borrowSummaryQuery.data, ["PENDING_RETURN", "IN_PICKUP"]);
 
   const [activeTab, setActiveTab] = useState<TabId>("borrow");
   const [inputSearch, setInputSearch] = useState("");
@@ -127,12 +96,10 @@ export default function AssetCenterBorrowReturn() {
 
   // useMemo คำนวณนับจำนวน assets และจัด Format การ์ด
   const statsSummary: StatCardData[] = useMemo(() => {
-    const assetList = assets ?? [];
+
 
     // 1. ฟังก์ชันช่วยนับจำนวนตาม code ของสถานะ (ไม่ขึ้นกับชื่อที่แสดงผล)
-    const countByCode = (code: string): number =>
-      assetList.filter((asset) => asset.availabilityStatus?.code === code)
-        .length;
+    const countByCode = (code: string) => assetSummary?.byAvailabilityStatusCode[code] ?? (assetSummary ? 0 : undefined);
 
     // 2. ดึงชื่อจริงจากตาราง availabilities มาเป็น filter key (ตารางกรองด้วยชื่อ)
     const getNameByCode = (code: string) =>
@@ -143,7 +110,7 @@ export default function AssetCenterBorrowReturn() {
         id: "total",
         filterKey: "ALL",
         title: "จำนวนครุภัณฑ์ทั้งหมด",
-        value: assets?.length ?? 999,
+        value: assetSummary?.total,
         icon: Plus,
         iconBg: "bg-slate-100",
         iconColor: "text-slate-600",
@@ -190,11 +157,13 @@ export default function AssetCenterBorrowReturn() {
         valueColor: "text-sky-600",
       },
     ];
-  }, [assets, availabilities]);
+  }, [assetSummary, availabilities]);
 
   return (
     // 1. เพิ่ม flex flex-col และ h-full เพื่อเตรียมให้ Table ขยายเต็มพื้นที่ที่เหลือ
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      <QueryStatus query={assetSummaryQuery} />
+      <QueryStatus query={borrowSummaryQuery} />
       {/* Tab Navigation แยกหน้า ยืม-คืน / อนุมัติ */}
       <div className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
         {tabs.map((tab) => {

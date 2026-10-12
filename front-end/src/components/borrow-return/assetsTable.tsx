@@ -1,3 +1,9 @@
+import { useServerPage, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage, getSummary, statusCount } from "../../services/pagedApi";
+import type { StatusSummary } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
+import { useDebouncedSearch } from "../../hooks/useServerPage";
+import { getAssetTypes, getAvailabilities } from "../../services/assetService";
 import {
   tableFeatures,
   useTable,
@@ -179,63 +185,41 @@ export default function AssetsTable({ search, category, type }: Props) {
   const user = useAuthStore((state) => state.user);
   const sectionId = user?.section_id;
 
-  const { data: assets } = useQuery({
-    queryKey: ["assets", sectionId],
-    queryFn: () => getAssets(sectionId),
-  });
-
+  const searchTerm = useDebouncedSearch(search);
+  const { data: types } = useQuery({ queryKey: ["assetTypes"], queryFn: getAssetTypes });
+  const { data: states } = useQuery({ queryKey: ["availabilities"], queryFn: getAvailabilities });
+  const typeName = type;
+  const listQuery = useServerPage<Asset>("assets", {
+    section_id: sectionId, search: searchTerm,
+    asset_type_id: typeName !== "ALL" ? types?.find((t) => t.name === typeName)?.id : undefined,
+    availability_status_id: category !== "ALL" ? states?.find((s) => s.name === category)?.id : undefined,
+  }, (filters, signal) => getPage("/asset", filters, signal), true, !!sectionId);
+  const assets = listQuery.rows;
   const isRecommendationOpen = useBorrowRecommendationStore(
     (s) => !!s.clickedAsset,
   );
 
-  // ขอบเขตของรายการแนะนำ: เครื่องที่ยืมได้ทั้งหมด (ไม่ขึ้นกับคำค้นหา/ตัวกรองที่เลือกอยู่)
-  const borrowableAssets = useMemo(
-    () =>
-      (assets ?? []).filter(
-        (item) =>
-          item.availabilityStatus?.code === "AVAILABLE" &&
-          item.status?.code === "NORMAL",
-      ),
-    [assets],
-  );
-
-  const filteredAssets = useMemo(() => {
-    if (!assets) {
-      console.log("assets is undefined at AssetsTable.tsx");
-      return [];
-    }
-
-    return assets.filter((item) => {
-      const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(search.toLowerCase()) ||
-        item.serialNo?.toLowerCase().includes(search.toLowerCase());
-
-      const matchesStatus =
-        category === "ALL" || item.availabilityStatus?.name === category;
-
-      const matchesType = type === "ALL" || item.type?.name === type;
-
-      return matchesSearch && matchesStatus && matchesType;
-    });
-  }, [assets, search, category, type]);
-
+  // Preserve the recommendation scope; load its pool only when opening the dialog.
+  const recommendationPoolQuery = useQuery({
+    queryKey: ["assets", "recommendation-pool", sectionId],
+    queryFn: () => getAssets(sectionId),
+    enabled: isRecommendationOpen,
+  });
+  const borrowableAssets = (recommendationPoolQuery.data ?? []).filter((asset) => asset.status?.code === "NORMAL" && asset.availabilityStatus?.code === "AVAILABLE");
+  const filteredAssets = assets;
   const table = useTable({
     key: "assets-table",
     features,
     columns,
     data: filteredAssets ?? [],
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-      {isRecommendationOpen && (
+      <QueryStatus query={listQuery} />
+      {isRecommendationOpen && !recommendationPoolQuery.data && <div><QueryStatus query={recommendationPoolQuery} /><button type="button" className="px-3 py-1 text-sm" onClick={() => useBorrowRecommendationStore.getState().close()}>ยกเลิก</button></div>}
+      {isRecommendationOpen && !!recommendationPoolQuery.data && (
         <BorrowRecommendationDialog
           pool={borrowableAssets}
           onProceed={(asset) => useBorrowModalStore.getState().openForm(asset)}

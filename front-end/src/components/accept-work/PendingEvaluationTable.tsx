@@ -1,3 +1,6 @@
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useMemo } from "react";
 import {
   tableFeatures,
@@ -94,11 +97,13 @@ export default function PendingEvaluationTable({
     (state) => state.openAssessmentForm,
   );
 
-  const { data: jobsData = [], isLoading } = useQuery<any>({
-    queryKey: ["pendingEvaluations"],
-    queryFn: getPendingEvaluations,
-    refetchOnWindowFocus: true,
-  });
+  const term = useDebouncedSearch(search);
+  const listQuery = useServerPage<RepairListItem>("pendingEvaluations", {
+    search: term, urgencyStatus, evaluatedOnly: false, isRejected: false,
+    statusCodes: ["WAITING_HANDOVER", "PENDING_ASSIGN", "IN_PROGRESS"],
+    assignmentScope: isHead ? "MINE_OR_UNASSIGNED" : "MINE",
+  }, (filters, signal) => getPage("/repairs", filters, signal), true);
+  const isLoading = listQuery.isLoading;
 
   const columns = useMemo<ColumnDef<typeof features, RepairListItem>[]>(
     () => [
@@ -216,136 +221,19 @@ export default function PendingEvaluationTable({
     [openAssessmentForm, isHead, user],
   );
 
-  const filteredData = useMemo(() => {
-    const list: RepairListItem[] = Array.isArray(jobsData)
-      ? jobsData
-      : Array.isArray((jobsData as any)?.data)
-        ? (jobsData as any).data
-        : [];
-
-    return list.filter((item: any) => {
-      // 1. ดึงค่า status ออกมาจากทุกรูปแบบออบเจกต์/ฟิลด์ที่เป็นไปได้ (รวม jobStatus และ jobStatusId)
-      const rawJobStatus =
-        typeof item.jobStatus === "object"
-          ? item.jobStatus?.code || item.jobStatus?.name || ""
-          : item.jobStatus || "";
-
-      const rawStatus =
-        typeof item.status === "object"
-          ? item.status?.code || item.status?.name || item.status?.status || ""
-          : item.status || "";
-
-      const rawStepStatus =
-        typeof item.stepStatus === "object"
-          ? item.stepStatus?.code || item.stepStatus?.name || ""
-          : item.stepStatus || "";
-
-      const rawRepairStatus =
-        typeof item.repairStatus === "object"
-          ? item.repairStatus?.code || item.repairStatus?.name || ""
-          : item.repairStatus || "";
-
-      const rawWorkStatus =
-        typeof item.workStatus === "object"
-          ? item.workStatus?.code || item.workStatus?.name || ""
-          : item.workStatus || "";
-
-      const jobStatusStr = String(rawJobStatus).toUpperCase();
-      const statusStr = String(rawStatus).toUpperCase();
-      const stepStatusStr = String(rawStepStatus).toUpperCase();
-      const repairStatusStr = String(rawRepairStatus).toUpperCase();
-      const workStatusStr = String(rawWorkStatus).toUpperCase();
-      const solutionStr = String(item.solution || "").toUpperCase();
-
-      // เช็คคำสำคัญการยกเลิก/ปฏิเสธ รวมถึง jobStatusId = 10
-      const isCancelled =
-        item.jobStatusId === 10 ||
-        jobStatusStr.includes("CANCEL") ||
-        statusStr.includes("CANCEL") ||
-        stepStatusStr.includes("CANCEL") ||
-        repairStatusStr.includes("CANCEL") ||
-        workStatusStr.includes("CANCEL") ||
-        jobStatusStr.includes("REJECT") ||
-        statusStr.includes("REJECT") ||
-        stepStatusStr.includes("REJECT") ||
-        repairStatusStr.includes("REJECT") ||
-        workStatusStr.includes("REJECT") ||
-        solutionStr.includes("ยกเลิก") ||
-        jobStatusStr === "CANCELLED" ||
-        statusStr === "CANCELLED" ||
-        Boolean(item.isCancelled) ||
-        Boolean(item.canceledAt) ||
-        Boolean(item.cancelledAt);
-
-      if (isCancelled) {
-        return false;
-      }
-
-      // 2. เช็คการจ่ายงาน/ช่าง
-      const assignedMechanics =
-        item.mechanicRepairs || item.mechanics || item.assignedMechanics || [];
-
-      const currentUserId = String(user?.id ?? "");
-      const currentMechanicId = String(
-        (user as any)?.mechanicId ?? user?.id ?? "",
-      );
-
-      const isMyJob = assignedMechanics.some((m: any) => {
-        const mUserId = String(m.userId ?? m.user?.id ?? m.id ?? "");
-        const mMechanicId = String(m.mechanicId ?? m.id ?? "");
-
-        return (
-          (mUserId && mUserId === currentUserId) ||
-          (mMechanicId && mMechanicId === currentMechanicId) ||
-          (mUserId && mUserId === currentMechanicId) ||
-          (mMechanicId && mMechanicId === currentUserId)
-        );
-      });
-
-      if (isHead) {
-        const isUnassigned = assignedMechanics.length === 0;
-        if (!isUnassigned && !isMyJob) return false;
-      } else {
-        if (!isMyJob) return false;
-      }
-
-      // 3. กรองงานที่ประเมินแล้วออก
-      const isEvaluated = Boolean(item.diagnosis);
-      if (isEvaluated) {
-        return false;
-      }
-
-      // 4. การค้นหาและระดับความเร่งด่วน
-      const sl = search.toLowerCase();
-      const matchesSearch =
-        search === "" ||
-        item.jobNo?.toLowerCase().includes(sl) ||
-        item.asset?.name?.toLowerCase().includes(sl) ||
-        item.asset?.noid?.toLowerCase().includes(sl);
-
-      const matchesUrgency =
-        urgencyStatus === "ALL" ||
-        (item.urgencyStatus || "NORMAL") === urgencyStatus;
-
-      return matchesSearch && matchesUrgency;
-    });
-  }, [jobsData, search, urgencyStatus, isHead, user]);
+  const filteredData = listQuery.rows;
 
   const table = useTable({
     key: "pending-evaluation-table",
     features,
     columns,
     data: filteredData,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       {/* พื้นที่ตาราง Scroll ได้ */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-sm text-slate-600">

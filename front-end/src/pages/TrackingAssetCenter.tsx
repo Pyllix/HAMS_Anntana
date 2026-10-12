@@ -1,3 +1,7 @@
+import { useForegroundQuery } from "../hooks/useServerPage";
+import { getSummary, statusCount } from "../services/pagedApi";
+import type { StatusSummary } from "../services/pagedApi";
+import QueryStatus from "../components/shared/QueryStatus";
 import {
   ChevronDown,
   Search,
@@ -97,26 +101,18 @@ export default function TrackingAssetCenter({}) {
 
   // DEPARTMENT_STAFF ถูก backend จำกัดให้เห็นเฉพาะแผนกตัวเองอยู่แล้ว
   // แยก cache ตามผู้ใช้ เพื่อไม่ให้เห็นข้อมูลของบัญชีก่อนหน้าหลังสลับผู้ใช้
-  const { data: repairsHistory } = useQuery({
-    queryKey: ["repairsHistory", user?.id, effectiveSectionId],
-    queryFn: () =>
-      getRepairsHistory(
-        effectiveSectionId !== "ALL" ? effectiveSectionId : undefined,
-      ),
-  });
-
+  const summaryQuery = useForegroundQuery(["repairsHistory", "summary", effectiveSectionId],
+    (signal) => getSummary<StatusSummary>("/repairs/summary", { sectionId: effectiveSectionId }, signal), true);
+  const repairsSummary = summaryQuery.data;
   const statsSummary: StatCardData[] = useMemo(() => {
-    const items = repairsHistory ?? [];
-    const countGroup = (codes: string[]) =>
-      items.filter((item) => codes.includes(item.jobStatus?.code ?? ""))
-        .length;
+    const countGroup = (codes: string[]) => statusCount(repairsSummary, codes);
 
     return [
       {
         id: "total",
         filterKey: "ALL",
         title: "งานซ่อมทั้งหมด",
-        value: items.length,
+        value: repairsSummary?.total,
         icon: ClipboardList,
         iconBg: "bg-slate-100",
         iconColor: "text-slate-600",
@@ -133,7 +129,7 @@ export default function TrackingAssetCenter({}) {
         valueColor: g.valueColor,
       })),
     ];
-  }, [repairsHistory]);
+  }, [repairsSummary]);
 
   // สถานะที่ใช้กรองตาราง: dropdown (สถานะเดียว) มาก่อน ถ้าไม่ได้เลือกใช้กลุ่มจากการ์ด
   const statusCodes = useMemo(() => {
@@ -172,6 +168,7 @@ export default function TrackingAssetCenter({}) {
     // 1. เปลี่ยนให้หน้าเพจนี้ใช้ความสูงเต็มพื้นที่ (h-full) และเรียงลงมา (flex-col)
     // เพิ่มระยะห่างระหว่างส่วนค้นหากับตารางให้โปร่งขึ้น
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      <QueryStatus query={summaryQuery} />
       {/* การ์ดสรุปสถานะงานซ่อม (กดเพื่อกรองตาราง) */}
       <div className="shrink-0">
         <StatCards
@@ -329,7 +326,7 @@ export default function TrackingAssetCenter({}) {
       {/* 3. ดันตารางให้กินพื้นที่ที่เหลือทั้งหมด (flex-1) พร้อมกับบังคับให้ Scroll เกิดเฉพาะในกล่องนี้ (overflow-hidden) */}
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <TrackTable
-          items={repairsHistory}
+          sectionId={effectiveSectionId !== "ALL" ? effectiveSectionId : undefined}
           inputSearch={inputSearch}
           statusCodes={statusCodes}
         />

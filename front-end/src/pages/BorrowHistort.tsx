@@ -1,3 +1,7 @@
+import { useForegroundQuery } from "../hooks/useServerPage";
+import { getSummary, statusCount } from "../services/pagedApi";
+import type { StatusSummary } from "../services/pagedApi";
+import QueryStatus from "../components/shared/QueryStatus";
 import {
   ChevronDown,
   Search,
@@ -19,7 +23,7 @@ const STATUS_GROUPS = [
   {
     key: "PENDING",
     title: "รอดำเนินการ",
-    codes: ["PENDING_APPROVAL", "APPROVED"],
+    codes: ["PENDING_APPROVE", "APPROVED"],
     icon: Clock,
     iconBg: "bg-amber-50",
     iconColor: "text-amber-500",
@@ -28,7 +32,7 @@ const STATUS_GROUPS = [
   {
     key: "BORROWED",
     title: "กำลังยืม",
-    codes: ["BORROWED", "PENDING_VERIFICATION"],
+    codes: ["BORROWED", "PENDING_RETURN", "IN_PICKUP", "PENDING_VERIFICATION"],
     icon: Repeat,
     iconBg: "bg-blue-50",
     iconColor: "text-blue-500",
@@ -59,23 +63,19 @@ export default function BorrowHistory() {
   // กลุ่มสถานะที่เลือกจากการ์ดหรือ dropdown ("ALL" = ไม่กรอง)
   const [statusGroup, setStatusGroup] = useState("ALL");
 
-  const { data: borrowHistory } = useQuery({
-    queryKey: ["borrowHistory", "all"],
-    queryFn: () => getAllBorrowHistory({ limit: 100 }),
-  });
+  const summaryQuery = useForegroundQuery(["borrowHistory", "summary"],
+    (signal) => getSummary<StatusSummary>("/borrowings/summary", {}, signal));
+  const borrowSummary = summaryQuery.data;
 
   const statsSummary: StatCardData[] = useMemo(() => {
-    const items = borrowHistory ?? [];
-    const countGroup = (codes: string[]) =>
-      items.filter((item) => codes.includes(item.borrowStatus?.code ?? ""))
-        .length;
+    const countGroup = (codes: string[]) => statusCount(borrowSummary, codes);
 
     return [
       {
         id: "total",
         filterKey: "ALL",
         title: "รายการทั้งหมด",
-        value: items.length,
+        value: borrowSummary?.total,
         icon: ClipboardList,
         iconBg: "bg-slate-100",
         iconColor: "text-slate-600",
@@ -92,7 +92,7 @@ export default function BorrowHistory() {
         valueColor: g.valueColor,
       })),
     ];
-  }, [borrowHistory]);
+  }, [borrowSummary]);
 
   const statusCodes = useMemo(
     () => STATUS_GROUPS.find((g) => g.key === statusGroup)?.codes ?? null,
@@ -105,6 +105,7 @@ export default function BorrowHistory() {
   return (
     // 1. กำหนดให้เต็มความสูง (h-full) และเป็น flex-col
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
+      <QueryStatus query={summaryQuery} />
       {/* การ์ดสรุปสถานะการยืม-คืน (กดเพื่อกรองตาราง) */}
       <div className="shrink-0">
         <StatCards
@@ -164,7 +165,6 @@ export default function BorrowHistory() {
       {/* 3. ให้ตารางยืดจนสุดพื้นที่ (flex-1) และเกิด Scroll ภายในตัวเอง (overflow-hidden) */}
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <AssetsHistoryTable
-          items={borrowHistory}
           inputSearch={inputSearch}
           statusCodes={statusCodes}
         />

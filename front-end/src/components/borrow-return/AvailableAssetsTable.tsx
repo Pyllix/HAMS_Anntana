@@ -1,3 +1,9 @@
+import { useServerPage, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage, getSummary, statusCount } from "../../services/pagedApi";
+import type { StatusSummary } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
+import { useDebouncedSearch } from "../../hooks/useServerPage";
+import { getAssetTypes, getAvailabilities } from "../../services/assetService";
 import {
   tableFeatures,
   useTable,
@@ -101,66 +107,41 @@ export default function AvailableAssetsTable({ search, typeFilter }: Props) {
     [sections],
   );
 
-  const { data: assets } = useQuery({
-    queryKey: ["assets", centerSectionId],
-    queryFn: () => getAssets(centerSectionId),
-    enabled: !!centerSectionId,
-  });
-
+  const searchTerm = useDebouncedSearch(search);
+  const { data: types } = useQuery({ queryKey: ["assetTypes"], queryFn: getAssetTypes });
+  const { data: states } = useQuery({ queryKey: ["availabilities"], queryFn: getAvailabilities });
+  const typeName = typeFilter;
+  const listQuery = useServerPage<Asset>("assets", {
+    section_id: centerSectionId, search: searchTerm,
+    asset_type_id: typeName !== "ALL" ? types?.find((t) => t.name === typeName)?.id : undefined,
+    assetStatusCode: "NORMAL", availabilityStatusCode: "AVAILABLE",
+  }, (filters, signal) => getPage("/asset", filters, signal), true, !!centerSectionId);
+  const assets = listQuery.rows;
   const isRecommendationOpen = useBorrowRecommendationStore(
     (s) => !!s.clickedAsset,
   );
 
-  // ขอบเขตของรายการแนะนำ: ครุภัณฑ์ศูนย์ฯ ที่ยืมได้ทั้งหมด (ไม่ขึ้นกับคำค้นหา/ประเภทที่กรองอยู่)
-  const borrowableAssets = useMemo(
-    () =>
-      (assets ?? []).filter(
-        (item) =>
-          item.section?.code === "CENTER" &&
-          item.availabilityStatus?.code === "AVAILABLE" &&
-          item.status?.code === "NORMAL",
-      ),
-    [assets],
-  );
-
-  // เห็นเฉพาะครุภัณฑ์ของศูนย์ฯ ที่ "ว่าง" (AVAILABLE) และ "ใช้งานได้" (NORMAL) เท่านั้น
-  const filteredAssets = useMemo(() => {
-    if (!assets) return [];
-
-    return assets.filter((item) => {
-      const isCenterAsset = item.section?.code === "CENTER";
-      const isAvailable = item.availabilityStatus?.code === "AVAILABLE";
-      const isNormal = item.status?.code === "NORMAL";
-
-      const matchesSearch =
-        search === "" ||
-        item.name?.toLowerCase().includes(search.toLowerCase()) ||
-        item.serialNo?.toLowerCase().includes(search.toLowerCase());
-
-      const matchesType = typeFilter === "ALL" || item.type?.name === typeFilter;
-
-      return (
-        isCenterAsset && isAvailable && isNormal && matchesSearch && matchesType
-      );
-    });
-  }, [assets, search, typeFilter]);
-
+  // Preserve the recommendation scope; load its pool only when opening the dialog.
+  const recommendationPoolQuery = useQuery({
+    queryKey: ["assets", "recommendation-pool", centerSectionId],
+    queryFn: () => getAssets(centerSectionId),
+    enabled: isRecommendationOpen,
+  });
+  const borrowableAssets = (recommendationPoolQuery.data ?? []).filter((asset) => asset.status?.code === "NORMAL" && asset.availabilityStatus?.code === "AVAILABLE");
+  const filteredAssets = assets;
   const table = useTable({
     key: "available-assets-table",
     features,
     columns,
     data: filteredAssets,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-      {isRecommendationOpen && (
+      <QueryStatus query={listQuery} />
+      {isRecommendationOpen && !recommendationPoolQuery.data && <div><QueryStatus query={recommendationPoolQuery} /><button type="button" className="px-3 py-1 text-sm" onClick={() => useBorrowRecommendationStore.getState().close()}>ยกเลิก</button></div>}
+      {isRecommendationOpen && !!recommendationPoolQuery.data && (
         <BorrowRecommendationDialog
           pool={borrowableAssets}
           onProceed={(asset) =>

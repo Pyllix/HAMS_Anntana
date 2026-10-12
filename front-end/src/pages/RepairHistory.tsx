@@ -1,3 +1,7 @@
+import { useForegroundQuery } from "../hooks/useServerPage";
+import { getSummary, statusCount } from "../services/pagedApi";
+import type { StatusSummary } from "../services/pagedApi";
+import QueryStatus from "../components/shared/QueryStatus";
 import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -46,34 +50,19 @@ export default function RepairHistory() {
   const [actionType, setActionType] = useState<RepairActionFilter>("ALL");
   const [status, setStatus] = useState<RepairStatusFilter>("ALL");
 
-  const { data: jobs = [] } = useQuery({
-    queryKey: ["repairHistory"],
-    queryFn: getRepairHistory,
-  });
-
-  const summary = useMemo(
-    () => ({
-      all: jobs.length,
-      inProgress: jobs.filter((job) =>
-        ["IN_PROGRESS", "WAITING_DELIVERY"].includes(
-          job.status?.statusCode || "",
-        ),
-      ).length,
-      waiting: jobs.filter((job) =>
-        ["WAITING_PARTS", "PARCEL_PROCESSING"].includes(
-          job.status?.statusCode || "",
-        ),
-      ).length,
-      external: jobs.filter((job) =>
-        ["OUTSOURCED", "UNREPAIRABLE"].includes(job.status?.statusCode || ""),
-      ).length,
-    }),
-    [jobs],
-  );
+  const summaryQuery = useForegroundQuery(["repairHistory", "summary"],
+    (signal) => getSummary<StatusSummary>("/repairs/summary", { evaluatedOnly: true }, signal), true);
+  const summary = {
+    all: summaryQuery.data?.total,
+    inProgress: statusCount(summaryQuery.data, ["IN_PROGRESS", "WAITING_DELIVERY"]),
+    waiting: statusCount(summaryQuery.data, ["WAITING_PARTS", "PARCEL_PROCESSING"]),
+    external: statusCount(summaryQuery.data, ["OUTSOURCED", "UNREPAIRABLE"]),
+  };
 
   return (
     // ล็อกความสูงเต็มความสูงที่เหลือของจอภาพ และห้าม scroll ระดับเพจ (overflow-hidden)
     <div className="flex flex-col h-[calc(100vh-6rem)] overflow-hidden space-y-4">
+      <QueryStatus query={summaryQuery} />
       {/* Summary Cards */}
       <div className="shrink-0 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
@@ -144,7 +133,7 @@ export default function RepairHistory() {
 
 interface SummaryCardProps {
   label: string;
-  value: number;
+  value: number | undefined;
   icon: ComponentType<{ className?: string }>;
   color: "emerald" | "blue" | "amber" | "violet";
 }
@@ -166,7 +155,7 @@ function SummaryCard({ label, value, icon: Icon, color }: SummaryCardProps) {
       <div>
         <p className="text-[11px] text-slate-500">{label}</p>
         <p className="mt-0.5 text-lg font-bold text-slate-900">
-          {value}{" "}
+          {value ?? "—"}{" "}
           <span className="text-xs font-medium text-slate-500">งาน</span>
         </p>
       </div>

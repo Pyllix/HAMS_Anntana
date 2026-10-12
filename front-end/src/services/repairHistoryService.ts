@@ -29,9 +29,9 @@ export async function getRepairHistory(): Promise<RepairJob[]> {
   }
 }
 
-export async function getRepairHistoryById(jobId: string): Promise<RepairJob> {
+export async function getRepairHistoryById(jobId: string, signal?: AbortSignal): Promise<RepairJob> {
   try {
-    return mapApiRepairJob(await fetchRepairJobDetail(jobId));
+    return mapApiRepairJob(await fetchRepairJobDetail(jobId, signal));
   } catch (error) {
     throw toRepairApiError(error, "ไม่พบข้อมูลงานซ่อมที่เลือก");
   }

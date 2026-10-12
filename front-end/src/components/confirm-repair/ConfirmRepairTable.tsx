@@ -1,3 +1,8 @@
+import { mapApiRepairJob } from "../../services/repairApiService";
+import type { ApiRepairJob } from "../../services/repairApiService";
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useEffect, useMemo, useState } from "react";
 import {
   tableFeatures,
@@ -41,30 +46,15 @@ export default function ConfirmRepairTable({
   const openConfirm = useConfirmRepairModalStore((state) => state.openModal);
   const openDetail = useRepairHistoryModalStore((state) => state.openModal);
 
-  const {
-    data: jobs = [],
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["repairConfirmations"],
-    queryFn: getRepairConfirmations,
-  });
+  const term = useDebouncedSearch(search);
+  const listQuery = useServerPage<RepairJob>("repairConfirmations", { search: term, statusCodes: status === "ALL" ? ["WAITING_DELIVERY", "COMPLETED"] : [status] },
+    async (filters, signal) => {
+      const result = await getPage<ApiRepairJob>("/repairs", filters, signal);
+      return { ...result, data: result.data.map(mapApiRepairJob) };
+    }, true);
+  const { rows: jobs, isLoading, isError, page: currentPage, setPage: setCurrentPage, total: totalItems, totalPages, pageSize } = listQuery;
 
-  const filteredData = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return jobs.filter((job) => {
-      const matchesSearch =
-        !keyword ||
-        job.jobNo.toLowerCase().includes(keyword) ||
-        job.asset?.assetName.toLowerCase().includes(keyword) ||
-        job.asset?.assetCode.toLowerCase().includes(keyword) ||
-        job.symptom.toLowerCase().includes(keyword);
-      const matchesStatus =
-        status === "ALL" || job.status?.statusCode === status;
-      return matchesSearch && matchesStatus;
-    });
-  }, [jobs, search, status]);
-
+  const filteredData = jobs;
   const columns = useMemo<Array<ColumnDef<typeof features, RepairJob>>>(
     () => [
       {
@@ -179,20 +169,14 @@ export default function ConfirmRepairTable({
     features,
     columns,
     data: filteredData,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
-  useEffect(() => {
-    table.setPageIndex(0);
-  }, [search, status]);
+
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-sm">
@@ -218,7 +202,7 @@ export default function ConfirmRepairTable({
                   กำลังโหลดรายการรอยืนยัน...
                 </td>
               </tr>
-            ) : isError ? (
+            ) : isError && !listQuery.data ? (
               <tr>
                 <td
                   colSpan={columns.length}

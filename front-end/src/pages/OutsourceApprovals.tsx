@@ -1,3 +1,6 @@
+import { useServerPage, useDebouncedSearch } from "../hooks/useServerPage";
+import { getOutsourceApprovalRequestsPage } from "../services/outsourceApprovalService";
+import QueryStatus from "../components/shared/QueryStatus";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,42 +28,19 @@ const PAGE_SIZE = 5;
 export default function OutsourceApprovals({ embedded = false }: { embedded?: boolean }) {
   const client = useQueryClient();
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+
   const [selected, setSelected] = useState<OutsourceApprovalRequest | null>(null);
   const [mode, setMode] = useState<OutsourceApprovalDialogMode>("DETAIL");
   const [success, setSuccess] = useState("");
-  const query = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: ({ signal }) => getOutsourceApprovalRequests(signal),
-    retry: false,
-  });
-  const requests = query.data || [];
+  const term = useDebouncedSearch(search);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase();
-    if (!term) return requests;
-    return requests.filter((request) =>
-      [
-        request.requestNo,
-        request.jobNo,
-        request.assetCode,
-        request.assetName,
-        request.assetModel,
-        request.requester,
-        request.diagnosis,
-      ].some((value) => value.toLocaleLowerCase().includes(term)),
-    );
-  }, [requests, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const visible = filtered.slice(start, start + PAGE_SIZE);
+  const query = useServerPage(QUERY_KEY[0], { search: term, stepActionType: "OUTSOURCE", workflowStep: 4, isRejected: false }, getOutsourceApprovalRequestsPage, true);
+  const { page: currentPage, setPage, totalPages } = query;
+  const totalItems = query.total;
+  const start = (currentPage - 1) * query.pageSize;
+  const visible = query.rows;
   const firstPage = Math.max(1, Math.min(currentPage - 1, totalPages - 2));
-  const pages = Array.from(
-    { length: Math.min(3, totalPages) },
-    (_, index) => firstPage + index,
-  );
+  const pages = Array.from({ length: Math.min(3, totalPages) }, (_, index) => firstPage + index);
 
   function open(
     request: OutsourceApprovalRequest,
@@ -88,6 +68,7 @@ export default function OutsourceApprovals({ embedded = false }: { embedded?: bo
           : "min-h-[calc(100vh-120px)] px-4 py-6 lg:px-7"
       }`}
     >
+      <QueryStatus query={query} />
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">รายการขออนุมัติส่งซ่อมภายนอก</h2>
@@ -105,7 +86,7 @@ export default function OutsourceApprovals({ embedded = false }: { embedded?: bo
       </div>
 
       <div className="min-h-[380px] flex-1 overflow-hidden rounded-b-xl bg-white">
-        {query.isError ? (
+        {query.isError && !query.data ? (
           <div role="alert" className="m-6 rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"><p>{outsourceApprovalError(query.error)}</p><button type="button" onClick={() => void query.refetch()} className="mt-3 font-semibold underline">ลองโหลดอีกครั้ง</button></div>
         ) : query.isLoading ? (
           <div role="status" className="flex justify-center gap-2 py-24 text-sm text-slate-500"><Loader2 size={20} className="animate-spin" />กำลังโหลดคำขอส่งซ่อมภายนอก…</div>
@@ -117,7 +98,7 @@ export default function OutsourceApprovals({ embedded = false }: { embedded?: bo
         )}
       </div>
 
-      {!query.isError && !query.isLoading && <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500"><p>แสดง {filtered.length ? start + 1 : 0} ถึง {Math.min(start + PAGE_SIZE, filtered.length)} จาก {filtered.length.toLocaleString("th-TH")} รายการ</p><nav aria-label="หน้ารายการอนุมัติส่งซ่อมภายนอก" className="flex gap-2"><button type="button" aria-label="หน้าก่อนหน้า" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"><ChevronLeft size={16} /></button>{pages.map((number) => <button type="button" key={number} aria-current={number === currentPage ? "page" : undefined} onClick={() => setPage(number)} className={`min-w-9 rounded-lg border px-3 py-2 ${number === currentPage ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-200 bg-white"}`}>{number}</button>)}<button type="button" aria-label="หน้าถัดไป" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"><ChevronRight size={16} /></button></nav></div>}
+      {!!query.data && <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500"><p>แสดง {totalItems ? start + 1 : 0} ถึง {Math.min(start + query.pageSize, totalItems)} จาก {totalItems.toLocaleString("th-TH")} รายการ</p><nav aria-label="หน้ารายการอนุมัติส่งซ่อมภายนอก" className="flex gap-2"><button type="button" aria-label="หน้าก่อนหน้า" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"><ChevronLeft size={16} /></button>{pages.map((number) => <button type="button" key={number} aria-current={number === currentPage ? "page" : undefined} onClick={() => setPage(number)} className={`min-w-9 rounded-lg border px-3 py-2 ${number === currentPage ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-200 bg-white"}`}>{number}</button>)}<button type="button" aria-label="หน้าถัดไป" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-40"><ChevronRight size={16} /></button></nav></div>}
 
       {selected && <OutsourceApprovalDialog key={`${selected.id}-${mode}`} request={selected} mode={mode} onClose={() => setSelected(null)} onSuccess={(message) => void completed(message)} />}
     </section>

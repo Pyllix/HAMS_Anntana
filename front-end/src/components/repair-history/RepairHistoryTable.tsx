@@ -1,3 +1,8 @@
+import { mapApiRepairJob } from "../../services/repairApiService";
+import type { ApiRepairJob } from "../../services/repairApiService";
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useEffect, useMemo, useState } from "react";
 import {
   tableFeatures,
@@ -283,7 +288,7 @@ export default function RepairHistoryTable({
     (state) => state.openAssessmentForm,
   );
   const user = useAuthStore((state) => state.user);
-  const [currentPage, setCurrentPage] = useState(1);
+
   const [workflowTarget, setWorkflowTarget] = useState<{
     job: RepairJob;
     stage: RepairWorkflowStage;
@@ -294,16 +299,18 @@ export default function RepairHistoryTable({
     reason: string;
     actionType?: RepairActionType | null;
   } | null>(null);
-  const pageSize = 5;
 
-  const {
-    data: jobs = [],
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["repairHistory"],
-    queryFn: getRepairHistory,
-  });
+
+  const term = useDebouncedSearch(search);
+  const listQuery = useServerPage<RepairJob>("repairHistory", { search: term, evaluatedOnly: true,
+    stepActionType: ["INTERNAL_STOCK", "EXTERNAL_STOCK"].includes(actionType) ? "WITH_PARTS" : actionType,
+    sparepartSource: actionType === "INTERNAL_STOCK" ? "INTERNAL" : actionType === "EXTERNAL_STOCK" ? "EXTERNAL" : undefined,
+    statusCode: status },
+    async (filters, signal) => {
+      const result = await getPage<ApiRepairJob>("/repairs", filters, signal);
+      return { ...result, data: result.data.map(mapApiRepairJob) };
+    }, true);
+  const { rows: jobs, isLoading, isError, page: currentPage, setPage: setCurrentPage, total: totalItems, totalPages, pageSize } = listQuery;
 
   const updateWorkflow = useMutation({
     mutationFn: ({
@@ -330,35 +337,11 @@ export default function RepairHistoryTable({
     });
   }, [jobs]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, actionType, status]);
 
-  const filteredData = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return jobs.filter((job) => {
-      const matchesSearch =
-        !keyword ||
-        job.jobNo.toLowerCase().includes(keyword) ||
-        job.asset?.assetName.toLowerCase().includes(keyword) ||
-        job.asset?.assetCode.toLowerCase().includes(keyword) ||
-        job.symptom.toLowerCase().includes(keyword);
-      const matchesAction =
-        actionType === "ALL" || job.actionType === actionType;
-      const matchesStatus =
-        status === "ALL" || job.status?.statusCode === status;
-      return matchesSearch && matchesAction && matchesStatus;
-    });
-  }, [jobs, search, actionType, status]);
 
-  const totalItems = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedData = useMemo(
-    () => filteredData.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filteredData, safePage],
-  );
-
+  const filteredData = jobs;
+  const safePage = currentPage;
+  const paginatedData = jobs;
   const columns = useMemo<Array<ColumnDef<typeof features, RepairJob>>>(
     () => [
       {
@@ -549,16 +532,12 @@ export default function RepairHistoryTable({
     features,
     columns,
     data: filteredData,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mt-4">
+      <QueryStatus query={listQuery} />
       {/* Scrollable Container สำหรับตัวตาราง */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
@@ -585,7 +564,7 @@ export default function RepairHistoryTable({
                   กำลังโหลดรายการงานซ่อม...
                 </td>
               </tr>
-            ) : isError ? (
+            ) : isError && !listQuery.data ? (
               <tr>
                 <td
                   colSpan={columns.length}

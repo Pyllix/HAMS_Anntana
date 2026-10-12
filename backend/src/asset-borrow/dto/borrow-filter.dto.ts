@@ -5,12 +5,38 @@ import {
   IsInt,
   IsDateString,
   IsBoolean,
+  IsArray,
+  ArrayNotEmpty,
+  ArrayUnique,
+  MaxLength,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class BorrowFilterDto extends PaginationDto {
+  @ApiPropertyOptional({
+    description:
+      'Filter by one or more borrow status codes. Accepts comma-separated or repeated values.',
+    type: [String],
+    example: ['PENDING_APPROVE', 'APPROVED'],
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return value;
+    const values = Array.isArray(value) ? value : [value];
+    return values
+      .flatMap((item) => String(item).split(','))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  readonly statusCodes?: string[];
+
   @ApiPropertyOptional({
     description:
       'Filter by borrow transaction pattern ID (e.g. BR-202609-0001)',

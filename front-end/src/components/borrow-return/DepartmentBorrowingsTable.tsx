@@ -1,3 +1,7 @@
+import { useServerPage, useForegroundQuery } from "../../hooks/useServerPage";
+import { getPage, getSummary, statusCount } from "../../services/pagedApi";
+import type { StatusSummary } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import {
   tableFeatures,
   useTable,
@@ -203,49 +207,25 @@ export default function DepartmentBorrowingsTable() {
   // PARCEL_STAFF: API ไม่ได้กรองให้ จึงต้องส่ง sectionId ของผู้ใช้ไปเอง
   const sectionId = user?.section_id;
 
-  const { data: borrowings, isLoading } = useQuery({
-    queryKey: ["borrowHistory", "department", sectionId],
-    queryFn: () => getAllBorrowHistory({ limit: 100, sectionId }),
-    enabled: !!sectionId,
-  });
-
-  const activeBorrowings = useMemo(
-    () =>
-      (borrowings ?? []).filter((b) =>
-        ACTIVE_CODES.includes(b.borrowStatus?.code),
-      ),
-    [borrowings],
-  );
-
-  const summary = useMemo(
-    () => ({
-      borrowed: activeBorrowings.filter(
-        (b) => b.borrowStatus?.code === "BORROWED",
-      ).length,
-      pending: activeBorrowings.filter((b) =>
-        ["PENDING_APPROVE", "APPROVED"].includes(b.borrowStatus?.code),
-      ).length,
-      returning: activeBorrowings.filter((b) =>
-        ["PENDING_RETURN", "IN_PICKUP"].includes(b.borrowStatus?.code),
-      ).length,
-      overdue: activeBorrowings.filter((b) => b.isOverdue).length,
-    }),
-    [activeBorrowings],
-  );
-
-  const tableData = showAll ? (borrowings ?? []) : activeBorrowings;
-
+  const listQuery = useServerPage<BorrowHistory>("borrowHistory", { sectionId, statusCodes: showAll ? undefined : ACTIVE_CODES },
+    (filters, signal) => getPage("/borrowings", filters, signal), true, !!sectionId);
+  const isLoading = listQuery.isLoading;
+  const tableData = listQuery.rows;
+  const summaryQuery = useForegroundQuery(["borrowHistory", "summary", sectionId],
+    (signal) => getSummary<StatusSummary>("/borrowings/summary", { sectionId }, signal), true, !!sectionId);
+  const counts = summaryQuery.data;
+  const summary = {
+    borrowed: statusCount(counts, ["BORROWED"]),
+    pending: statusCount(counts, ["PENDING_APPROVE", "APPROVED"]),
+    returning: statusCount(counts, ["PENDING_RETURN", "IN_PICKUP"]),
+    overdue: counts?.overdueCount,
+  };
   const table = useTable({
     key: "department-borrowings-table",
     features,
     columns,
     data: tableData,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 5,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   const summaryItems = [
@@ -257,6 +237,8 @@ export default function DepartmentBorrowingsTable() {
 
   return (
     <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
+      <QueryStatus query={summaryQuery} />
       {/* หัวข้อ + ตัวกรอง */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
         <div className="flex items-center gap-2">
@@ -299,7 +281,7 @@ export default function DepartmentBorrowingsTable() {
           <div key={item.label} className="bg-white px-4 py-3">
             <div className="text-xs text-slate-500">{item.label}</div>
             <div className={`text-xl font-bold ${item.color}`}>
-              {item.value}
+              {item.value ?? "—"}
             </div>
           </div>
         ))}

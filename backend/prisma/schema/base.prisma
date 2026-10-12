@@ -1,7 +1,8 @@
 // This file defines the base configuration for the Prisma schema, including the generator and datasource settings.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {

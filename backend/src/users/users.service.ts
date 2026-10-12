@@ -267,29 +267,44 @@ export class UsersService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
+    const search = query.search?.trim();
 
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       ...(query.role ? { role: query.role } : {}),
       ...(query.section_id ? { section_id: query.section_id } : {}),
-      ...(query.search
+      ...(search
         ? {
             OR: [
-              { employeeId: { contains: query.search, mode: 'insensitive' } },
-              { userName: { contains: query.search, mode: 'insensitive' } },
-              { firstname: { contains: query.search, mode: 'insensitive' } },
-              { lastname: { contains: query.search, mode: 'insensitive' } },
-              { email: { contains: query.search, mode: 'insensitive' } },
+              { employeeId: { contains: search, mode: 'insensitive' } },
+              { userName: { contains: search, mode: 'insensitive' } },
+              { firstname: { contains: search, mode: 'insensitive' } },
+              { lastname: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
             ],
           }
         : {}),
     };
 
+    if (query.banned === true) {
+      where.banned = true;
+    } else if (query.banned === false) {
+      const activeFilter: Prisma.UserWhereInput = {
+        OR: [{ banned: false }, { banned: null }],
+      };
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, activeFilter];
+        delete where.OR;
+      } else {
+        where.AND = [activeFilter];
+      }
+    }
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
         omit: { deletedAt: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),

@@ -1,3 +1,5 @@
+import { getPage } from "./pagedApi";
+import type { Filters, Page } from "./pagedApi";
 import { isAxiosError } from "axios";
 import { createApiClient } from "./apiClient";
 import type {
@@ -151,4 +153,14 @@ export function outsourceApprovalError(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "ไม่สามารถทำรายการได้ กรุณาลองใหม่";
+}
+
+export async function getOutsourceApprovalRequestsPage(filters: Filters, signal?: AbortSignal): Promise<Page<OutsourceApprovalRequest>> {
+  const result = await getPage<ApiRepairJob>("/repairs", filters, signal);
+  const data = result.data.map((job) => {
+    const row = mapRequest(job);
+    if (!row) throw new Error("รายการเปลี่ยนสถานะ กรุณารีเฟรชข้อมูล");
+    return row;
+  });
+  return { ...result, data };
 }

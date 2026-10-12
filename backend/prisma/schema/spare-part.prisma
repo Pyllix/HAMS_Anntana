@@ -48,6 +48,8 @@ model SparepartAdd {
   user      User      @relation(fields: [addBy], references: [id])
 
   @@index([sparepartId])
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "sparepart_adds_live_created_at_id_idx", where: { deletedAt: null })
+  @@index([sparepartId, createdAt(sort: Desc), id(sort: Desc)], map: "sparepart_adds_sparepart_id_live_created_at_id_idx", where: { deletedAt: null })
   @@map("sparepart_adds")
 }
 
@@ -70,5 +72,7 @@ model SparepartTxn {
   @@index([sparepartId])
   @@index([jobId])
   @@index([txnType])
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "sparepart_txns_created_at_id_idx")
+  @@index([sparepartId, createdAt(sort: Desc), id(sort: Desc)], map: "sparepart_txns_sparepart_id_created_at_id_idx")
   @@map("sparepart_txns")
 }

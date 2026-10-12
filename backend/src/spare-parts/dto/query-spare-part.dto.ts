@@ -1,9 +1,24 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsPositive } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsPositive,
+} from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class QuerySparepartDto extends PaginationDto {
+  @ApiPropertyOptional({
+    enum: ['NORMAL', 'LOW', 'OUT'],
+    description:
+      'Filter stock state: NORMAL (> 0 and above minimum), LOW (> 0 and at/below minimum), OUT (0 or less)',
+  })
+  @IsOptional()
+  @IsIn(['NORMAL', 'LOW', 'OUT'])
+  readonly stockStatus?: 'NORMAL' | 'LOW' | 'OUT';
+
   @ApiPropertyOptional({ example: 1, description: 'กรองตาม ID กลุ่มอะไหล่' })
   @IsOptional()
   @Type(() => Number)

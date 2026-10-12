@@ -21,14 +21,7 @@ export default function OrderSpareParts() {
     queryFn: getSparepartGroups,
   });
 
-  const defaultGroups = [
-    { id: 1, name: "ไฟฟ้า" },
-    { id: 2, name: "เครื่องมือแพทย์" },
-    { id: 3, name: "อิเล็กทรอนิกส์" },
-    { id: 4, name: "กลไก/เครื่องกล" },
-  ];
-
-  const availableGroups = groups && groups.length > 0 ? groups : defaultGroups;
+  const availableGroups = groups ?? [];
 
   return (
     <div className="flex flex-col h-[calc(100vh-6.8rem)] max-h-[calc(100vh-6.8rem)] space-y-2 overflow-hidden">

@@ -4,7 +4,7 @@ export interface StatCardData {
   id: string;
   filterKey: string; // ส่งค่าสำหรับ filter กลับไปที่ category
   title: string;
-  value: number;
+  value: number | undefined;
   icon: LucideIcon;
   iconBg: string;
   iconColor: string;
@@ -56,7 +56,7 @@ export default function StatCards({
                 <span
                   className={`text-2xl font-bold tracking-tight ${item.valueColor}`}
                 >
-                  {item.value.toLocaleString()}
+                  {item.value === undefined ? "—" : item.value.toLocaleString()}
                 </span>
               </div>
             </div>

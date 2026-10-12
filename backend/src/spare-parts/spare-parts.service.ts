@@ -1,11 +1,10 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { paginate } from 'src/common/utils/paginate.util';
+import { paginate, type PaginatedResult } from 'src/common/utils/paginate.util';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { CreateSparepartDto } from './dto/create-spare-part.dto';
 import { UpdateSparepartDto } from './dto/update-spare-part.dto';
@@ -14,6 +13,60 @@ import { StockInSparepartDto } from './dto/stock-in-spare-part.dto';
 import { QuerySparepartTxnDto } from './dto/query-spare-part-txn.dto';
 import { QueryStockInHistoryDto } from './dto/query-stock-in-history.dto';
 import { Prisma } from '@prisma/client';
+
+type SparepartHistoryRow = {
+  total: bigint;
+  source: 'ADD' | 'TXN' | null;
+  recordId: number | null;
+  qty: number | null;
+  amountBase: string | null;
+  transactionType: string | null;
+  docOrJob: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  timestamp: Date | null;
+};
+
+type StockInHistorySearchRow = {
+  total: bigint;
+  id: number | null;
+  sparepartId: number | null;
+  qty: number | null;
+  totalPrice: Prisma.Decimal | null;
+  sparepartAddDoc: string | null;
+  addBy: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  deletedAt: Date | null;
+  partId: number | null;
+  partCode: string | null;
+  partName: string | null;
+  partUnit: string | null;
+  partGroupId: number | null;
+  partGroupName: string | null;
+  userId: string | null;
+  userFirstname: string | null;
+  userLastname: string | null;
+  userEmail: string | null;
+};
+
+export interface SparePartStockSummary {
+  total: number;
+  byStockStatus: Record<'NORMAL' | 'LOW' | 'OUT', number>;
+}
+
+const SPAREPART_LIST_INCLUDE = {
+  group: {
+    select: { id: true, name: true },
+  },
+};
+
+type SparepartListRow = Prisma.SparepartGetPayload<{
+  include: typeof SPAREPART_LIST_INCLUDE;
+}> & {
+  isLowStock: boolean;
+};
 
 @Injectable()
 export class SparePartsService {
@@ -107,7 +160,9 @@ export class SparePartsService {
     });
   }
 
-  async findAll(query: QuerySparepartDto) {
+  async findAll(
+    query: QuerySparepartDto,
+  ): Promise<PaginatedResult<SparepartListRow>> {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
     const search = query.search?.trim();
@@ -123,22 +178,39 @@ export class SparePartsService {
             ],
           }
         : {}),
+      ...(query.lowStock
+        ? {
+            qtyInStock: {
+              lte: this.prisma.sparepart.fields.minStock,
+            },
+          }
+        : {}),
+      ...(query.stockStatus === 'NORMAL'
+        ? {
+            AND: [
+              { qtyInStock: { gt: 0 } },
+              {
+                qtyInStock: {
+                  gt: this.prisma.sparepart.fields.minStock,
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(query.stockStatus === 'LOW'
+        ? {
+            AND: [
+              { qtyInStock: { gt: 0 } },
+              {
+                qtyInStock: {
+                  lte: this.prisma.sparepart.fields.minStock,
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(query.stockStatus === 'OUT' ? { qtyInStock: { lte: 0 } } : {}),
     };
-
-    if (query.lowStock) {
-      const lowStockIds = await this.prisma.$queryRaw<
-        { sparepart_id: number }[]
-      >`
-        SELECT sparepart_id FROM spareparts
-        WHERE deleted_at IS NULL
-          AND qty_in_stock <= min_stock
-          ${query.groupId ? Prisma.sql`AND group_id = ${Number(query.groupId)}` : Prisma.empty}
-          ${search ? Prisma.sql`AND (sparepart_code ILIKE ${`%${search}%`} OR name ILIKE ${`%${search}%`})` : Prisma.empty}
-      `;
-
-      const ids = lowStockIds.map((item) => item.sparepart_id);
-      where.id = { in: ids };
-    }
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.sparepart.findMany({
@@ -146,11 +218,7 @@ export class SparePartsService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { id: 'asc' },
-        include: {
-          group: {
-            select: { id: true, name: true },
-          },
-        },
+        include: SPAREPART_LIST_INCLUDE,
       }),
       this.prisma.sparepart.count({ where }),
     ]);
@@ -163,28 +231,61 @@ export class SparePartsService {
     return paginate(formatted, total, page, limit);
   }
 
+  async getStockSummary(): Promise<SparePartStockSummary> {
+    const [counts] = await this.prisma.$queryRaw<
+      Array<{
+        total: bigint | number;
+        normal: bigint | number;
+        low: bigint | number;
+        out: bigint | number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (
+          WHERE "qty_in_stock" > 0 AND "qty_in_stock" > "min_stock"
+        ) AS normal,
+        COUNT(*) FILTER (
+          WHERE "qty_in_stock" > 0 AND "qty_in_stock" <= "min_stock"
+        ) AS low,
+        COUNT(*) FILTER (WHERE "qty_in_stock" <= 0) AS out
+      FROM "spareparts"
+      WHERE "deleted_at" IS NULL
+    `);
+
+    return {
+      total: Number(counts?.total ?? 0),
+      byStockStatus: {
+        NORMAL: Number(counts?.normal ?? 0),
+        LOW: Number(counts?.low ?? 0),
+        OUT: Number(counts?.out ?? 0),
+      },
+    };
+  }
+
   async findLowStockSummary() {
     const lowStockParts = await this.prisma.sparepart.findMany({
       where: {
         deletedAt: null,
+        qtyInStock: {
+          lte: this.prisma.sparepart.fields.minStock,
+        },
       },
       include: {
         group: { select: { id: true, name: true } },
       },
-      orderBy: { qtyInStock: 'asc' },
+      orderBy: [{ qtyInStock: 'asc' }, { id: 'asc' }],
     });
 
-    const filtered = lowStockParts
-      .filter((p) => p.qtyInStock <= p.minStock)
-      .map((p) => ({
-        ...p,
-        isLowStock: true,
-        deficit: p.minStock - p.qtyInStock,
-      }));
+    const items = lowStockParts.map((part) => ({
+      ...part,
+      isLowStock: true,
+      deficit: part.minStock - part.qtyInStock,
+    }));
 
     return {
-      totalLowStockCount: filtered.length,
-      items: filtered,
+      totalLowStockCount: items.length,
+      items,
     };
   }
 
@@ -302,78 +403,149 @@ export class SparePartsService {
   // ───────────────────────────────────────────────────────────────────────────
 
   async findSparepartHistory(sparepartId: number, query: PaginationDto) {
-    await this.findOne(sparepartId);
+    const sparepart = await this.prisma.sparepart.findFirst({
+      where: { id: sparepartId, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!sparepart) {
+      throw new NotFoundException(`Spare part #${sparepartId} not found`);
+    }
 
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
+    const offset = (page - 1) * limit;
+    // A global prefix of K items can contain at most K items from either source;
+    // fetch that prefix from each source, then apply the requested page once globally.
+    const rows = await this.prisma.$queryRaw<SparepartHistoryRow[]>(Prisma.sql`
+      WITH metadata AS (
+        SELECT
+          (SELECT COUNT(*)
+           FROM "sparepart_adds"
+           WHERE "sparepart_id" = ${sparepartId}
+             AND "deleted_at" IS NULL)
+          +
+          (SELECT COUNT(*)
+           FROM "sparepart_txns"
+           WHERE "sparepart_id" = ${sparepartId}) AS total
+      ),
+      timeline AS (
+        SELECT
+          'ADD'::text AS source,
+          0::integer AS source_order,
+          latest_stock_ins."sparepart_add_id" AS record_id,
+          latest_stock_ins."createdAt" AS created_at
+        FROM (
+          SELECT "sparepart_add_id", "createdAt"
+          FROM "sparepart_adds"
+          WHERE "sparepart_id" = ${sparepartId}
+            AND "deleted_at" IS NULL
+          ORDER BY "createdAt" DESC, "sparepart_add_id" DESC
+          LIMIT ${offset + limit}
+        ) AS latest_stock_ins
 
-    const [adds, txns] = await Promise.all([
-      this.prisma.sparepartAdd.findMany({
-        where: { sparepartId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
+        UNION ALL
+
+        SELECT
+          'TXN'::text AS source,
+          1::integer AS source_order,
+          latest_transactions."txn_id" AS record_id,
+          latest_transactions."createdAt" AS created_at
+        FROM (
+          SELECT "txn_id", "createdAt"
+          FROM "sparepart_txns"
+          WHERE "sparepart_id" = ${sparepartId}
+          ORDER BY "createdAt" DESC, "txn_id" DESC
+          LIMIT ${offset + limit}
+        ) AS latest_transactions
+      ),
+      page AS (
+        SELECT source, source_order, record_id, created_at
+        FROM timeline
+        ORDER BY created_at DESC, source_order ASC, record_id DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      )
+      SELECT
+        metadata.total,
+        page.source,
+        page.record_id AS "recordId",
+        CASE WHEN page.source = 'ADD' THEN stock_in.qty ELSE txn.qty END AS qty,
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in.total_price::text
+          ELSE txn.unit_price::text
+        END AS "amountBase",
+        txn.txn_type AS "transactionType",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in.sparepart_add_doc
+          ELSE txn.job_id
+        END AS "docOrJob",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in_actor.id
+          ELSE txn_actor.id
+        END AS "actorId",
+        CASE
+          WHEN page.source = 'ADD'
+            THEN TRIM(stock_in_actor.first_name || ' ' || stock_in_actor.last_name)
+          ELSE TRIM(txn_actor.first_name || ' ' || txn_actor.last_name)
+        END AS "actorName",
+        CASE
+          WHEN page.source = 'ADD' THEN stock_in_actor.email
+          ELSE txn_actor.email
+        END AS "actorEmail",
+        page.created_at AS timestamp
+      FROM metadata
+      LEFT JOIN page ON TRUE
+      LEFT JOIN "sparepart_adds" AS stock_in
+        ON page.source = 'ADD'
+        AND stock_in.sparepart_add_id = page.record_id
+      LEFT JOIN "users" AS stock_in_actor
+        ON stock_in_actor.id = stock_in.add_by
+      LEFT JOIN "sparepart_txns" AS txn
+        ON page.source = 'TXN'
+        AND txn.txn_id = page.record_id
+      LEFT JOIN "users" AS txn_actor
+        ON txn_actor.id = txn.txn_by
+      ORDER BY
+        page.created_at DESC NULLS LAST,
+        page.source_order ASC NULLS LAST,
+        page.record_id DESC NULLS LAST
+    `);
+
+    const data = rows.flatMap((row) => {
+      if (
+        row.source === null ||
+        row.recordId === null ||
+        row.qty === null ||
+        row.amountBase === null ||
+        row.actorId === null ||
+        row.actorName === null ||
+        row.actorEmail === null ||
+        row.timestamp === null
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          id: `${row.source === 'ADD' ? 'ADD' : 'TXN'}-${row.recordId}`,
+          activityType: row.source === 'ADD' ? 'STOCK_IN' : 'TXN',
+          type: row.source === 'ADD' ? 'RESTOCK' : row.transactionType!,
+          qty: row.qty,
+          amount: Number(row.amountBase) * (row.source === 'TXN' ? row.qty : 1),
+          docOrJob: row.docOrJob,
+          actor: {
+            id: row.actorId,
+            name: row.actorName,
+            email: row.actorEmail,
           },
+          timestamp: row.timestamp,
         },
-      }),
-      this.prisma.sparepartTxn.findMany({
-        where: { sparepartId },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
-          },
-        },
-      }),
-    ]);
+      ];
+    });
 
-    type TimelineItem = {
-      id: string;
-      activityType: 'STOCK_IN' | 'TXN';
-      type: string;
-      qty: number;
-      amount: number;
-      docOrJob: string | null;
-      actor: { id: string; name: string; email: string };
-      timestamp: Date;
-    };
-
-    const combined: TimelineItem[] = [
-      ...adds.map((a) => ({
-        id: `ADD-${a.id}`,
-        activityType: 'STOCK_IN' as const,
-        type: 'RESTOCK',
-        qty: a.qty,
-        amount: Number(a.totalPrice),
-        docOrJob: a.sparepartAddDoc,
-        actor: {
-          id: a.user.id,
-          name: `${a.user.firstname} ${a.user.lastname}`.trim(),
-          email: a.user.email,
-        },
-        timestamp: a.createdAt,
-      })),
-      ...txns.map((t) => ({
-        id: `TXN-${t.id}`,
-        activityType: 'TXN' as const,
-        type: t.txnType,
-        qty: t.qty,
-        amount: Number(t.unitPrice) * t.qty,
-        docOrJob: t.jobId,
-        actor: {
-          id: t.user.id,
-          name: `${t.user.firstname} ${t.user.lastname}`.trim(),
-          email: t.user.email,
-        },
-        timestamp: t.createdAt,
-      })),
-    ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    const total = combined.length;
-    const paginatedItems = combined.slice((page - 1) * limit, page * limit);
-
-    return paginate(paginatedItems, total, page, limit);
+    const total = Number(rows[0]?.total ?? 0);
+    return paginate(data, total, page, limit);
   }
 
   async findAllTransactions(query: QuerySparepartTxnDto) {
@@ -404,7 +576,7 @@ export class SparePartsService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: {
           sparepart: {
             select: { id: true, code: true, name: true, unit: true },
@@ -428,8 +600,15 @@ export class SparePartsService {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 20;
 
+    // The measured short-term case is broad and slower through the UNION plan;
+    // keep short patterns on the ordered Prisma query that can stop at the page.
+    if (query.search && [...query.search].length >= 3) {
+      return this.findStockInHistoryBySearch(query, page, limit);
+    }
+
     const where: Prisma.SparepartAddWhereInput = {
       deletedAt: null,
+      ...(query.groupId ? { sparepart: { groupId: query.groupId } } : {}),
       ...(query.sparepartId ? { sparepartId: Number(query.sparepartId) } : {}),
       ...(query.addBy ? { addBy: query.addBy } : {}),
       ...(query.sparepartAddDoc
@@ -456,6 +635,13 @@ export class SparePartsService {
         ? {
             OR: [
               {
+                sparepart: {
+                  group: {
+                    name: { contains: query.search, mode: 'insensitive' },
+                  },
+                },
+              },
+              {
                 sparepartAddDoc: {
                   contains: query.search,
                   mode: 'insensitive',
@@ -476,24 +662,212 @@ export class SparePartsService {
         : {}),
     };
 
-    const [adds, total] = await this.prisma.$transaction([
-      this.prisma.sparepartAdd.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          sparepart: {
-            select: { id: true, code: true, name: true, unit: true },
-          },
-          user: {
-            select: { id: true, firstname: true, lastname: true, email: true },
+    const stockInRowsPromise = this.prisma.sparepartAdd.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        sparepart: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            unit: true,
+            group: { select: { id: true, name: true } },
           },
         },
-      }),
-      this.prisma.sparepartAdd.count({ where }),
+        user: {
+          select: { id: true, firstname: true, lastname: true, email: true },
+        },
+      },
+    });
+    const totalCountPromise = this.prisma.sparepartAdd.count({ where });
+
+    // The list and exact count share one filter but do not depend on each
+    // other's result. Run them concurrently; keep relation includes on the
+    // page query only so the count remains a lightweight database operation.
+    const [adds, total] = await Promise.all([
+      stockInRowsPromise,
+      totalCountPromise,
     ]);
 
     return paginate(adds, total, page, limit);
+  }
+
+  private async findStockInHistoryBySearch(
+    query: QueryStockInHistoryDto,
+    page: number,
+    limit: number,
+  ) {
+    const offset = (page - 1) * limit;
+    const prefixLimit = offset + limit;
+    const searchPattern = `%${query.search}%`;
+    const sparepartIdFilter = query.sparepartId
+      ? Prisma.sql`AND a."sparepart_id" = ${Number(query.sparepartId)}`
+      : Prisma.empty;
+    const addByFilter = query.addBy
+      ? Prisma.sql`AND a."add_by" = ${query.addBy}`
+      : Prisma.empty;
+    const documentFilter = query.sparepartAddDoc
+      ? Prisma.sql`AND a."sparepart_add_doc" ILIKE ${`%${query.sparepartAddDoc}%`}`
+      : Prisma.empty;
+    const startDateFilter = query.startDate
+      ? Prisma.sql`AND a."createdAt" >= ${new Date(`${query.startDate}T00:00:00.000Z`)}`
+      : Prisma.empty;
+    const endDateFilter = query.endDate
+      ? Prisma.sql`AND a."createdAt" <= ${new Date(`${query.endDate}T23:59:59.999Z`)}`
+      : Prisma.empty;
+    const commonFilters = Prisma.sql`
+      ${sparepartIdFilter}
+      ${addByFilter}
+      ${documentFilter}
+      ${startDateFilter}
+      ${endDateFilter}
+      ${
+        query.groupId
+          ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM "spareparts" AS grouped_part
+        WHERE grouped_part."sparepart_id" = a."sparepart_id"
+          AND grouped_part."group_id" = ${query.groupId}
+      )`
+          : Prisma.empty
+      }
+    `;
+
+    const rows = await this.prisma.$queryRaw<
+      StockInHistorySearchRow[]
+    >(Prisma.sql`
+      WITH matching_rows AS (
+        SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+        FROM "sparepart_adds" AS a
+        WHERE a."deleted_at" IS NULL
+          ${commonFilters}
+          AND a."sparepart_add_doc" ILIKE ${searchPattern}
+
+        UNION
+
+        SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+        FROM "spareparts" AS p
+        JOIN "sparepart_adds" AS a
+          ON a."sparepart_id" = p."sparepart_id"
+        WHERE a."deleted_at" IS NULL
+          ${commonFilters}
+          AND (
+            p."sparepart_code" ILIKE ${searchPattern}
+            OR p."name" ILIKE ${searchPattern}
+            OR EXISTS (SELECT 1 FROM "sparepart_groups" AS search_group
+              WHERE search_group."group_id" = p."group_id"
+                AND search_group.name ILIKE ${searchPattern})
+          )
+      ),
+      total_count AS (
+        SELECT COUNT(*) AS total FROM matching_rows
+      ),
+      page_candidates AS (
+        (
+          SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+          FROM "sparepart_adds" AS a
+          WHERE a."deleted_at" IS NULL
+            ${commonFilters}
+            AND a."sparepart_add_doc" ILIKE ${searchPattern}
+          ORDER BY a."createdAt" DESC, a."sparepart_add_id" DESC
+          LIMIT ${prefixLimit}
+        )
+
+        UNION
+
+        (
+          SELECT a."sparepart_add_id" AS id, a."createdAt" AS created_at
+          FROM "spareparts" AS p
+          JOIN "sparepart_adds" AS a
+            ON a."sparepart_id" = p."sparepart_id"
+          WHERE a."deleted_at" IS NULL
+            ${commonFilters}
+            AND (
+              p."sparepart_code" ILIKE ${searchPattern}
+              OR p."name" ILIKE ${searchPattern}
+            OR EXISTS (SELECT 1 FROM "sparepart_groups" AS search_group
+              WHERE search_group."group_id" = p."group_id"
+                AND search_group.name ILIKE ${searchPattern})
+            )
+          ORDER BY a."createdAt" DESC, a."sparepart_add_id" DESC
+          LIMIT ${prefixLimit}
+        )
+      ),
+      history_page AS (
+        SELECT id, created_at
+        FROM page_candidates
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      )
+      SELECT
+        total_count.total,
+        a."sparepart_add_id" AS id,
+        a."sparepart_id" AS "sparepartId",
+        a.qty,
+        a."total_price" AS "totalPrice",
+        a."sparepart_add_doc" AS "sparepartAddDoc",
+        a."add_by" AS "addBy",
+        a."createdAt",
+        a."updatedAt",
+        a."deleted_at" AS "deletedAt",
+        p."sparepart_id" AS "partId",
+        p."sparepart_code" AS "partCode",
+        p.name AS "partName",
+        p.unit AS "partUnit",
+        p."group_id" AS "partGroupId",
+        g.name AS "partGroupName",
+        u.id AS "userId",
+        u."first_name" AS "userFirstname",
+        u."last_name" AS "userLastname",
+        u.email AS "userEmail"
+      FROM total_count
+      LEFT JOIN history_page AS page ON TRUE
+      LEFT JOIN "sparepart_adds" AS a
+        ON a."sparepart_add_id" = page.id
+      LEFT JOIN "spareparts" AS p
+        ON p."sparepart_id" = a."sparepart_id"
+      LEFT JOIN "users" AS u
+        ON u.id = a."add_by"
+      LEFT JOIN "sparepart_groups" AS g
+        ON g."group_id" = p."group_id"
+      ORDER BY page.created_at DESC NULLS LAST, page.id DESC NULLS LAST
+    `);
+
+    const data = rows.flatMap((row) => {
+      if (row.id === null) return [];
+
+      return [
+        {
+          id: row.id,
+          sparepartId: row.sparepartId!,
+          qty: row.qty!,
+          totalPrice: row.totalPrice!,
+          sparepartAddDoc: row.sparepartAddDoc!,
+          addBy: row.addBy!,
+          createdAt: row.createdAt!,
+          updatedAt: row.updatedAt!,
+          deletedAt: row.deletedAt,
+          sparepart: {
+            id: row.partId!,
+            code: row.partCode!,
+            name: row.partName!,
+            unit: row.partUnit!,
+            group: { id: row.partGroupId!, name: row.partGroupName! },
+          },
+          user: {
+            id: row.userId!,
+            firstname: row.userFirstname!,
+            lastname: row.userLastname!,
+            email: row.userEmail!,
+          },
+        },
+      ];
+    });
+
+    const total = Number(rows[0]?.total ?? 0);
+    return paginate(data, total, page, limit);
   }
 }

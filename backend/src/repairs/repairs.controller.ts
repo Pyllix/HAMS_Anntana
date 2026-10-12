@@ -12,11 +12,12 @@ import {
   ApiCookieAuth,
   ApiOperation,
   ApiResponse,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
-import { UserRole } from '@prisma/client';
+import { StepActionType, UserRole } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RepairsService } from './repairs.service';
 import { CreateRepairRequestDto } from './dto/create-repair-request.dto';
@@ -26,6 +27,7 @@ import { RejectRepairStepDto } from './dto/reject-repair-step.dto';
 import { CancelRepairJobDto } from './dto/cancel-repair-job.dto';
 import { ReturnRepairSparePartDto } from './dto/return-repair-spare-part.dto';
 import { QueryRepairJobDto } from './dto/query-repair-job.dto';
+import { RepairSummaryFilterDto } from './dto/repair-summary-filter.dto';
 import { AssignRepairJobDto } from './dto/assign-repair-job.dto';
 import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
 import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
@@ -80,7 +82,9 @@ export class RepairsController {
     summary:
       'Get active workload counts of all mechanics for balanced job dispatch',
   })
-  async getMechanicWorkloads() {
+  async getMechanicWorkloads(): ReturnType<
+    RepairsService['getMechanicWorkloads']
+  > {
     return this.repairsService.getMechanicWorkloads();
   }
 
@@ -98,11 +102,49 @@ export class RepairsController {
     UserRole.ADMIN,
   )
   @ApiOperation({ summary: 'Get paginated list of repair jobs with filtering' })
+  @ApiQuery({ name: 'statusCodes', required: false, type: [String] })
+  @ApiQuery({ name: 'evaluatedOnly', required: false, type: Boolean })
+  @ApiQuery({ name: 'workflowStep', required: false, type: Number })
+  @ApiQuery({ name: 'stepActionType', required: false, enum: StepActionType })
+  @ApiQuery({
+    name: 'hasPendingSparepartWithdrawal',
+    required: false,
+    type: Boolean,
+  })
+  @ApiQuery({
+    name: 'sparepartSource',
+    required: false,
+    enum: ['ALL', 'INTERNAL', 'EXTERNAL', 'MIXED'],
+  })
+  @ApiQuery({ name: 'isRejected', required: false, type: Boolean })
   async findAll(
     @Query() query: QueryRepairJobDto,
     @Session() session: UserSession,
-  ) {
+  ): ReturnType<RepairsService['findAll']> {
     return this.repairsService.findAll(query, session.user);
+  }
+
+  @Get('summary')
+  @Roles(
+    UserRole.DEPARTMENT_STAFF,
+    UserRole.MAINTENANCE_STAFF,
+    UserRole.MAINTENANCE_HEAD,
+    UserRole.ASSET_CENTER_STAFF,
+    UserRole.PARCEL_STAFF,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
+  @ApiOperation({
+    summary: 'Return exact repair-job totals grouped by workflow status',
+  })
+  @ApiQuery({ name: 'sectionId', required: false, type: String })
+  @ApiQuery({ name: 'evaluatedOnly', required: false, type: Boolean })
+  @ApiResponse({ status: 200, description: 'Repair status counts and total' })
+  async getSummary(
+    @Query() query: RepairSummaryFilterDto,
+    @Session() session: UserSession,
+  ): ReturnType<RepairsService['getStatusSummary']> {
+    return this.repairsService.getStatusSummary(query, session.user);
   }
 
   @Get('mechanics')

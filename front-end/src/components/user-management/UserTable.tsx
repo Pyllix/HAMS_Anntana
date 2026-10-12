@@ -1,3 +1,6 @@
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import {
   ColumnDef,
   createPaginatedRowModel,
@@ -128,10 +131,11 @@ interface UserTableProps {
 }
 
 export default function UserTable({ search, role, status }: UserTableProps) {
-  const { data: users, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => getAllUser(),
-  });
+  const term = useDebouncedSearch(search);
+  const listQuery = useServerPage<User>("users", {
+    search: term, role, banned: status === "active" ? false : status === "banned" ? true : undefined,
+  }, (filters, signal) => getPage("/users", filters, signal));
+  const { isLoading, isError, error, refetch } = listQuery;
 
   const loadErrorDetail = isAxiosError(error)
     ? error.response
@@ -143,46 +147,21 @@ export default function UserTable({ search, role, status }: UserTableProps) {
         : error.message
       : null;
 
-  const filteredUsers = useMemo(() => {
-    const term = search.trim().toLowerCase();
-
-    return (users ?? []).filter((user) => {
-      if (role && user.role !== role) return false;
-      if (status === "active" && user.banned) return false;
-      if (status === "banned" && !user.banned) return false;
-
-      if (!term) return true;
-
-      return [
-        user.employeeId,
-        user.userName,
-        user.firstname,
-        user.lastname,
-        user.email,
-      ].some((field) => field?.toLowerCase().includes(term));
-    });
-  }, [users, search, role, status]);
-
+  const filteredUsers = listQuery.rows;
   const table = useTable({
     key: "assets-table",
     features,
     columns,
     data: filteredUsers,
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    },
+    ...listQuery.tableOptions,
   });
 
   // กลับไปหน้าแรกทุกครั้งที่ผลลัพธ์การค้นหา/กรองเปลี่ยน
-  useEffect(() => {
-    table.setPageIndex(0);
-  }, [search, role, status]);
+
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <QueryStatus query={listQuery} />
       {/* พื้นที่ตาราง Scroll ได้ */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-sm text-slate-600">
@@ -223,7 +202,7 @@ export default function UserTable({ search, role, status }: UserTableProps) {
                   กำลังโหลดข้อมูลผู้ใช้...
                 </td>
               </tr>
-            ) : isError ? (
+            ) : isError && !listQuery.data ? (
               <tr>
                 <td colSpan={columns.length} className="text-center py-12 text-rose-700">
                   <div className="flex flex-col items-center gap-2">

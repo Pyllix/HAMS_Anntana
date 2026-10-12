@@ -1,3 +1,6 @@
+import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
+import { getPage } from "../../services/pagedApi";
+import QueryStatus from "../shared/QueryStatus";
 import { useState } from "react";
 import { Search, Plus, Trash2, Package, Loader2, Box, ShoppingCart } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -25,21 +28,11 @@ export default function InternalSpareFields({
   const [isOpenDropdown, setIsOpenDropdown] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: apiSpares, isLoading } = useQuery<SparePart[]>({
-    queryKey: ["spareParts"],
-    queryFn: getSpareParts,
-    enabled: !propAvailableSpares,
-  });
-
-  const rawSpares = propAvailableSpares || apiSpares;
-
-  const availableSpares: SparePart[] = Array.isArray(rawSpares)
-    ? rawSpares
-    : (rawSpares as unknown as { data: SparePart[] })?.data &&
-      Array.isArray((rawSpares as unknown as { data: SparePart[] }).data)
-      ? (rawSpares as unknown as { data: SparePart[] }).data
-      : [];
-
+  const term = useDebouncedSearch(searchTerm);
+  const partsQuery = useServerPage<SparePart>("spareParts", { search: term },
+    (filters, signal) => getPage("/spare-parts", filters, signal), false, isOpenDropdown);
+  const isLoading = partsQuery.isLoading;
+  const availableSpares = partsQuery.rows;
   // เพิ่มรายการอะไหล่
   const handleAddSpare = (item: SparePart) => {
     const numericId = Number(item.id);
@@ -85,12 +78,7 @@ export default function InternalSpareFields({
     );
   };
 
-  const filteredStock = availableSpares.filter((item) => {
-    const search = searchTerm.toLowerCase();
-    const nameStr = (item.name || "").toLowerCase();
-    const codeStr = (item.code || "").toLowerCase();
-    return nameStr.includes(search) || codeStr.includes(search);
-  });
+  const filteredStock = availableSpares;
 
   return (
     <div className="space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
@@ -201,6 +189,12 @@ export default function InternalSpareFields({
               )}
             </div>
 
+            <QueryStatus query={partsQuery} />
+            <nav aria-label="หน้าอะไหล่" className="flex items-center justify-between gap-2 border-t p-2 text-xs">
+  <button type="button" disabled={partsQuery.page === 1 || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page - 1)}>ก่อนหน้า</button>
+  <span>หน้า {partsQuery.page} / {partsQuery.totalPages} ({partsQuery.total} รายการ)</span>
+  <button type="button" disabled={partsQuery.page >= partsQuery.totalPages || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page + 1)}>ถัดไป</button>
+</nav>
             <div className="pt-2 border-t border-slate-100 flex justify-end">
               <button
                 type="button"
