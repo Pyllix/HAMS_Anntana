@@ -385,6 +385,18 @@ function getBadgeHtml(statusName?: string, statusCode?: string): string {
   return `<span class="badge badge-disposal">${escapeHtml(name)}</span>`;
 }
 
+function getWarrantyHtml(warrantyDateStr?: string | null): string {
+  if (!warrantyDateStr) return `<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">(ไม่ระบุประกัน)</small>`;
+  const d = new Date(warrantyDateStr);
+  if (isNaN(d.getTime())) return `<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">-</small>`;
+  const isExpired = d.getTime() < Date.now();
+  const dateShort = `${d.getDate()}/${d.getMonth() + 1}/${(d.getFullYear() + 543).toString().slice(2)}`;
+  if (isExpired) {
+    return `<small style="color: #be123c; font-weight: 600; display: block; font-size: 8px; margin-top: 2px; white-space: nowrap;">หมดประกัน (${dateShort})</small>`;
+  }
+  return `<small style="color: #047857; font-weight: 600; display: block; font-size: 8px; margin-top: 2px; white-space: nowrap;">ในประกัน (${dateShort})</small>`;
+}
+
 // -------------------------------------------------------------
 // Report 1: สรุปรายการสต็อกครุภัณฑ์ (Asset Stock Report)
 // -------------------------------------------------------------
@@ -983,9 +995,9 @@ export function printEquipmentStockReport(
       <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
       <th class="center" style="width: 105px;">หมายเลขเครื่อง (S/N)</th>
       <th style="width: 130px;">หน่วยงานที่ส่งคืน</th>
-      <th style="width: 150px;">เหตุผลการขอจำหน่าย</th>
-      <th class="center" style="width: 85px;">วันที่รับเข้า</th>
-      <th class="number" style="width: 90px;">ราคาจัดซื้อ (บ.)</th>
+      <th style="width: 140px;">เหตุผลการขอจำหน่าย</th>
+      <th class="center" style="width: 95px;">วันที่รับ / ประกัน</th>
+      <th class="number" style="width: 85px;">ราคาจัดซื้อ (บ.)</th>
     </tr>`;
 
     tableRowsHtml = assets.length
@@ -1004,7 +1016,10 @@ export function printEquipmentStockReport(
               <td class="center">${escapeHtml(a.serialNo || "-")}</td>
               <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
               <td><span style="color: #b45309; font-weight: 500;">${escapeHtml(reason)}</span></td>
-              <td class="center">${formatDate(a.receivedDate)}</td>
+              <td class="center" style="white-space: nowrap;">
+                <div>${formatDate(a.receivedDate)}</div>
+                ${getWarrantyHtml(a.warrantyDate)}
+              </td>
               <td class="number">${a.price ? money(a.price) : "-"}</td>
             </tr>`;
           })
@@ -1085,9 +1100,9 @@ export function printEquipmentStockReport(
       <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
       <th class="center" style="width: 105px;">หมายเลขเครื่อง (S/N)</th>
       <th style="width: 130px;">หน่วยงานที่รับผิดชอบ</th>
-      <th class="center" style="width: 85px;">วันที่รับเข้า</th>
+      <th class="center" style="width: 95px;">วันที่รับ / ประกัน</th>
       <th class="center" style="width: 90px;">สถานะ</th>
-      <th class="number" style="width: 90px;">ราคา (บ.)</th>
+      <th class="number" style="width: 85px;">ราคา (บ.)</th>
     </tr>`;
 
     tableRowsHtml = assets.length
@@ -1104,7 +1119,10 @@ export function printEquipmentStockReport(
               </td>
               <td class="center">${escapeHtml(a.serialNo || "-")}</td>
               <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
-              <td class="center">${formatDate(a.receivedDate)}</td>
+              <td class="center" style="white-space: nowrap;">
+                <div>${formatDate(a.receivedDate)}</div>
+                ${getWarrantyHtml(a.warrantyDate)}
+              </td>
               <td class="center">${getBadgeHtml(a.status?.name, a.status?.code)}</td>
               <td class="number">${a.price ? money(a.price) : "-"}</td>
             </tr>`;
@@ -1296,7 +1314,10 @@ export function printEquipmentStockGroupedByStatusReport(
             </td>
             <td class="center">${escapeHtml(a.serialNo || "-")}</td>
             <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
-            <td class="center">${getBadgeHtml(a.status?.name, a.status?.code)}</td>
+            <td class="center">
+              <div>${getBadgeHtml(a.status?.name, a.status?.code)}</div>
+              ${getWarrantyHtml(a.warrantyDate)}
+            </td>
             <td class="number">${a.price ? money(a.price) : "-"}</td>
           </tr>`;
         })
@@ -1322,7 +1343,7 @@ export function printEquipmentStockGroupedByStatusReport(
                 <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
                 <th class="center" style="width: 110px;">หมายเลขเครื่อง (S/N)</th>
                 <th style="width: 140px;">หน่วยงานที่รับผิดชอบ</th>
-                <th class="center" style="width: 95px;">สถานะ</th>
+                <th class="center" style="width: 95px;">สถานะ / ประกัน</th>
                 <th class="number" style="width: 95px;">ราคา (บาท)</th>
               </tr>
             </thead>
