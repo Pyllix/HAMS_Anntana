@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, AlertTriangle, Lock } from "lucide-react";
 import type { BudgetType } from "../../types/TypeBudgetType";
+import { useToastStore } from "../../stores/useToastStore";
 
 // Helper สำหรับแปลง ID เป็นรหัส BT-xxx
 export function formatBudgetCode(id: number | string): string {
@@ -128,7 +129,7 @@ interface FormModalProps {
     fiscalYear?: number;
     description?: string;
     isActive: boolean;
-  }) => void;
+  }) => Promise<void> | void;
   isSubmitting?: boolean;
 }
 
@@ -148,7 +149,9 @@ export function BudgetTypeFormModal({
   // Validation Error States
   const [nameError, setNameError] = useState("");
   const [fiscalYearError, setFiscalYearError] = useState("");
+  const [serverError, setServerError] = useState("");
 
+  const showToast = useToastStore((state) => state.showToast);
   const isEdit = Boolean(item);
 
   useEffect(() => {
@@ -165,6 +168,7 @@ export function BudgetTypeFormModal({
     }
     setNameError("");
     setFiscalYearError("");
+    setServerError("");
   }, [item, isOpen]);
 
   if (!isOpen) return null;
@@ -172,6 +176,7 @@ export function BudgetTypeFormModal({
   const handleNameChange = (val: string) => {
     setName(val);
     if (nameError) setNameError("");
+    if (serverError) setServerError("");
   };
 
   const handleFiscalYearChange = (val: string) => {
@@ -179,6 +184,7 @@ export function BudgetTypeFormModal({
     const numericOnly = val.replace(/\D/g, "").slice(0, 4);
     setFiscalYear(numericOnly);
     if (fiscalYearError) setFiscalYearError("");
+    if (serverError) setServerError("");
   };
 
   const validate = (): boolean => {
@@ -220,7 +226,9 @@ export function BudgetTypeFormModal({
       });
 
       if (isDuplicate) {
-        setNameError(`ชื่อประเภทเงินนี้มีอยู่แล้วในปีงบประมาณ ${trimmedYear}`);
+        const alertMsg = `ชื่อประเภทเงิน "${trimmedName}" มีอยู่แล้ว`;
+        setServerError(alertMsg);
+        showToast("error", "ชื่อประเภทเงินนี้มีอยู่แล้ว");
         isValid = false;
       }
     }
@@ -228,8 +236,9 @@ export function BudgetTypeFormModal({
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError("");
 
     if (!validate()) {
       return;
@@ -237,12 +246,35 @@ export function BudgetTypeFormModal({
 
     const parsedYear = Number(fiscalYear.trim());
 
-    onSubmit({
-      name: name.trim(),
-      fiscalYear: parsedYear,
-      description: description.trim() || undefined,
-      isActive,
-    });
+    try {
+      await onSubmit({
+        name: name.trim(),
+        fiscalYear: parsedYear,
+        description: description.trim() || undefined,
+        isActive,
+      });
+    } catch (err: any) {
+      console.error("Submit Budget Type Error:", err);
+      const status = err?.response?.status;
+      const dataMsg = err?.response?.data?.message;
+      const errorText = Array.isArray(dataMsg) ? dataMsg.join(", ") : dataMsg;
+
+      if (
+        status === 409 ||
+        (errorText && String(errorText).toLowerCase().includes("conflict")) ||
+        (errorText && String(errorText).toLowerCase().includes("already exists")) ||
+        (errorText && String(errorText).toLowerCase().includes("duplicate"))
+      ) {
+        const alertMsg = `ชื่อประเภทเงิน "${name.trim()}" มีอยู่แล้ว`;
+        setServerError(alertMsg);
+        showToast("error", "ชื่อประเภทเงินนี้มีอยู่แล้ว");
+      } else {
+        const fallbackMsg =
+          errorText || "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง";
+        setServerError(fallbackMsg);
+        showToast("error", fallbackMsg);
+      }
+    }
   };
 
   return (
@@ -274,6 +306,14 @@ export function BudgetTypeFormModal({
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Server / Validation Error Alert Banner */}
+        {serverError && (
+          <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+            <span>{serverError}</span>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} noValidate className="space-y-4 text-xs sm:text-sm">
