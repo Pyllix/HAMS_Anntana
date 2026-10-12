@@ -42,6 +42,7 @@ import ToastContainer from "../components/borrow-return/ToastContainer";
 import CalendarFilterDialog from "../components/equipment-stock/CalendarFilterDialog";
 import { EquipmentStockPrintDialog } from "../components/equipment-stock/EquipmentStockPrintDialog";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
+import { useAuthStore } from "../stores/authStore";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
 
@@ -50,6 +51,10 @@ type TabKey = "ALL" | "WAIT_DISPOSAL" | "DISPOSAL" | "LOST";
 
 export default function EquipmentStock() {
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
+  const user = useAuthStore((state) => state.user);
+  const userName = user
+    ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.userName
+    : "เจ้าหน้าที่พัสดุ";
 
   const pageSize = 10;
   const [inputSearch, setInputSearch] = useState("");
@@ -503,6 +508,7 @@ export default function EquipmentStock() {
         selectedTypeId={selectedType}
         searchQuery={debouncedSearch}
         dateRange={dateRange}
+        userName={userName}
       />
     </div>
   );

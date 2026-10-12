@@ -192,4 +192,6 @@ export interface AssetQueryParams {
   asset_type_id?: number;
   availability_status_id?: number;
   equipment_type_id?: number;
+  updatedAtFrom?: string;
+  updatedAtTo?: string;
 }

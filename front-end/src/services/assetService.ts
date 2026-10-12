@@ -29,6 +29,10 @@ export async function getAssetsPaginated(
       cleanParams.availability_status_id = params.availability_status_id;
     if (params.equipment_type_id !== undefined)
       cleanParams.equipment_type_id = params.equipment_type_id;
+    if (params.updatedAtFrom !== undefined)
+      cleanParams.updatedAtFrom = params.updatedAtFrom;
+    if (params.updatedAtTo !== undefined)
+      cleanParams.updatedAtTo = params.updatedAtTo;
   }
 
   const res = await apiClient.get("/asset", {
