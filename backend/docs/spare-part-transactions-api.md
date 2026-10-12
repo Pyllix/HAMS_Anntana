@@ -11,7 +11,7 @@ The endpoint keeps the existing cookie authentication and read roles: `ADMIN`, `
 | `page` | 1-based page number; defaults to `1`. |
 | `limit` | Rows per page; defaults to `20`, maximum `100`. |
 | `search` | Case-insensitive partial search across spare-part code, spare-part name, and repair job number. Whitespace-only input is treated as empty. |
-| `txnType` | One of `WITHDRAW`, `RETURN`, `ADJUST`, or `PENDING_WITHDRAW`. When omitted, only `WITHDRAW` and `RETURN` are included; `PENDING_WITHDRAW` is not a completed withdrawal. |
+| `txnType` | One of `WITHDRAW`, `RETURN`, or `PENDING_WITHDRAW`. When omitted, only `WITHDRAW` and `RETURN` are included; `PENDING_WITHDRAW` is not a completed withdrawal. |
 | `startDate` | Inclusive calendar date `YYYY-MM-DD` in `Asia/Bangkok`, applied to `txnDate`. |
 | `endDate` | Inclusive calendar date `YYYY-MM-DD` in `Asia/Bangkok`, applied to `txnDate`. Must not be before `startDate`. |
 | `sparepartId` | Existing exact spare-part ID filter. |
