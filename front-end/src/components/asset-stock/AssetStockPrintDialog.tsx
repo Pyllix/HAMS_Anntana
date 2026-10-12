@@ -3,7 +3,7 @@
 // Dialog for selecting asset stock print mode (Department / All / Current Page)
 // =============================================================
 
-import React, { useState, useId } from "react";
+import React, { useState } from "react";
 import {
   Printer,
   X,
@@ -11,7 +11,6 @@ import {
   Layers,
   FileText,
   CheckCircle2,
-  Filter,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -32,9 +31,6 @@ interface AssetStockPrintDialogProps {
   sections: Section[];
   selectedSectionId?: string;
   searchQuery?: string;
-  selectedStatusId?: string;
-  selectedTypeId?: string;
-  totalFilteredCount?: number;
   // User info
   userName?: string;
 }
@@ -46,21 +42,14 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
   sections,
   selectedSectionId = "ALL",
   searchQuery = "",
-  selectedStatusId = "ALL",
-  selectedTypeId = "ALL",
-  totalFilteredCount,
   userName = "เจ้าหน้าที่ศูนย์ครุภัณฑ์",
 }) => {
-  const currentFilterCheckboxId = useId();
-
   // Mode: department / all_grouped / current_page
   const [mode, setMode] = useState<PrintMode>("department");
   // Chosen department when mode === 'department'
   const [targetSectionId, setTargetSectionId] = useState<string>(
     selectedSectionId !== "ALL" ? selectedSectionId : sections[0]?.id || "",
   );
-  // Whether to apply current search/filter conditions to the export
-  const [applyCurrentFilters, setApplyCurrentFilters] = useState<boolean>(true);
   // Loading state while fetching all pages
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -112,18 +101,9 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
 
       if (mode === "department") {
         // Fetch all assets for the selected department
-        const filterParams: Record<string, any> = {
+        const deptAssets = await getAllAssets({
           section_id: targetSectionId,
-        };
-        if (applyCurrentFilters) {
-          if (searchQuery.trim()) filterParams.search = searchQuery.trim();
-          if (selectedStatusId !== "ALL")
-            filterParams.asset_status_id = selectedStatusId;
-          if (selectedTypeId !== "ALL")
-            filterParams.asset_type_id = selectedTypeId;
-        }
-
-        const deptAssets = await getAllAssets(filterParams);
+        });
 
         const total = deptAssets.length;
         const normal = deptAssets.filter(
@@ -151,7 +131,6 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
           subtitle: building ? `สถานที่/อาคาร: ${building}` : undefined,
           filters: {
             sectionName: secName,
-            search: applyCurrentFilters && searchQuery ? searchQuery : undefined,
           },
           stats: { total, normal, repair, disposal },
           assets: deptAssets,
@@ -166,24 +145,12 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
 
       if (mode === "all_grouped") {
         // Fetch all assets across all departments
-        const filterParams: Record<string, any> = {};
-        if (applyCurrentFilters) {
-          if (searchQuery.trim()) filterParams.search = searchQuery.trim();
-          if (selectedStatusId !== "ALL")
-            filterParams.asset_status_id = selectedStatusId;
-          if (selectedTypeId !== "ALL")
-            filterParams.asset_type_id = selectedTypeId;
-        }
-
-        const allAssets = await getAllAssets(filterParams);
+        const allAssets = await getAllAssets();
 
         printAssetStockGroupedByDepartmentReport({
           title: "รายงานสรุปสต็อกครุภัณฑ์แยกตามแผนก",
           subtitle:
             "ศูนย์บริหารจัดการสินทรัพย์ (Asset Center) • สรุปรายการตามหน่วยงาน",
-          filters: {
-            search: applyCurrentFilters && searchQuery ? searchQuery : undefined,
-          },
           assets: allAssets,
           context: {
             preparedBy: userName,
@@ -365,47 +332,6 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Filter Option Checkbox (for department and all_grouped) */}
-          {mode !== "current_page" && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-              <label
-                htmlFor={currentFilterCheckboxId}
-                className="flex items-start gap-3 cursor-pointer"
-              >
-                <input
-                  id={currentFilterCheckboxId}
-                  type="checkbox"
-                  checked={applyCurrentFilters}
-                  onChange={(e) => setApplyCurrentFilters(e.target.checked)}
-                  disabled={isLoading}
-                  className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-                <div className="text-xs">
-                  <div className="font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-slate-400" />
-                    ใช้เงื่อนไขการค้นหาและตัวกรองปัจจุบันร่วมด้วย
-                  </div>
-                  <div className="text-slate-500 mt-0.5">
-                    {searchQuery || selectedStatusId !== "ALL" || selectedTypeId !== "ALL" ? (
-                      <span>
-                        ตัวกรองที่เลือกอยู่:{" "}
-                        {[
-                          searchQuery ? `คำค้นหา "${searchQuery}"` : "",
-                          selectedStatusId !== "ALL" ? `สถานะ` : "",
-                          selectedTypeId !== "ALL" ? `ประเภท` : "",
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </span>
-                    ) : (
-                      "ไม่มีตัวกรองเพิ่มเติม (จะดึงครุภัณฑ์ทั้งหมดของเงื่อนไขที่เลือก)"
-                    )}
-                  </div>
-                </div>
-              </label>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}

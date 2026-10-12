@@ -291,9 +291,6 @@ export default function AssetStock() {
         sections={sections ?? []}
         selectedSectionId={sectionId}
         searchQuery={debouncedSearch}
-        selectedStatusId={statusId}
-        selectedTypeId={typeId}
-        totalFilteredCount={assetResponse?.meta?.total}
         userName={
           user?.firstname
             ? `${user.firstname} ${user.lastname || ""}`.trim()
