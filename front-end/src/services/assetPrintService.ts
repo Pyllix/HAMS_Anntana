@@ -976,7 +976,7 @@ export function printEquipmentStockReport(
       ${
         !isSpecialTab && stats.disposal !== undefined
           ? `<div>
-              <span>รอจำหน่าย / จำหน่าย</span>
+              <span>รอจำหน่าย / จำหน่ายแล้ว / สูญหาย</span>
               <strong style="color: #475569;">${stats.disposal.toLocaleString()}</strong>
               <small>รายการ</small>
             </div>`
@@ -1395,7 +1395,7 @@ export function printEquipmentStockGroupedByStatusReport(
         <small>รายการ</small>
       </div>
       <div>
-        <span>รอจำหน่าย / ตัดจำหน่าย</span>
+        <span>รอจำหน่าย / จำหน่ายแล้ว / สูญหาย</span>
         <strong style="color: #475569;">${(groups[2].assets.length + groups[3].assets.length).toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
