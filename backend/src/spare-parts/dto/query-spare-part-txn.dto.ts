@@ -34,7 +34,7 @@ export class QuerySparepartTxnDto extends PaginationDto {
   @ApiPropertyOptional({
     example: 'WITHDRAW',
     description:
-      'กรองตามประเภทธุรกรรม (WITHDRAW, RETURN, ADJUST, PENDING_WITHDRAW); หากไม่ระบุจะแสดงเฉพาะ WITHDRAW และ RETURN',
+      'กรองตามประเภทธุรกรรม (WITHDRAW, RETURN, PENDING_WITHDRAW); หากไม่ระบุจะแสดงเฉพาะ WITHDRAW และ RETURN',
     enum: SPAREPART_TXN_TYPES,
   })
   @IsOptional()

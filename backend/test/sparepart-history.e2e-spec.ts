@@ -191,7 +191,7 @@ describeWithDatabase('Spare part history API (PostgreSQL)', () => {
     const tiedTransactionHigh = await createTransaction(
       mixedPartId,
       timestamp(3),
-      'ADJUST',
+      'WITHDRAW',
     );
     const olderTransaction = await createTransaction(
       mixedPartId,

@@ -15,7 +15,7 @@ describe('QuerySparepartTxnDto', () => {
 
   it('rejects unsupported transaction types and non-calendar date values', async () => {
     const query = plainToInstance(QuerySparepartTxnDto, {
-      txnType: 'WITHDRAWN',
+      txnType: 'ADJUST',
       startDate: '2026-02-31',
       endDate: '2026-08-31T10:00:00Z',
     });
