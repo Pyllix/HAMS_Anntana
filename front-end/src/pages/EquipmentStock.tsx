@@ -19,6 +19,7 @@ import {
   Calendar as CalendarIcon,
   X,
   Info,
+  Printer,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -39,7 +40,9 @@ import ConfirmLostModal from "../components/equipment-stock/ConfirmLostModal";
 import SendAssessmentModal from "../components/equipment-stock/SendAssessmentModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import CalendarFilterDialog from "../components/equipment-stock/CalendarFilterDialog";
+import { EquipmentStockPrintDialog } from "../components/equipment-stock/EquipmentStockPrintDialog";
 import { useEquipmentModalStore } from "../stores/useEquipmentModalStore";
+import { useAuthStore } from "../stores/authStore";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
 
@@ -48,6 +51,10 @@ type TabKey = "ALL" | "WAIT_DISPOSAL" | "DISPOSAL" | "LOST";
 
 export default function EquipmentStock() {
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
+  const user = useAuthStore((state) => state.user);
+  const userName = user
+    ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.userName
+    : "เจ้าหน้าที่พัสดุ";
 
   const pageSize = 10;
   const [inputSearch, setInputSearch] = useState("");
@@ -59,6 +66,7 @@ export default function EquipmentStock() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dateFilterLabel, setDateFilterLabel] = useState("ทั้งหมด");
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
 
   const openCreateModal = useEquipmentModalStore((state) => state.openCreate);
 
@@ -386,17 +394,30 @@ export default function EquipmentStock() {
           </div>
         </div>
 
-        {/* Add Equipment Button (Only for "รายการทั้งหมด" and "ใช้งานปกติ") */}
-        {canCreateAsset && (
+        {/* Action Buttons: Print Report & Add Equipment */}
+        <div className="md:ml-auto flex items-center gap-2.5 w-full sm:w-auto shrink-0 justify-end">
           <button
             type="button"
-            onClick={openCreateModal}
-            className="md:ml-auto inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer shrink-0 w-full sm:w-auto"
+            onClick={() => setIsPrintDialogOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-xs hover:bg-emerald-700 transition-colors cursor-pointer w-full sm:w-auto"
+            title="พิมพ์รายงานสต็อกครุภัณฑ์"
           >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            เพิ่มครุภัณฑ์
+            <Printer className="h-4 w-4" />
+            <span>พิมพ์รายงาน</span>
           </button>
-        )}
+
+          {/* Add Equipment Button (Only for "รายการทั้งหมด" and "ใช้งานปกติ") */}
+          {canCreateAsset && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer w-full sm:w-auto"
+            >
+              <Plus className="h-4 w-4 stroke-[2.5]" />
+              เพิ่มครุภัณฑ์
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -475,6 +496,19 @@ export default function EquipmentStock() {
           }
           setPage(1);
         }}
+      />
+
+      {/* Equipment Stock Print Dialog */}
+      <EquipmentStockPrintDialog
+        isOpen={isPrintDialogOpen}
+        onClose={() => setIsPrintDialogOpen(false)}
+        activeTab={activeTab}
+        currentPageAssets={displayedAssets}
+        effectiveStatusId={effectiveStatusId}
+        selectedTypeId={selectedType}
+        searchQuery={debouncedSearch}
+        dateRange={dateRange}
+        userName={userName}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import type { AssetSummary } from "../services/pagedApi";
 import type { Asset } from "../types/TypeAsset";
 import QueryStatus from "../components/shared/QueryStatus";
 import { useState, useMemo, useEffect } from "react";
-import { Search, ChevronDown, Plus, Check, X } from "lucide-react";
+import { Search, ChevronDown, Plus, Check, X, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getAssetTypes,
@@ -16,6 +16,7 @@ import {
 import StockAssetsTable from "../components/asset-stock/StockAssetsTable";
 import AssetDetailModal from "../components/asset-stock/AssetDetailModal";
 import AssetRepairHistoryModal from "../components/asset-stock/AssetRepairHistoryModal";
+import { AssetStockPrintDialog } from "../components/asset-stock/AssetStockPrintDialog";
 import { useAuthStore } from "../stores/authStore";
 import { ROLES } from "../router/roles";
 import StatCards from "../components/borrow-return/StatCards";
@@ -29,6 +30,7 @@ export default function AssetStock() {
   const [typeId, setTypeId] = useState("ALL");
   const [sectionId, setSectionId] = useState("ALL");
   const [statusId, setStatusId] = useState("ALL");
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
 
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
@@ -248,6 +250,17 @@ export default function AssetStock() {
             </select>
           </div>
         </div>
+
+        {/* ปุ่มพิมพ์รายงาน (ชิดขวาสุด) */}
+        <button
+          type="button"
+          onClick={() => setIsPrintDialogOpen(true)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors shadow-xs cursor-pointer ml-auto w-full sm:w-auto justify-center"
+          title="พิมพ์รายงานสต็อกครุภัณฑ์"
+        >
+          <Printer className="h-4 w-4" />
+          <span>พิมพ์รายงาน</span>
+        </button>
       </div>
 
       {/* Table */}
@@ -269,6 +282,21 @@ export default function AssetStock() {
 
       {/* Asset Repair History Dialog */}
       <AssetRepairHistoryModal />
+
+      {/* Print Dialog */}
+      <AssetStockPrintDialog
+        isOpen={isPrintDialogOpen}
+        onClose={() => setIsPrintDialogOpen(false)}
+        currentPageAssets={assetResponse?.data ?? []}
+        sections={sections ?? []}
+        selectedSectionId={sectionId}
+        searchQuery={debouncedSearch}
+        userName={
+          user?.firstname
+            ? `${user.firstname} ${user.lastname || ""}`.trim()
+            : undefined
+        }
+      />
     </div>
   );
 }

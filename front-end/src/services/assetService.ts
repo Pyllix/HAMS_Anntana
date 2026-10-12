@@ -29,6 +29,10 @@ export async function getAssetsPaginated(
       cleanParams.availability_status_id = params.availability_status_id;
     if (params.equipment_type_id !== undefined)
       cleanParams.equipment_type_id = params.equipment_type_id;
+    if (params.updatedAtFrom !== undefined)
+      cleanParams.updatedAtFrom = params.updatedAtFrom;
+    if (params.updatedAtTo !== undefined)
+      cleanParams.updatedAtTo = params.updatedAtTo;
   }
 
   const res = await apiClient.get("/asset", {
@@ -181,9 +185,52 @@ export async function getEquipmentTypes(): Promise<any[]> {
 }
 
 export async function getAllUsers(): Promise<any[]> {
-
   const res = await apiClient.get("/users");
-
   const raw = res.data;
   return Array.isArray(raw) ? raw : (raw?.data ?? []);
 }
+
+export async function getAllAssets(
+  params?: Omit<AssetQueryParams, "page" | "limit">,
+): Promise<Asset[]> {
+  const pageSize = 100;
+  let page = 1;
+  let all: Asset[] = [];
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const res = await getAssetsPaginated({
+      ...params,
+      page,
+      limit: pageSize,
+    });
+    all = all.concat(res.data);
+    totalPages = res.meta.totalPages || 1;
+    page += 1;
+  }
+
+  return all;
+}
+
+export async function getAllMySectionAssets(
+  params?: { search?: string },
+): Promise<Asset[]> {
+  const pageSize = 100;
+  let page = 1;
+  let all: Asset[] = [];
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const res = await getMySectionAssetsPaginated({
+      ...params,
+      page,
+      limit: pageSize,
+    });
+    all = all.concat(res.data);
+    totalPages = res.meta.totalPages || 1;
+    page += 1;
+  }
+
+  return all;
+}
+
