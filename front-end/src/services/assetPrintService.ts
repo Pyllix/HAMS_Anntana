@@ -1246,9 +1246,9 @@ export function printEquipmentStockReport(
 }
 
 // -------------------------------------------------------------
-// Report 5: รายงานสต็อกครุภัณฑ์พัสดุแยกตามสถานะวงจรชีวิต (Grouped by Lifecycle/Status)
+// Report 5: รายงานทะเบียนคุมครุภัณฑ์พัสดุแยกตามประเภท (Grouped by Asset Type)
 // -------------------------------------------------------------
-export interface EquipmentGroupedByStatusPrintRequest {
+export interface EquipmentGroupedByTypePrintRequest {
   title?: string;
   subtitle?: string;
   reportRef?: string;
@@ -1259,12 +1259,14 @@ export interface EquipmentGroupedByStatusPrintRequest {
   };
 }
 
-export function printEquipmentStockGroupedByStatusReport(
-  request: EquipmentGroupedByStatusPrintRequest,
+export type EquipmentGroupedByStatusPrintRequest = EquipmentGroupedByTypePrintRequest;
+
+export function printEquipmentStockGroupedByTypeReport(
+  request: EquipmentGroupedByTypePrintRequest,
 ): boolean {
   const {
-    title = "รายงานสต็อกครุภัณฑ์แยกตามสถานะวงจรชีวิต (งานพัสดุ)",
-    subtitle = "ฝ่ายพัสดุและบำรุงรักษา • สรุปรายการตามกลุ่มสถานะการใช้งานและการจำหน่าย",
+    title = "รายงานทะเบียนคุมครุภัณฑ์แยกตามประเภท (งานพัสดุ)",
+    subtitle = "ฝ่ายพัสดุและบำรุงรักษา • สรุปรายการตามหมวดหมู่ประเภทครุภัณฑ์และมูลค่างบประมาณ",
     reportRef,
     assets,
     context,
@@ -1272,72 +1274,75 @@ export function printEquipmentStockGroupedByStatusReport(
 
   const refCode =
     reportRef ||
-    `PCL-STS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    `PCL-TYP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
 
-  interface StatusGroup {
-    groupKey: string;
-    groupName: string;
-    badgeClass: string;
+  interface TypeGroup {
+    typeId: string;
+    typeName: string;
     assets: Asset[];
     totalCost: number;
+    normalCount: number;
+    repairCount: number;
+    disposalCount: number;
   }
 
-  const groups: StatusGroup[] = [
-    {
-      groupKey: "NORMAL",
-      groupName: "ครุภัณฑ์ใช้งานปกติ (พร้อมใช้งาน)",
-      badgeClass: "badge-normal",
-      assets: [],
-      totalCost: 0,
-    },
-    {
-      groupKey: "REPAIR",
-      groupName: "ครุภัณฑ์ชำรุด / อยู่ระหว่างส่งซ่อม",
-      badgeClass: "badge-repair",
-      assets: [],
-      totalCost: 0,
-    },
-    {
-      groupKey: "WAIT_DISPOSAL",
-      groupName: "ครุภัณฑ์รอการจำหน่าย (ชำรุด/เสื่อมสภาพ)",
-      badgeClass: "badge-damaged",
-      assets: [],
-      totalCost: 0,
-    },
-    {
-      groupKey: "DISPOSAL_LOST",
-      groupName: "ครุภัณฑ์จำหน่ายแล้ว / สูญหาย",
-      badgeClass: "badge-disposal",
-      assets: [],
-      totalCost: 0,
-    },
-  ];
+  const groupMap = new Map<string, TypeGroup>();
 
   for (const asset of assets) {
-    const code = (asset.status?.code || "").toUpperCase();
-    let target = groups[0]; // normal default
-    if (code === "NORMAL") {
-      target = groups[0];
-    } else if (code === "DAMAGED" || code === "UNDER_REPAIR") {
-      target = groups[1];
-    } else if (code === "WAIT_DISPOSAL") {
-      target = groups[2];
-    } else if (code === "DISPOSAL" || code === "DISPOSED" || code === "LOST") {
-      target = groups[3];
+    const typeId = String(asset.type?.id || asset.equipmentType?.id || "NO_TYPE");
+    const typeName = asset.type?.name || asset.equipmentType?.name || "ไม่ระบุประเภทครุภัณฑ์";
+
+    if (!groupMap.has(typeId)) {
+      groupMap.set(typeId, {
+        typeId,
+        typeName,
+        assets: [],
+        totalCost: 0,
+        normalCount: 0,
+        repairCount: 0,
+        disposalCount: 0,
+      });
     }
 
-    target.assets.push(asset);
-    target.totalCost += Number(asset.price || 0);
+    const group = groupMap.get(typeId)!;
+    group.assets.push(asset);
+    group.totalCost += Number(asset.price || 0);
+
+    const code = (asset.status?.code || "").toUpperCase();
+    if (code === "NORMAL") group.normalCount += 1;
+    else if (code === "DAMAGED" || code === "UNDER_REPAIR") group.repairCount += 1;
+    else if (
+      code === "WAIT_DISPOSAL" ||
+      code === "DISPOSAL" ||
+      code === "DISPOSED" ||
+      code === "LOST"
+    ) {
+      group.disposalCount += 1;
+    }
   }
 
+  const sortedGroups = Array.from(groupMap.values()).sort((a, b) =>
+    a.typeName.localeCompare(b.typeName, "th"),
+  );
+
   const totalAssetsCount = assets.length;
+  const totalNormalCount = assets.filter((a) => a.status?.code === "NORMAL").length;
+  const totalRepairCount = assets.filter(
+    (a) => a.status?.code === "DAMAGED" || a.status?.code === "UNDER_REPAIR",
+  ).length;
+  const totalDisposalCount = assets.filter(
+    (a) =>
+      a.status?.code === "WAIT_DISPOSAL" ||
+      a.status?.code === "DISPOSAL" ||
+      a.status?.code === "DISPOSED" ||
+      a.status?.code === "LOST",
+  ).length;
   const totalAmount = assets.reduce(
     (sum, item) => sum + Number(item.price || 0),
     0,
   );
 
-  const statusBlocksHtml = groups
-    .filter((grp) => grp.assets.length > 0)
+  const typeBlocksHtml = sortedGroups
     .map((grp, gIdx) => {
       const rows = grp.assets
         .map((a, rIdx) => {
@@ -1352,10 +1357,11 @@ export function printEquipmentStockGroupedByStatusReport(
             </td>
             <td class="center">${escapeHtml(a.serialNo || "-")}</td>
             <td>${escapeHtml(a.section?.name || "ครุภัณฑ์ส่วนกลาง")}</td>
-            <td class="center">
-              <div>${getBadgeHtml(a.status?.name, a.status?.code)}</div>
+            <td class="center" style="white-space: nowrap;">
+              <div>${formatDate(a.receivedDate)}</div>
               ${getWarrantyHtml(a.warrantyDate)}
             </td>
+            <td class="center">${getBadgeHtml(a.status?.name, a.status?.code)}</td>
             <td class="number">${a.price ? money(a.price) : "-"}</td>
           </tr>`;
         })
@@ -1365,10 +1371,13 @@ export function printEquipmentStockGroupedByStatusReport(
         <div class="department-block">
           <div class="department-header-bar">
             <div>
-              <h3>กลุ่มที่ ${gIdx + 1}: ${escapeHtml(grp.groupName)}</h3>
+              <h3>หมวดที่ ${gIdx + 1}: ${escapeHtml(grp.typeName)}</h3>
             </div>
             <div class="dept-badges">
-              <span class="dept-badge">จำนวน: <strong>${grp.assets.length}</strong> รายการ</span>
+              <span class="dept-badge">รวม: <strong>${grp.assets.length}</strong></span>
+              <span class="dept-badge" style="color: #047857;">พร้อมใช้: <strong>${grp.normalCount}</strong></span>
+              ${grp.repairCount > 0 ? `<span class="dept-badge" style="color: #b45309;">ซ่อม: <strong>${grp.repairCount}</strong></span>` : ""}
+              ${grp.disposalCount > 0 ? `<span class="dept-badge" style="color: #475569;">รอ/จำหน่าย: <strong>${grp.disposalCount}</strong></span>` : ""}
               <span class="dept-badge" style="color: #047857;">มูลค่า: <strong>${money(grp.totalCost)}</strong> บ.</span>
             </div>
           </div>
@@ -1376,13 +1385,14 @@ export function printEquipmentStockGroupedByStatusReport(
           <table>
             <thead>
               <tr>
-                <th class="center" style="width: 38px;">ลำดับ</th>
-                <th style="width: 130px;">รหัสครุภัณฑ์ (PID)</th>
+                <th class="center" style="width: 35px;">ลำดับ</th>
+                <th style="width: 120px;">รหัสครุภัณฑ์ (PID)</th>
                 <th>ชื่อครุภัณฑ์ / ยี่ห้อ-รุ่น</th>
-                <th class="center" style="width: 110px;">หมายเลขเครื่อง (S/N)</th>
-                <th style="width: 140px;">หน่วยงานที่รับผิดชอบ</th>
-                <th class="center" style="width: 95px;">สถานะ / ประกัน</th>
-                <th class="number" style="width: 95px;">ราคา (บาท)</th>
+                <th class="center" style="width: 105px;">หมายเลขเครื่อง (S/N)</th>
+                <th style="width: 130px;">หน่วยงานที่รับผิดชอบ</th>
+                <th class="center" style="width: 95px;">วันที่รับ / ประกัน</th>
+                <th class="center" style="width: 85px;">สถานะ</th>
+                <th class="number" style="width: 90px;">ราคา (บาท)</th>
               </tr>
             </thead>
             <tbody>
@@ -1390,7 +1400,7 @@ export function printEquipmentStockGroupedByStatusReport(
               ${
                 grp.totalCost > 0
                   ? `<tr style="background: #f8fafc; font-weight: 700; break-inside: avoid; page-break-inside: avoid;">
-                      <td colspan="6" style="text-align: right; padding-right: 12px;">รวมกลุ่ม ${escapeHtml(grp.groupName)} (${grp.assets.length} รายการ)</td>
+                      <td colspan="7" style="text-align: right; padding-right: 12px;">รวมหมวด ${escapeHtml(grp.typeName)} (${grp.assets.length} รายการ)</td>
                       <td class="number" style="color: #047857;">${money(grp.totalCost)}</td>
                     </tr>`
                   : ""
@@ -1408,13 +1418,17 @@ export function printEquipmentStockGroupedByStatusReport(
       <div class="brand-copy">
         <p>โรงพยาบาลและหน่วยงานในสังกัด</p>
         <h1>${escapeHtml(title)}</h1>
-        <span>${escapeHtml(subtitle)}</span>
+        <span>${escapeHtml(subtitle)} (ครอบคลุม ${sortedGroups.length} หมวด)</span>
       </div>
       <div class="document-ref">
         <span>เลขที่อ้างอิง</span>
         <strong>${escapeHtml(refCode)}</strong>
       </div>
     </header>
+
+    <div style="font-size: 11px; color: #475569; margin-bottom: 8px;">
+      ข้อมูลทะเบียนคุมครุภัณฑ์ทั้งหมด (ครอบคลุมทั้งหมด <strong>${sortedGroups.length.toLocaleString()}</strong> หมวดประเภทครุภัณฑ์)
+    </div>
 
     <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 16px;">
       <div>
@@ -1424,26 +1438,26 @@ export function printEquipmentStockGroupedByStatusReport(
       </div>
       <div>
         <span>พร้อมใช้งาน</span>
-        <strong style="color: #047857;">${groups[0].assets.length.toLocaleString()}</strong>
+        <strong style="color: #047857;">${totalNormalCount.toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
       <div>
         <span>ชำรุด / ส่งซ่อม</span>
-        <strong style="color: #b45309;">${groups[1].assets.length.toLocaleString()}</strong>
+        <strong style="color: #b45309;">${totalRepairCount.toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
       <div>
         <span>รอจำหน่าย / จำหน่ายแล้ว / สูญหาย</span>
-        <strong style="color: #475569;">${(groups[2].assets.length + groups[3].assets.length).toLocaleString()}</strong>
+        <strong style="color: #475569;">${totalDisposalCount.toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
     </div>
 
-    ${statusBlocksHtml}
+    ${typeBlocksHtml}
 
     <div class="report-summary-signatures" style="break-inside: avoid; page-break-inside: avoid; margin-top: 24px;">
       <section style="margin: 0 0 24px 0; padding: 12px; border: 2px solid #059669; border-radius: 8px; background: #ecfdf5; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 13px; font-weight: 700; color: #065f46;">มูลค่ารวมครุภัณฑ์ทั้งหมดทุกสถานะ (${totalAssetsCount.toLocaleString()} รายการ)</span>
+        <span style="font-size: 13px; font-weight: 700; color: #065f46;">มูลค่ารวมครุภัณฑ์ทั้งหมดทุกประเภท (${totalAssetsCount.toLocaleString()} รายการ)</span>
         <strong style="font-size: 16px; color: #047857;">${money(totalAmount)} บาท</strong>
       </section>
 
@@ -1459,4 +1473,7 @@ export function printEquipmentStockGroupedByStatusReport(
     documentShell(title, body, context.preparedBy, context.preparedAt || new Date()),
   );
 }
+
+// Keep backward-compatible alias
+export const printEquipmentStockGroupedByStatusReport = printEquipmentStockGroupedByTypeReport;
 

@@ -20,7 +20,7 @@ import {
 import type { Asset } from "../../types/TypeAsset";
 import {
   printEquipmentStockReport,
-  printEquipmentStockGroupedByStatusReport,
+  printEquipmentStockGroupedByTypeReport,
 } from "../../services/assetPrintService";
 import { getAllAssets } from "../../services/assetService";
 
@@ -176,11 +176,11 @@ export const EquipmentStockPrintDialog: React.FC<
       }
 
       if (mode === "all_grouped") {
-        // Fetch all assets and group by lifecycle status
+        // Fetch all assets and group by asset type
         const allAssets = await getAllAssets();
 
-        printEquipmentStockGroupedByStatusReport({
-          title: "รายงานสต็อกครุภัณฑ์แยกตามสถานะวงจรชีวิต (งานพัสดุ)",
+        printEquipmentStockGroupedByTypeReport({
+          title: "รายงานทะเบียนคุมครุภัณฑ์แยกตามประเภท (งานพัสดุ)",
           assets: allAssets,
           context: {
             preparedBy: userName,
@@ -291,14 +291,14 @@ export const EquipmentStockPrintDialog: React.FC<
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-bold text-slate-800">
-                  พิมพ์ทั้งหมด (แยกตามสถานะวงจรชีวิต)
+                  พิมพ์ทั้งหมด (จัดกลุ่มแยกตามประเภทครุภัณฑ์)
                 </h4>
                 {mode === "all_grouped" && (
                   <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                ดึงครุภัณฑ์ทั้งหมดในระบบ จัดกลุ่มเรียงตามสถานะ (พร้อมใช้, ชำรุด/ส่งซ่อม, รอจำหน่าย, จำหน่ายแล้ว/สูญหาย)
+                ดึงครุภัณฑ์ทั้งหมดในทะเบียนคุมพัสดุ จัดกลุ่มแยกตามหมวดหมู่ประเภทครุภัณฑ์ (การแพทย์, สำนักงาน, คอมพิวเตอร์ ฯลฯ) พร้อมสรุปมูลค่า
               </p>
             </div>
           </div>
