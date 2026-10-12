@@ -23,9 +23,12 @@ import {
   BudgetTypeDeleteModal,
   formatBudgetCode,
 } from "../components/budget-type/BudgetTypeModals";
+import ToastContainer from "../components/borrow-return/ToastContainer";
+import { useToastStore } from "../stores/useToastStore";
 
 export default function BudgetTypePage() {
   const queryClient = useQueryClient();
+  const showToast = useToastStore((state) => state.showToast);
 
   // Filter States
   const [inputSearch, setInputSearch] = useState("");
@@ -69,6 +72,21 @@ export default function BudgetTypePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgetTypes"] });
       setIsFormOpen(false);
+      showToast("success", "เพิ่มประเภทเงินใหม่สำเร็จเรียบร้อย");
+    },
+    onError: (err: any) => {
+      if (err?.response?.status === 409) return;
+      const dataMsg = err?.response?.data?.message;
+      const errorText = Array.isArray(dataMsg) ? dataMsg.join(", ") : dataMsg;
+      if (
+        errorText &&
+        (String(errorText).toLowerCase().includes("conflict") ||
+          String(errorText).toLowerCase().includes("already exists") ||
+          String(errorText).toLowerCase().includes("duplicate"))
+      ) {
+        return;
+      }
+      showToast("error", errorText || "เกิดข้อผิดพลาดในการเพิ่มประเภทเงิน");
     },
   });
 
@@ -78,6 +96,21 @@ export default function BudgetTypePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgetTypes"] });
       setIsFormOpen(false);
+      showToast("success", "บันทึกการแก้ไขประเภทเงินสำเร็จเรียบร้อย");
+    },
+    onError: (err: any) => {
+      if (err?.response?.status === 409) return;
+      const dataMsg = err?.response?.data?.message;
+      const errorText = Array.isArray(dataMsg) ? dataMsg.join(", ") : dataMsg;
+      if (
+        errorText &&
+        (String(errorText).toLowerCase().includes("conflict") ||
+          String(errorText).toLowerCase().includes("already exists") ||
+          String(errorText).toLowerCase().includes("duplicate"))
+      ) {
+        return;
+      }
+      showToast("error", errorText || "เกิดข้อผิดพลาดในการแก้ไขประเภทเงิน");
     },
   });
 
@@ -86,6 +119,12 @@ export default function BudgetTypePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgetTypes"] });
       setIsDeleteOpen(false);
+      showToast("success", "ลบประเภทเงินออกจากระบบเรียบร้อย");
+    },
+    onError: (err: any) => {
+      const dataMsg = err?.response?.data?.message;
+      const errorText = Array.isArray(dataMsg) ? dataMsg.join(", ") : dataMsg;
+      showToast("error", errorText || "เกิดข้อผิดพลาดในการลบประเภทเงิน");
     },
   });
 
@@ -154,25 +193,29 @@ export default function BudgetTypePage() {
     setIsDeleteOpen(true);
   };
 
-  const handleFormSubmit = (formData: {
+  const handleFormSubmit = async (formData: {
     name: string;
     fiscalYear?: number;
     description?: string;
     isActive: boolean;
   }) => {
     if (formItem) {
-      updateMutation.mutate({
+      await updateMutation.mutateAsync({
         id: formItem.id,
         dto: formData,
       });
     } else {
-      createMutation.mutate(formData);
+      await createMutation.mutateAsync(formData);
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (deleteItem) {
-      deleteMutation.mutate(deleteItem.id);
+      try {
+        await deleteMutation.mutateAsync(deleteItem.id);
+      } catch {
+        // handled in onError
+      }
     }
   };
 
@@ -418,6 +461,9 @@ export default function BudgetTypePage() {
         onConfirm={handleDeleteConfirm}
         isDeleting={deleteMutation.isPending}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 }
