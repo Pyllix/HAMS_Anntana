@@ -406,7 +406,7 @@ describe('SparePartsService', () => {
             unit: 'ชิ้น',
           },
           repairJob: { id: 'job-uuid-1', jobNo: 'REP-001' },
-          user: { id: 'user-uuid-1', name: 'Somchai Jai Dee' },
+          recordedBy: { id: 'user-uuid-1', name: 'Somchai Jai Dee' },
         },
       ]);
       expect(result.data[0]).not.toHaveProperty('unitPrice');
@@ -453,7 +453,7 @@ describe('SparePartsService', () => {
         txnType: 'RETURN',
         stockType: null,
         repairJob: null,
-        user: { id: 'user-uuid-1', name: 'Ada Lovelace' },
+        recordedBy: { id: 'user-uuid-1', name: 'Ada Lovelace' },
       });
     });
 

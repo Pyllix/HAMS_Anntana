@@ -77,7 +77,7 @@ type SparepartTransactionListItem = Omit<
   SparepartTransactionListRecord,
   'user'
 > & {
-  user: { id: string; name: string };
+  recordedBy: { id: string; name: string };
 };
 
 export interface SparePartStockSummary {
@@ -663,7 +663,7 @@ export class SparePartsService {
             jobNo: transaction.repairJob.jobNo,
           }
         : null,
-      user: {
+      recordedBy: {
         id: transaction.user.id,
         name: `${transaction.user.firstname} ${transaction.user.lastname}`
           .trim()

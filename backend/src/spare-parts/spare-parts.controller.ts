@@ -173,7 +173,7 @@ export class SparePartsController {
   @ApiResponse({
     status: 200,
     description:
-      'Paginated transaction rows with minimal sparepart, repairJob, and user objects',
+      'Paginated transaction rows with minimal sparepart, repairJob, and recordedBy objects',
     schema: {
       type: 'object',
       properties: {
@@ -213,8 +213,10 @@ export class SparePartsController {
                   jobNo: { type: 'string' },
                 },
               },
-              user: {
+              recordedBy: {
                 type: 'object',
+                description:
+                  'Account that recorded or confirmed this transaction',
                 properties: {
                   id: { type: 'string', format: 'uuid' },
                   name: { type: 'string' },

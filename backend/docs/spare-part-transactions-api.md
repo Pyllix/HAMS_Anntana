@@ -16,7 +16,7 @@ The endpoint keeps the existing cookie authentication and read roles: `ADMIN`, `
 | `endDate` | Inclusive calendar date `YYYY-MM-DD` in `Asia/Bangkok`, applied to `txnDate`. Must not be before `startDate`. |
 | `sparepartId` | Existing exact spare-part ID filter. |
 | `jobId` | Existing exact repair-job UUID filter. |
-| `userId` | Existing exact transaction actor UUID filter. |
+| `userId` | Existing exact filter for the UUID of the account recorded in `recordedBy`. |
 
 All supplied filters apply together. Date bounds are converted to a half-open timestamp range from midnight on `startDate` through (but excluding) midnight after `endDate` in Bangkok time. Results sort by `txnDate` descending and then transaction `id` descending. The same filters determine both `data` and `meta.total` before pagination.
 
@@ -43,7 +43,7 @@ Invalid dates, unsupported `txnType` values, invalid IDs, and an inverted date r
         "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "jobNo": "REP-001"
       },
-      "user": {
+      "recordedBy": {
         "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "name": "Somchai Jai Dee"
       }
@@ -60,4 +60,4 @@ Invalid dates, unsupported `txnType` values, invalid IDs, and an inverted date r
 }
 ```
 
-`stockType` is `INTERNAL`, `EXTERNAL`, or `null` when no source was recorded. `repairJob` is `null` if the transaction has no repair-job reference. The `user` is the account that recorded the transaction; it is not necessarily the person who received or requested the part. Each row contains only the fields needed by the history table and reference IDs; it does not include price, email, `createdAt`, or duplicate relation IDs.
+`stockType` is `INTERNAL`, `EXTERNAL`, or `null` when no source was recorded. `repairJob` is `null` if the transaction has no repair-job reference. `recordedBy` is the account that recorded or confirmed the stock transaction. It does not identify the person who requested or physically returned the part, or who approved the repair step. Each row contains only the fields needed by the history table and reference IDs; it does not include price, email, `createdAt`, or duplicate relation IDs.
