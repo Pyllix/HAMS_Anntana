@@ -66,16 +66,18 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
         const normal = currentPageAssets.filter(
           (a) => a.status?.code === "NORMAL",
         ).length;
-        const repair = currentPageAssets.filter(
-          (a) =>
-            a.status?.code === "DAMAGED" ||
-            a.status?.code === "UNDER_REPAIR" ||
-            a.status?.code === "LOST",
+        const underRepair = currentPageAssets.filter(
+          (a) => a.status?.code === "UNDER_REPAIR",
         ).length;
+        const damaged = currentPageAssets.filter(
+          (a) => a.status?.code === "DAMAGED",
+        ).length;
+        const repair = underRepair + damaged;
         const disposal = currentPageAssets.filter(
           (a) =>
             a.status?.code === "WAIT_DISPOSAL" ||
-            a.status?.code === "DISPOSED",
+            a.status?.code === "DISPOSED" ||
+            a.status?.code === "LOST",
         ).length;
 
         printAssetStockReport({
@@ -88,7 +90,7 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
                 ? sections.find((s) => s.id === selectedSectionId)?.name
                 : undefined,
           },
-          stats: { total, normal, repair, disposal },
+          stats: { total, normal, repair, underRepair, damaged, disposal },
           assets: currentPageAssets,
           context: {
             preparedBy: userName,
@@ -109,16 +111,18 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
         const normal = deptAssets.filter(
           (a) => a.status?.code === "NORMAL",
         ).length;
-        const repair = deptAssets.filter(
-          (a) =>
-            a.status?.code === "DAMAGED" ||
-            a.status?.code === "UNDER_REPAIR" ||
-            a.status?.code === "LOST",
+        const underRepair = deptAssets.filter(
+          (a) => a.status?.code === "UNDER_REPAIR",
         ).length;
+        const damaged = deptAssets.filter(
+          (a) => a.status?.code === "DAMAGED",
+        ).length;
+        const repair = underRepair + damaged;
         const disposal = deptAssets.filter(
           (a) =>
             a.status?.code === "WAIT_DISPOSAL" ||
-            a.status?.code === "DISPOSED",
+            a.status?.code === "DISPOSED" ||
+            a.status?.code === "LOST",
         ).length;
 
         const secName = currentSection?.name || "ระบุแผนก";
@@ -132,7 +136,7 @@ export const AssetStockPrintDialog: React.FC<AssetStockPrintDialogProps> = ({
           filters: {
             sectionName: secName,
           },
-          stats: { total, normal, repair, disposal },
+          stats: { total, normal, repair, underRepair, damaged, disposal },
           assets: deptAssets,
           context: {
             preparedBy: userName,

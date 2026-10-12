@@ -16,7 +16,9 @@ export interface AssetPrintFilterInfo {
 export interface AssetPrintSummaryStats {
   total: number;
   normal: number;
-  repair: number;
+  repair?: number;
+  underRepair?: number;
+  damaged?: number;
   disposal?: number;
 }
 
@@ -430,32 +432,57 @@ export function printAssetStockReport(request: AssetStockPrintRequest): boolean 
 
   let summaryHtml = "";
   if (stats) {
-    summaryHtml = `<div class="summary-grid ${isDisposal ? "cols-3" : ""}">
-      <div>
-        <span>จำนวนรายการทั้งหมด</span>
-        <strong>${stats.total.toLocaleString()}</strong>
-        <small>รายการ</small>
-      </div>
-      <div>
-        <span>สภาพปกติ (พร้อมใช้)</span>
-        <strong style="color: #047857;">${stats.normal.toLocaleString()}</strong>
-        <small>รายการ</small>
-      </div>
-      <div>
-        <span>ชำรุด / ส่งซ่อม</span>
-        <strong style="color: #b45309;">${stats.repair.toLocaleString()}</strong>
-        <small>รายการ</small>
-      </div>
-      ${
-        !isDisposal && stats.disposal !== undefined
-          ? `<div>
-              <span>รอจำหน่าย / จำหน่าย</span>
-              <strong style="color: #475569;">${stats.disposal.toLocaleString()}</strong>
-              <small>รายการ</small>
-            </div>`
-          : ""
-      }
-    </div>`;
+    if (stats.underRepair !== undefined && stats.damaged !== undefined) {
+      summaryHtml = `<div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 16px;">
+        <div>
+          <span>รวมทั้งหมด</span>
+          <strong>${stats.total.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        <div>
+          <span>สภาพปกติ</span>
+          <strong style="color: #047857;">${stats.normal.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        <div>
+          <span>กำลังซ่อม</span>
+          <strong style="color: #0284c7;">${stats.underRepair.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        <div>
+          <span>ชำรุด</span>
+          <strong style="color: #be123c;">${stats.damaged.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+      </div>`;
+    } else {
+      summaryHtml = `<div class="summary-grid ${isDisposal ? "cols-3" : ""}">
+        <div>
+          <span>รวมทั้งหมด</span>
+          <strong>${stats.total.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        <div>
+          <span>สภาพปกติ</span>
+          <strong style="color: #047857;">${stats.normal.toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        <div>
+          <span>ชำรุด / ส่งซ่อม</span>
+          <strong style="color: #b45309;">${(stats.repair ?? 0).toLocaleString()}</strong>
+          <small>รายการ</small>
+        </div>
+        ${
+          !isDisposal && stats.disposal !== undefined
+            ? `<div>
+                <span>รอจำหน่าย / จำหน่าย</span>
+                <strong style="color: #475569;">${stats.disposal.toLocaleString()}</strong>
+                <small>รายการ</small>
+              </div>`
+            : ""
+        }
+      </div>`;
+    }
   }
 
   const tableRows = assets.length
@@ -721,9 +748,8 @@ export function printAssetStockGroupedByDepartmentReport(
 
     const code = (asset.status?.code || "").toUpperCase();
     if (code === "NORMAL") group.normalCount += 1;
-    else if (code === "DAMAGED" || code === "LOST") group.damagedCount += 1;
-    else if (code === "UNDER_REPAIR" || code === "WAIT_DISPOSAL")
-      group.underRepairCount += 1;
+    else if (code === "DAMAGED") group.damagedCount += 1;
+    else if (code === "UNDER_REPAIR") group.underRepairCount += 1;
   }
 
   const sortedGroups = Array.from(groupMap.values()).sort((a, b) =>
@@ -734,8 +760,11 @@ export function printAssetStockGroupedByDepartmentReport(
   const totalNormalCount = assets.filter(
     (a) => a.status?.code === "NORMAL",
   ).length;
+  const totalUnderRepairCount = assets.filter(
+    (a) => a.status?.code === "UNDER_REPAIR",
+  ).length;
   const totalDamagedCount = assets.filter(
-    (a) => a.status?.code === "DAMAGED" || a.status?.code === "LOST",
+    (a) => a.status?.code === "DAMAGED",
   ).length;
   const totalAmount = assets.reduce(
     (sum, item) => sum + Number(item.price || 0),
@@ -762,14 +791,12 @@ export function printAssetStockGroupedByDepartmentReport(
   }
 
   const overallSummaryHtml = `
+    <div style="font-size: 11px; color: #475569; margin-bottom: 8px;">
+      ข้อมูลภาพรวมครุภัณฑ์แยกตามแผนก (ครอบคลุมทั้งหมด <strong>${sortedGroups.length.toLocaleString()}</strong> หน่วยงาน)
+    </div>
     <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 16px;">
       <div>
-        <span>จำนวนแผนกทั้งหมด</span>
-        <strong>${sortedGroups.length.toLocaleString()}</strong>
-        <small>หน่วยงาน</small>
-      </div>
-      <div>
-        <span>ครุภัณฑ์รวมทั้งหมด</span>
+        <span>รวมทั้งหมด</span>
         <strong>${totalAssetsCount.toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
@@ -779,8 +806,13 @@ export function printAssetStockGroupedByDepartmentReport(
         <small>รายการ</small>
       </div>
       <div>
-        <span>ชำรุด / รอซ่อม</span>
-        <strong style="color: #b45309;">${totalDamagedCount.toLocaleString()}</strong>
+        <span>กำลังซ่อม</span>
+        <strong style="color: #0284c7;">${totalUnderRepairCount.toLocaleString()}</strong>
+        <small>รายการ</small>
+      </div>
+      <div>
+        <span>ชำรุด</span>
+        <strong style="color: #be123c;">${totalDamagedCount.toLocaleString()}</strong>
         <small>รายการ</small>
       </div>
     </div>
@@ -816,6 +848,7 @@ export function printAssetStockGroupedByDepartmentReport(
             <div class="dept-badges">
               <span class="dept-badge">รวม: <strong>${grp.assets.length}</strong> รายการ</span>
               <span class="dept-badge" style="color: #047857;">ปกติ: <strong>${grp.normalCount}</strong></span>
+              ${grp.underRepairCount > 0 ? `<span class="dept-badge" style="color: #0284c7;">กำลังซ่อม: <strong>${grp.underRepairCount}</strong></span>` : ""}
               ${grp.damagedCount > 0 ? `<span class="dept-badge" style="color: #be123c;">ชำรุด: <strong>${grp.damagedCount}</strong></span>` : ""}
               <span class="dept-badge" style="color: #047857;">มูลค่า: <strong>${money(grp.totalCost)}</strong> บ.</span>
             </div>
