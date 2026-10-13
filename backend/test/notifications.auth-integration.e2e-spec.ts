@@ -18,8 +18,6 @@ import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/users/users.service';
 import { TwoFactorService } from '../src/auth/two-factor.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { PrismaService } from '../src/prisma.service';
-import { NotificationStreamService } from '../src/notifications/notification-stream.service';
 
 jest.setTimeout(60_000);
 
@@ -1336,10 +1334,6 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
 
     const notificationsService =
       app.get<NotificationsService>(NotificationsService);
-    const readAllService = new NotificationsService(
-      app.get<PrismaService>(PrismaService),
-      app.get<NotificationStreamService>(NotificationStreamService),
-    );
     let handlerCutoffFixtureId = '';
     jest
       .spyOn(notificationsService, 'markAllReadForUser')
@@ -1349,7 +1343,8 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
           new Date(cutoffAt.getTime() + 10_000),
         );
         handlerCutoffFixtureId = arrival.id;
-        return readAllService.markAllReadForUser(userId, cutoffAt);
+        jest.restoreAllMocks();
+        return notificationsService.markAllReadForUser(userId, cutoffAt);
       });
     let handlerCutoffResponse: request.Response | undefined;
     try {
