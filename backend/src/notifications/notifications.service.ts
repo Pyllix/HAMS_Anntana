@@ -39,6 +39,16 @@ interface BorrowExtensionNotificationDetails {
   requestedReturnDate: Date;
 }
 
+interface BorrowDeadlineNotificationDetails {
+  id: string;
+  borrowNo: string;
+  assetName: string;
+  borrowerId: string;
+  deadlineEpochMs: string;
+  expectedReturnDate: Date;
+  type: 'BORROW_DUE_SOON' | 'BORROW_OVERDUE';
+}
+
 interface RepairNotificationDetails {
   id: string;
   jobNo: string;
@@ -49,7 +59,7 @@ interface SectionRepairNotificationDetails extends RepairNotificationDetails {
   sectionId: string;
 }
 
-type RepairNotificationCreateDetails = Pick<
+type NotificationCreateDetails = Pick<
   Prisma.NotificationCreateManyInput,
   'type' | 'title' | 'message' | 'resourceType' | 'resourceId' | 'eventKey'
 >;
@@ -269,6 +279,51 @@ export class NotificationsService {
     });
   }
 
+  async createBorrowDeadlineNotifications(
+    tx: Prisma.TransactionClient,
+    events: readonly BorrowDeadlineNotificationDetails[],
+  ): Promise<NotificationDeliveryRow[]> {
+    if (events.length === 0) return [];
+
+    const includesOverdue = events.some(
+      ({ type }) => type === NotificationType.BORROW_OVERDUE,
+    );
+    const assetCenterRecipientIds = includesOverdue
+      ? await this.findActiveAssetCenterRecipientIds(tx)
+      : [];
+    const data: Prisma.NotificationCreateManyInput[] = events.flatMap(
+      (event) => {
+        const recipients =
+          event.type === NotificationType.BORROW_OVERDUE
+            ? [event.borrowerId, ...assetCenterRecipientIds]
+            : [event.borrowerId];
+        const uniqueRecipients = [...new Set(recipients)];
+        const isOverdue = event.type === NotificationType.BORROW_OVERDUE;
+        const returnDeadline = NOTIFICATION_DATE_FORMATTER.format(
+          event.expectedReturnDate,
+        );
+        const details: NotificationCreateDetails = {
+          type: event.type,
+          title: isOverdue ? 'เกินกำหนดคืนครุภัณฑ์' : 'ใกล้กำหนดคืนครุภัณฑ์',
+          message: isOverdue
+            ? `รายการยืม ${event.borrowNo} (${event.assetName}) เกินกำหนดคืนตั้งแต่ ${returnDeadline}`
+            : `รายการยืม ${event.borrowNo} (${event.assetName}) มีกำหนดคืน ${returnDeadline} กรุณาดำเนินการคืนภายในกำหนด`,
+          resourceType: NotificationResourceType.BORROW_TRANSACTION,
+          resourceId: event.id,
+          eventKey: `${event.type}:${event.id}:${event.deadlineEpochMs}`,
+        };
+        return uniqueRecipients.map((userId) => ({ ...details, userId }));
+      },
+    );
+
+    if (data.length === 0) return [];
+    return tx.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: NOTIFICATION_DELIVERY_SELECT,
+    });
+  }
+
   async createBorrowExtensionApprovalRequired(
     tx: Prisma.TransactionClient,
     extension: BorrowExtensionNotificationDetails,
@@ -406,7 +461,7 @@ export class NotificationsService {
   private async createForRecipients(
     tx: Prisma.TransactionClient,
     recipientIds: readonly string[],
-    details: RepairNotificationCreateDetails,
+    details: NotificationCreateDetails,
   ): Promise<NotificationDeliveryRow[]> {
     if (recipientIds.length === 0) return [];
 

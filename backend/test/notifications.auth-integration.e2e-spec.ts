@@ -19,6 +19,10 @@ import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/users/users.service';
 import { TwoFactorService } from '../src/auth/two-factor.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import {
+  BORROW_DEADLINE_CLOCK,
+  BorrowDeadlineNotificationsService,
+} from '../src/asset-borrow/borrow-deadline-notifications.service';
 
 jest.setTimeout(60_000);
 
@@ -62,6 +66,10 @@ interface NotificationListApiResponse {
 
 const notificationTypes = Object.values(NotificationType);
 const notificationResourceTypes = Object.values(NotificationResourceType);
+let borrowDeadlineNow = new Date();
+const borrowDeadlineClock = {
+  now: (): Date => new Date(borrowDeadlineNow),
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -187,6 +195,27 @@ function parseUnreadCountResponse(response: { body: unknown }): {
 } {
   const body = requireRecord(response.body, 'unread count');
   return { count: requireNumber(body, 'count') };
+}
+
+async function createNotificationIntegrationApplication(): Promise<INestApplication> {
+  process.env.NODE_ENV = 'test';
+  const moduleFixture = await Test.createTestingModule({
+    imports: [AppModule],
+  })
+    .overrideProvider(BORROW_DEADLINE_CLOCK)
+    .useValue(borrowDeadlineClock)
+    .compile();
+  const app = moduleFixture.createNestApplication();
+  app.use(cookieParser());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  await app.listen(0);
+  return app;
 }
 
 class SseEventReader {
@@ -323,6 +352,49 @@ async function expectNoEvent(
   }
 }
 
+async function waitForCreatedNotification(
+  reader: SseEventReader,
+  resourceId: string,
+  type: NotificationType,
+  timeoutMs = 10_000,
+): Promise<NotificationApiResponse> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(`Timed out waiting for ${type} on ${resourceId}`);
+    }
+    const result = await reader.next(remainingMs);
+    if (result.closed) throw new Error('Notification stream closed');
+    if (result.timedOut) {
+      throw new Error(`Timed out waiting for ${type} on ${resourceId}`);
+    }
+    if (result.frame?.event !== 'notification.created') continue;
+    const notification = parseNotificationResponse(result.frame.data);
+    if (notification.resourceId === resourceId && notification.type === type) {
+      return notification;
+    }
+  }
+}
+
+async function expectNoNotificationForResource(
+  reader: SseEventReader,
+  resourceId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return;
+    const result = await reader.next(remainingMs);
+    expect(result.closed).toBe(false);
+    if (result.timedOut) return;
+    if (result.frame?.event !== 'notification.created') continue;
+    const notification = parseNotificationResponse(result.frame.data);
+    expect(notification.resourceId).not.toBe(resourceId);
+  }
+}
+
 describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
@@ -370,6 +442,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   const extensionIds: string[] = [];
   const repairJobIds: string[] = [];
   const repairAssetIds: string[] = [];
+  const borrowAssetIds: string[] = [];
   const userIds: string[] = [];
   const abortControllers: AbortController[] = [];
   let repairSparepartGroupId: number | undefined;
@@ -567,6 +640,34 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     return asset.id;
   }
 
+  async function createDeadlineTestAsset(name: string): Promise<string> {
+    const [normalStatus, availableStatus] = await Promise.all([
+      prisma.assetStatus.findUniqueOrThrow({ where: { code: 'NORMAL' } }),
+      prisma.availabilityStatus.findUniqueOrThrow({
+        where: { code: 'AVAILABLE' },
+      }),
+    ]);
+    const asset = await prisma.asset.create({
+      data: {
+        name,
+        model: 'Deadline notification test model',
+        price: 1,
+        receivedDate: new Date('2026-01-01T00:00:00.000Z'),
+        type_id: assetTypeId,
+        section_id: testSectionId,
+        company_id: companyId,
+        asset_status_id: normalStatus.id,
+        availability_status_id: availableStatus.id,
+        owner_id: firstCenterUserId,
+        createdBy: firstCenterUserId,
+        updatedBy: firstCenterUserId,
+      },
+      select: { id: true },
+    });
+    borrowAssetIds.push(asset.id);
+    return asset.id;
+  }
+
   async function createRepairRequest(
     assetId: string,
     cookie: string,
@@ -624,19 +725,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     });
     await prisma.$connect();
 
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleFixture.createNestApplication();
-    app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-    await app.listen(0);
+    app = await createNotificationIntegrationApplication();
 
     const centerSection = await prisma.section.upsert({
       where: { code: 'CENTER' },
@@ -967,6 +1056,11 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         });
         await prisma.borrowTransaction.deleteMany({
           where: { id: { in: borrowIds } },
+        });
+      }
+      if (borrowAssetIds.length > 0) {
+        await prisma.asset.deleteMany({
+          where: { id: { in: borrowAssetIds } },
         });
       }
       const fixtureAssetIds = [
@@ -3054,5 +3148,640 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     for (const stream of streams) {
       await expectNoEvent(stream.reader, 'notification.created', 250);
     }
+  });
+
+  it('reminds only the borrower before the deadline, escalates overdue once, and starts a new cycle after an approved extension', async () => {
+    await refreshTicket03Sessions();
+
+    const startAt = new Date(Date.now() + 2_000);
+    borrowDeadlineNow = startAt;
+    const originalDeadline = new Date(startAt.getTime() + 24 * 60 * 60 * 1000);
+    const borrowAssetId = await createDeadlineTestAsset(
+      `Deadline notification test asset ${randomUUID().slice(0, 8)}`,
+    );
+    const createdBorrowResponse = await request(server())
+      .post('/borrowings')
+      .set('Cookie', firstCenterCookie)
+      .send({
+        assetId: borrowAssetId,
+        borrowerId: departmentUserId,
+        deliveryMethod: 'PICKUP',
+        expectedReturnDate: originalDeadline.toISOString(),
+      })
+      .expect(201);
+    centerServiceBorrowId = parseBorrowingResponse(createdBorrowResponse).id;
+    borrowIds.push(centerServiceBorrowId);
+
+    const quickDeadlineBorrowerStream = await openStream(
+      extensionRequesterCookie,
+    );
+    const quickDeadlineAssetId = await createDeadlineTestAsset(
+      `Short remaining deadline test asset ${randomUUID().slice(0, 8)}`,
+    );
+    const quickDeadlineBorrowResponse = await request(server())
+      .post('/borrowings')
+      .set('Cookie', firstCenterCookie)
+      .send({
+        assetId: quickDeadlineAssetId,
+        borrowerId: extensionRequesterUserId,
+        deliveryMethod: 'PICKUP',
+        expectedReturnDate: new Date(
+          startAt.getTime() + 23 * 60 * 60 * 1000,
+        ).toISOString(),
+      })
+      .expect(201);
+    const quickDeadlineBorrowId = parseBorrowingResponse(
+      quickDeadlineBorrowResponse,
+    ).id;
+    borrowIds.push(quickDeadlineBorrowId);
+    async function createDeadlineBorrow(
+      borrowerId: string,
+      expectedReturnDate: Date,
+    ): Promise<string> {
+      const assetId = await createDeadlineTestAsset(
+        `Boundary deadline test asset ${randomUUID().slice(0, 8)}`,
+      );
+      const response = await request(server())
+        .post('/borrowings')
+        .set('Cookie', firstCenterCookie)
+        .send({
+          assetId,
+          borrowerId,
+          deliveryMethod: 'PICKUP',
+          expectedReturnDate: new Date(
+            startAt.getTime() + 25 * 60 * 60 * 1000,
+          ).toISOString(),
+        })
+        .expect(201);
+      const id = parseBorrowingResponse(response).id;
+      borrowIds.push(id);
+      await prisma.borrowTransaction.update({
+        where: { id },
+        data: { expectedReturnDate },
+      });
+      return id;
+    }
+    const exactDeadlineBorrowId = await createDeadlineBorrow(
+      departmentUserId,
+      startAt,
+    );
+    const firstSeenOverdueBorrowId = await createDeadlineBorrow(
+      extensionRequesterUserId,
+      new Date(startAt.getTime() - 1),
+    );
+    const quickDeadlineInitial =
+      await quickDeadlineBorrowerStream.reader.next(5_000);
+    expect(quickDeadlineInitial.frame?.event).toBe(
+      'notifications.sync_required',
+    );
+
+    const originalBorrow = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: centerServiceBorrowId },
+      select: { borrowNo: true, asset: { select: { name: true } } },
+    });
+
+    const borrowerStream = await openStream(departmentCookie);
+    const firstSeenOverdueBorrowerStream = await openStream(
+      extensionRequesterCookie,
+    );
+    const firstCenterStream = await openStream(firstCenterCookie);
+    const secondCenterStream = await openStream(secondCenterCookie);
+    for (const stream of [
+      borrowerStream,
+      firstSeenOverdueBorrowerStream,
+      firstCenterStream,
+      secondCenterStream,
+    ]) {
+      const initial = await stream.reader.next(5_000);
+      expect(initial.frame?.event).toBe('notifications.sync_required');
+    }
+
+    const deadlineScheduler = app.get(BorrowDeadlineNotificationsService);
+    await Promise.all([
+      deadlineScheduler.runSweepOnce(),
+      deadlineScheduler.runSweepOnce(),
+    ]);
+    const exactDeadlineDueSoon = await waitForCreatedNotification(
+      borrowerStream.reader,
+      exactDeadlineBorrowId,
+      NotificationType.BORROW_DUE_SOON,
+    );
+    const dueSoon = await waitForCreatedNotification(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      NotificationType.BORROW_DUE_SOON,
+    );
+    const quickDeadlineDueSoon = await waitForCreatedNotification(
+      quickDeadlineBorrowerStream.reader,
+      quickDeadlineBorrowId,
+      NotificationType.BORROW_DUE_SOON,
+    );
+    const firstSeenOverdue = await waitForCreatedNotification(
+      firstSeenOverdueBorrowerStream.reader,
+      firstSeenOverdueBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+    await waitForCreatedNotification(
+      firstCenterStream.reader,
+      firstSeenOverdueBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+    await waitForCreatedNotification(
+      secondCenterStream.reader,
+      firstSeenOverdueBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+    expect(quickDeadlineDueSoon.resourceId).toBe(quickDeadlineBorrowId);
+    expect(exactDeadlineDueSoon.resourceId).toBe(exactDeadlineBorrowId);
+    expect(firstSeenOverdue.resourceId).toBe(firstSeenOverdueBorrowId);
+    expect(dueSoon.message).toContain(originalBorrow.borrowNo);
+    expect(dueSoon.message).toContain(originalBorrow.asset.name);
+    await expectNoNotificationForResource(
+      firstCenterStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    await expectNoNotificationForResource(
+      secondCenterStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await expectNoNotificationForResource(
+        stream.reader,
+        quickDeadlineBorrowId,
+        50,
+      );
+    }
+    const exactDeadlineRows = await prisma.notification.findMany({
+      where: { resourceId: exactDeadlineBorrowId },
+      select: { userId: true, type: true },
+    });
+    expect(exactDeadlineRows).toEqual([
+      { userId: departmentUserId, type: NotificationType.BORROW_DUE_SOON },
+    ]);
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: firstSeenOverdueBorrowId,
+          type: NotificationType.BORROW_DUE_SOON,
+        },
+      }),
+    ).toBe(0);
+    const overdueRecipients = await prisma.notification.findMany({
+      where: {
+        resourceId: firstSeenOverdueBorrowId,
+        type: NotificationType.BORROW_OVERDUE,
+      },
+      select: { userId: true },
+    });
+    const activeCenterCount = await prisma.user.count({
+      where: {
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+    });
+    expect(overdueRecipients).toHaveLength(activeCenterCount + 1);
+
+    const dueSoonRows = await prisma.notification.findMany({
+      where: {
+        resourceId: centerServiceBorrowId,
+        type: NotificationType.BORROW_DUE_SOON,
+      },
+      select: { userId: true, eventKey: true },
+    });
+    expect(dueSoonRows).toEqual([
+      {
+        userId: departmentUserId,
+        eventKey: `${NotificationType.BORROW_DUE_SOON}:${centerServiceBorrowId}:${originalDeadline.getTime()}`,
+      },
+    ]);
+
+    await deadlineScheduler.runSweepOnce();
+    await expectNoNotificationForResource(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+
+    borrowDeadlineNow = originalDeadline;
+    await deadlineScheduler.runSweepOnce();
+    await expectNoNotificationForResource(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: centerServiceBorrowId,
+          type: NotificationType.BORROW_OVERDUE,
+        },
+      }),
+    ).toBe(0);
+    await waitForCreatedNotification(
+      quickDeadlineBorrowerStream.reader,
+      quickDeadlineBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+
+    const originalDeadlineRecipients = await prisma.user.findMany({
+      where: {
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    const originalCenterRecipientIds = originalDeadlineRecipients
+      .map(({ id }) => id)
+      .sort();
+
+    borrowDeadlineNow = new Date(originalDeadline.getTime() + 1);
+    await deadlineScheduler.runSweepOnce();
+    await waitForCreatedNotification(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await waitForCreatedNotification(
+        stream.reader,
+        centerServiceBorrowId,
+        NotificationType.BORROW_OVERDUE,
+      );
+    }
+    const originalOverdueRows = await prisma.notification.findMany({
+      where: {
+        resourceId: centerServiceBorrowId,
+        type: NotificationType.BORROW_OVERDUE,
+      },
+      orderBy: { userId: 'asc' },
+      select: { userId: true, eventKey: true },
+    });
+    expect(originalOverdueRows.map(({ userId }) => userId).sort()).toEqual(
+      [...new Set([departmentUserId, ...originalCenterRecipientIds])].sort(),
+    );
+    expect(
+      new Set(originalOverdueRows.map(({ eventKey }) => eventKey)).size,
+    ).toBe(1);
+
+    const lateCenterUserId = await createUser(
+      `notification-late-center-${randomUUID()}@hams-test.local`,
+      UserRole.ASSET_CENTER_STAFF,
+      testSectionId,
+    );
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: centerServiceBorrowId,
+          userId: lateCenterUserId,
+          type: NotificationType.BORROW_OVERDUE,
+        },
+      }),
+    ).toBe(0);
+
+    await deadlineScheduler.runSweepOnce();
+    await expectNoNotificationForResource(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await expectNoNotificationForResource(
+        stream.reader,
+        centerServiceBorrowId,
+        250,
+      );
+    }
+
+    const extensionDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const extensionCsrf = await getCsrfProof(extensionRequesterCookie);
+    const extensionResponse = await request(server())
+      .post(`/borrowings/${centerServiceBorrowId}/extensions`)
+      .set('Origin', 'http://localhost:5173')
+      .set('Cookie', extensionCsrf.cookie)
+      .set('X-CSRF-Token', extensionCsrf.token)
+      .send({
+        requestedReturnDate: extensionDate.toISOString(),
+        reason: 'Notification deadline integration test',
+      })
+      .expect(201);
+    const extensionBody = requireRecord(
+      extensionResponse.body,
+      'borrow extension',
+    );
+    const extensionId = requireString(extensionBody, 'id');
+    extensionIds.push(extensionId);
+    const deadlineWhilePending =
+      await prisma.borrowTransaction.findUniqueOrThrow({
+        where: { id: centerServiceBorrowId },
+        select: { expectedReturnDate: true },
+      });
+    expect(deadlineWhilePending.expectedReturnDate).toEqual(originalDeadline);
+
+    const pendingCenterEvent = await waitForCreatedNotification(
+      firstCenterStream.reader,
+      extensionId,
+      NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+    );
+    expect(pendingCenterEvent.resourceId).toBe(extensionId);
+    await deadlineScheduler.runSweepOnce();
+    await expectNoNotificationForResource(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await expectNoNotificationForResource(
+        stream.reader,
+        centerServiceBorrowId,
+        250,
+      );
+    }
+
+    const centerCsrf = await getCsrfProof(firstCenterCookie);
+    await request(server())
+      .patch(`/borrowings/extensions/${extensionId}/review`)
+      .set('Origin', 'http://localhost:5173')
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({ status: 'APPROVED' })
+      .expect(200);
+    const deadlineAfterApproval =
+      await prisma.borrowTransaction.findUniqueOrThrow({
+        where: { id: centerServiceBorrowId },
+        select: { expectedReturnDate: true },
+      });
+    expect(deadlineAfterApproval.expectedReturnDate).toEqual(extensionDate);
+
+    const nextCycleDeadline = deadlineAfterApproval.expectedReturnDate;
+    if (!nextCycleDeadline) {
+      throw new Error('Approved extension did not persist its new deadline');
+    }
+    borrowDeadlineNow = new Date(
+      nextCycleDeadline.getTime() - 24 * 60 * 60 * 1000,
+    );
+    await deadlineScheduler.runSweepOnce();
+    await waitForCreatedNotification(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      NotificationType.BORROW_DUE_SOON,
+    );
+    await expectNoNotificationForResource(
+      firstCenterStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+
+    borrowDeadlineNow = new Date(nextCycleDeadline.getTime() + 1);
+    await deadlineScheduler.runSweepOnce();
+    await waitForCreatedNotification(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+    await waitForCreatedNotification(
+      firstCenterStream.reader,
+      centerServiceBorrowId,
+      NotificationType.BORROW_OVERDUE,
+    );
+
+    const nextCycleRows = await prisma.notification.findMany({
+      where: {
+        resourceId: centerServiceBorrowId,
+        type: {
+          in: [
+            NotificationType.BORROW_DUE_SOON,
+            NotificationType.BORROW_OVERDUE,
+          ],
+        },
+      },
+      orderBy: [{ type: 'asc' }, { userId: 'asc' }],
+      select: { userId: true, type: true, eventKey: true },
+    });
+    const expectedNextCycleCenters = await prisma.user.findMany({
+      where: {
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    const newCycleOverdueEventKey = `${NotificationType.BORROW_OVERDUE}:${centerServiceBorrowId}:${nextCycleDeadline.getTime()}`;
+    const newCycleOverdueRecipients = nextCycleRows
+      .filter(
+        ({ type, eventKey }) =>
+          type === NotificationType.BORROW_OVERDUE &&
+          eventKey === newCycleOverdueEventKey,
+      )
+      .map(({ userId }) => userId)
+      .sort();
+    expect(newCycleOverdueRecipients).toEqual(
+      [
+        ...new Set([
+          departmentUserId,
+          ...expectedNextCycleCenters.map(({ id }) => id),
+        ]),
+      ].sort(),
+    );
+    expect(new Set(nextCycleRows.map(({ eventKey }) => eventKey)).size).toBe(4);
+
+    const borrowerApi = parseNotificationListResponse(
+      await request(server())
+        .get('/notifications?limit=100')
+        .set('Cookie', departmentCookie)
+        .expect(200),
+    );
+    expect(
+      borrowerApi.data
+        .filter(
+          (notification) => notification.resourceId === centerServiceBorrowId,
+        )
+        .map(({ type }) => type)
+        .sort(),
+    ).toEqual(
+      [
+        NotificationType.BORROW_DUE_SOON,
+        NotificationType.BORROW_DUE_SOON,
+        NotificationType.BORROW_OVERDUE,
+        NotificationType.BORROW_OVERDUE,
+      ].sort(),
+    );
+
+    await prisma.borrowTransaction.update({
+      where: { id: centerServiceBorrowId },
+      data: { expectedReturnDate: null },
+    });
+    await deadlineScheduler.runSweepOnce();
+    await expectNoNotificationForResource(
+      borrowerStream.reader,
+      centerServiceBorrowId,
+      50,
+    );
+
+    const concurrentReturnDeadline = new Date(
+      nextCycleDeadline.getTime() - 60_000,
+    );
+    await prisma.borrowTransaction.update({
+      where: { id: centerServiceBorrowId },
+      data: { expectedReturnDate: concurrentReturnDeadline },
+    });
+
+    const triggerSuffix = randomUUID().replaceAll('-', '');
+    const triggerName = `pause_return_${triggerSuffix}`;
+    const functionName = `pause_return_fn_${triggerSuffix}`;
+    const advisoryLockKey = 1_904_051_013;
+    try {
+      await pool!.query(`
+        CREATE FUNCTION public."${functionName}"()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          IF OLD."borrow_transaction_id" = '${centerServiceBorrowId}'
+            AND NEW."borrow_status_id" <> OLD."borrow_status_id" THEN
+            PERFORM pg_advisory_xact_lock(
+              ${advisoryLockKey},
+              hashtext(OLD."borrow_transaction_id")
+            );
+            PERFORM pg_sleep(1.5);
+          END IF;
+          RETURN NEW;
+        END;
+        $$;
+      `);
+      await pool!.query(`
+        CREATE TRIGGER "${triggerName}"
+        BEFORE UPDATE OF "borrow_status_id" ON public."borrow_transaction"
+        FOR EACH ROW EXECUTE FUNCTION public."${functionName}"();
+      `);
+
+      const returnCsrf = await getCsrfProof(departmentCookie);
+      const returnRequest = (async () =>
+        await request(server())
+          .patch(`/borrowings/${centerServiceBorrowId}/request-return`)
+          .set('Origin', 'http://localhost:5173')
+          .set('Cookie', returnCsrf.cookie)
+          .set('X-CSRF-Token', returnCsrf.token)
+          .send({ remark: 'Concurrent deadline notification test' }))();
+
+      let returnUpdateHasLock = false;
+      const lockDeadline = Date.now() + 3_000;
+      while (Date.now() < lockDeadline) {
+        const probe = await pool!.query<{ acquired: boolean }>(
+          'SELECT pg_try_advisory_lock($1, hashtext($2)) AS acquired',
+          [advisoryLockKey, centerServiceBorrowId],
+        );
+        if (!probe.rows[0]?.acquired) {
+          returnUpdateHasLock = true;
+          break;
+        }
+        await pool!.query('SELECT pg_advisory_unlock($1, hashtext($2))', [
+          advisoryLockKey,
+          centerServiceBorrowId,
+        ]);
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      expect(returnUpdateHasLock).toBe(true);
+
+      await deadlineScheduler.runSweepOnce();
+      const returnResponse = await returnRequest;
+      expect(returnResponse.status).toBe(200);
+      await deadlineScheduler.runSweepOnce();
+      await expectNoNotificationForResource(
+        borrowerStream.reader,
+        centerServiceBorrowId,
+        250,
+      );
+      expect(
+        await prisma.notification.count({
+          where: {
+            resourceId: centerServiceBorrowId,
+            eventKey: `${NotificationType.BORROW_OVERDUE}:${centerServiceBorrowId}:${concurrentReturnDeadline.getTime()}`,
+          },
+        }),
+      ).toBe(0);
+    } finally {
+      await pool!.query(
+        `DROP TRIGGER IF EXISTS "${triggerName}" ON public."borrow_transaction"`,
+      );
+      await pool!.query(`DROP FUNCTION IF EXISTS public."${functionName}"()`);
+    }
+
+    const borrowedStatus = await prisma.borrowStatus.findUniqueOrThrow({
+      where: { code: 'BORROWED' },
+      select: { id: true },
+    });
+    for (const [index, statusCode] of [
+      'PENDING_APPROVE',
+      'APPROVED',
+      'IN_PICKUP',
+      'PENDING_RETURN',
+      'RETURNED',
+      'CANCELLED',
+    ].entries()) {
+      const status = await prisma.borrowStatus.upsert({
+        where: { code: statusCode },
+        update: {},
+        create: { code: statusCode, name: statusCode },
+        select: { id: true },
+      });
+      await prisma.borrowTransaction.update({
+        where: { id: centerServiceBorrowId },
+        data: {
+          borrow_status_id: status.id,
+          expectedReturnDate: new Date(
+            borrowDeadlineNow.getTime() - 10_000 - index,
+          ),
+        },
+      });
+      await deadlineScheduler.runSweepOnce();
+      await expectNoNotificationForResource(
+        borrowerStream.reader,
+        centerServiceBorrowId,
+        50,
+      );
+    }
+
+    await prisma.borrowTransaction.update({
+      where: { id: centerServiceBorrowId },
+      data: {
+        borrow_status_id: borrowedStatus.id,
+        expectedReturnDate: nextCycleDeadline,
+      },
+    });
+    for (const controller of abortControllers) controller.abort();
+    abortControllers.splice(0, abortControllers.length);
+    await app.close();
+    app = await createNotificationIntegrationApplication();
+    await refreshTicket03Sessions();
+    const restartedBorrowerStream = await openStream(departmentCookie);
+    const restartedInitial = await restartedBorrowerStream.reader.next(5_000);
+    expect(restartedInitial.frame?.event).toBe('notifications.sync_required');
+    await app.get(BorrowDeadlineNotificationsService).runSweepOnce();
+    await expectNoNotificationForResource(
+      restartedBorrowerStream.reader,
+      centerServiceBorrowId,
+      250,
+    );
+    const afterRestartApi = parseNotificationListResponse(
+      await request(server())
+        .get('/notifications?limit=100')
+        .set('Cookie', departmentCookie)
+        .expect(200),
+    );
+    expect(
+      afterRestartApi.data.filter(
+        ({ resourceId, type }) =>
+          resourceId === centerServiceBorrowId &&
+          [
+            NotificationType.BORROW_DUE_SOON,
+            NotificationType.BORROW_OVERDUE,
+          ].includes(type),
+      ),
+    ).toHaveLength(4);
+    restartedBorrowerStream.controller.abort();
   });
 });
