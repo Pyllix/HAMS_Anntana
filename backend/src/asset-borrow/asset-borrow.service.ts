@@ -22,6 +22,7 @@ import {
   SwapCheckResponseDto,
 } from './dto/borrow-recommendation-response.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   ReturnCondition,
   ReturnMethod,
@@ -29,6 +30,7 @@ import {
   RequestSource,
   BorrowExtensionType,
   BorrowExtensionStatus,
+  NotificationType,
   Prisma,
 } from '@prisma/client';
 
@@ -36,6 +38,12 @@ export interface BorrowStatusSummary {
   total: number;
   byStatusCode: Record<string, number>;
   overdueCount: number;
+}
+
+interface BorrowActor {
+  id: string;
+  role?: string | string[];
+  section_id?: string | null;
 }
 
 /** Shared selection projection for Asset within BorrowTransaction */
@@ -102,9 +110,46 @@ export const BORROW_TRANSACTION_INCLUDE = {
   },
 };
 
+type BorrowTransactionWithIncludes = Prisma.BorrowTransactionGetPayload<{
+  include: typeof BORROW_TRANSACTION_INCLUDE;
+}>;
+
+type EnrichedBorrowTransaction = BorrowTransactionWithIncludes & {
+  isOverdue: boolean;
+  remainingDays: number | null;
+  overdueDays: number | null;
+  hasPendingExtension: boolean;
+  activePendingExtension:
+    | BorrowTransactionWithIncludes['extensions'][number]
+    | null;
+};
+
+const BORROW_EXTENSION_USER_SELECT = {
+  id: true,
+  employeeId: true,
+  firstname: true,
+  lastname: true,
+} as const;
+
+type BorrowExtensionOnlineResponse = Prisma.BorrowExtensionGetPayload<{
+  include: {
+    requestedByUser: { select: typeof BORROW_EXTENSION_USER_SELECT };
+  };
+}>;
+
+type BorrowExtensionDeskResponse = Prisma.BorrowExtensionGetPayload<{
+  include: {
+    requestedByUser: { select: typeof BORROW_EXTENSION_USER_SELECT };
+    reviewedByUser: { select: typeof BORROW_EXTENSION_USER_SELECT };
+  };
+}>;
+
 @Injectable()
 export class AssetBorrowService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async generateBorrowNo(
     tx?: Prisma.TransactionClient,
@@ -165,7 +210,7 @@ export class AssetBorrowService {
   private async getBorrowTransactionWithIncludes(
     id: string,
     tx?: Prisma.TransactionClient,
-  ) {
+  ): Promise<EnrichedBorrowTransaction | null> {
     const client = tx || this.prisma;
     const item = await client.borrowTransaction.findUnique({
       where: { id },
@@ -174,7 +219,10 @@ export class AssetBorrowService {
     return this.enrichBorrowItem(item);
   }
 
-  async createBorrow(dto: CreateAssetBorrowDto, user: any) {
+  async createBorrow(
+    dto: CreateAssetBorrowDto,
+    user: BorrowActor,
+  ): Promise<EnrichedBorrowTransaction | null> {
     // Determine RequestSource from user role
     let requestSource: RequestSource;
     if (
@@ -265,7 +313,7 @@ export class AssetBorrowService {
         ? pendingTxStatusId
         : borrowedTxStatusId;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Verify Asset exists, belongs to Asset Center, and is eligible
       const existingAsset = await tx.asset.findUnique({
         where: { id: dto.assetId },
@@ -335,11 +383,29 @@ export class AssetBorrowService {
         },
       });
 
-      return this.getBorrowTransactionWithIncludes(transaction.id, tx);
+      const pendingNotifications =
+        requestSource === RequestSource.SELF_SERVICE
+          ? await this.notifications.createBorrowApprovalRequired(
+              tx,
+              { id: transaction.id, borrowNo: transaction.borrowNo },
+              existingAsset.name,
+            )
+          : [];
+
+      return {
+        borrow: await this.getBorrowTransactionWithIncludes(transaction.id, tx),
+        notifications: pendingNotifications,
+      };
     });
+
+    this.notifications.publishCommitted(result.notifications);
+    return result.borrow;
   }
 
-  async approveBorrow(id: string, user: any) {
+  async approveBorrow(
+    id: string,
+    user: BorrowActor,
+  ): Promise<EnrichedBorrowTransaction | null> {
     const pendingTxStatusId = await this.getStatusId(
       'borrowStatus',
       'PENDING_APPROVE',
@@ -349,10 +415,20 @@ export class AssetBorrowService {
       'APPROVED',
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id },
-        select: { id: true, asset_id: true, borrow_status_id: true },
+        select: {
+          id: true,
+          borrowNo: true,
+          asset_id: true,
+          borrower_id: true,
+          expectedReturnDate: true,
+          borrow_status_id: true,
+          request_source: true,
+          borrower: { select: { role: true } },
+          asset: { select: { name: true } },
+        },
       });
 
       if (!transaction) {
@@ -383,8 +459,29 @@ export class AssetBorrowService {
         );
       }
 
-      return this.getBorrowTransactionWithIncludes(id, tx);
+      const notifications =
+        transaction.request_source === RequestSource.SELF_SERVICE &&
+        transaction.borrower.role === UserRole.DEPARTMENT_STAFF
+          ? await this.notifications.createBorrowApproved(
+              tx,
+              {
+                id: transaction.id,
+                borrowNo: transaction.borrowNo,
+                assetName: transaction.asset.name,
+                expectedReturnDate: transaction.expectedReturnDate,
+              },
+              transaction.borrower_id,
+            )
+          : [];
+
+      return {
+        borrow: await this.getBorrowTransactionWithIncludes(id, tx),
+        notifications,
+      };
     });
+
+    this.notifications.publishCommitted(result.notifications);
+    return result.borrow;
   }
 
   async handoverAsset(id: string, user: any) {
@@ -1113,20 +1210,21 @@ export class AssetBorrowService {
     });
   }
 
-  private enrichBorrowItem(item: any) {
+  private enrichBorrowItem(
+    item: BorrowTransactionWithIncludes | null,
+  ): EnrichedBorrowTransaction | null {
     if (!item) return item;
     const now = new Date();
     const isBorrowed = item.borrowStatus?.code === 'BORROWED';
-    const hasExpectedDate = !!item.expectedReturnDate;
-    const isOverdue =
-      isBorrowed && hasExpectedDate && now > new Date(item.expectedReturnDate);
+    const expectedReturnDate = item.expectedReturnDate;
+    const hasExpectedDate = expectedReturnDate !== null;
+    const isOverdue = isBorrowed && hasExpectedDate && now > expectedReturnDate;
 
     let remainingDays: number | null = null;
     let overdueDays: number | null = null;
 
-    if (hasExpectedDate) {
-      const diffMs =
-        new Date(item.expectedReturnDate).getTime() - now.getTime();
+    if (expectedReturnDate) {
+      const diffMs = expectedReturnDate.getTime() - now.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       if (diffDays >= 0) {
         remainingDays = diffDays;
@@ -1413,8 +1511,8 @@ export class AssetBorrowService {
   async createExtension(
     borrowTransactionId: string,
     dto: CreateBorrowExtensionDto,
-    user: any,
-  ) {
+    user: BorrowActor,
+  ): Promise<BorrowExtensionDeskResponse | BorrowExtensionOnlineResponse> {
     const { requestedReturnDate, reason } = dto;
     const newReturnDate = new Date(requestedReturnDate);
     if (isNaN(newReturnDate.getTime())) {
@@ -1436,11 +1534,12 @@ export class AssetBorrowService {
       'BORROWED',
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.borrowTransaction.findUnique({
         where: { id: borrowTransactionId },
         include: {
           borrower: { select: { id: true, section_id: true } },
+          asset: { select: { name: true } },
           extensions: {
             where: { status: BorrowExtensionStatus.PENDING },
             select: { id: true },
@@ -1495,22 +1594,8 @@ export class AssetBorrowService {
             reviewedAt: new Date(),
           },
           include: {
-            requestedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
-            reviewedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
+            requestedByUser: { select: BORROW_EXTENSION_USER_SELECT },
+            reviewedByUser: { select: BORROW_EXTENSION_USER_SELECT },
           },
         });
 
@@ -1522,7 +1607,7 @@ export class AssetBorrowService {
           },
         });
 
-        return extension;
+        return { extension, notifications: [] };
       } else {
         // Online extension: requester must be borrower or from same section, or staff
         if (user.role === UserRole.DEPARTMENT_STAFF) {
@@ -1552,42 +1637,55 @@ export class AssetBorrowService {
             requestedByUserId: user.id,
           },
           include: {
-            requestedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
+            requestedByUser: { select: BORROW_EXTENSION_USER_SELECT },
           },
         });
 
-        return extension;
+        const notifications =
+          await this.notifications.createBorrowExtensionApprovalRequired(tx, {
+            id: extension.id,
+            borrowNo: transaction.borrowNo,
+            assetName: transaction.asset.name,
+            roundNumber: extension.roundNumber,
+            requestedReturnDate: extension.requestedReturnDate,
+          });
+
+        return { extension, notifications };
       }
     });
+
+    this.notifications.publishCommitted(result.notifications);
+    return result.extension;
   }
 
   async reviewExtension(
     extensionId: string,
     dto: ReviewBorrowExtensionDto,
-    user: any,
-  ) {
+    user: BorrowActor,
+  ): Promise<BorrowExtensionDeskResponse> {
     const allowedRoles = [
       UserRole.ASSET_CENTER_STAFF,
       UserRole.ADMIN,
       UserRole.MANAGER,
     ];
-    if (!allowedRoles.includes(user.role)) {
+    if (
+      !allowedRoles.some((allowedRole) =>
+        Array.isArray(user.role)
+          ? user.role.includes(allowedRole)
+          : user.role === allowedRole,
+      )
+    ) {
       throw new BadRequestException(
         'Only Asset Center Staff, Admin, or Manager can review extension requests',
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const extension = await tx.borrowExtension.findUnique({
         where: { id: extensionId },
-        include: { borrowTransaction: true },
+        include: {
+          borrowTransaction: { include: { asset: { select: { name: true } } } },
+        },
       });
 
       if (!extension) {
@@ -1605,32 +1703,19 @@ export class AssetBorrowService {
       const now = new Date();
 
       if (dto.status === BorrowExtensionStatus.APPROVED) {
-        const updatedExtension = await tx.borrowExtension.update({
-          where: { id: extensionId },
+        const transition = await tx.borrowExtension.updateMany({
+          where: { id: extensionId, status: BorrowExtensionStatus.PENDING },
           data: {
             status: BorrowExtensionStatus.APPROVED,
             reviewedByUserId: user.id,
             reviewedAt: now,
           },
-          include: {
-            requestedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
-            reviewedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
-          },
         });
+        if (transition.count === 0) {
+          throw new ConflictException(
+            `Borrow extension ${extensionId} has already been reviewed`,
+          );
+        }
 
         await tx.borrowTransaction.update({
           where: { id: extension.borrowTransactionId },
@@ -1640,7 +1725,30 @@ export class AssetBorrowService {
           },
         });
 
-        return updatedExtension;
+        const updatedExtension = await tx.borrowExtension.findUniqueOrThrow({
+          where: { id: extensionId },
+          include: {
+            requestedByUser: { select: BORROW_EXTENSION_USER_SELECT },
+            reviewedByUser: { select: BORROW_EXTENSION_USER_SELECT },
+          },
+        });
+        const notifications =
+          extension.extensionType === BorrowExtensionType.ONLINE
+            ? await this.notifications.createBorrowExtensionDecision(
+                tx,
+                {
+                  id: extension.id,
+                  borrowNo: extension.borrowTransaction.borrowNo,
+                  assetName: extension.borrowTransaction.asset.name,
+                  roundNumber: extension.roundNumber,
+                  requestedReturnDate: extension.requestedReturnDate,
+                  requestedByUserId: extension.requestedByUserId,
+                },
+                NotificationType.BORROW_EXTENSION_APPROVED,
+              )
+            : [];
+
+        return { extension: updatedExtension, notifications };
       } else {
         if (!dto.rejectReason) {
           throw new BadRequestException(
@@ -1648,37 +1756,51 @@ export class AssetBorrowService {
           );
         }
 
-        const updatedExtension = await tx.borrowExtension.update({
-          where: { id: extensionId },
+        const transition = await tx.borrowExtension.updateMany({
+          where: { id: extensionId, status: BorrowExtensionStatus.PENDING },
           data: {
             status: BorrowExtensionStatus.REJECTED,
             rejectReason: dto.rejectReason,
             reviewedByUserId: user.id,
             reviewedAt: now,
           },
+        });
+        if (transition.count === 0) {
+          throw new ConflictException(
+            `Borrow extension ${extensionId} has already been reviewed`,
+          );
+        }
+
+        const updatedExtension = await tx.borrowExtension.findUniqueOrThrow({
+          where: { id: extensionId },
           include: {
-            requestedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
-            reviewedByUser: {
-              select: {
-                id: true,
-                employeeId: true,
-                firstname: true,
-                lastname: true,
-              },
-            },
+            requestedByUser: { select: BORROW_EXTENSION_USER_SELECT },
+            reviewedByUser: { select: BORROW_EXTENSION_USER_SELECT },
           },
         });
+        const notifications =
+          extension.extensionType === BorrowExtensionType.ONLINE
+            ? await this.notifications.createBorrowExtensionDecision(
+                tx,
+                {
+                  id: extension.id,
+                  borrowNo: extension.borrowTransaction.borrowNo,
+                  assetName: extension.borrowTransaction.asset.name,
+                  roundNumber: extension.roundNumber,
+                  requestedReturnDate: extension.requestedReturnDate,
+                  requestedByUserId: extension.requestedByUserId,
+                  rejectReason: dto.rejectReason,
+                },
+                NotificationType.BORROW_EXTENSION_REJECTED,
+              )
+            : [];
 
-        return updatedExtension;
+        return { extension: updatedExtension, notifications };
       }
     });
+
+    this.notifications.publishCommitted(result.notifications);
+    return result.extension;
   }
 
   async cancelExtension(extensionId: string, user: any) {

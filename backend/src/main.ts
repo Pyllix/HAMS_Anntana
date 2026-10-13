@@ -54,7 +54,12 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-User-Activity'],
+    allowedHeaders: [
+      'Content-Type',
+      'Last-Event-ID',
+      'X-CSRF-Token',
+      'X-User-Activity',
+    ],
   });
 
   // Enable global validation pipe for DTO validation

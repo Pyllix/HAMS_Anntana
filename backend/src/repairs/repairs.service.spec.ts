@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RepairsService } from './repairs.service';
 import { PrismaService } from '../prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   ActionType,
   ReportType,
@@ -84,6 +85,7 @@ describe('RepairsService', () => {
     repairJobStep: {
       create: jest.fn(),
       update: jest.fn(),
+      findFirst: jest.fn(),
       deleteMany: jest.fn(),
     },
     mechanicRepair: {
@@ -119,6 +121,14 @@ describe('RepairsService', () => {
       providers: [
         RepairsService,
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createRepairApprovalRequired: jest.fn().mockResolvedValue([]),
+            createRepairReadyForCollection: jest.fn().mockResolvedValue([]),
+            publishCommitted: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

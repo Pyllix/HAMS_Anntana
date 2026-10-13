@@ -30,6 +30,7 @@ import { SessionLifetimeService } from './auth/session-lifetime.service';
 import { MandatoryEnrollmentGuard } from './auth/mandatory-enrollment.guard';
 import { ForecastModule } from './forecast/forecast.module';
 import { ImagesModule } from './images/images.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ImagesModule } from './images/images.module';
     AssetViabilityModule,
     ForecastModule,
     ImagesModule,
+    NotificationsModule,
   ],
   controllers: [],
   providers: [

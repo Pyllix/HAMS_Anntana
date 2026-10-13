@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AssetBorrowController } from './asset-borrow.controller';
 import { PrismaService } from '../prisma.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
@@ -22,6 +23,13 @@ describe('Smart Asset Borrow Recommendation & Swap Nudge', () => {
       providers: [
         AssetBorrowService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+            publishCommitted: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

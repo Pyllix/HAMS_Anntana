@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
 import { PrismaService } from '../prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   UserRole,
   ReturnCondition,
   ReturnMethod,
   DeliveryMethod,
+  NotificationType,
   RequestSource,
 } from '@prisma/client';
 import {
@@ -35,6 +37,7 @@ const mockPrismaService = {
     update: jest.fn(),
     updateMany: jest.fn(),
     findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
@@ -54,6 +57,14 @@ const mockPrismaService = {
   },
 };
 
+const mockNotificationsService = {
+  createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+  createBorrowApproved: jest.fn().mockResolvedValue([]),
+  createBorrowExtensionApprovalRequired: jest.fn().mockResolvedValue([]),
+  createBorrowExtensionDecision: jest.fn().mockResolvedValue([]),
+  publishCommitted: jest.fn(),
+};
+
 describe('AssetBorrowService', () => {
   let service: AssetBorrowService;
   let prisma: any;
@@ -63,12 +74,21 @@ describe('AssetBorrowService', () => {
       providers: [
         AssetBorrowService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
     service = module.get<AssetBorrowService>(AssetBorrowService);
     prisma = module.get<PrismaService>(PrismaService);
     jest.clearAllMocks();
+
+    mockNotificationsService.createBorrowApproved.mockResolvedValue([]);
+    mockNotificationsService.createBorrowExtensionApprovalRequired.mockResolvedValue(
+      [],
+    );
+    mockNotificationsService.createBorrowExtensionDecision.mockResolvedValue(
+      [],
+    );
 
     prisma.asset.updateMany.mockResolvedValue({ count: 1 });
     prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
@@ -153,6 +173,13 @@ describe('AssetBorrowService', () => {
       const dtoOther = { ...dto, borrowerId: 'user-id-99' }; // Client passes another ID
       await service.createBorrow(dtoOther, parcelUser);
 
+      expect(
+        mockNotificationsService.createBorrowApprovalRequired,
+      ).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledTimes(
+        1,
+      );
+
       // Verify it ignored user-id-99 and used parcelUser's own ID with RESERVED / PENDING_APPROVE
       expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -202,6 +229,13 @@ describe('AssetBorrowService', () => {
 
       const dtoForOther = { ...dto, borrowerId: 'user-id-99' };
       await service.createBorrow(dtoForOther, acStaffUser);
+
+      expect(
+        mockNotificationsService.createBorrowApprovalRequired,
+      ).not.toHaveBeenCalled();
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledWith(
+        [],
+      );
 
       expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -301,8 +335,14 @@ describe('AssetBorrowService', () => {
       prisma.borrowTransaction.findUnique
         .mockResolvedValueOnce({
           id: 'tx-1',
+          borrowNo: 'BR-202609-0001',
           asset_id: 'asset-1',
+          borrower_id: 'dept-user-1',
+          expectedReturnDate: new Date('2026-09-15T09:00:00.000Z'),
           borrow_status_id: 21,
+          request_source: RequestSource.SELF_SERVICE,
+          borrower: { role: UserRole.DEPARTMENT_STAFF },
+          asset: { name: 'Asset' },
         })
         .mockResolvedValueOnce({ id: 'tx-1', borrow_status_id: 25 });
       prisma.borrowTransaction.updateMany.mockResolvedValue({ count: 1 });
@@ -318,6 +358,21 @@ describe('AssetBorrowService', () => {
             approved_by_user_id: 'user-id-2',
           }),
         }),
+      );
+      expect(
+        mockNotificationsService.createBorrowApproved,
+      ).toHaveBeenCalledWith(
+        prisma,
+        {
+          id: 'tx-1',
+          borrowNo: 'BR-202609-0001',
+          assetName: 'Asset',
+          expectedReturnDate: new Date('2026-09-15T09:00:00.000Z'),
+        },
+        'dept-user-1',
+      );
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledWith(
+        [],
       );
     });
 
@@ -1324,10 +1379,12 @@ describe('AssetBorrowService', () => {
 
       prisma.borrowTransaction.findUnique.mockResolvedValue({
         id: 'tx-1',
+        borrowNo: 'BR-202609-0001',
         borrow_status_id: 23, // BORROWED
         expectedReturnDate: initialDate,
         extensionCount: 1, // previous extension done once
         extensions: [],
+        asset: { name: 'Asset' },
       });
 
       prisma.borrowExtension.create.mockImplementation(
@@ -1397,12 +1454,14 @@ describe('AssetBorrowService', () => {
 
       prisma.borrowTransaction.findUnique.mockResolvedValue({
         id: 'tx-1',
+        borrowNo: 'BR-202609-0001',
         borrower_id: 'dept-user-1',
         borrow_status_id: 23, // BORROWED
         expectedReturnDate: initialDate,
         extensionCount: 0,
         extensions: [],
         borrower: { section_id: 'sec-opd' },
+        asset: { name: 'Asset' },
       });
 
       prisma.borrowExtension.create.mockImplementation(
@@ -1424,6 +1483,21 @@ describe('AssetBorrowService', () => {
       expect(res.extensionType).toBe('ONLINE');
       expect(res.status).toBe('PENDING');
       expect(res.roundNumber).toBe(1);
+      expect(
+        mockNotificationsService.createBorrowExtensionApprovalRequired,
+      ).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          id: 'ext-online-1',
+          borrowNo: 'BR-202609-0001',
+          assetName: 'Asset',
+          roundNumber: 1,
+          requestedReturnDate: newRequestedDate,
+        }),
+      );
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledWith(
+        [],
+      );
     });
 
     it('should throw ConflictException if there is already a pending extension request', async () => {
@@ -1454,10 +1528,18 @@ describe('AssetBorrowService', () => {
         id: 'ext-1',
         borrowTransactionId: 'tx-1',
         status: 'PENDING',
+        extensionType: 'ONLINE',
+        roundNumber: 1,
         requestedReturnDate: requestedDate,
+        requestedByUserId: 'dept-user-1',
+        borrowTransaction: {
+          borrowNo: 'BR-202609-0001',
+          asset: { name: 'Asset' },
+        },
       });
 
-      prisma.borrowExtension.update.mockResolvedValue({
+      prisma.borrowExtension.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.borrowExtension.findUniqueOrThrow.mockResolvedValue({
         id: 'ext-1',
         status: 'APPROVED',
       });
@@ -1470,6 +1552,17 @@ describe('AssetBorrowService', () => {
       );
 
       expect(res.status).toBe('APPROVED');
+      expect(
+        mockNotificationsService.createBorrowExtensionDecision,
+      ).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          id: 'ext-1',
+          borrowNo: 'BR-202609-0001',
+          requestedByUserId: 'dept-user-1',
+        }),
+        NotificationType.BORROW_EXTENSION_APPROVED,
+      );
       expect(prisma.borrowTransaction.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'tx-1' },
@@ -1486,9 +1579,18 @@ describe('AssetBorrowService', () => {
         id: 'ext-1',
         borrowTransactionId: 'tx-1',
         status: 'PENDING',
+        extensionType: 'ONLINE',
+        roundNumber: 1,
+        requestedReturnDate: new Date(Date.now() + 86400000 * 3),
+        requestedByUserId: 'dept-user-1',
+        borrowTransaction: {
+          borrowNo: 'BR-202609-0001',
+          asset: { name: 'Asset' },
+        },
       });
 
-      prisma.borrowExtension.update.mockResolvedValue({
+      prisma.borrowExtension.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.borrowExtension.findUniqueOrThrow.mockResolvedValue({
         id: 'ext-1',
         status: 'REJECTED',
         rejectReason: 'มีคิวจองต่อ',

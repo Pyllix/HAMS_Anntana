@@ -20,6 +20,7 @@ import request from 'supertest';
 import { PrismaService } from '../src/prisma.service';
 import { AssetBorrowController } from '../src/asset-borrow/asset-borrow.controller';
 import { AssetBorrowService } from '../src/asset-borrow/asset-borrow.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { AssetController } from '../src/asset/asset.controller';
 import { AssetService } from '../src/asset/asset.service';
 import { ImageAttachmentService } from '../src/images/image-attachment.service';
@@ -729,6 +730,20 @@ describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
       ],
       providers: [
         AssetBorrowService,
+        {
+          provide: NotificationsService,
+          useValue: {
+            createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+            createBorrowApproved: jest.fn().mockResolvedValue([]),
+            createBorrowExtensionApprovalRequired: jest
+              .fn()
+              .mockResolvedValue([]),
+            createBorrowExtensionDecision: jest.fn().mockResolvedValue([]),
+            createRepairApprovalRequired: jest.fn().mockResolvedValue([]),
+            createRepairReadyForCollection: jest.fn().mockResolvedValue([]),
+            publishCommitted: jest.fn(),
+          },
+        },
         AssetService,
         RepairsService,
         UsersService,
@@ -1854,12 +1869,26 @@ describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
     expect(list.body.data.length).toBeGreaterThan(0);
     expect(list.body.data.length).toBeLessThanOrEqual(20);
     for (const [method, endpoint, body] of [
-      ['post', '/spare-parts', { code: 'HEAD-NOT-ALLOWED', name: 'Blocked', price: 1, groupId: workflowSparepartGroupId }],
-      ['post', '/spare-parts/stock-in', { sparepartId: workflowSparepartId, qty: 1, totalPrice: 1 }],
+      [
+        'post',
+        '/spare-parts',
+        {
+          code: 'HEAD-NOT-ALLOWED',
+          name: 'Blocked',
+          price: 1,
+          groupId: workflowSparepartGroupId,
+        },
+      ],
+      [
+        'post',
+        '/spare-parts/stock-in',
+        { sparepartId: workflowSparepartId, qty: 1, totalPrice: 1 },
+      ],
       ['patch', '/spare-parts/' + workflowSparepartId, { name: 'Blocked' }],
       ['delete', '/spare-parts/' + workflowSparepartId, {}],
     ] as const) {
-      await request(server())[method](endpoint)
+      await request(server())
+        [method](endpoint)
         .set('x-e2e-role', 'mechanic')
         .send(body)
         .expect(403);
@@ -1869,5 +1898,4 @@ describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
       .set('x-e2e-role', 'department')
       .expect(403);
   });
-
 });
