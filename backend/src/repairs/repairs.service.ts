@@ -19,6 +19,7 @@ import { AssignRepairJobDto } from './dto/assign-repair-job.dto';
 import { CompleteUnrepairableDto } from './dto/complete-unrepairable.dto';
 import { UpdateRepairRequestDto } from './dto/update-repair-request.dto';
 import { ActionType, Prisma, StepActionType, UserRole } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export const REJECTED_STEP_PREFIX = '[ไม่อนุมัติ]';
 
@@ -32,6 +33,13 @@ type RepairCaller = {
   role?: string | string[];
   section_id?: string | null;
 };
+
+interface RepairStepProgressResponse {
+  message: string;
+  step: Prisma.RepairJobStepGetPayload<{
+    include: { stepMaster: true; user: true };
+  }>;
+}
 
 const MECHANIC_WORKLOAD_SELECT = {
   id: true,
@@ -170,7 +178,10 @@ type RepairJobListRow = Prisma.RepairJobGetPayload<{
 
 @Injectable()
 export class RepairsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ───────────────────────────────────────────────────────────────────────────
   // Helper Methods
@@ -608,7 +619,11 @@ export class RepairsService {
   // 4. Diagnose and Plan (ช่างรับงาน วินิจฉัย และ Clone Steps - 4 Tracks)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async diagnoseAndPlan(id: string, dto: DiagnoseRepairJobDto, user: any) {
+  async diagnoseAndPlan(
+    id: string,
+    dto: DiagnoseRepairJobDto,
+    user: RepairCaller,
+  ): Promise<Awaited<ReturnType<RepairsService['findOne']>>> {
     if (
       user.role !== UserRole.MAINTENANCE_STAFF &&
       user.role !== UserRole.MAINTENANCE_HEAD
@@ -621,6 +636,7 @@ export class RepairsService {
     const job = await this.prisma.repairJob.findUnique({
       where: { id },
       include: {
+        asset: { select: { name: true } },
         jobStatus: true,
         repairJobSteps: {
           include: { stepMaster: true },
@@ -805,7 +821,7 @@ export class RepairsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Update RepairJob
       const updatedJob = await tx.repairJob.update({
         where: { id },
@@ -897,8 +913,41 @@ export class RepairsService {
         });
       }
 
-      return this.findOne(id, tx);
+      const nextPendingStep = await tx.repairJobStep.findFirst({
+        where: { jobId: id, completeAt: null },
+        include: {
+          stepMaster: {
+            select: { actionType: true, stepNumber: true },
+          },
+        },
+        orderBy: { stepMaster: { stepNumber: 'asc' } },
+      });
+      const notificationsToPublish =
+        nextPendingStep &&
+        this.isParcelApprovalStep(
+          nextPendingStep.stepMaster.actionType,
+          nextPendingStep.stepMaster.stepNumber,
+        )
+          ? await this.notifications.createRepairApprovalRequired(
+              tx,
+              {
+                id,
+                jobNo: job.jobNo,
+                assetName: job.asset.name,
+              },
+              nextPendingStep.id,
+              nextPendingStep.stepMaster.stepNumber,
+            )
+          : [];
+
+      return {
+        response: await this.findOne(id, tx),
+        notificationsToPublish,
+      };
     });
+
+    this.notifications.publishCommitted(result.notificationsToPublish);
+    return result.response;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -910,7 +959,7 @@ export class RepairsService {
     stepNumber: number,
     dto: UpdateRepairStepDto,
     user: any,
-  ) {
+  ): Promise<RepairStepProgressResponse> {
     const job = await this.prisma.repairJob.findUnique({
       where: { id: jobId },
       include: {
@@ -1055,7 +1104,7 @@ export class RepairsService {
 
     const completionTime = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Step-specific Dynamic JobStatus Transitions
       if (currentStepActionType === StepActionType.OUTSOURCE) {
         if (stepNumber === 5) {
@@ -1223,10 +1272,29 @@ export class RepairsService {
       });
 
       return {
-        message: `Step #${stepNumber} ("${targetStep.stepMaster.label}") completed successfully`,
-        step: updatedStep,
+        response: {
+          message: `Step #${stepNumber} ("${targetStep.stepMaster.label}") completed successfully`,
+          step: updatedStep,
+        },
+        notificationsToPublish:
+          isPenultimateStep &&
+          currentStepActionType !== StepActionType.UNREPAIRABLE
+            ? await this.notifications.createRepairReadyForCollection(
+                tx,
+                {
+                  id: job.id,
+                  jobNo: job.jobNo,
+                  assetName: job.asset.name,
+                  sectionId: job.sectionId,
+                },
+                targetStep.id,
+              )
+            : [],
       };
     });
+
+    this.notifications.publishCommitted(result.notificationsToPublish);
+    return result.response;
   }
 
   async advanceNextStep(jobId: string, dto: UpdateRepairStepDto, user: any) {
@@ -2212,11 +2280,7 @@ export class RepairsService {
       role === UserRole.MAINTENANCE_STAFF || role === UserRole.MAINTENANCE_HEAD;
 
     // Step 5 Approval / External Handling (PARCEL_STAFF only for WITH_PARTS and OUTSOURCE)
-    if (
-      (actionType === StepActionType.WITH_PARTS ||
-        actionType === StepActionType.OUTSOURCE) &&
-      stepNumber === 5
-    ) {
+    if (this.isParcelApprovalStep(actionType, stepNumber)) {
       if (role !== UserRole.PARCEL_STAFF) {
         throw new ForbiddenException(
           `Step #${stepNumber} (Parcel approval/procurement) can only be performed by PARCEL_STAFF`,
@@ -2289,5 +2353,16 @@ export class RepairsService {
       }
       return;
     }
+  }
+
+  private isParcelApprovalStep(
+    actionType: StepActionType,
+    stepNumber: number,
+  ): boolean {
+    return (
+      (actionType === StepActionType.WITH_PARTS ||
+        actionType === StepActionType.OUTSOURCE) &&
+      stepNumber === 5
+    );
   }
 }

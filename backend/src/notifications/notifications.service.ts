@@ -39,6 +39,33 @@ interface BorrowExtensionNotificationDetails {
   requestedReturnDate: Date;
 }
 
+interface RepairNotificationDetails {
+  id: string;
+  jobNo: string;
+  assetName: string;
+}
+
+interface SectionRepairNotificationDetails extends RepairNotificationDetails {
+  sectionId: string;
+}
+
+type RepairNotificationCreateDetails = Pick<
+  Prisma.NotificationCreateManyInput,
+  'type' | 'title' | 'message' | 'resourceType' | 'resourceId' | 'eventKey'
+>;
+
+const NOTIFICATION_DELIVERY_SELECT = {
+  id: true,
+  userId: true,
+  type: true,
+  title: true,
+  message: true,
+  resourceType: true,
+  resourceId: true,
+  readAt: true,
+  createdAt: true,
+} as const satisfies Prisma.NotificationSelect;
+
 type BorrowExtensionDecisionType =
   | 'BORROW_EXTENSION_APPROVED'
   | 'BORROW_EXTENSION_REJECTED';
@@ -336,14 +363,78 @@ export class NotificationsService {
     });
   }
 
+  async createRepairApprovalRequired(
+    tx: Prisma.TransactionClient,
+    repairJob: RepairNotificationDetails,
+    pendingStepId: number,
+    stepNumber: number,
+  ): Promise<NotificationDeliveryRow[]> {
+    const recipientIds = await this.findActiveUserIds(tx, {
+      role: UserRole.PARCEL_STAFF,
+    });
+    return this.createForRecipients(tx, recipientIds, {
+      type: NotificationType.REPAIR_APPROVAL_REQUIRED,
+      title: 'มีงานซ่อมรอพัสดุอนุมัติ',
+      message: `งานซ่อม ${repairJob.jobNo} สำหรับ ${repairJob.assetName} รอพัสดุอนุมัติขั้นตอนที่ ${stepNumber}`,
+      resourceType: NotificationResourceType.REPAIR_JOB,
+      resourceId: repairJob.id,
+      eventKey: `${NotificationType.REPAIR_APPROVAL_REQUIRED}:${pendingStepId}`,
+    });
+  }
+
+  async createRepairReadyForCollection(
+    tx: Prisma.TransactionClient,
+    repairJob: SectionRepairNotificationDetails,
+    completedStepId: number,
+  ): Promise<NotificationDeliveryRow[]> {
+    const recipientIds = await this.findActiveUserIds(tx, {
+      section_id: repairJob.sectionId,
+      role: {
+        in: [UserRole.DEPARTMENT_STAFF, UserRole.ASSET_CENTER_STAFF],
+      },
+    });
+    return this.createForRecipients(tx, recipientIds, {
+      type: NotificationType.REPAIR_READY_FOR_COLLECTION,
+      title: 'งานซ่อมเสร็จแล้ว รอรับคืน',
+      message: `งานซ่อม ${repairJob.jobNo} สำหรับ ${repairJob.assetName} เสร็จแล้ว กรุณาติดต่อรับคืน`,
+      resourceType: NotificationResourceType.REPAIR_JOB,
+      resourceId: repairJob.id,
+      eventKey: `${NotificationType.REPAIR_READY_FOR_COLLECTION}:${completedStepId}`,
+    });
+  }
+
+  private async createForRecipients(
+    tx: Prisma.TransactionClient,
+    recipientIds: readonly string[],
+    details: RepairNotificationCreateDetails,
+  ): Promise<NotificationDeliveryRow[]> {
+    if (recipientIds.length === 0) return [];
+
+    return tx.notification.createManyAndReturn({
+      data: recipientIds.map((userId) => ({ ...details, userId })),
+      skipDuplicates: true,
+      select: NOTIFICATION_DELIVERY_SELECT,
+    });
+  }
+
   private async findActiveAssetCenterRecipientIds(
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
+    return this.findActiveUserIds(tx, {
+      role: UserRole.ASSET_CENTER_STAFF,
+    });
+  }
+
+  private async findActiveUserIds(
+    tx: Prisma.TransactionClient,
+    criteria: Prisma.UserWhereInput,
+  ): Promise<string[]> {
     const recipients = await tx.user.findMany({
       where: {
-        role: UserRole.ASSET_CENTER_STAFF,
-        deletedAt: null,
-        OR: [{ banned: false }, { banned: null }],
+        AND: [
+          criteria,
+          { deletedAt: null, OR: [{ banned: false }, { banned: null }] },
+        ],
       },
       select: { id: true },
     });

@@ -329,10 +329,19 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let pool: import('pg').Pool | undefined;
   let testSectionId: string;
   let departmentSectionId: string;
+  let repairOtherSectionId = '';
   let departmentUserId = '';
   let extensionRequesterUserId = '';
   let departmentEmail = '';
   let extensionRequesterEmail = '';
+  let repairOtherDepartmentEmail = '';
+  let repairOtherDepartmentCookie = '';
+  let repairMaintenanceEmail = '';
+  let repairMaintenanceCookie = '';
+  let repairParcelUserId = '';
+  let repairParcelEmail = '';
+  let repairParcelSecret = '';
+  let repairParcelCookie = '';
   let firstCenterUserId: string;
   let firstCenterEmail = '';
   let firstCenterSecret = '';
@@ -341,6 +350,8 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let secondCenterSecret = '';
   let bannedCenterUserId: string;
   let deletedCenterUserId: string;
+  let bannedParcelUserId: string;
+  let deletedParcelUserId: string;
   let parcelUserId: string;
   let assetTypeId: number;
   let companyId: string;
@@ -357,8 +368,12 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let secondCenterSessionToken = '';
   const borrowIds: string[] = [];
   const extensionIds: string[] = [];
+  const repairJobIds: string[] = [];
+  const repairAssetIds: string[] = [];
   const userIds: string[] = [];
   const abortControllers: AbortController[] = [];
+  let repairSparepartGroupId: number | undefined;
+  let repairSparepartId: number | undefined;
 
   const server = () => app.getHttpServer() as Server;
   const baseUrl = () => {
@@ -520,6 +535,77 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     return { reader: new SseEventReader(response.body), controller };
   }
 
+  async function createRepairTestAsset(
+    sectionId: string,
+    ownerId: string,
+    name: string,
+  ): Promise<string> {
+    const [normalStatus, availableStatus] = await Promise.all([
+      prisma.assetStatus.findUniqueOrThrow({ where: { code: 'NORMAL' } }),
+      prisma.availabilityStatus.findUniqueOrThrow({
+        where: { code: 'AVAILABLE' },
+      }),
+    ]);
+    const asset = await prisma.asset.create({
+      data: {
+        name,
+        model: 'Repair notification test model',
+        price: 1,
+        receivedDate: new Date('2026-01-01T00:00:00.000Z'),
+        type_id: assetTypeId,
+        section_id: sectionId,
+        company_id: companyId,
+        asset_status_id: normalStatus.id,
+        availability_status_id: availableStatus.id,
+        owner_id: ownerId,
+        createdBy: ownerId,
+        updatedBy: ownerId,
+      },
+      select: { id: true },
+    });
+    repairAssetIds.push(asset.id);
+    return asset.id;
+  }
+
+  async function createRepairRequest(
+    assetId: string,
+    cookie: string,
+  ): Promise<Record<string, unknown>> {
+    const csrf = await getCsrfProof(cookie);
+    const response = await request(server())
+      .post('/repairs')
+      .set('Origin', 'http://localhost:5173')
+      .set('Cookie', csrf.cookie)
+      .set('X-CSRF-Token', csrf.token)
+      .send({
+        assetId,
+        symptom: 'Repair notification integration test',
+        urgencyStatus: 'NORMAL',
+        reportType: 'Repair',
+      })
+      .expect(201);
+    const body = requireRecord(response.body, 'repair request');
+    repairJobIds.push(requireString(body, 'id'));
+    return body;
+  }
+
+  async function patchRepair(
+    path: string,
+    cookie: string,
+    body: Record<string, unknown>,
+    expectedStatus?: number,
+  ): Promise<request.Response> {
+    const csrf = await getCsrfProof(cookie);
+    let test = request(server())
+      .patch(path)
+      .set('Origin', 'http://localhost:5173')
+      .set('Cookie', csrf.cookie)
+      .set('X-CSRF-Token', csrf.token)
+      .send(body);
+    if (expectedStatus !== undefined) test = test.expect(expectedStatus);
+    return test;
+  }
+
   beforeAll(async () => {
     if (!testDatabaseUrl) {
       throw new Error(
@@ -565,10 +651,21 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       },
     });
     departmentSectionId = departmentSection.id;
+    const repairOtherSection = await prisma.section.create({
+      data: {
+        code: `NT-X-${randomUUID().slice(0, 7)}`,
+        name: 'Other repair notification department',
+      },
+      select: { id: true },
+    });
+    repairOtherSectionId = repairOtherSection.id;
 
     const suffix = randomUUID();
     departmentEmail = `notification-dept-${suffix}@hams-test.local`;
     extensionRequesterEmail = `notify-ext-${suffix}@hams-test.local`;
+    repairOtherDepartmentEmail = `notify-other-dept-${suffix}@hams-test.local`;
+    repairMaintenanceEmail = `notify-mechanic-${suffix}@hams-test.local`;
+    repairParcelEmail = `notify-parcel-${suffix}@hams-test.local`;
     firstCenterEmail = `notification-center-a-${suffix}@hams-test.local`;
     secondCenterEmail = `notification-center-b-${suffix}@hams-test.local`;
     departmentUserId = await createUser(
@@ -580,6 +677,25 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       extensionRequesterEmail,
       UserRole.DEPARTMENT_STAFF,
       departmentSectionId,
+    );
+    await createUser(
+      repairOtherDepartmentEmail,
+      UserRole.DEPARTMENT_STAFF,
+      repairOtherSectionId,
+    );
+    await createUser(
+      repairMaintenanceEmail,
+      UserRole.MAINTENANCE_HEAD,
+      testSectionId,
+    );
+    repairParcelUserId = await createUser(
+      repairParcelEmail,
+      UserRole.PARCEL_STAFF,
+      testSectionId,
+    );
+    repairParcelSecret = await enrollTwoFactor(
+      repairParcelUserId,
+      repairParcelEmail,
     );
     firstCenterUserId = await createUser(
       firstCenterEmail,
@@ -645,13 +761,62 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         },
         select: { id: true },
       }),
+      prisma.user.create({
+        data: {
+          id: randomUUID(),
+          email: `notification-banned-parcel-${suffix}@hams-test.local`,
+          emailVerified: true,
+          firstname: 'Banned',
+          lastname: 'Parcel',
+          role: UserRole.PARCEL_STAFF,
+          section_id: testSectionId,
+          banned: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      }),
+      prisma.user.create({
+        data: {
+          id: randomUUID(),
+          email: `notification-deleted-parcel-${suffix}@hams-test.local`,
+          emailVerified: true,
+          firstname: 'Deleted',
+          lastname: 'Parcel',
+          role: UserRole.PARCEL_STAFF,
+          section_id: testSectionId,
+          deletedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      }),
     ]);
-    [bannedCenterUserId, deletedCenterUserId, parcelUserId] =
-      inactiveAccounts.map(({ id }) => id);
-    userIds.push(bannedCenterUserId, deletedCenterUserId, parcelUserId);
+    [
+      bannedCenterUserId,
+      deletedCenterUserId,
+      parcelUserId,
+      bannedParcelUserId,
+      deletedParcelUserId,
+    ] = inactiveAccounts.map(({ id }) => id);
+    userIds.push(
+      bannedCenterUserId,
+      deletedCenterUserId,
+      parcelUserId,
+      bannedParcelUserId,
+      deletedParcelUserId,
+    );
 
     departmentCookie = await signInDepartment(departmentEmail);
     extensionRequesterCookie = await signInDepartment(extensionRequesterEmail);
+    repairOtherDepartmentCookie = await signInDepartment(
+      repairOtherDepartmentEmail,
+    );
+    repairMaintenanceCookie = await signInDepartment(repairMaintenanceEmail);
+    repairParcelCookie = await signInCenter(
+      repairParcelEmail,
+      repairParcelSecret,
+    );
     firstCenterCookie = await signInCenter(firstCenterEmail, firstCenterSecret);
     secondCenterCookie = await signInCenter(
       secondCenterEmail,
@@ -764,6 +929,38 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     for (const controller of abortControllers) controller.abort();
     if (app) await app.close();
     if (prisma) {
+      if (repairJobIds.length > 0) {
+        await prisma.notification.deleteMany({
+          where: { resourceId: { in: repairJobIds } },
+        });
+        await prisma.sparepartTxn.deleteMany({
+          where: { jobId: { in: repairJobIds } },
+        });
+        await prisma.mechanicRepair.deleteMany({
+          where: { jobId: { in: repairJobIds } },
+        });
+        await prisma.repairJob.deleteMany({
+          where: { id: { in: repairJobIds } },
+        });
+      }
+      if (repairAssetIds.length > 0) {
+        await prisma.asset.deleteMany({
+          where: { id: { in: repairAssetIds } },
+        });
+      }
+      if (repairSparepartId) {
+        await prisma.sparepartTxn.deleteMany({
+          where: { sparepartId: repairSparepartId },
+        });
+        await prisma.sparepart.deleteMany({
+          where: { id: repairSparepartId },
+        });
+      }
+      if (repairSparepartGroupId) {
+        await prisma.sparepartGroup.deleteMany({
+          where: { id: repairSparepartGroupId },
+        });
+      }
       if (borrowIds.length > 0) {
         await prisma.notification.deleteMany({
           where: { resourceId: { in: [...borrowIds, ...extensionIds] } },
@@ -801,6 +998,11 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       }
       if (departmentSectionId) {
         await prisma.section.deleteMany({ where: { id: departmentSectionId } });
+      }
+      if (repairOtherSectionId) {
+        await prisma.section.deleteMany({
+          where: { id: repairOtherSectionId },
+        });
       }
       await prisma.$disconnect();
       if (pool) await pool.end();
@@ -2227,6 +2429,629 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     expect(afterRejection.expectedReturnDate).toEqual(firstRequestedReturnDate);
     await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
     for (const stream of centerStreams) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+  });
+
+  it('notifies parcel staff only when a repair reaches a parcel approval step', async () => {
+    const parcelStream = await openStream(repairParcelCookie);
+    const departmentStream = await openStream(departmentCookie);
+    const centerStream = await openStream(firstCenterCookie);
+    for (const stream of [parcelStream, departmentStream, centerStream]) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+
+    const cause = await prisma.cause.findFirst({
+      where: { deleteAt: null },
+      select: { id: true },
+    });
+    const techCategory = await prisma.techCategory.findFirst({
+      where: { isActive: true, deleteAt: null },
+      select: { id: true },
+    });
+    const jobType = await prisma.jobType.findFirst({
+      where: { deletedAt: null },
+      select: { id: true },
+    });
+    if (!cause || !techCategory || !jobType) {
+      throw new Error('Repair reference data is required for this test');
+    }
+
+    const group = await prisma.sparepartGroup.create({
+      data: { name: `Repair notification ${randomUUID()}` },
+      select: { id: true },
+    });
+    repairSparepartGroupId = group.id;
+    const sparepart = await prisma.sparepart.create({
+      data: {
+        code: `NT-RP-${randomUUID().slice(0, 8)}`,
+        name: 'Repair notification test part',
+        price: 1,
+        qtyInStock: 5,
+        groupId: group.id,
+      },
+      select: { id: true },
+    });
+    repairSparepartId = sparepart.id;
+
+    const diagnose = async (
+      repairJobId: string,
+      stepActionType:
+        | 'WITH_PARTS'
+        | 'OUTSOURCE'
+        | 'SELF_REPAIR'
+        | 'UNREPAIRABLE',
+      extra: Record<string, unknown> = {},
+    ) => {
+      const response = await patchRepair(
+        `/repairs/${repairJobId}/diagnose`,
+        repairMaintenanceCookie,
+        {
+          diagnosis: 'Integration test diagnosis',
+          solution: 'Integration test plan',
+          causeId: cause.id,
+          techCategoryId: techCategory.id,
+          jobTypeId: jobType.id,
+          actionType: 'REPAIR',
+          stepActionType,
+          ...extra,
+        },
+        200,
+      );
+      return response;
+    };
+
+    const assertParcelNotification = async (repairJobId: string) => {
+      let event = await parcelStream.reader.next(5_000);
+      while (event.frame?.event === 'heartbeat') {
+        event = await parcelStream.reader.next(5_000);
+      }
+      expect(event.frame?.event).toBe('notification.created');
+      expect(event.frame?.data).toMatchObject({
+        type: NotificationType.REPAIR_APPROVAL_REQUIRED,
+        resourceType: NotificationResourceType.REPAIR_JOB,
+        resourceId: repairJobId,
+        readAt: null,
+      });
+    };
+
+    const internalAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Repair parts internal notification asset',
+    );
+    const internalRequest = await createRepairRequest(
+      internalAssetId,
+      departmentCookie,
+    );
+    const internalJobId = requireString(internalRequest, 'id');
+    await diagnose(internalJobId, 'WITH_PARTS', {
+      spareParts: [
+        { sparepartId: sparepart.id, qty: 1, stockType: 'INTERNAL' },
+      ],
+    });
+    expect(
+      (
+        await prisma.repairJob.findUniqueOrThrow({
+          where: { id: internalJobId },
+          select: { jobStatus: { select: { code: true } } },
+        })
+      ).jobStatus.code,
+    ).toBe('PARCEL_PROCESSING');
+    await assertParcelNotification(internalJobId);
+
+    await prisma.sparepart.update({
+      where: { id: sparepart.id },
+      data: { qtyInStock: 0 },
+    });
+    const externalAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Repair parts external notification asset',
+    );
+    const externalRequest = await createRepairRequest(
+      externalAssetId,
+      departmentCookie,
+    );
+    const externalJobId = requireString(externalRequest, 'id');
+    await diagnose(externalJobId, 'WITH_PARTS', {
+      spareParts: [
+        { sparepartId: sparepart.id, qty: 1, stockType: 'EXTERNAL' },
+      ],
+    });
+    expect(
+      (
+        await prisma.repairJob.findUniqueOrThrow({
+          where: { id: externalJobId },
+          select: { jobStatus: { select: { code: true } } },
+        })
+      ).jobStatus.code,
+    ).toBe('WAITING_PARTS');
+    await assertParcelNotification(externalJobId);
+
+    const outsourceAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Repair outsource notification asset',
+    );
+    const outsourceRequest = await createRepairRequest(
+      outsourceAssetId,
+      departmentCookie,
+    );
+    const outsourceJobId = requireString(outsourceRequest, 'id');
+    await diagnose(outsourceJobId, 'OUTSOURCE');
+    await assertParcelNotification(outsourceJobId);
+    await expectNoEvent(parcelStream.reader, 'notification.created', 250);
+    const originalApprovalStep = await prisma.repairJobStep.findFirstOrThrow({
+      where: {
+        jobId: outsourceJobId,
+        stepMaster: { actionType: 'OUTSOURCE', stepNumber: 5 },
+      },
+      select: { id: true },
+    });
+    const firstOutsourceNotificationList = await request(server())
+      .get('/notifications?limit=100')
+      .set('Cookie', repairParcelCookie)
+      .expect(200);
+    expect(
+      parseNotificationListResponse(firstOutsourceNotificationList).data.filter(
+        ({ type, resourceId }) =>
+          type === NotificationType.REPAIR_APPROVAL_REQUIRED &&
+          resourceId === outsourceJobId,
+      ),
+    ).toHaveLength(1);
+
+    await patchRepair(
+      `/repairs/${outsourceJobId}/steps/reject`,
+      repairParcelCookie,
+      { reason: 'Reassess vendor plan' },
+      200,
+    );
+    await diagnose(outsourceJobId, 'OUTSOURCE');
+    await assertParcelNotification(outsourceJobId);
+
+    const approvalRows = await prisma.notification.findMany({
+      where: {
+        resourceId: { in: [internalJobId, externalJobId, outsourceJobId] },
+        type: NotificationType.REPAIR_APPROVAL_REQUIRED,
+      },
+      orderBy: [{ resourceId: 'asc' }, { eventKey: 'asc' }, { userId: 'asc' }],
+      select: { resourceId: true, userId: true, eventKey: true },
+    });
+    const expectedParcelRecipients = await prisma.user.findMany({
+      where: {
+        role: UserRole.PARCEL_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    const recipientIds = expectedParcelRecipients.map(({ id }) => id);
+    for (const repairJobId of [internalJobId, externalJobId, outsourceJobId]) {
+      const rows = approvalRows.filter((row) => row.resourceId === repairJobId);
+      const usersByEvent = new Map<string, string[]>();
+      for (const row of rows) {
+        const eventRecipients = usersByEvent.get(row.eventKey) ?? [];
+        eventRecipients.push(row.userId);
+        usersByEvent.set(row.eventKey, eventRecipients);
+      }
+      expect(usersByEvent.size).toBe(repairJobId === outsourceJobId ? 2 : 1);
+      for (const eventRecipients of usersByEvent.values()) {
+        expect(eventRecipients).toHaveLength(recipientIds.length);
+        expect(new Set(eventRecipients)).toEqual(new Set(recipientIds));
+      }
+    }
+    const outsourceKeys = approvalRows
+      .filter((row) => row.resourceId === outsourceJobId)
+      .map(({ eventKey }) => eventKey);
+    expect(outsourceKeys).toEqual(
+      expect.arrayContaining([
+        `${NotificationType.REPAIR_APPROVAL_REQUIRED}:${originalApprovalStep.id}`,
+      ]),
+    );
+    expect(new Set(outsourceKeys).size).toBe(2);
+    expect(approvalRows.map(({ userId }) => userId)).not.toContain(
+      bannedParcelUserId,
+    );
+    expect(approvalRows.map(({ userId }) => userId)).not.toContain(
+      deletedParcelUserId,
+    );
+    await expectNoEvent(departmentStream.reader, 'notification.created', 250);
+    await expectNoEvent(centerStream.reader, 'notification.created', 250);
+
+    const invalidAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Invalid repair diagnosis notification asset',
+    );
+    const invalidRequest = await createRepairRequest(
+      invalidAssetId,
+      departmentCookie,
+    );
+    const invalidJobId = requireString(invalidRequest, 'id');
+    await patchRepair(
+      `/repairs/${invalidJobId}/diagnose`,
+      repairMaintenanceCookie,
+      {
+        diagnosis: 'Invalid parts request',
+        solution: 'No parts supplied',
+        causeId: cause.id,
+        techCategoryId: techCategory.id,
+        jobTypeId: jobType.id,
+        actionType: 'REPAIR',
+        stepActionType: 'WITH_PARTS',
+        spareParts: [],
+      },
+      400,
+    );
+    expect(
+      await prisma.notification.count({ where: { resourceId: invalidJobId } }),
+    ).toBe(0);
+    expect(
+      await prisma.repairJobStep.count({ where: { jobId: invalidJobId } }),
+    ).toBe(0);
+    await expectNoEvent(parcelStream.reader, 'notification.created', 250);
+  });
+
+  it('notifies the owning section when repair enters waiting delivery and excludes unrepairable jobs', async () => {
+    const departmentStream = await openStream(departmentCookie);
+    const departmentMemberStream = await openStream(extensionRequesterCookie);
+    const otherDepartmentStream = await openStream(repairOtherDepartmentCookie);
+    const firstCenterStream = await openStream(firstCenterCookie);
+    const secondCenterStream = await openStream(secondCenterCookie);
+    const parcelStream = await openStream(repairParcelCookie);
+    const streams = [
+      departmentStream,
+      departmentMemberStream,
+      otherDepartmentStream,
+      firstCenterStream,
+      secondCenterStream,
+      parcelStream,
+    ];
+    for (const stream of streams) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+    const expectReadyEvent = async (
+      stream: { reader: SseEventReader },
+      repairJobId: string,
+    ) => {
+      let event = await stream.reader.next(5_000);
+      while (event.frame?.event === 'heartbeat') {
+        event = await stream.reader.next(5_000);
+      }
+      expect(event.frame).toMatchObject({
+        event: 'notification.created',
+        data: {
+          type: NotificationType.REPAIR_READY_FOR_COLLECTION,
+          resourceType: NotificationResourceType.REPAIR_JOB,
+          resourceId: repairJobId,
+        },
+      });
+    };
+
+    const cause = await prisma.cause.findFirst({
+      where: { deleteAt: null },
+      select: { id: true },
+    });
+    const techCategory = await prisma.techCategory.findFirst({
+      where: { isActive: true, deleteAt: null },
+      select: { id: true },
+    });
+    const jobType = await prisma.jobType.findFirst({
+      where: { deletedAt: null },
+      select: { id: true },
+    });
+    if (!cause || !techCategory || !jobType) {
+      throw new Error('Repair reference data is required for this test');
+    }
+    const diagnose = async (
+      repairJobId: string,
+      stepActionType: 'SELF_REPAIR' | 'UNREPAIRABLE',
+      extra: Record<string, unknown> = {},
+    ) => {
+      await patchRepair(
+        `/repairs/${repairJobId}/diagnose`,
+        repairMaintenanceCookie,
+        {
+          diagnosis: 'Integration test diagnosis',
+          solution: 'Integration test plan',
+          causeId: cause.id,
+          techCategoryId: techCategory.id,
+          jobTypeId: jobType.id,
+          actionType: 'REPAIR',
+          stepActionType,
+          ...extra,
+        },
+        200,
+      );
+    };
+    const stepForward = async (
+      repairJobId: string,
+      body: Record<string, unknown> = {},
+      expectedStatus = 200,
+    ) =>
+      patchRepair(
+        `/repairs/${repairJobId}/steps/next`,
+        repairMaintenanceCookie,
+        body,
+        expectedStatus,
+      );
+
+    const departmentAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Department ready for collection test asset',
+    );
+    const departmentRequest = await createRepairRequest(
+      departmentAssetId,
+      departmentCookie,
+    );
+    const departmentJobId = requireString(departmentRequest, 'id');
+    await diagnose(departmentJobId, 'SELF_REPAIR');
+    const readyRecipients = await prisma.user.findMany({
+      where: {
+        section_id: departmentSectionId,
+        role: { in: [UserRole.DEPARTMENT_STAFF, UserRole.ASSET_CENTER_STAFF] },
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    expect(readyRecipients.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([departmentUserId, extensionRequesterUserId]),
+    );
+    const selfRepairSteps = await prisma.repairJobStep.findMany({
+      where: { jobId: departmentJobId },
+      orderBy: { stepMaster: { stepNumber: 'asc' } },
+      select: {
+        completeAt: true,
+        stepMaster: { select: { stepNumber: true } },
+      },
+    });
+    expect(
+      selfRepairSteps.map(({ stepMaster }) => stepMaster.stepNumber),
+    ).toEqual(expect.arrayContaining([4]));
+    await stepForward(departmentJobId, { warrantyDate: '2026-12-31' }, 400);
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: departmentJobId },
+      }),
+    ).toBe(0);
+    await stepForward(departmentJobId);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION public.raise_repair_ready_notification_for_test()
+      RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.type::text = 'REPAIR_READY_FOR_COLLECTION' THEN
+          RAISE EXCEPTION 'repair ready notification rollback test';
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER raise_repair_ready_notification_for_test
+      BEFORE INSERT ON public.notifications
+      FOR EACH ROW EXECUTE FUNCTION public.raise_repair_ready_notification_for_test()
+    `);
+    try {
+      await stepForward(departmentJobId, {}, 500);
+    } finally {
+      await prisma.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS raise_repair_ready_notification_for_test
+        ON public.notifications
+      `);
+      await prisma.$executeRawUnsafe(`
+        DROP FUNCTION IF EXISTS public.raise_repair_ready_notification_for_test()
+      `);
+    }
+    const rolledBackDepartmentJob = await prisma.repairJob.findUniqueOrThrow({
+      where: { id: departmentJobId },
+      select: {
+        jobStatus: { select: { code: true } },
+        repairJobSteps: {
+          where: { stepMaster: { stepNumber: 5 } },
+          select: { completeAt: true },
+        },
+      },
+    });
+    expect(rolledBackDepartmentJob.jobStatus.code).toBe('IN_PROGRESS');
+    expect(rolledBackDepartmentJob.repairJobSteps[0]?.completeAt).toBeNull();
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: departmentJobId },
+      }),
+    ).toBe(0);
+    await expectNoEvent(departmentStream.reader, 'notification.created', 250);
+
+    const pendingCollectionStep = await prisma.repairJobStep.findFirstOrThrow({
+      where: {
+        jobId: departmentJobId,
+        completeAt: null,
+        stepMaster: { stepNumber: 5 },
+      },
+      select: { id: true },
+    });
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION public.pause_repair_update_for_duplicate_test()
+      RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM pg_sleep(0.75);
+        RETURN NEW;
+      END;
+      $$
+    `);
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TRIGGER pause_repair_update_for_duplicate_test
+        BEFORE UPDATE ON public.repair_job
+        FOR EACH ROW EXECUTE FUNCTION public.pause_repair_update_for_duplicate_test()
+      `);
+      const concurrentStepCsrf = await getCsrfProof(repairMaintenanceCookie);
+      const concurrentStepCompletions = await Promise.all(
+        [0, 1].map(() =>
+          request(server())
+            .patch(`/repairs/${departmentJobId}/steps/next`)
+            .set('Origin', 'http://localhost:5173')
+            .set('Cookie', concurrentStepCsrf.cookie)
+            .set('X-CSRF-Token', concurrentStepCsrf.token)
+            .send({}),
+        ),
+      );
+      expect(concurrentStepCompletions.map(({ status }) => status)).toEqual([
+        200, 200,
+      ]);
+    } finally {
+      await prisma.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS pause_repair_update_for_duplicate_test
+        ON public.repair_job
+      `);
+      await prisma.$executeRawUnsafe(`
+        DROP FUNCTION IF EXISTS public.pause_repair_update_for_duplicate_test()
+      `);
+    }
+    const departmentStatus = await prisma.repairJob.findUniqueOrThrow({
+      where: { id: departmentJobId },
+      select: { jobStatus: { select: { code: true } } },
+    });
+    expect(departmentStatus.jobStatus.code).toBe('WAITING_DELIVERY');
+    const departmentRows = await prisma.notification.findMany({
+      where: {
+        resourceId: departmentJobId,
+        type: NotificationType.REPAIR_READY_FOR_COLLECTION,
+      },
+      orderBy: { userId: 'asc' },
+      select: { userId: true, eventKey: true },
+    });
+    const expectedDepartmentRecipients = await prisma.user.findMany({
+      where: {
+        section_id: departmentSectionId,
+        role: UserRole.DEPARTMENT_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    expect(departmentRows.map(({ userId }) => userId)).toEqual(
+      expectedDepartmentRecipients.map(({ id }) => id),
+    );
+    expect(departmentRows).toHaveLength(expectedDepartmentRecipients.length);
+    expect(new Set(departmentRows.map(({ eventKey }) => eventKey))).toEqual(
+      new Set([
+        `${NotificationType.REPAIR_READY_FOR_COLLECTION}:${pendingCollectionStep.id}`,
+      ]),
+    );
+    const departmentNotificationList = await request(server())
+      .get('/notifications?limit=100')
+      .set('Cookie', departmentCookie)
+      .expect(200);
+    expect(
+      parseNotificationListResponse(departmentNotificationList).data.filter(
+        ({ type, resourceId }) =>
+          type === NotificationType.REPAIR_READY_FOR_COLLECTION &&
+          resourceId === departmentJobId,
+      ),
+    ).toHaveLength(1);
+    for (const stream of [departmentStream, departmentMemberStream]) {
+      await expectReadyEvent(stream, departmentJobId);
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+    for (const stream of [
+      otherDepartmentStream,
+      firstCenterStream,
+      secondCenterStream,
+      parcelStream,
+    ]) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    const centerAssetId = await createRepairTestAsset(
+      testSectionId,
+      firstCenterUserId,
+      'Center ready for collection test asset',
+    );
+    const centerRequest = await createRepairRequest(
+      centerAssetId,
+      firstCenterCookie,
+    );
+    const centerJobId = requireString(centerRequest, 'id');
+    await diagnose(centerJobId, 'SELF_REPAIR');
+    await stepForward(centerJobId);
+    await stepForward(centerJobId);
+    const centerRows = await prisma.notification.findMany({
+      where: {
+        resourceId: centerJobId,
+        type: NotificationType.REPAIR_READY_FOR_COLLECTION,
+      },
+      orderBy: { userId: 'asc' },
+      select: { userId: true },
+    });
+    const expectedCenterRecipients = await prisma.user.findMany({
+      where: {
+        section_id: testSectionId,
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    expect(centerRows.map(({ userId }) => userId)).toEqual(
+      expectedCenterRecipients.map(({ id }) => id),
+    );
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await expectReadyEvent(stream, centerJobId);
+    }
+    for (const stream of [
+      departmentStream,
+      departmentMemberStream,
+      otherDepartmentStream,
+      parcelStream,
+    ]) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    const unrepairableAssetId = await createRepairTestAsset(
+      departmentSectionId,
+      departmentUserId,
+      'Unrepairable exclusion test asset',
+    );
+    const unrepairableRequest = await createRepairRequest(
+      unrepairableAssetId,
+      departmentCookie,
+    );
+    const unrepairableJobId = requireString(unrepairableRequest, 'id');
+    await diagnose(unrepairableJobId, 'UNREPAIRABLE', {
+      unrepairableReason: 'Integration test: cannot repair',
+    });
+    await stepForward(unrepairableJobId);
+    await patchRepair(
+      `/repairs/${unrepairableJobId}/complete-unrepairable`,
+      repairParcelCookie,
+      { storageLocation: 'Repair notification test area' },
+      200,
+    );
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: unrepairableJobId,
+          type: {
+            in: [
+              NotificationType.REPAIR_APPROVAL_REQUIRED,
+              NotificationType.REPAIR_READY_FOR_COLLECTION,
+            ],
+          },
+        },
+      }),
+    ).toBe(0);
+    for (const stream of streams) {
       await expectNoEvent(stream.reader, 'notification.created', 250);
     }
   });
