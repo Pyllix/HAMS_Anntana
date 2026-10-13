@@ -24,6 +24,31 @@ interface NotificationDeliveryRow {
   createdAt: Date;
 }
 
+interface BorrowNotificationDetails {
+  id: string;
+  borrowNo: string;
+  assetName: string;
+  expectedReturnDate: Date | null;
+}
+
+interface BorrowExtensionNotificationDetails {
+  id: string;
+  borrowNo: string;
+  assetName: string;
+  roundNumber: number;
+  requestedReturnDate: Date;
+}
+
+type BorrowExtensionDecisionType =
+  | 'BORROW_EXTENSION_APPROVED'
+  | 'BORROW_EXTENSION_REJECTED';
+
+const NOTIFICATION_DATE_FORMATTER = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Bangkok',
+});
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -143,15 +168,7 @@ export class NotificationsService {
     borrowTransaction: { id: string; borrowNo: string },
     assetName: string,
   ): Promise<NotificationDeliveryRow[]> {
-    const recipients = await tx.user.findMany({
-      where: {
-        role: UserRole.ASSET_CENTER_STAFF,
-        deletedAt: null,
-        OR: [{ banned: false }, { banned: null }],
-      },
-      select: { id: true },
-    });
-    const recipientIds = [...new Set(recipients.map(({ id }) => id))];
+    const recipientIds = await this.findActiveAssetCenterRecipientIds(tx);
     if (recipientIds.length === 0) return [];
 
     return tx.notification.createManyAndReturn({
@@ -177,6 +194,160 @@ export class NotificationsService {
         createdAt: true,
       },
     });
+  }
+
+  async createBorrowApproved(
+    tx: Prisma.TransactionClient,
+    borrowTransaction: BorrowNotificationDetails,
+    borrowerId: string,
+  ): Promise<NotificationDeliveryRow[]> {
+    const borrower = await tx.user.findFirst({
+      where: {
+        id: borrowerId,
+        role: UserRole.DEPARTMENT_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    if (!borrower) return [];
+
+    const returnDeadline = borrowTransaction.expectedReturnDate
+      ? ` กำหนดคืน ${NOTIFICATION_DATE_FORMATTER.format(borrowTransaction.expectedReturnDate)}`
+      : '';
+    return tx.notification.createManyAndReturn({
+      data: [
+        {
+          userId: borrower.id,
+          type: NotificationType.BORROW_APPROVED,
+          title: 'คำขอยืมได้รับอนุมัติ',
+          message: `คำขอยืม ${borrowTransaction.borrowNo} สำหรับ ${borrowTransaction.assetName} ได้รับอนุมัติแล้ว${returnDeadline}`,
+          resourceType: NotificationResourceType.BORROW_TRANSACTION,
+          resourceId: borrowTransaction.id,
+          eventKey: `${NotificationType.BORROW_APPROVED}:${borrowTransaction.id}`,
+        },
+      ],
+      skipDuplicates: true,
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        title: true,
+        message: true,
+        resourceType: true,
+        resourceId: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async createBorrowExtensionApprovalRequired(
+    tx: Prisma.TransactionClient,
+    extension: BorrowExtensionNotificationDetails,
+  ): Promise<NotificationDeliveryRow[]> {
+    const recipientIds = await this.findActiveAssetCenterRecipientIds(tx);
+    if (recipientIds.length === 0) return [];
+
+    const requestedDate = NOTIFICATION_DATE_FORMATTER.format(
+      extension.requestedReturnDate,
+    );
+    return tx.notification.createManyAndReturn({
+      data: recipientIds.map((userId) => ({
+        userId,
+        type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+        title: 'มีคำขอต่ออายุรอพิจารณา',
+        message: `คำขอต่ออายุรอบที่ ${extension.roundNumber} ของรายการยืม ${extension.borrowNo} (${extension.assetName}) รอพิจารณา กำหนดคืนใหม่ ${requestedDate}`,
+        resourceType: NotificationResourceType.BORROW_EXTENSION,
+        resourceId: extension.id,
+        eventKey: `${NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED}:${extension.id}`,
+      })),
+      skipDuplicates: true,
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        title: true,
+        message: true,
+        resourceType: true,
+        resourceId: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async createBorrowExtensionDecision(
+    tx: Prisma.TransactionClient,
+    extension: BorrowExtensionNotificationDetails & {
+      requestedByUserId: string;
+      rejectReason?: string | null;
+    },
+    type: BorrowExtensionDecisionType,
+  ): Promise<NotificationDeliveryRow[]> {
+    const recipient = await tx.user.findFirst({
+      where: {
+        id: extension.requestedByUserId,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    if (!recipient) return [];
+
+    const requestedDate = NOTIFICATION_DATE_FORMATTER.format(
+      extension.requestedReturnDate,
+    );
+    const decisionCopy =
+      type === NotificationType.BORROW_EXTENSION_APPROVED
+        ? {
+            title: 'คำขอต่ออายุได้รับอนุมัติ',
+            message: `คำขอต่ออายุรอบที่ ${extension.roundNumber} ของรายการยืม ${extension.borrowNo} (${extension.assetName}) ได้รับอนุมัติ กำหนดคืนใหม่ ${requestedDate}`,
+          }
+        : {
+            title: 'คำขอต่ออายุถูกปฏิเสธ',
+            message: `คำขอต่ออายุรอบที่ ${extension.roundNumber} ของรายการยืม ${extension.borrowNo} (${extension.assetName}) ถูกปฏิเสธ กำหนดคืนที่ขอ ${requestedDate}${extension.rejectReason ? ` เหตุผล: ${extension.rejectReason}` : ''}`,
+          };
+
+    return tx.notification.createManyAndReturn({
+      data: [
+        {
+          userId: recipient.id,
+          type,
+          title: decisionCopy.title,
+          message: decisionCopy.message,
+          resourceType: NotificationResourceType.BORROW_EXTENSION,
+          resourceId: extension.id,
+          eventKey: `${type}:${extension.id}`,
+        },
+      ],
+      skipDuplicates: true,
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        title: true,
+        message: true,
+        resourceType: true,
+        resourceId: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  private async findActiveAssetCenterRecipientIds(
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const recipients = await tx.user.findMany({
+      where: {
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    return [...new Set(recipients.map(({ id }) => id))];
   }
 
   publishCommitted(rows: readonly NotificationDeliveryRow[]): void {

@@ -8,6 +8,7 @@ import {
   PrismaClient,
   NotificationResourceType,
   NotificationType,
+  RequestSource,
   UserRole,
 } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -329,8 +330,15 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let testSectionId: string;
   let departmentSectionId: string;
   let departmentUserId = '';
+  let extensionRequesterUserId = '';
+  let departmentEmail = '';
+  let extensionRequesterEmail = '';
   let firstCenterUserId: string;
+  let firstCenterEmail = '';
+  let firstCenterSecret = '';
   let secondCenterUserId: string;
+  let secondCenterEmail = '';
+  let secondCenterSecret = '';
   let bannedCenterUserId: string;
   let deletedCenterUserId: string;
   let parcelUserId: string;
@@ -338,12 +346,17 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let companyId: string;
   let assetId: string;
   let centerServiceAssetId: string;
+  let parcelApprovalAssetId: string;
+  let departmentBorrowId = '';
+  let centerServiceBorrowId = '';
   let departmentCookie = '';
+  let extensionRequesterCookie = '';
   let firstCenterCookie = '';
   let secondCenterCookie = '';
   let firstCenterSessionToken = '';
   let secondCenterSessionToken = '';
   const borrowIds: string[] = [];
+  const extensionIds: string[] = [];
   const userIds: string[] = [];
   const abortControllers: AbortController[] = [];
 
@@ -432,7 +445,11 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       email,
       password: 'TestPassword@1234!',
     });
-    expect(response.status).toBe(200);
+    if (response.status !== 200) {
+      throw new Error(
+        `Department sign-in failed (${response.status}): ${JSON.stringify(response.body)}`,
+      );
+    }
     return sessionCookieHeader(response);
   }
 
@@ -452,6 +469,18 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .send({ code: generateSync({ secret: totpSecret }) });
     expect(verified.status).toBe(200);
     return sessionCookieHeader(verified);
+  }
+
+  async function refreshTicket03Sessions(): Promise<void> {
+    departmentCookie = await signInDepartment(departmentEmail);
+    extensionRequesterCookie = await signInDepartment(extensionRequesterEmail);
+    firstCenterCookie = await signInCenter(firstCenterEmail, firstCenterSecret);
+    secondCenterCookie = await signInCenter(
+      secondCenterEmail,
+      secondCenterSecret,
+    );
+    firstCenterSessionToken = sessionTokenFromCookie(firstCenterCookie);
+    secondCenterSessionToken = sessionTokenFromCookie(secondCenterCookie);
   }
 
   async function getCsrfProof(
@@ -538,11 +567,17 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     departmentSectionId = departmentSection.id;
 
     const suffix = randomUUID();
-    const departmentEmail = `notification-dept-${suffix}@hams-test.local`;
-    const firstCenterEmail = `notification-center-a-${suffix}@hams-test.local`;
-    const secondCenterEmail = `notification-center-b-${suffix}@hams-test.local`;
+    departmentEmail = `notification-dept-${suffix}@hams-test.local`;
+    extensionRequesterEmail = `notify-ext-${suffix}@hams-test.local`;
+    firstCenterEmail = `notification-center-a-${suffix}@hams-test.local`;
+    secondCenterEmail = `notification-center-b-${suffix}@hams-test.local`;
     departmentUserId = await createUser(
       departmentEmail,
+      UserRole.DEPARTMENT_STAFF,
+      departmentSectionId,
+    );
+    extensionRequesterUserId = await createUser(
+      extensionRequesterEmail,
       UserRole.DEPARTMENT_STAFF,
       departmentSectionId,
     );
@@ -556,11 +591,11 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       UserRole.ASSET_CENTER_STAFF,
       testSectionId,
     );
-    const firstSecret = await enrollTwoFactor(
+    firstCenterSecret = await enrollTwoFactor(
       firstCenterUserId,
       firstCenterEmail,
     );
-    const secondSecret = await enrollTwoFactor(
+    secondCenterSecret = await enrollTwoFactor(
       secondCenterUserId,
       secondCenterEmail,
     );
@@ -616,8 +651,12 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     userIds.push(bannedCenterUserId, deletedCenterUserId, parcelUserId);
 
     departmentCookie = await signInDepartment(departmentEmail);
-    firstCenterCookie = await signInCenter(firstCenterEmail, firstSecret);
-    secondCenterCookie = await signInCenter(secondCenterEmail, secondSecret);
+    extensionRequesterCookie = await signInDepartment(extensionRequesterEmail);
+    firstCenterCookie = await signInCenter(firstCenterEmail, firstCenterSecret);
+    secondCenterCookie = await signInCenter(
+      secondCenterEmail,
+      secondCenterSecret,
+    );
     firstCenterSessionToken = sessionTokenFromCookie(firstCenterCookie);
     secondCenterSessionToken = sessionTokenFromCookie(secondCenterCookie);
 
@@ -700,6 +739,25 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         select: { id: true },
       })
     ).id;
+    parcelApprovalAssetId = (
+      await prisma.asset.create({
+        data: {
+          name: 'Parcel approval notification test asset',
+          model: 'Test model',
+          price: 1,
+          receivedDate: new Date('2026-01-01T00:00:00.000Z'),
+          type_id: assetTypeId,
+          section_id: testSectionId,
+          company_id: companyId,
+          asset_status_id: assetStatus.id,
+          availability_status_id: availableStatus.id,
+          owner_id: firstCenterUserId,
+          createdBy: firstCenterUserId,
+          updatedBy: firstCenterUserId,
+        },
+        select: { id: true },
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -708,13 +766,17 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     if (prisma) {
       if (borrowIds.length > 0) {
         await prisma.notification.deleteMany({
-          where: { resourceId: { in: borrowIds } },
+          where: { resourceId: { in: [...borrowIds, ...extensionIds] } },
         });
         await prisma.borrowTransaction.deleteMany({
           where: { id: { in: borrowIds } },
         });
       }
-      const fixtureAssetIds = [assetId, centerServiceAssetId].filter(Boolean);
+      const fixtureAssetIds = [
+        assetId,
+        centerServiceAssetId,
+        parcelApprovalAssetId,
+      ].filter(Boolean);
       if (fixtureAssetIds.length > 0) {
         await prisma.asset.deleteMany({
           where: { id: { in: fixtureAssetIds } },
@@ -778,6 +840,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .expect(201);
     const createdBody = parseBorrowingResponse(created);
     borrowIds.push(createdBody.id);
+    departmentBorrowId = createdBody.id;
     expect(createdBody.borrowStatus.code).toBe('PENDING_APPROVE');
 
     await request(server())
@@ -1002,6 +1065,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .expect(201);
     const centerServiceBody = parseBorrowingResponse(centerServiceBorrow);
     borrowIds.push(centerServiceBody.id);
+    centerServiceBorrowId = centerServiceBody.id;
     expect(centerServiceBody.borrowStatus.code).toBe('BORROWED');
     expect(
       await prisma.notification.count({
@@ -1433,5 +1497,737 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .set('X-CSRF-Token', otherUserCsrf.token)
       .send({ userId: firstCenterUserId })
       .expect(400);
+  });
+
+  it('notifies only the department borrower after a committed approval', async () => {
+    if (!departmentBorrowId)
+      throw new Error('Department borrow fixture missing');
+    await refreshTicket03Sessions();
+    const borrow = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: departmentBorrowId },
+      select: {
+        borrowNo: true,
+        expectedReturnDate: true,
+        request_source: true,
+        borrower: { select: { role: true } },
+        asset: { select: { name: true } },
+        borrowStatus: { select: { code: true } },
+      },
+    });
+    expect(borrow.request_source).toBe(RequestSource.SELF_SERVICE);
+    expect(borrow.borrower.role).toBe(UserRole.DEPARTMENT_STAFF);
+    expect(borrow.borrowStatus.code).toBe('PENDING_APPROVE');
+    if (!borrow.expectedReturnDate)
+      throw new Error('Department borrow return date fixture missing');
+
+    const origin = 'http://localhost:5173';
+    const centerCsrf = await getCsrfProof(firstCenterCookie);
+    const borrowerStream = await openStream(departmentCookie);
+    const firstCenterStream = await openStream(firstCenterCookie);
+    const secondCenterStream = await openStream(secondCenterCookie);
+    for (const stream of [
+      borrowerStream,
+      firstCenterStream,
+      secondCenterStream,
+    ]) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+
+    try {
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION public.raise_borrow_approved_for_test()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $notification_test$
+        BEGIN
+          IF NEW.type = 'BORROW_APPROVED' THEN
+            RAISE EXCEPTION 'borrow approval notification rollback test';
+          END IF;
+          RETURN NEW;
+        END;
+        $notification_test$
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER raise_borrow_approved_for_test
+        AFTER INSERT ON public.notifications
+        FOR EACH ROW
+        EXECUTE FUNCTION public.raise_borrow_approved_for_test()
+      `;
+
+      await request(server())
+        .patch(`/borrowings/${departmentBorrowId}/approve`)
+        .set('Origin', origin)
+        .set('Cookie', centerCsrf.cookie)
+        .set('X-CSRF-Token', centerCsrf.token)
+        .send({})
+        .expect(500);
+    } finally {
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS raise_borrow_approved_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.raise_borrow_approved_for_test()
+      `;
+    }
+
+    const afterRollback = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: departmentBorrowId },
+      select: { borrowStatus: { select: { code: true } } },
+    });
+    expect(afterRollback.borrowStatus.code).toBe('PENDING_APPROVE');
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: departmentBorrowId,
+          type: NotificationType.BORROW_APPROVED,
+        },
+      }),
+    ).toBe(0);
+    await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
+
+    const approved = await request(server())
+      .patch(`/borrowings/${departmentBorrowId}/approve`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({})
+      .expect(200);
+    expect(parseBorrowingResponse(approved).borrowStatus.code).toBe('APPROVED');
+    const approvalEvent = await borrowerStream.reader.next(5_000);
+    const approvalPayload = requireRecord(
+      approvalEvent.frame?.data,
+      'borrow approval SSE notification',
+    );
+    expect(approvalEvent.frame?.event).toBe('notification.created');
+    expect(approvalPayload).toMatchObject({
+      type: NotificationType.BORROW_APPROVED,
+      resourceType: NotificationResourceType.BORROW_TRANSACTION,
+      resourceId: departmentBorrowId,
+    });
+    expect(requireString(approvalPayload, 'message')).toContain(
+      borrow.borrowNo,
+    );
+    expect(requireString(approvalPayload, 'message')).toContain(
+      new Intl.DateTimeFormat('th-TH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Asia/Bangkok',
+      }).format(borrow.expectedReturnDate),
+    );
+
+    const approvedRows = await prisma.notification.findMany({
+      where: {
+        resourceId: departmentBorrowId,
+        type: NotificationType.BORROW_APPROVED,
+      },
+      select: { userId: true, eventKey: true },
+    });
+    expect(approvedRows).toEqual([
+      {
+        userId: departmentUserId,
+        eventKey: `${NotificationType.BORROW_APPROVED}:${departmentBorrowId}`,
+      },
+    ]);
+    const borrowerList = await request(server())
+      .get('/notifications')
+      .set('Cookie', departmentCookie)
+      .expect(200);
+    expect(parseNotificationListResponse(borrowerList).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: NotificationType.BORROW_APPROVED,
+          resourceType: NotificationResourceType.BORROW_TRANSACTION,
+          resourceId: departmentBorrowId,
+        }),
+      ]),
+    );
+    const borrowerUnreadCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', departmentCookie)
+      .expect(200);
+    expect(parseUnreadCountResponse(borrowerUnreadCount)).toEqual({ count: 1 });
+    await expectNoEvent(firstCenterStream.reader, 'notification.created', 250);
+    await expectNoEvent(secondCenterStream.reader, 'notification.created', 250);
+
+    await request(server())
+      .patch(`/borrowings/${departmentBorrowId}/approve`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({})
+      .expect(400);
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: departmentBorrowId,
+          type: NotificationType.BORROW_APPROVED,
+        },
+      }),
+    ).toBe(1);
+    await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
+
+    const pendingStatus = await prisma.borrowStatus.findUniqueOrThrow({
+      where: { code: 'PENDING_APPROVE' },
+      select: { id: true },
+    });
+    const parcelBorrow = await prisma.borrowTransaction.create({
+      data: {
+        borrowNo: `NT-${randomUUID()}`,
+        asset_id: parcelApprovalAssetId,
+        borrower_id: parcelUserId,
+        created_by_user_id: parcelUserId,
+        borrow_status_id: pendingStatus.id,
+        request_source: RequestSource.SELF_SERVICE,
+      },
+      select: { id: true },
+    });
+    borrowIds.push(parcelBorrow.id);
+    const parcelApproval = await request(server())
+      .patch(`/borrowings/${parcelBorrow.id}/approve`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({})
+      .expect(200);
+    expect(parseBorrowingResponse(parcelApproval).borrowStatus.code).toBe(
+      'APPROVED',
+    );
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: parcelBorrow.id,
+          type: NotificationType.BORROW_APPROVED,
+        },
+      }),
+    ).toBe(0);
+    expect(centerServiceBorrowId).toBeTruthy();
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: centerServiceBorrowId,
+          type: NotificationType.BORROW_APPROVED,
+        },
+      }),
+    ).toBe(0);
+    await expectNoEvent(firstCenterStream.reader, 'notification.created', 250);
+    await expectNoEvent(secondCenterStream.reader, 'notification.created', 250);
+  });
+
+  it('notifies asset center for online extensions and only the requester about decisions', async () => {
+    if (!centerServiceBorrowId) {
+      throw new Error('Center-service borrow fixture missing');
+    }
+    const origin = 'http://localhost:5173';
+    const centerCsrf = await getCsrfProof(firstCenterCookie);
+    const requesterCsrf = await getCsrfProof(extensionRequesterCookie);
+    const centerStreams = [
+      await openStream(firstCenterCookie),
+      await openStream(secondCenterCookie),
+    ];
+    const borrowerStream = await openStream(departmentCookie);
+    const requesterStream = await openStream(extensionRequesterCookie);
+    for (const stream of [...centerStreams, borrowerStream, requesterStream]) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+
+    const centerBorrow = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: centerServiceBorrowId },
+      select: {
+        borrowNo: true,
+        borrower_id: true,
+        expectedReturnDate: true,
+        borrowStatus: { select: { code: true } },
+      },
+    });
+    expect(centerBorrow.borrowStatus.code).toBe('BORROWED');
+    expect(centerBorrow.borrower_id).toBe(departmentUserId);
+    expect(centerBorrow.expectedReturnDate).toBeInstanceOf(Date);
+    expect(extensionRequesterUserId).not.toBe(centerBorrow.borrower_id);
+
+    const deskReturnDate = new Date(
+      centerBorrow.expectedReturnDate!.getTime() + 24 * 60 * 60 * 1000,
+    );
+    const deskResponse = await request(server())
+      .post(`/borrowings/${centerServiceBorrowId}/extensions`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({
+        requestedReturnDate: deskReturnDate.toISOString(),
+        reason: 'Desk extension should not notify',
+      })
+      .expect(201);
+    const deskBody = requireRecord(deskResponse.body, 'desk extension');
+    const deskExtensionId = requireString(deskBody, 'id');
+    extensionIds.push(deskExtensionId);
+    expect(deskBody).toMatchObject({
+      extensionType: 'DESK',
+      status: 'APPROVED',
+    });
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: deskExtensionId },
+      }),
+    ).toBe(0);
+    for (const stream of [...centerStreams, borrowerStream, requesterStream]) {
+      await expectNoEvent(stream.reader, 'notification.created', 150);
+    }
+
+    const firstRequestedReturnDate = new Date(
+      deskReturnDate.getTime() + 24 * 60 * 60 * 1000,
+    );
+    const eligibleCenterUsers = await prisma.user.findMany({
+      where: {
+        role: UserRole.ASSET_CENTER_STAFF,
+        deletedAt: null,
+        OR: [{ banned: false }, { banned: null }],
+      },
+      select: { id: true },
+    });
+    const eligibleCenterIds = eligibleCenterUsers.map(({ id }) => id);
+    const approvalRequiredCountBefore = await prisma.notification.count({
+      where: {
+        userId: { in: eligibleCenterIds },
+        type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+      },
+    });
+    try {
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION public.raise_borrow_extension_pending_for_test()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $notification_test$
+        BEGIN
+          IF NEW.type = 'BORROW_EXTENSION_APPROVAL_REQUIRED' THEN
+            RAISE EXCEPTION 'borrow extension notification rollback test';
+          END IF;
+          RETURN NEW;
+        END;
+        $notification_test$
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER raise_borrow_extension_pending_for_test
+        AFTER INSERT ON public.notifications
+        FOR EACH ROW
+        EXECUTE FUNCTION public.raise_borrow_extension_pending_for_test()
+      `;
+
+      await request(server())
+        .post(`/borrowings/${centerServiceBorrowId}/extensions`)
+        .set('Origin', origin)
+        .set('Cookie', requesterCsrf.cookie)
+        .set('X-CSRF-Token', requesterCsrf.token)
+        .send({
+          requestedReturnDate: firstRequestedReturnDate.toISOString(),
+          reason: 'ขอต่ออายุออนไลน์รอบแรก',
+        })
+        .expect(500);
+    } finally {
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS raise_borrow_extension_pending_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.raise_borrow_extension_pending_for_test()
+      `;
+    }
+    expect(
+      await prisma.borrowExtension.count({
+        where: {
+          borrowTransactionId: centerServiceBorrowId,
+          status: 'PENDING',
+          extensionType: 'ONLINE',
+        },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.notification.count({
+        where: {
+          userId: { in: eligibleCenterIds },
+          type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+        },
+      }),
+    ).toBe(approvalRequiredCountBefore);
+    for (const stream of [...centerStreams, borrowerStream, requesterStream]) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    const onlineResponse = await request(server())
+      .post(`/borrowings/${centerServiceBorrowId}/extensions`)
+      .set('Origin', origin)
+      .set('Cookie', requesterCsrf.cookie)
+      .set('X-CSRF-Token', requesterCsrf.token)
+      .send({
+        requestedReturnDate: firstRequestedReturnDate.toISOString(),
+        reason: 'ขอต่ออายุออนไลน์รอบแรก',
+      })
+      .expect(201);
+    const onlineBody = requireRecord(onlineResponse.body, 'online extension');
+    const onlineExtensionId = requireString(onlineBody, 'id');
+    extensionIds.push(onlineExtensionId);
+    expect(onlineBody).toMatchObject({
+      extensionType: 'ONLINE',
+      status: 'PENDING',
+      requestedByUserId: extensionRequesterUserId,
+    });
+    const expectedDateText = new Intl.DateTimeFormat('th-TH', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Bangkok',
+    }).format(firstRequestedReturnDate);
+    for (const stream of centerStreams) {
+      const event = await stream.reader.next(5_000);
+      const payload = requireRecord(event.frame?.data, 'extension request SSE');
+      expect(event.frame?.event).toBe('notification.created');
+      expect(payload).toMatchObject({
+        type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+        resourceType: NotificationResourceType.BORROW_EXTENSION,
+        resourceId: onlineExtensionId,
+      });
+      expect(requireString(payload, 'message')).toContain(
+        centerBorrow.borrowNo,
+      );
+      expect(requireString(payload, 'message')).toContain(expectedDateText);
+    }
+    await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
+    await expectNoEvent(requesterStream.reader, 'notification.created', 250);
+
+    const pendingRows = await prisma.notification.findMany({
+      where: {
+        resourceId: onlineExtensionId,
+        type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+      },
+      select: { userId: true, eventKey: true },
+    });
+    expect(pendingRows.map(({ userId }) => userId).sort()).toEqual(
+      eligibleCenterUsers.map(({ id }) => id).sort(),
+    );
+    expect(
+      pendingRows.every(
+        ({ eventKey }) =>
+          eventKey ===
+          `${NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED}:${onlineExtensionId}`,
+      ),
+    ).toBe(true);
+    expect(pendingRows.map(({ userId }) => userId)).not.toContain(parcelUserId);
+    const centerList = await request(server())
+      .get('/notifications')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    expect(parseNotificationListResponse(centerList).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+          resourceType: NotificationResourceType.BORROW_EXTENSION,
+          resourceId: onlineExtensionId,
+        }),
+      ]),
+    );
+    const afterPending = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: centerServiceBorrowId },
+      select: { expectedReturnDate: true },
+    });
+    expect(afterPending.expectedReturnDate).toEqual(deskReturnDate);
+
+    try {
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION public.raise_borrow_extension_approved_for_test()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $notification_test$
+        BEGIN
+          IF NEW.type = 'BORROW_EXTENSION_APPROVED' THEN
+            RAISE EXCEPTION 'borrow extension decision rollback test';
+          END IF;
+          RETURN NEW;
+        END;
+        $notification_test$
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER raise_borrow_extension_approved_for_test
+        AFTER INSERT ON public.notifications
+        FOR EACH ROW
+        EXECUTE FUNCTION public.raise_borrow_extension_approved_for_test()
+      `;
+
+      await request(server())
+        .patch(`/borrowings/extensions/${onlineExtensionId}/review`)
+        .set('Origin', origin)
+        .set('Cookie', centerCsrf.cookie)
+        .set('X-CSRF-Token', centerCsrf.token)
+        .send({ status: 'APPROVED' })
+        .expect(500);
+    } finally {
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS raise_borrow_extension_approved_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.raise_borrow_extension_approved_for_test()
+      `;
+    }
+    const extensionAfterRollback =
+      await prisma.borrowExtension.findUniqueOrThrow({
+        where: { id: onlineExtensionId },
+        select: { status: true },
+      });
+    expect(extensionAfterRollback.status).toBe('PENDING');
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: onlineExtensionId,
+          type: NotificationType.BORROW_EXTENSION_APPROVED,
+        },
+      }),
+    ).toBe(0);
+    const borrowAfterDecisionRollback =
+      await prisma.borrowTransaction.findUniqueOrThrow({
+        where: { id: centerServiceBorrowId },
+        select: { expectedReturnDate: true },
+      });
+    expect(borrowAfterDecisionRollback.expectedReturnDate).toEqual(
+      deskReturnDate,
+    );
+    await expectNoEvent(requesterStream.reader, 'notification.created', 250);
+
+    await request(server())
+      .patch(`/borrowings/extensions/${onlineExtensionId}/review`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({ status: 'APPROVED' })
+      .expect(200);
+    const approvalEvent = await requesterStream.reader.next(5_000);
+    const approvalPayload = requireRecord(
+      approvalEvent.frame?.data,
+      'extension approval SSE notification',
+    );
+    expect(approvalEvent.frame?.event).toBe('notification.created');
+    expect(approvalPayload).toMatchObject({
+      type: NotificationType.BORROW_EXTENSION_APPROVED,
+      resourceType: NotificationResourceType.BORROW_EXTENSION,
+      resourceId: onlineExtensionId,
+    });
+    expect(requireString(approvalPayload, 'message')).toContain(
+      expectedDateText,
+    );
+    const approvedRows = await prisma.notification.findMany({
+      where: {
+        resourceId: onlineExtensionId,
+        type: NotificationType.BORROW_EXTENSION_APPROVED,
+      },
+      select: { userId: true },
+    });
+    expect(approvedRows).toEqual([{ userId: extensionRequesterUserId }]);
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: onlineExtensionId,
+          userId: departmentUserId,
+          type: {
+            in: [
+              NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+              NotificationType.BORROW_EXTENSION_APPROVED,
+            ],
+          },
+        },
+      }),
+    ).toBe(0);
+    const afterApproval = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: centerServiceBorrowId },
+      select: { expectedReturnDate: true },
+    });
+    expect(afterApproval.expectedReturnDate).toEqual(firstRequestedReturnDate);
+    await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
+    for (const stream of centerStreams) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    await request(server())
+      .patch(`/borrowings/extensions/${onlineExtensionId}/review`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({ status: 'APPROVED' })
+      .expect(400);
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: onlineExtensionId,
+          type: NotificationType.BORROW_EXTENSION_APPROVED,
+        },
+      }),
+    ).toBe(1);
+    await expectNoEvent(requesterStream.reader, 'notification.created', 250);
+
+    const secondRequestedReturnDate = new Date(
+      firstRequestedReturnDate.getTime() + 24 * 60 * 60 * 1000,
+    );
+    const secondOnlineResponse = await request(server())
+      .post(`/borrowings/${centerServiceBorrowId}/extensions`)
+      .set('Origin', origin)
+      .set('Cookie', requesterCsrf.cookie)
+      .set('X-CSRF-Token', requesterCsrf.token)
+      .send({
+        requestedReturnDate: secondRequestedReturnDate.toISOString(),
+        reason: 'ขอต่ออายุออนไลน์รอบสอง',
+      })
+      .expect(201);
+    const secondOnlineBody = requireRecord(
+      secondOnlineResponse.body,
+      'second online extension',
+    );
+    const rejectedExtensionId = requireString(secondOnlineBody, 'id');
+    extensionIds.push(rejectedExtensionId);
+    expect(secondOnlineBody).toMatchObject({
+      extensionType: 'ONLINE',
+      status: 'PENDING',
+    });
+    for (const stream of centerStreams) {
+      const event = await stream.reader.next(5_000);
+      expect(event.frame).toMatchObject({
+        event: 'notification.created',
+        data: {
+          type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+          resourceType: NotificationResourceType.BORROW_EXTENSION,
+          resourceId: rejectedExtensionId,
+        },
+      });
+    }
+
+    try {
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION public.raise_borrow_extension_rejected_for_test()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $notification_test$
+        BEGIN
+          IF NEW.type = 'BORROW_EXTENSION_REJECTED' THEN
+            RAISE EXCEPTION 'borrow extension rejection rollback test';
+          END IF;
+          RETURN NEW;
+        END;
+        $notification_test$
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER raise_borrow_extension_rejected_for_test
+        AFTER INSERT ON public.notifications
+        FOR EACH ROW
+        EXECUTE FUNCTION public.raise_borrow_extension_rejected_for_test()
+      `;
+
+      await request(server())
+        .patch(`/borrowings/extensions/${rejectedExtensionId}/review`)
+        .set('Origin', origin)
+        .set('Cookie', centerCsrf.cookie)
+        .set('X-CSRF-Token', centerCsrf.token)
+        .send({ status: 'REJECTED', rejectReason: 'ไม่สามารถต่อกำหนดคืนได้' })
+        .expect(500);
+    } finally {
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS raise_borrow_extension_rejected_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.raise_borrow_extension_rejected_for_test()
+      `;
+    }
+    const extensionAfterRejectionRollback =
+      await prisma.borrowExtension.findUniqueOrThrow({
+        where: { id: rejectedExtensionId },
+        select: { status: true, rejectReason: true },
+      });
+    expect(extensionAfterRejectionRollback).toEqual({
+      status: 'PENDING',
+      rejectReason: null,
+    });
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: rejectedExtensionId,
+          type: NotificationType.BORROW_EXTENSION_REJECTED,
+        },
+      }),
+    ).toBe(0);
+    await expectNoEvent(requesterStream.reader, 'notification.created', 250);
+
+    requesterStream.controller.abort();
+    await request(server())
+      .patch(`/borrowings/extensions/${rejectedExtensionId}/review`)
+      .set('Origin', origin)
+      .set('Cookie', centerCsrf.cookie)
+      .set('X-CSRF-Token', centerCsrf.token)
+      .send({ status: 'REJECTED', rejectReason: 'ไม่สามารถต่อกำหนดคืนได้' })
+      .expect(200);
+    const rejectedRows = await prisma.notification.findMany({
+      where: {
+        resourceId: rejectedExtensionId,
+        type: NotificationType.BORROW_EXTENSION_REJECTED,
+      },
+      select: { userId: true },
+    });
+    expect(rejectedRows).toEqual([{ userId: extensionRequesterUserId }]);
+    const requesterList = await request(server())
+      .get('/notifications')
+      .set('Cookie', extensionRequesterCookie)
+      .expect(200);
+    expect(parseNotificationListResponse(requesterList).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: NotificationType.BORROW_EXTENSION_APPROVED,
+          resourceType: NotificationResourceType.BORROW_EXTENSION,
+          resourceId: onlineExtensionId,
+        }),
+        expect.objectContaining({
+          type: NotificationType.BORROW_EXTENSION_REJECTED,
+          resourceType: NotificationResourceType.BORROW_EXTENSION,
+          resourceId: rejectedExtensionId,
+        }),
+      ]),
+    );
+    const requesterUnreadCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', extensionRequesterCookie)
+      .expect(200);
+    expect(parseUnreadCountResponse(requesterUnreadCount)).toEqual({
+      count: 2,
+    });
+    const rejectedRow = await prisma.notification.findFirstOrThrow({
+      where: {
+        resourceId: rejectedExtensionId,
+        userId: extensionRequesterUserId,
+        type: NotificationType.BORROW_EXTENSION_REJECTED,
+      },
+      select: { message: true },
+    });
+    expect(rejectedRow.message).toContain('ไม่สามารถต่อกำหนดคืนได้');
+    expect(
+      await prisma.notification.count({
+        where: {
+          resourceId: rejectedExtensionId,
+          userId: departmentUserId,
+          type: {
+            in: [
+              NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
+              NotificationType.BORROW_EXTENSION_REJECTED,
+            ],
+          },
+        },
+      }),
+    ).toBe(0);
+    const afterRejection = await prisma.borrowTransaction.findUniqueOrThrow({
+      where: { id: centerServiceBorrowId },
+      select: { expectedReturnDate: true },
+    });
+    expect(afterRejection.expectedReturnDate).toEqual(firstRequestedReturnDate);
+    await expectNoEvent(borrowerStream.reader, 'notification.created', 250);
+    for (const stream of centerStreams) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
   });
 });

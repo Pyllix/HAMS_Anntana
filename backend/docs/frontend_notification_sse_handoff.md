@@ -64,7 +64,7 @@ resourceType มี BORROW_TRANSACTION, BORROW_EXTENSION และ REPAIR_JOB �
 | heartbeat                   | พร้อมใช้: รับแล้วไม่เพิ่มรายการ ไม่เพิ่ม badge และไม่แสดง toast                                                                |
 | notifications.changed       | พร้อมใช้: payload `{ "reason": "read_state" }`; โหลดรายการและจำนวนใหม่เมื่อสถานะอ่านเปลี่ยนจากอีก connection ของผู้ใช้เดียวกัน |
 
-ขณะนี้ชนิดเหตุการณ์ที่สร้างจริงคือ `BORROW_APPROVAL_REQUIRED` เมื่อคำขอยืมแบบรออนุมัติสำเร็จ ผู้รับคือเจ้าหน้าที่ Asset Center ที่บัญชีใช้งานได้ เหตุการณ์อนุมัติยืม/ต่ออายุ งานซ่อม และการเตือนวันคืนจะตามมาใน Ticket 03–05
+ชนิดเหตุการณ์ที่สร้างจริงในขณะนี้คือ `BORROW_APPROVAL_REQUIRED`, `BORROW_APPROVED`, `BORROW_EXTENSION_APPROVAL_REQUIRED`, `BORROW_EXTENSION_APPROVED` และ `BORROW_EXTENSION_REJECTED` โดยคำขอยืมแจ้งศูนย์ที่บัญชีใช้งานได้ ผลอนุมัติยืมแจ้งผู้ยืม Department คนเดียว คำขอต่ออายุออนไลน์แจ้งศูนย์ที่บัญชีใช้งานได้ และผลต่ออายุแจ้งผู้ส่งคำขอคนเดียว ส่วนงานซ่อมและการเตือนวันคืนจะตามมาใน Ticket 04–05
 
 ชื่อ SSE event ไม่ใช่ payload.type เช่น BORROW_APPROVED อยู่ใน type ของข้อมูล แต่ส่งผ่านชื่อ notification.created เหมือน notification ใหม่ชนิดอื่น ต้องใช้ addEventListener สำหรับชื่อในตาราง ไม่ใช้ onmessage เพียงตัวเดียว ดู [MDN: named SSE events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
 
