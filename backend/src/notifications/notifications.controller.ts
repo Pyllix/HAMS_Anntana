@@ -1,8 +1,11 @@
 import {
   Controller,
+  Body,
   Get,
   Header,
   MessageEvent,
+  Patch,
+  Param,
   Query,
   Req,
   Res,
@@ -12,7 +15,9 @@ import {
 } from '@nestjs/common';
 import {
   ApiCookieAuth,
+  ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -23,6 +28,10 @@ import { Observable } from 'rxjs';
 import { readSessionToken } from '../auth/auth-cookies';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { NotificationResponseDto } from './dto/notification-response.dto';
+import {
+  EmptyNotificationRequestDto,
+  NotificationReadAllResponseDto,
+} from './dto/notification-read.dto';
 import { NotificationsService } from './notifications.service';
 import { NotificationStreamService } from './notification-stream.service';
 import type { PaginatedResult } from '../common/utils/paginate.util';
@@ -64,6 +73,39 @@ export class NotificationsController {
     @Session() session: AuthenticatedNotificationSession,
   ): Promise<{ count: number }> {
     return this.notifications.countUnreadForUser(session.user.id);
+  }
+
+  @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark one notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  @ApiBody({ required: false, type: EmptyNotificationRequestDto })
+  @ApiResponse({
+    status: 200,
+    description: 'The notification with its current read state',
+    type: NotificationResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Notification not found' })
+  markRead(
+    @Param('id') id: string,
+    @Body() _body: EmptyNotificationRequestDto,
+    @Session() session: AuthenticatedNotificationSession,
+  ): Promise<NotificationResponseDto> {
+    return this.notifications.markReadForUser(session.user.id, id);
+  }
+
+  @Patch('read-all')
+  @ApiOperation({ summary: 'Mark all existing notifications as read' })
+  @ApiBody({ required: false, type: EmptyNotificationRequestDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Number of changed notifications and their shared read time',
+    type: NotificationReadAllResponseDto,
+  })
+  markAllRead(
+    @Body() _body: EmptyNotificationRequestDto,
+    @Session() session: AuthenticatedNotificationSession,
+  ): Promise<NotificationReadAllResponseDto> {
+    return this.notifications.markAllReadForUser(session.user.id);
   }
 
   @Sse('stream')

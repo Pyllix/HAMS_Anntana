@@ -83,6 +83,19 @@ export class NotificationStreamService implements OnModuleDestroy {
     }
   }
 
+  publishChanged(userId: string): void {
+    const connections = this.connectionsByUser.get(userId);
+    if (!connections) return;
+
+    const event: MessageEvent = {
+      type: 'notifications.changed',
+      data: { reason: 'read_state' },
+    };
+    for (const connection of connections) {
+      this.enqueue(connection, event);
+    }
+  }
+
   onModuleDestroy(): void {
     for (const connections of this.connectionsByUser.values()) {
       for (const connection of [...connections]) {

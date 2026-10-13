@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   NotificationResourceType,
   NotificationType,
@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma.service';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { NotificationResponseDto } from './dto/notification-response.dto';
+import { NotificationReadAllResponseDto } from './dto/notification-read.dto';
 import { NotificationStreamService } from './notification-stream.service';
 
 interface NotificationDeliveryRow {
@@ -74,6 +75,72 @@ export class NotificationsService {
     return { count };
   }
 
+  async markReadForUser(
+    userId: string,
+    notificationId: string,
+  ): Promise<NotificationResponseDto> {
+    const readAt = new Date();
+    const [updated] = await this.prisma.notification.updateManyAndReturn({
+      where: { id: notificationId, userId, readAt: null },
+      data: { readAt },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        resourceType: true,
+        resourceId: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
+
+    if (updated) {
+      this.publishReadStateChanged(userId);
+      return this.toResponse(updated);
+    }
+
+    const existing = await this.prisma.notification.findFirst({
+      where: { id: notificationId, userId },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        resourceType: true,
+        resourceId: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
+    if (!existing) throw new NotFoundException('Notification not found');
+    return this.toResponse(existing);
+  }
+
+  async markAllReadForUser(
+    userId: string,
+  ): Promise<NotificationReadAllResponseDto> {
+    // Keep the cutoff and update in one statement so concurrent arrivals stay outside its snapshot.
+    const changed = await this.prisma.$queryRaw<{ readAt: Date }[]>`
+      WITH cutoff AS (
+        SELECT transaction_timestamp()::timestamp(3) AS value
+      )
+      UPDATE public.notifications AS target
+      SET read_at = cutoff.value
+      FROM cutoff
+      WHERE target.user_id = ${userId}
+        AND target.read_at IS NULL
+        AND target.created_at <= cutoff.value
+      RETURNING target.read_at AS "readAt"
+    `;
+
+    if (changed.length > 0) this.publishReadStateChanged(userId);
+    return {
+      updatedCount: changed.length,
+      readAt: changed[0]?.readAt ?? null,
+    };
+  }
+
   async createBorrowApprovalRequired(
     tx: Prisma.TransactionClient,
     borrowTransaction: { id: string; borrowNo: string },
@@ -124,6 +191,16 @@ export class NotificationsService {
           `Could not publish committed notification ${row.id} (${error instanceof Error ? error.name : 'unknown error'})`,
         );
       }
+    }
+  }
+
+  private publishReadStateChanged(userId: string): void {
+    try {
+      this.stream.publishChanged(userId);
+    } catch (error) {
+      this.logger.warn(
+        `Could not publish read-state change for ${userId} (${error instanceof Error ? error.name : 'unknown error'})`,
+      );
     }
   }
 

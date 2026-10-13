@@ -21,17 +21,17 @@
 
 ผู้รับต้องเป็นบัญชีที่ยังใช้งานได้ ใช้กฎบัญชีเดิมของระบบในการตรวจบัญชีที่ลบ/ถูกระงับ กลุ่มผู้รับถูกเลือกตอนสร้างเหตุการณ์ ไม่จำกัดเฉพาะคนที่ออนไลน์
 
-| Type | เกิดเมื่อ | ผู้รับ |
-| --- | --- | --- |
-| BORROW_APPROVAL_REQUIRED | สร้างคำขอยืมที่เข้า PENDING_APPROVE สำเร็จ | ASSET_CENTER_STAFF ทุกคน |
-| BORROW_APPROVED | คำขอยืมเปลี่ยนจาก PENDING_APPROVE เป็น APPROVED สำเร็จ | ผู้ขอยืมของรายการนั้น (borrower_id) ตามขอบเขตแจ้งผลของ department ที่ตกลง |
-| REPAIR_APPROVAL_REQUIRED | งานถึงขั้นรอพัสดุอนุมัติเบิกอะไหล่หรือส่งซ่อมภายนอก | PARCEL_STAFF ทุกคน |
-| REPAIR_READY_FOR_COLLECTION | ช่างทำขั้นแล้วเสร็จจนงานเข้า WAITING_DELIVERY สำเร็จ | สมาชิกหน่วยงานของ RepairJob.sectionId ทุกคน |
-| BORROW_EXTENSION_APPROVAL_REQUIRED | สร้างคำขอต่ออายุ ONLINE สถานะ PENDING สำเร็จ | ASSET_CENTER_STAFF ทุกคน |
-| BORROW_EXTENSION_APPROVED | คำขอต่ออายุเปลี่ยน PENDING → APPROVED สำเร็จ | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว |
-| BORROW_EXTENSION_REJECTED | คำขอต่ออายุเปลี่ยน PENDING → REJECTED สำเร็จ | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว |
-| BORROW_DUE_SOON | รายการ BORROWED ที่มีวันคืนเข้าในช่วง 24 ชั่วโมงก่อนกำหนด | ผู้ยืม (borrower_id) คนเดียว |
-| BORROW_OVERDUE | รายการ BORROWED ที่มีวันคืนเลยกำหนดที่บันทึก | ผู้ยืม + ASSET_CENTER_STAFF ทุกคน |
+| Type                               | เกิดเมื่อ                                                 | ผู้รับ                                                                    |
+| ---------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| BORROW_APPROVAL_REQUIRED           | สร้างคำขอยืมที่เข้า PENDING_APPROVE สำเร็จ                | ASSET_CENTER_STAFF ทุกคน                                                  |
+| BORROW_APPROVED                    | คำขอยืมเปลี่ยนจาก PENDING_APPROVE เป็น APPROVED สำเร็จ    | ผู้ขอยืมของรายการนั้น (borrower_id) ตามขอบเขตแจ้งผลของ department ที่ตกลง |
+| REPAIR_APPROVAL_REQUIRED           | งานถึงขั้นรอพัสดุอนุมัติเบิกอะไหล่หรือส่งซ่อมภายนอก       | PARCEL_STAFF ทุกคน                                                        |
+| REPAIR_READY_FOR_COLLECTION        | ช่างทำขั้นแล้วเสร็จจนงานเข้า WAITING_DELIVERY สำเร็จ      | สมาชิกหน่วยงานของ RepairJob.sectionId ทุกคน                               |
+| BORROW_EXTENSION_APPROVAL_REQUIRED | สร้างคำขอต่ออายุ ONLINE สถานะ PENDING สำเร็จ              | ASSET_CENTER_STAFF ทุกคน                                                  |
+| BORROW_EXTENSION_APPROVED          | คำขอต่ออายุเปลี่ยน PENDING → APPROVED สำเร็จ              | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว                             |
+| BORROW_EXTENSION_REJECTED          | คำขอต่ออายุเปลี่ยน PENDING → REJECTED สำเร็จ              | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว                             |
+| BORROW_DUE_SOON                    | รายการ BORROWED ที่มีวันคืนเข้าในช่วง 24 ชั่วโมงก่อนกำหนด | ผู้ยืม (borrower_id) คนเดียว                                              |
+| BORROW_OVERDUE                     | รายการ BORROWED ที่มีวันคืนเลยกำหนดที่บันทึก              | ผู้ยืม + ASSET_CENTER_STAFF ทุกคน                                         |
 
 - พัสดุไม่มีแจ้งผลอนุมัติยืมตามการแก้ไขขอบเขตของผู้ใช้ ผลอนุมัติยืมในแผนนี้ใช้สำหรับผู้ขอที่เป็น department
 - ใกล้คืนและเกินกำหนดส่งตามตัวผู้ยืมได้ รวมถึงผู้ยืมที่เป็นพัสดุ ไม่กระจายให้ทั้งแผนกผู้ยืม
@@ -67,16 +67,16 @@ Nest รองรับการตั้งงานตามเวลาผ่
 
 แต่ละแถวคือแจ้งเตือนของผู้รับหนึ่งคน ใช้ตารางเดียวสำหรับข้อความย้อนหลังและสถานะอ่าน
 
-| ฟิลด์ที่เสนอ | หน้าที่ |
-| --- | --- |
-| id | UUID ของแจ้งเตือน |
-| userId | ผู้รับ อ้างถึง User |
-| type | หนึ่งในเหตุการณ์จากตารางข้อ 2 |
-| title / message | ข้อความที่สร้างโดย BE |
-| resourceType / resourceId | อ้างถึง BorrowTransaction, BorrowExtension หรือ RepairJob |
-| eventKey | รหัสเหตุการณ์สำหรับป้องกันสร้างซ้ำ |
-| readAt | null เมื่อยังไม่อ่าน; timestamp เมื่อผู้รับทำเครื่องหมายอ่าน |
-| createdAt | เวลาสร้างแจ้งเตือน |
+| ฟิลด์ที่เสนอ              | หน้าที่                                                      |
+| ------------------------- | ------------------------------------------------------------ |
+| id                        | UUID ของแจ้งเตือน                                            |
+| userId                    | ผู้รับ อ้างถึง User                                          |
+| type                      | หนึ่งในเหตุการณ์จากตารางข้อ 2                                |
+| title / message           | ข้อความที่สร้างโดย BE                                        |
+| resourceType / resourceId | อ้างถึง BorrowTransaction, BorrowExtension หรือ RepairJob    |
+| eventKey                  | รหัสเหตุการณ์สำหรับป้องกันสร้างซ้ำ                           |
+| readAt                    | null เมื่อยังไม่อ่าน; timestamp เมื่อผู้รับทำเครื่องหมายอ่าน |
+| createdAt                 | เวลาสร้างแจ้งเตือน                                           |
 
 - unique: (eventKey, userId)
 - index: (userId, readAt) และ (userId, createdAt, id)
@@ -94,15 +94,15 @@ Nest รองรับการตั้งงานตามเวลาผ่
 - BorrowReminderService ตรวจใกล้คืน/เกินกำหนดตามข้อ 3
 - AssetBorrowModule และ RepairsModule เรียกผ่าน NotificationsService; ไม่ย้ายกฎธุรกิจยืม/ซ่อมมาไว้ใน controller notification
 
-| จุดเชื่อมเดิม | สิ่งที่จะเพิ่ม |
-| --- | --- |
-| AssetBorrowService.createBorrow | แจ้งศูนย์เฉพาะรายการที่เกิด PENDING_APPROVE |
-| AssetBorrowService.approveBorrow | แจ้งผลตามผู้รับ BORROW_APPROVED |
-| AssetBorrowService.createExtension | แจ้งศูนย์เฉพาะ ONLINE / PENDING |
-| AssetBorrowService.reviewExtension | แจ้งผู้ส่งคำขอเมื่ออนุมัติหรือปฏิเสธ |
-| RepairsService.diagnoseAndPlan | หลังสร้างขั้นซ่อม ตรวจขั้นถัดไปที่รอพัสดุอนุมัติ WITH_PARTS / OUTSOURCE |
-| RepairsService.updateStepProgress | เมื่อเปลี่ยนเข้าสู่ WAITING_DELIVERY แจ้งหน่วยงานของงานซ่อม |
-| งานตรวจตามเวลา | แจ้งใกล้คืน/เกินกำหนดตามสถานะและวันคืนล่าสุด |
+| จุดเชื่อมเดิม                      | สิ่งที่จะเพิ่ม                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| AssetBorrowService.createBorrow    | แจ้งศูนย์เฉพาะรายการที่เกิด PENDING_APPROVE                             |
+| AssetBorrowService.approveBorrow   | แจ้งผลตามผู้รับ BORROW_APPROVED                                         |
+| AssetBorrowService.createExtension | แจ้งศูนย์เฉพาะ ONLINE / PENDING                                         |
+| AssetBorrowService.reviewExtension | แจ้งผู้ส่งคำขอเมื่ออนุมัติหรือปฏิเสธ                                    |
+| RepairsService.diagnoseAndPlan     | หลังสร้างขั้นซ่อม ตรวจขั้นถัดไปที่รอพัสดุอนุมัติ WITH_PARTS / OUTSOURCE |
+| RepairsService.updateStepProgress  | เมื่อเปลี่ยนเข้าสู่ WAITING_DELIVERY แจ้งหน่วยงานของงานซ่อม             |
+| งานตรวจตามเวลา                     | แจ้งใกล้คืน/เกินกำหนดตามสถานะและวันคืนล่าสุด                            |
 
 ใช้ขั้นที่รอดำเนินการและสิทธิ์ของขั้นสำหรับแจ้งรอพัสดุอนุมัติ ไม่ตรวจเฉพาะ PARCEL_PROCESSING เพราะ WITH_PARTS ที่มีอะไหล่นอกคลังอาจเป็น WAITING_PARTS แต่ยังรอพัสดุทำขั้นอนุมัติ
 
@@ -120,28 +120,30 @@ Nest รองรับการตั้งงานตามเวลาผ่
 
 ## 6. API และสัญญา SSE
 
-| Endpoint ที่เสนอ | ผลลัพธ์ |
-| --- | --- |
-| GET /notifications?page=1&limit=20 | รายการของผู้ใช้ปัจจุบันและ meta แบ่งหน้า; limit สูงสุด 100 |
-| GET /notifications/unread-count | จำนวนที่ยังไม่อ่านของผู้ใช้ปัจจุบัน |
-| PATCH /notifications/:id/read | ตั้ง readAt เฉพาะแถวของผู้ใช้ปัจจุบัน; อ่านซ้ำไม่เปลี่ยนเวลาเดิม |
-| PATCH /notifications/read-all | อ่านแถวของผู้ใช้ปัจจุบันที่มีอยู่ถึงเวลาเริ่ม request; ไม่อ่านรายการใหม่ที่เพิ่งเข้ามาระหว่างทำงาน |
-| GET /notifications/stream | SSE ของผู้ใช้ปัจจุบัน |
+| Endpoint ที่เสนอ                   | ผลลัพธ์                                                                                                                                                                                               |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET /notifications?page=1&limit=20 | รายการของผู้ใช้ปัจจุบันและ meta แบ่งหน้า; limit สูงสุด 100                                                                                                                                            |
+| GET /notifications/unread-count    | จำนวนที่ยังไม่อ่านของผู้ใช้ปัจจุบัน                                                                                                                                                                   |
+| PATCH /notifications/:id/read      | รับ body ว่าง; ตั้ง readAt เฉพาะแถวของผู้ใช้ปัจจุบันและคืน notification; อ่านซ้ำคืน readAt เดิม                                                                                                       |
+| PATCH /notifications/read-all      | รับ body ว่าง; คืน `{ updatedCount, readAt }`; อ่านเฉพาะแถวที่ยังไม่อ่านและ `createdAt` ไม่เกิน cutoff ตอนเริ่มทำงาน รายการใหม่หลัง cutoff ยังคงไม่อ่าน; เมื่อไม่มีแถวที่เปลี่ยน `readAt` เป็น `null` |
+| GET /notifications/stream          | SSE ของผู้ใช้ปัจจุบัน                                                                                                                                                                                 |
 
 - อ่าน userId จาก session ไม่รับผู้รับหรือ userId ของผู้อื่นจาก request
 - ใช้ cookie authentication และ guards เดิม รวมถึง CSRF สำหรับ PATCH
 - เข้าถึงแถวของผู้อื่นตอบ 404 ไม่เปิดเผยว่ามีแถวนั้นอยู่
 - API อ่านและ SSE ไม่เปลี่ยนสถานะยืมหรืองานซ่อม
+- ปฏิเสธ field ใน body ของ PATCH; ผู้เรียกกำหนด `userId`, `readAt` หรือข้อความเองไม่ได้
+- `read-all` ใช้ timestamp เดียวกันเป็น readAt ให้ทุกแถวที่เปลี่ยน และส่ง invalidation หลัง commit เฉพาะเมื่อ `updatedCount` มากกว่า 0
 - ส่ง field id, type, title, message, resourceType, resourceId, readAt, createdAt โดยไม่ต้องเปิดเผย eventKey หรือ userId ใน payload
 
 เสนอใช้ @Sse และ RxJS ซึ่งโปรเจกต์มีอยู่แล้ว ตาม [เอกสาร SSE ของ Nest](https://docs.nestjs.com/techniques/server-sent-events) พร้อม cleanup subscription/timer เมื่อ connection ปิด
 
-| SSE event | ความหมาย |
-| --- | --- |
-| notification.created | มี notification ใหม่ ส่งข้อมูลแถวของผู้รับคนนั้น |
-| notifications.changed | สถานะอ่านเปลี่ยน เพื่อให้ connection อื่นของผู้ใช้เดียวกันโหลดข้อมูลใหม่ |
-| notifications.sync_required | ส่งเมื่อเชื่อมต่อหรือ reconnect เพื่อให้ผู้เรียกดึงรายการและจำนวนล่าสุดจาก API |
-| heartbeat | สัญญาณรักษาการเชื่อมต่อ ไม่ใช่ notification และไม่นับเป็นกิจกรรมของผู้ใช้ |
+| SSE event                   | ความหมาย                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| notification.created        | มี notification ใหม่ ส่งข้อมูลแถวของผู้รับคนนั้น                                                                  |
+| notifications.changed       | สถานะอ่านเปลี่ยน; ส่ง `{ "reason": "read_state" }` ให้ทุก connection ของผู้ใช้เดียวกันเพื่อโหลดรายการและจำนวนใหม่ |
+| notifications.sync_required | ส่งเมื่อเชื่อมต่อหรือ reconnect เพื่อให้ผู้เรียกดึงรายการและจำนวนล่าสุดจาก API                                    |
+| heartbeat                   | สัญญาณรักษาการเชื่อมต่อ ไม่ใช่ notification และไม่นับเป็นกิจกรรมของผู้ใช้                                         |
 
 - ลงทะเบียน connection ก่อนส่ง sync_required เพื่อไม่ให้มีช่องว่างระหว่างเริ่มเชื่อมต่อกับการรับเหตุการณ์ใหม่
 - heartbeat เสนอทุก 15 วินาที ตรวจ session ระหว่างรอและก่อนส่งข้อมูล โดยใช้กฎ SessionLifetimeService เดิมและไม่ต่ออายุ idle จาก heartbeat
@@ -153,14 +155,14 @@ Nest รองรับการตั้งงานตามเวลาผ่
 
 ## 7. ลำดับพัฒนาและการตรวจรับ
 
-| ลำดับ | งาน | เกณฑ์เสร็จ |
-| --- | --- | --- |
-| 1 | เพิ่ม schema, migration และโมดูล notification | หนึ่งตาราง; unique/index ถูกต้อง; ไม่เปลี่ยนข้อมูลกำหนดคืนเดิม |
-| 2 | เพิ่ม API รายการ/จำนวน/อ่าน | ข้อมูลและสถานะอ่านแยกรายคน แบ่งหน้าและเรียกอ่านซ้ำได้ |
-| 3 | เชื่อมเหตุการณ์ยืม/ต่ออายุ/ซ่อม | ผู้รับตรงตารางข้อ 2; บันทึกพร้อมเหตุการณ์และไม่สร้างซ้ำ |
-| 4 | เพิ่ม SSE | ผู้รับเห็นข้อมูลใหม่หลัง commit, cleanup ได้, session มีผลระหว่างเปิด stream |
-| 5 | เพิ่มงานตรวจเวลา | ครอบคลุมช่วง 24 ชั่วโมง, เกินกำหนด, null, คืนแล้ว และต่ออายุ |
-| 6 | ตรวจการทำงานรวมและเอกสาร API | กรณีสำคัญผ่านและยืนยันว่าไม่แก้ FE/flow เดิม |
+| ลำดับ | งาน                                           | เกณฑ์เสร็จ                                                                   |
+| ----- | --------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1     | เพิ่ม schema, migration และโมดูล notification | หนึ่งตาราง; unique/index ถูกต้อง; ไม่เปลี่ยนข้อมูลกำหนดคืนเดิม               |
+| 2     | เพิ่ม API รายการ/จำนวน/อ่าน                   | ข้อมูลและสถานะอ่านแยกรายคน แบ่งหน้าและเรียกอ่านซ้ำได้                        |
+| 3     | เชื่อมเหตุการณ์ยืม/ต่ออายุ/ซ่อม               | ผู้รับตรงตารางข้อ 2; บันทึกพร้อมเหตุการณ์และไม่สร้างซ้ำ                      |
+| 4     | เพิ่ม SSE                                     | ผู้รับเห็นข้อมูลใหม่หลัง commit, cleanup ได้, session มีผลระหว่างเปิด stream |
+| 5     | เพิ่มงานตรวจเวลา                              | ครอบคลุมช่วง 24 ชั่วโมง, เกินกำหนด, null, คืนแล้ว และต่ออายุ                 |
+| 6     | ตรวจการทำงานรวมและเอกสาร API                  | กรณีสำคัญผ่านและยืนยันว่าไม่แก้ FE/flow เดิม                                 |
 
 กรณีตรวจหลัก:
 

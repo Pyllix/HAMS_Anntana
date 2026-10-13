@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
-  Prisma,
   PrismaClient,
   NotificationResourceType,
   NotificationType,
@@ -307,6 +306,22 @@ async function expectNoCreatedEvent(
   }
 }
 
+async function expectNoEvent(
+  reader: SseEventReader,
+  eventType: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return;
+    const result = await reader.next(remainingMs);
+    expect(result.closed).toBe(false);
+    if (result.timedOut) return;
+    expect(result.frame?.event).not.toBe(eventType);
+  }
+}
+
 describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
@@ -437,6 +452,24 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .send({ code: generateSync({ secret: totpSecret }) });
     expect(verified.status).toBe(200);
     return sessionCookieHeader(verified);
+  }
+
+  async function getCsrfProof(
+    sessionCookie: string,
+  ): Promise<{ cookie: string; token: string }> {
+    const response = await request(server())
+      .get('/auth/csrf')
+      .set('Cookie', sessionCookie)
+      .expect(200);
+    const cookieName =
+      process.env.NODE_ENV === 'production' ? '__Host-hams.csrf' : 'hams.csrf';
+    const csrfCookie = cookiePair(response, cookieName);
+    if (!csrfCookie) throw new Error('CSRF cookie was not returned');
+    const body = requireRecord(response.body, 'CSRF proof');
+    return {
+      cookie: `${sessionCookie}; ${csrfCookie}`,
+      token: requireString(body, 'csrfToken'),
+    };
   }
 
   async function openStream(
@@ -634,7 +667,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         data: {
           name: 'Notification test asset',
           model: 'Test model',
-          price: new Prisma.Decimal('1.00'),
+          price: 1,
           receivedDate: new Date('2026-01-01T00:00:00.000Z'),
           type_id: assetTypeId,
           section_id: testSectionId,
@@ -653,7 +686,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         data: {
           name: 'Center service notification test asset',
           model: 'Test model',
-          price: new Prisma.Decimal('1.00'),
+          price: 1,
           receivedDate: new Date('2026-01-01T00:00:00.000Z'),
           type_id: assetTypeId,
           section_id: testSectionId,
@@ -1008,5 +1041,324 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       where: { token: secondCenterSessionToken },
     });
     expect(await secondStaffStream.reader.waitUntilClosed(20_000)).toBe(true);
+  });
+
+  it('marks only the recipient copy as read and invalidates that user’s streams', async () => {
+    const borrowId = borrowIds[0];
+    if (!borrowId) throw new Error('Borrow fixture was not created');
+    const firstListResponse = await request(server())
+      .get('/notifications')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    const firstNotification =
+      parseNotificationListResponse(firstListResponse).data[0];
+    if (!firstNotification) throw new Error('No first user notification found');
+
+    const otherUserNotification = await prisma.notification.create({
+      data: {
+        userId: departmentUserId,
+        type: NotificationType.BORROW_APPROVAL_REQUIRED,
+        title: 'Other recipient read-state fixture',
+        message: 'Read-state integration fixture',
+        resourceType: NotificationResourceType.BORROW_TRANSACTION,
+        resourceId: borrowId,
+        eventKey: `read-state-other-test:${randomUUID()}`,
+      },
+      select: { id: true },
+    });
+    const otherUserListResponse = await request(server())
+      .get('/notifications')
+      .set('Cookie', departmentCookie)
+      .expect(200);
+    expect(
+      parseNotificationListResponse(otherUserListResponse).data.map(
+        ({ id }) => id,
+      ),
+    ).toContain(otherUserNotification.id);
+
+    const firstStream = await openStream(firstCenterCookie);
+    const secondTabStream = await openStream(firstCenterCookie);
+    const otherUserStream = await openStream(departmentCookie);
+    for (const stream of [firstStream, secondTabStream, otherUserStream]) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+
+    const firstCsrf = await getCsrfProof(firstCenterCookie);
+    const otherUserCsrf = await getCsrfProof(departmentCookie);
+    const readPath = `/notifications/${firstNotification.id}/read`;
+    const origin = 'http://localhost:5173';
+
+    await request(server())
+      .patch(readPath)
+      .set('Origin', origin)
+      .set('Cookie', firstCenterCookie)
+      .send({})
+      .expect(403);
+    await request(server())
+      .patch(readPath)
+      .set('Origin', origin)
+      .set('Cookie', firstCsrf.cookie)
+      .set('X-CSRF-Token', firstCsrf.token)
+      .send({ userId: firstCenterUserId, readAt: new Date().toISOString() })
+      .expect(400);
+    await request(server())
+      .patch(`/notifications/${otherUserNotification.id}/read`)
+      .set('Origin', origin)
+      .set('Cookie', firstCsrf.cookie)
+      .set('X-CSRF-Token', firstCsrf.token)
+      .send({})
+      .expect(404);
+    await request(server())
+      .patch(`/notifications/${randomUUID()}/read`)
+      .set('Origin', origin)
+      .set('Cookie', firstCsrf.cookie)
+      .set('X-CSRF-Token', firstCsrf.token)
+      .send({})
+      .expect(404);
+
+    const markedResponse = await request(server())
+      .patch(readPath)
+      .set('Origin', origin)
+      .set('Cookie', firstCsrf.cookie)
+      .set('X-CSRF-Token', firstCsrf.token)
+      .send({})
+      .expect(200);
+    const marked = parseNotificationResponse(markedResponse.body);
+    expect(marked.id).toBe(firstNotification.id);
+    expect(marked.readAt).toEqual(expect.any(String));
+
+    for (const stream of [firstStream, secondTabStream]) {
+      const changed = await stream.reader.next(5_000);
+      expect(changed.frame).toMatchObject({
+        event: 'notifications.changed',
+        data: { reason: 'read_state' },
+      });
+    }
+    await expectNoEvent(otherUserStream.reader, 'notifications.changed', 250);
+
+    const firstCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    const otherUserCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', departmentCookie)
+      .expect(200);
+    expect(parseUnreadCountResponse(firstCount)).toEqual({ count: 0 });
+    expect(parseUnreadCountResponse(otherUserCount)).toEqual({ count: 1 });
+
+    const repeatedResponse = await request(server())
+      .patch(readPath)
+      .set('Origin', origin)
+      .set('Cookie', firstCsrf.cookie)
+      .set('X-CSRF-Token', firstCsrf.token)
+      .send({})
+      .expect(200);
+    const repeated = parseNotificationResponse(repeatedResponse.body);
+    expect(repeated.readAt).toBe(marked.readAt);
+    await expectNoEvent(firstStream.reader, 'notifications.changed', 250);
+    await expectNoEvent(secondTabStream.reader, 'notifications.changed', 250);
+
+    const createReadAllFixture = (label: string, createdAt?: Date) =>
+      prisma.notification.create({
+        data: {
+          userId: firstCenterUserId,
+          type: NotificationType.BORROW_APPROVAL_REQUIRED,
+          title: `Read-all fixture ${label}`,
+          message: 'Read-state integration fixture',
+          resourceType: NotificationResourceType.BORROW_TRANSACTION,
+          resourceId: borrowId,
+          eventKey: `read-all-test:${randomUUID()}`,
+          ...(createdAt ? { createdAt } : {}),
+        },
+        select: { id: true },
+      });
+    const existingFixtureA = await createReadAllFixture('A');
+    const existingFixtureB = await createReadAllFixture('B');
+    const afterCutoffFixture = await createReadAllFixture(
+      'after-cutoff',
+      new Date(Date.now() + 60_000),
+    );
+    const originalReadAt = marked.readAt;
+    if (!pool) throw new Error('PostgreSQL test pool is not available');
+
+    const lockKey = 82719403;
+    const lockClient = await pool.connect();
+    let arrivalClient: import('pg').PoolClient | undefined;
+    let lockHeld = false;
+    let arrivalTransactionOpen = false;
+    let pendingReadAll:
+      | Promise<{ response: request.Response } | { error: unknown }>
+      | undefined;
+    let concurrentArrivalId = '';
+    let readAllAt = '';
+    try {
+      arrivalClient = await pool.connect();
+      await lockClient.query('SELECT pg_advisory_lock($1::bigint)', [lockKey]);
+      lockHeld = true;
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION public.block_notification_read_all_for_test()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $notification_read_all_test$
+        BEGIN
+          PERFORM pg_advisory_xact_lock(82719403::bigint);
+          RETURN NULL;
+        END;
+        $notification_read_all_test$
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER block_notification_read_all_for_test
+        BEFORE UPDATE ON public.notifications
+        FOR EACH STATEMENT
+        EXECUTE FUNCTION public.block_notification_read_all_for_test()
+      `;
+
+      await arrivalClient.query('BEGIN');
+      arrivalTransactionOpen = true;
+      concurrentArrivalId = randomUUID();
+      await arrivalClient.query(
+        `INSERT INTO public.notifications
+          (id, user_id, type, title, message, resource_type, resource_id, event_key)
+         VALUES
+          ($1, $2, 'BORROW_APPROVAL_REQUIRED', 'Concurrent arrival fixture',
+           'Read-state integration fixture', 'BORROW_TRANSACTION', $3, $4)`,
+        [
+          concurrentArrivalId,
+          firstCenterUserId,
+          borrowId,
+          `read-all-concurrent-test:${randomUUID()}`,
+        ],
+      );
+
+      pendingReadAll = request(server())
+        .patch('/notifications/read-all')
+        .set('Origin', origin)
+        .set('Cookie', firstCsrf.cookie)
+        .set('X-CSRF-Token', firstCsrf.token)
+        .send({})
+        .expect(200)
+        .then(
+          (response) => ({ response }),
+          (error: unknown) => ({ error }),
+        );
+
+      const lockDeadline = Date.now() + 10_000;
+      let updateIsBlocked = false;
+      while (Date.now() < lockDeadline) {
+        const [activity] = await prisma.$queryRaw<{ waiting: boolean }[]>`
+          SELECT EXISTS (
+            SELECT 1
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND state = 'active'
+              AND wait_event_type = 'Lock'
+              AND wait_event = 'advisory'
+          ) AS waiting
+        `;
+        if (activity?.waiting) {
+          updateIsBlocked = true;
+          break;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      }
+      expect(updateIsBlocked).toBe(true);
+
+      await arrivalClient.query('COMMIT');
+      arrivalTransactionOpen = false;
+      await lockClient.query('SELECT pg_advisory_unlock($1::bigint)', [
+        lockKey,
+      ]);
+      lockHeld = false;
+
+      const outcome = await pendingReadAll;
+      if ('error' in outcome) throw outcome.error;
+      const readAllBody = requireRecord(outcome.response.body, 'read-all');
+      expect(requireNumber(readAllBody, 'updatedCount')).toBe(2);
+      readAllAt = requireString(readAllBody, 'readAt');
+    } finally {
+      if (arrivalTransactionOpen && arrivalClient) {
+        await arrivalClient.query('ROLLBACK');
+      }
+      if (lockHeld) {
+        await lockClient.query('SELECT pg_advisory_unlock($1::bigint)', [
+          lockKey,
+        ]);
+      }
+      if (pendingReadAll) await pendingReadAll;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS block_notification_read_all_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.block_notification_read_all_for_test()
+      `;
+      arrivalClient?.release();
+      lockClient.release();
+    }
+
+    for (const stream of [firstStream, secondTabStream]) {
+      const changed = await stream.reader.next(5_000);
+      expect(changed.frame).toMatchObject({
+        event: 'notifications.changed',
+        data: { reason: 'read_state' },
+      });
+    }
+    await expectNoEvent(otherUserStream.reader, 'notifications.changed', 250);
+
+    const finalListResponse = await request(server())
+      .get('/notifications')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    const finalNotifications =
+      parseNotificationListResponse(finalListResponse).data;
+    const byId = new Map(finalNotifications.map((item) => [item.id, item]));
+    expect(byId.get(firstNotification.id)?.readAt).toBe(originalReadAt);
+    expect(byId.get(existingFixtureA.id)?.readAt).toBe(readAllAt);
+    expect(byId.get(existingFixtureB.id)?.readAt).toBe(readAllAt);
+    expect(byId.get(afterCutoffFixture.id)?.readAt).toBeNull();
+    expect(byId.get(concurrentArrivalId)?.readAt).toBeNull();
+
+    const remainingCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    expect(parseUnreadCountResponse(remainingCount)).toEqual({ count: 2 });
+
+    const otherUserMarkedResponse = await request(server())
+      .patch(`/notifications/${otherUserNotification.id}/read`)
+      .set('Origin', origin)
+      .set('Cookie', otherUserCsrf.cookie)
+      .set('X-CSRF-Token', otherUserCsrf.token)
+      .send({})
+      .expect(200);
+    expect(
+      parseNotificationResponse(otherUserMarkedResponse.body).readAt,
+    ).toEqual(expect.any(String));
+    expect((await otherUserStream.reader.next(5_000)).frame).toMatchObject({
+      event: 'notifications.changed',
+      data: { reason: 'read_state' },
+    });
+
+    const noOpReadAll = await request(server())
+      .patch('/notifications/read-all')
+      .set('Origin', origin)
+      .set('Cookie', otherUserCsrf.cookie)
+      .set('X-CSRF-Token', otherUserCsrf.token)
+      .send({})
+      .expect(200);
+    expect(noOpReadAll.body).toEqual({ updatedCount: 0, readAt: null });
+    await expectNoEvent(otherUserStream.reader, 'notifications.changed', 250);
+
+    await request(server())
+      .patch('/notifications/read-all')
+      .set('Origin', origin)
+      .set('Cookie', otherUserCsrf.cookie)
+      .set('X-CSRF-Token', otherUserCsrf.token)
+      .send({ userId: firstCenterUserId })
+      .expect(400);
   });
 });

@@ -2,7 +2,7 @@
 
 วันที่: 2026-10-13
 
-สถานะ: BE implementation ของ Ticket 01 มี schema/migration, GET รายการ/จำนวนยังไม่อ่าน, SSE และเหตุการณ์คำขอยืมรออนุมัติแล้ว; integration test ยังรอฐาน PostgreSQL ทดสอบจริง ส่วนการอ่านแจ้งเตือนและเหตุการณ์ยืม/ซ่อมรายการอื่นอยู่ใน Ticket ถัดไป
+สถานะ: BE implementation ของ Ticket 01–02 มี schema/migration, GET รายการ/จำนวนยังไม่อ่าน, PATCH อ่านรายรายการ/ทั้งหมด, SSE และเหตุการณ์คำขอยืมรออนุมัติแล้ว; API/SSE integration ผ่าน PostgreSQL บน `DEMO_DATABASE_URL`; เหตุการณ์ยืม/ซ่อมรายการอื่นและการเตือนวันคืนอยู่ใน Ticket 03–05
 
 ## SSE คืออะไร
 
@@ -11,6 +11,7 @@ FE เปิด HTTP connection หนึ่งเส้นไป BE แล้�
 Browser มี EventSource สำหรับงานนี้อยู่แล้ว ใช้ addEventListener รับ event ที่มีชื่อ และปิดด้วย close() ดู [MDN: EventSource](https://developer.mozilla.org/en-US/docs/Web/API/EventSource)
 
 งาน notification ใช้สองช่องทางร่วมกัน:
+
 - REST API โหลดรายการย้อนหลัง/จำนวน และส่งการอ่าน
 - SSE แจ้งว่ามีข้อมูลใหม่หรือสถานะอ่านเปลี่ยน ให้ FE อัปเดตหน้าจอ
 
@@ -26,13 +27,13 @@ FE ไม่สร้างเหตุการณ์ยืม/ซ่อมซ�
 
 ใช้ API base URL จาก configuration เดิม ไม่ hardcode localhost
 
-| Endpoint | สถานะ / การใช้งาน |
-| --- | --- |
-| GET /notifications?page=1&limit=20 | พร้อมใช้: รายการพร้อม pagination meta; `limit` สูงสุด 100 |
-| GET /notifications/unread-count | พร้อมใช้: จำนวนยังไม่อ่านจาก BE |
-| GET /notifications/stream | พร้อมใช้: เปิด EventSource ของผู้ใช้ที่ login |
-| PATCH /notifications/:id/read | Ticket 02: ทำเครื่องหมายอ่านรายการนั้น ส่ง body ว่าง |
-| PATCH /notifications/read-all | Ticket 02: อ่านทั้งหมด ส่ง body ว่าง |
+| Endpoint                           | สถานะ / การใช้งาน                                                                                                                             |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET /notifications?page=1&limit=20 | พร้อมใช้: รายการพร้อม pagination meta; `limit` สูงสุด 100                                                                                     |
+| GET /notifications/unread-count    | พร้อมใช้: จำนวนยังไม่อ่านจาก BE                                                                                                               |
+| GET /notifications/stream          | พร้อมใช้: เปิด EventSource ของผู้ใช้ที่ login                                                                                                 |
+| PATCH /notifications/:id/read      | พร้อมใช้: ทำเครื่องหมายอ่านรายการนั้น ส่ง body ว่าง; อ่านซ้ำคง `readAt` เดิม; รายการที่ไม่มีหรือเป็นของคนอื่นตอบ 404                          |
+| PATCH /notifications/read-all      | พร้อมใช้: อ่านรายการที่มีอยู่ถึง cutoff ตอน request เริ่ม; ตอบ `{ updatedCount, readAt }` และ `readAt` เป็น `null` เมื่อไม่มีรายการที่เปลี่ยน |
 
 - REST ใช้ API client เดิมที่ส่ง session cookie และ CSRF header สำหรับ PATCH
 - SSE ใช้ EventSource พร้อม withCredentials: true เมื่อเรียกข้าม origin และ BE ต้องอนุญาต origin/cookies ตามการตั้งค่าจริง
@@ -41,14 +42,14 @@ FE ไม่สร้างเหตุการณ์ยืม/ซ่อมซ�
 
 ## Payload ที่ใช้แสดง
 
-| Field | ความหมาย |
-| --- | --- |
-| id | ใช้เป็น key และกันข้อมูลซ้ำ |
-| type | ชนิดเหตุการณ์ธุรกิจ |
-| title / message | ข้อความพร้อมแสดงจาก BE |
+| Field                     | ความหมาย                                      |
+| ------------------------- | --------------------------------------------- |
+| id                        | ใช้เป็น key และกันข้อมูลซ้ำ                   |
+| type                      | ชนิดเหตุการณ์ธุรกิจ                           |
+| title / message           | ข้อความพร้อมแสดงจาก BE                        |
 | resourceType / resourceId | รายการที่เกี่ยวข้อง ใช้กับ mapping หน้าของ FE |
-| readAt | null = ยังไม่อ่าน; timestamp = อ่านแล้ว |
-| createdAt | เวลาเกิดแจ้งเตือนในรูป ISO timestamp |
+| readAt                    | null = ยังไม่อ่าน; timestamp = อ่านแล้ว       |
+| createdAt                 | เวลาเกิดแจ้งเตือนในรูป ISO timestamp          |
 
 resourceType มี BORROW_TRANSACTION, BORROW_EXTENSION และ REPAIR_JOB ใช้เส้นทางหน้าจอที่มีอยู่จริงของ FE อย่าใช้ BorrowExtension id แทน BorrowTransaction id
 
@@ -56,12 +57,12 @@ resourceType มี BORROW_TRANSACTION, BORROW_EXTENSION และ REPAIR_JOB �
 
 ## SSE events ที่ต้องรับ
 
-| ชื่อ SSE event | สถานะ / FE ทำอะไร |
-| --- | --- |
-| notification.created | พร้อมใช้: มีแจ้งเตือนใหม่ที่บันทึกแล้ว; อัปเดตรายการ/จำนวนและกันซ้ำด้วย id |
-| notifications.sync_required | พร้อมใช้: โหลดรายการและจำนวนล่าสุดเมื่อเชื่อมต่อหรือ reconnect |
-| heartbeat | พร้อมใช้: รับแล้วไม่เพิ่มรายการ ไม่เพิ่ม badge และไม่แสดง toast |
-| notifications.changed | Ticket 02: โหลดรายการและจำนวนใหม่เมื่อสถานะอ่านเปลี่ยนจากอีกแท็บ/อุปกรณ์ |
+| ชื่อ SSE event              | สถานะ / FE ทำอะไร                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| notification.created        | พร้อมใช้: มีแจ้งเตือนใหม่ที่บันทึกแล้ว; อัปเดตรายการ/จำนวนและกันซ้ำด้วย id                                                     |
+| notifications.sync_required | พร้อมใช้: โหลดรายการและจำนวนล่าสุดเมื่อเชื่อมต่อหรือ reconnect                                                                 |
+| heartbeat                   | พร้อมใช้: รับแล้วไม่เพิ่มรายการ ไม่เพิ่ม badge และไม่แสดง toast                                                                |
+| notifications.changed       | พร้อมใช้: payload `{ "reason": "read_state" }`; โหลดรายการและจำนวนใหม่เมื่อสถานะอ่านเปลี่ยนจากอีก connection ของผู้ใช้เดียวกัน |
 
 ขณะนี้ชนิดเหตุการณ์ที่สร้างจริงคือ `BORROW_APPROVAL_REQUIRED` เมื่อคำขอยืมแบบรออนุมัติสำเร็จ ผู้รับคือเจ้าหน้าที่ Asset Center ที่บัญชีใช้งานได้ เหตุการณ์อนุมัติยืม/ต่ออายุ งานซ่อม และการเตือนวันคืนจะตามมาใน Ticket 03–05
 
@@ -83,14 +84,14 @@ resourceType มี BORROW_TRANSACTION, BORROW_EXTENSION และ REPAIR_JOB �
 
 ```javascript
 function connectNotificationStream(apiBaseUrl, refreshNotifications) {
-  const base = apiBaseUrl.replace(/\/$/, "");
-  const source = new EventSource(base + "/notifications/stream", {
+  const base = apiBaseUrl.replace(/\/$/, '');
+  const source = new EventSource(base + '/notifications/stream', {
     withCredentials: true,
   });
 
-  source.addEventListener("notification.created", refreshNotifications);
-  source.addEventListener("notifications.changed", refreshNotifications);
-  source.addEventListener("notifications.sync_required", refreshNotifications);
+  source.addEventListener('notification.created', refreshNotifications);
+  source.addEventListener('notifications.changed', refreshNotifications);
+  source.addEventListener('notifications.sync_required', refreshNotifications);
 
   // ใช้ฟังก์ชันนี้ใน cleanup เมื่อ logout, เปลี่ยนผู้ใช้ หรือ unmount
   return () => source.close();
