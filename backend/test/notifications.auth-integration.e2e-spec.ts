@@ -18,6 +18,8 @@ import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/users/users.service';
 import { TwoFactorService } from '../src/auth/two-factor.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { PrismaService } from '../src/prisma.service';
+import { NotificationStreamService } from '../src/notifications/notification-stream.service';
 
 jest.setTimeout(60_000);
 
@@ -1233,17 +1235,21 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
         ],
       );
 
-      pendingReadAll = request(server())
-        .patch('/notifications/read-all')
-        .set('Origin', origin)
-        .set('Cookie', firstCsrf.cookie)
-        .set('X-CSRF-Token', firstCsrf.token)
-        .send({})
-        .expect(200)
-        .then(
-          (response) => ({ response }),
-          (error: unknown) => ({ error }),
-        );
+      pendingReadAll = (async () => {
+        try {
+          return {
+            response: await request(server())
+              .patch('/notifications/read-all')
+              .set('Origin', origin)
+              .set('Cookie', firstCsrf.cookie)
+              .set('X-CSRF-Token', firstCsrf.token)
+              .send({})
+              .expect(200),
+          };
+        } catch (error) {
+          return { error };
+        }
+      })();
 
       const lockDeadline = Date.now() + 10_000;
       let updateIsBlocked = false;
@@ -1327,6 +1333,73 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .set('Cookie', firstCenterCookie)
       .expect(200);
     expect(parseUnreadCountResponse(remainingCount)).toEqual({ count: 2 });
+
+    const notificationsService =
+      app.get<NotificationsService>(NotificationsService);
+    const readAllService = new NotificationsService(
+      app.get<PrismaService>(PrismaService),
+      app.get<NotificationStreamService>(NotificationStreamService),
+    );
+    let handlerCutoffFixtureId = '';
+    jest
+      .spyOn(notificationsService, 'markAllReadForUser')
+      .mockImplementation(async (userId, cutoffAt) => {
+        const arrival = await createReadAllFixture(
+          'after-handler-cutoff',
+          new Date(cutoffAt.getTime() + 10_000),
+        );
+        handlerCutoffFixtureId = arrival.id;
+        return readAllService.markAllReadForUser(userId, cutoffAt);
+      });
+    let handlerCutoffResponse: request.Response | undefined;
+    try {
+      handlerCutoffResponse = await request(server())
+        .patch('/notifications/read-all')
+        .set('Origin', origin)
+        .set('Cookie', firstCsrf.cookie)
+        .set('X-CSRF-Token', firstCsrf.token)
+        .send({})
+        .expect(200);
+    } finally {
+      jest.restoreAllMocks();
+    }
+    if (!handlerCutoffResponse || !handlerCutoffFixtureId) {
+      throw new Error('Handler cutoff integration fixture was not created');
+    }
+    const handlerCutoffBody = requireRecord(
+      handlerCutoffResponse.body,
+      'handler-cutoff read-all',
+    );
+    expect(requireNumber(handlerCutoffBody, 'updatedCount')).toBe(1);
+    const handlerCutoffReadAt = requireString(handlerCutoffBody, 'readAt');
+    for (const stream of [firstStream, secondTabStream]) {
+      expect((await stream.reader.next(5_000)).frame).toMatchObject({
+        event: 'notifications.changed',
+        data: { reason: 'read_state' },
+      });
+    }
+    await expectNoEvent(otherUserStream.reader, 'notifications.changed', 250);
+
+    const handlerCutoffList = await request(server())
+      .get('/notifications')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    const handlerCutoffNotifications =
+      parseNotificationListResponse(handlerCutoffList).data;
+    const handlerCutoffById = new Map(
+      handlerCutoffNotifications.map((item) => [item.id, item]),
+    );
+    expect(handlerCutoffById.get(concurrentArrivalId)?.readAt).toBe(
+      handlerCutoffReadAt,
+    );
+    expect(handlerCutoffById.get(handlerCutoffFixtureId)?.readAt).toBeNull();
+    const afterHandlerCutoffCount = await request(server())
+      .get('/notifications/unread-count')
+      .set('Cookie', firstCenterCookie)
+      .expect(200);
+    expect(parseUnreadCountResponse(afterHandlerCutoffCount)).toEqual({
+      count: 2,
+    });
 
     const otherUserMarkedResponse = await request(server())
       .patch(`/notifications/${otherUserNotification.id}/read`)

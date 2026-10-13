@@ -27,13 +27,13 @@ FE ไม่สร้างเหตุการณ์ยืม/ซ่อมซ�
 
 ใช้ API base URL จาก configuration เดิม ไม่ hardcode localhost
 
-| Endpoint                           | สถานะ / การใช้งาน                                                                                                                             |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET /notifications?page=1&limit=20 | พร้อมใช้: รายการพร้อม pagination meta; `limit` สูงสุด 100                                                                                     |
-| GET /notifications/unread-count    | พร้อมใช้: จำนวนยังไม่อ่านจาก BE                                                                                                               |
-| GET /notifications/stream          | พร้อมใช้: เปิด EventSource ของผู้ใช้ที่ login                                                                                                 |
-| PATCH /notifications/:id/read      | พร้อมใช้: ทำเครื่องหมายอ่านรายการนั้น ส่ง body ว่าง; อ่านซ้ำคง `readAt` เดิม; รายการที่ไม่มีหรือเป็นของคนอื่นตอบ 404                          |
-| PATCH /notifications/read-all      | พร้อมใช้: อ่านรายการที่มีอยู่ถึง cutoff ตอน request เริ่ม; ตอบ `{ updatedCount, readAt }` และ `readAt` เป็น `null` เมื่อไม่มีรายการที่เปลี่ยน |
+| Endpoint                           | สถานะ / การใช้งาน                                                                                                                                           |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET /notifications?page=1&limit=20 | พร้อมใช้: รายการพร้อม pagination meta; `limit` สูงสุด 100                                                                                                   |
+| GET /notifications/unread-count    | พร้อมใช้: จำนวนยังไม่อ่านจาก BE                                                                                                                             |
+| GET /notifications/stream          | พร้อมใช้: เปิด EventSource ของผู้ใช้ที่ login                                                                                                               |
+| PATCH /notifications/:id/read      | พร้อมใช้: ทำเครื่องหมายอ่านรายการนั้น ส่ง body ว่าง; อ่านซ้ำคง `readAt` เดิม; รายการที่ไม่มีหรือเป็นของคนอื่นตอบ 404                                        |
+| PATCH /notifications/read-all      | พร้อมใช้: อ่านรายการที่มีอยู่ถึง cutoff ที่จับตอน handler เริ่มก่อน I/O; ตอบ `{ updatedCount, readAt }` และ `readAt` เป็น `null` เมื่อไม่มีรายการที่เปลี่ยน |
 
 - REST ใช้ API client เดิมที่ส่ง session cookie และ CSRF header สำหรับ PATCH
 - SSE ใช้ EventSource พร้อม withCredentials: true เมื่อเรียกข้าม origin และ BE ต้องอนุญาต origin/cookies ตามการตั้งค่าจริง

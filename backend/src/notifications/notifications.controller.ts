@@ -105,7 +105,8 @@ export class NotificationsController {
     @Body() _body: EmptyNotificationRequestDto,
     @Session() session: AuthenticatedNotificationSession,
   ): Promise<NotificationReadAllResponseDto> {
-    return this.notifications.markAllReadForUser(session.user.id);
+    const cutoffAt = new Date();
+    return this.notifications.markAllReadForUser(session.user.id, cutoffAt);
   }
 
   @Sse('stream')

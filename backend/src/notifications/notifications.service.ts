@@ -119,11 +119,12 @@ export class NotificationsService {
 
   async markAllReadForUser(
     userId: string,
+    cutoffAt: Date,
   ): Promise<NotificationReadAllResponseDto> {
-    // Keep the cutoff and update in one statement so concurrent arrivals stay outside its snapshot.
+    // The controller captures the cutoff before I/O; one statement keeps the update atomic.
     const changed = await this.prisma.$queryRaw<{ readAt: Date }[]>`
       WITH cutoff AS (
-        SELECT transaction_timestamp()::timestamp(3) AS value
+        SELECT ${cutoffAt}::timestamp(3) AS value
       )
       UPDATE public.notifications AS target
       SET read_at = cutoff.value
