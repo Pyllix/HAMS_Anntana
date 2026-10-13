@@ -26,7 +26,7 @@
 | BORROW_APPROVAL_REQUIRED           | สร้างคำขอยืมที่เข้า PENDING_APPROVE สำเร็จ                | ASSET_CENTER_STAFF ทุกคน                                                  |
 | BORROW_APPROVED                    | คำขอยืมเปลี่ยนจาก PENDING_APPROVE เป็น APPROVED สำเร็จ    | ผู้ขอยืมของรายการนั้น (borrower_id) ตามขอบเขตแจ้งผลของ department ที่ตกลง |
 | REPAIR_APPROVAL_REQUIRED           | งานถึงขั้นรอพัสดุอนุมัติเบิกอะไหล่หรือส่งซ่อมภายนอก       | PARCEL_STAFF ทุกคน                                                        |
-| REPAIR_READY_FOR_COLLECTION        | ช่างทำขั้นแล้วเสร็จจนงานเข้า WAITING_DELIVERY สำเร็จ      | สมาชิกหน่วยงานของ RepairJob.sectionId ทุกคน                               |
+| REPAIR_READY_FOR_COLLECTION        | ช่างทำขั้นแล้วเสร็จจนงานเข้า WAITING_DELIVERY สำเร็จ      | สมาชิก DEPARTMENT_STAFF หรือ ASSET_CENTER_STAFF ที่มี sectionId ตรงกับงาน |
 | BORROW_EXTENSION_APPROVAL_REQUIRED | สร้างคำขอต่ออายุ ONLINE สถานะ PENDING สำเร็จ              | ASSET_CENTER_STAFF ทุกคน                                                  |
 | BORROW_EXTENSION_APPROVED          | คำขอต่ออายุเปลี่ยน PENDING → APPROVED สำเร็จ              | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว                             |
 | BORROW_EXTENSION_REJECTED          | คำขอต่ออายุเปลี่ยน PENDING → REJECTED สำเร็จ              | ผู้ส่งคำขอต่ออายุ (requestedByUserId) คนเดียว                             |
@@ -79,6 +79,7 @@ Nest รองรับการตั้งงานตามเวลาผ่
 | createdAt                 | เวลาสร้างแจ้งเตือน                                           |
 
 - unique: (eventKey, userId)
+- createdAt ใช้เวลา BE เดียวกับ cutoff ของ read-all เพื่อไม่ขึ้นกับเวลาเริ่ม transaction หรือ clock skew ระหว่าง BE กับฐานข้อมูล; database default สำรองใช้ clock_timestamp() ตอน insert
 - index: (userId, readAt) และ (userId, createdAt, id)
 - ดึงรายการเรียง createdAt DESC, id DESC เพื่อให้ลำดับแน่นอน
 - เนื้อหาไม่เก็บข้อมูลยืม/งานซ่อมทั้งก้อน ไม่เพิ่ม status ล่าสุดของงานลงตารางนี้

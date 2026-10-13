@@ -208,8 +208,9 @@ export class NotificationsService {
     const recipientIds = await this.findActiveAssetCenterRecipientIds(tx);
     if (recipientIds.length === 0) return [];
 
-    return tx.notification.createManyAndReturn({
-      data: recipientIds.map((userId) => ({
+    return this.createDeliveryRows(
+      tx,
+      recipientIds.map((userId) => ({
         userId,
         type: NotificationType.BORROW_APPROVAL_REQUIRED,
         title: 'มีคำขอยืมใหม่รออนุมัติ',
@@ -218,19 +219,7 @@ export class NotificationsService {
         resourceId: borrowTransaction.id,
         eventKey: `${NotificationType.BORROW_APPROVAL_REQUIRED}:${borrowTransaction.id}`,
       })),
-      skipDuplicates: true,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        title: true,
-        message: true,
-        resourceType: true,
-        resourceId: true,
-        readAt: true,
-        createdAt: true,
-      },
-    });
+    );
   }
 
   async createBorrowApproved(
@@ -252,31 +241,17 @@ export class NotificationsService {
     const returnDeadline = borrowTransaction.expectedReturnDate
       ? ` กำหนดคืน ${NOTIFICATION_DATE_FORMATTER.format(borrowTransaction.expectedReturnDate)}`
       : '';
-    return tx.notification.createManyAndReturn({
-      data: [
-        {
-          userId: borrower.id,
-          type: NotificationType.BORROW_APPROVED,
-          title: 'คำขอยืมได้รับอนุมัติ',
-          message: `คำขอยืม ${borrowTransaction.borrowNo} สำหรับ ${borrowTransaction.assetName} ได้รับอนุมัติแล้ว${returnDeadline}`,
-          resourceType: NotificationResourceType.BORROW_TRANSACTION,
-          resourceId: borrowTransaction.id,
-          eventKey: `${NotificationType.BORROW_APPROVED}:${borrowTransaction.id}`,
-        },
-      ],
-      skipDuplicates: true,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        title: true,
-        message: true,
-        resourceType: true,
-        resourceId: true,
-        readAt: true,
-        createdAt: true,
+    return this.createDeliveryRows(tx, [
+      {
+        userId: borrower.id,
+        type: NotificationType.BORROW_APPROVED,
+        title: 'คำขอยืมได้รับอนุมัติ',
+        message: `คำขอยืม ${borrowTransaction.borrowNo} สำหรับ ${borrowTransaction.assetName} ได้รับอนุมัติแล้ว${returnDeadline}`,
+        resourceType: NotificationResourceType.BORROW_TRANSACTION,
+        resourceId: borrowTransaction.id,
+        eventKey: `${NotificationType.BORROW_APPROVED}:${borrowTransaction.id}`,
       },
-    });
+    ]);
   }
 
   async createBorrowDeadlineNotifications(
@@ -291,12 +266,20 @@ export class NotificationsService {
     const assetCenterRecipientIds = includesOverdue
       ? await this.findActiveAssetCenterRecipientIds(tx)
       : [];
+    const activeBorrowerIds = new Set(
+      await this.findActiveUserIds(tx, {
+        id: { in: events.map(({ borrowerId }) => borrowerId) },
+      }),
+    );
     const data: Prisma.NotificationCreateManyInput[] = events.flatMap(
       (event) => {
+        const borrowerRecipients = activeBorrowerIds.has(event.borrowerId)
+          ? [event.borrowerId]
+          : [];
         const recipients =
           event.type === NotificationType.BORROW_OVERDUE
-            ? [event.borrowerId, ...assetCenterRecipientIds]
-            : [event.borrowerId];
+            ? [...borrowerRecipients, ...assetCenterRecipientIds]
+            : borrowerRecipients;
         const uniqueRecipients = [...new Set(recipients)];
         const isOverdue = event.type === NotificationType.BORROW_OVERDUE;
         const returnDeadline = NOTIFICATION_DATE_FORMATTER.format(
@@ -317,11 +300,7 @@ export class NotificationsService {
     );
 
     if (data.length === 0) return [];
-    return tx.notification.createManyAndReturn({
-      data,
-      skipDuplicates: true,
-      select: NOTIFICATION_DELIVERY_SELECT,
-    });
+    return this.createDeliveryRows(tx, data);
   }
 
   async createBorrowExtensionApprovalRequired(
@@ -334,8 +313,9 @@ export class NotificationsService {
     const requestedDate = NOTIFICATION_DATE_FORMATTER.format(
       extension.requestedReturnDate,
     );
-    return tx.notification.createManyAndReturn({
-      data: recipientIds.map((userId) => ({
+    return this.createDeliveryRows(
+      tx,
+      recipientIds.map((userId) => ({
         userId,
         type: NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED,
         title: 'มีคำขอต่ออายุรอพิจารณา',
@@ -344,19 +324,7 @@ export class NotificationsService {
         resourceId: extension.id,
         eventKey: `${NotificationType.BORROW_EXTENSION_APPROVAL_REQUIRED}:${extension.id}`,
       })),
-      skipDuplicates: true,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        title: true,
-        message: true,
-        resourceType: true,
-        resourceId: true,
-        readAt: true,
-        createdAt: true,
-      },
-    });
+    );
   }
 
   async createBorrowExtensionDecision(
@@ -391,31 +359,17 @@ export class NotificationsService {
             message: `คำขอต่ออายุรอบที่ ${extension.roundNumber} ของรายการยืม ${extension.borrowNo} (${extension.assetName}) ถูกปฏิเสธ กำหนดคืนที่ขอ ${requestedDate}${extension.rejectReason ? ` เหตุผล: ${extension.rejectReason}` : ''}`,
           };
 
-    return tx.notification.createManyAndReturn({
-      data: [
-        {
-          userId: recipient.id,
-          type,
-          title: decisionCopy.title,
-          message: decisionCopy.message,
-          resourceType: NotificationResourceType.BORROW_EXTENSION,
-          resourceId: extension.id,
-          eventKey: `${type}:${extension.id}`,
-        },
-      ],
-      skipDuplicates: true,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        title: true,
-        message: true,
-        resourceType: true,
-        resourceId: true,
-        readAt: true,
-        createdAt: true,
+    return this.createDeliveryRows(tx, [
+      {
+        userId: recipient.id,
+        type,
+        title: decisionCopy.title,
+        message: decisionCopy.message,
+        resourceType: NotificationResourceType.BORROW_EXTENSION,
+        resourceId: extension.id,
+        eventKey: `${type}:${extension.id}`,
       },
-    });
+    ]);
   }
 
   async createRepairApprovalRequired(
@@ -465,8 +419,21 @@ export class NotificationsService {
   ): Promise<NotificationDeliveryRow[]> {
     if (recipientIds.length === 0) return [];
 
+    return this.createDeliveryRows(
+      tx,
+      recipientIds.map((userId) => ({ ...details, userId })),
+    );
+  }
+
+  private createDeliveryRows(
+    tx: Prisma.TransactionClient,
+    data: Prisma.NotificationCreateManyInput[],
+  ): Promise<NotificationDeliveryRow[]> {
+    // Match the handler's read-all cutoff clock, independent of DB clock skew
+    // and the time the source transaction began.
+    const createdAt = new Date();
     return tx.notification.createManyAndReturn({
-      data: recipientIds.map((userId) => ({ ...details, userId })),
+      data: data.map((row) => ({ ...row, createdAt })),
       skipDuplicates: true,
       select: NOTIFICATION_DELIVERY_SELECT,
     });

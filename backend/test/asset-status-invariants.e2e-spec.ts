@@ -16,6 +16,7 @@ import { IMAGE_STORAGE } from '../src/images/image-storage.port';
 import { RepairsController } from '../src/repairs/repairs.controller';
 import { RepairsService } from '../src/repairs/repairs.service';
 import { PrismaService } from '../src/prisma.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
@@ -257,6 +258,14 @@ describeWithDatabase(
         providers: [
           AssetService,
           RepairsService,
+          {
+            provide: NotificationsService,
+            useValue: {
+              createRepairApprovalRequired: jest.fn().mockResolvedValue([]),
+              createRepairReadyForCollection: jest.fn().mockResolvedValue([]),
+              publishCommitted: jest.fn(),
+            },
+          },
           { provide: PrismaService, useValue: prisma },
           ImageAttachmentService,
           {

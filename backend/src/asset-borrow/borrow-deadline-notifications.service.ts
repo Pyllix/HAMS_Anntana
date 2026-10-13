@@ -118,6 +118,23 @@ export class BorrowDeadlineNotificationsService
           WHERE bs."status_code" = 'BORROWED'
             AND bt."expected_return_date" IS NOT NULL
             AND bt."expected_return_date" <= ${dueSoonCutoff}
+            AND (
+              EXISTS (
+                SELECT 1 FROM "users" AS borrower
+                WHERE borrower."id" = bt."borrower_id"
+                  AND borrower."deleted_at" IS NULL
+                  AND (borrower."banned" = false OR borrower."banned" IS NULL)
+              )
+              OR (
+                bt."expected_return_date" < ${now}
+                AND EXISTS (
+                  SELECT 1 FROM "users" AS staff
+                  WHERE staff."role" = 'ASSET_CENTER_STAFF'
+                    AND staff."deleted_at" IS NULL
+                    AND (staff."banned" = false OR staff."banned" IS NULL)
+                )
+              )
+            )
             AND NOT EXISTS (
               SELECT 1
               FROM "notifications" AS notification

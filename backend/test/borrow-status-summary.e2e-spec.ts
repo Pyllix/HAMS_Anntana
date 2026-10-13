@@ -734,6 +734,13 @@ describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
           provide: NotificationsService,
           useValue: {
             createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+            createBorrowApproved: jest.fn().mockResolvedValue([]),
+            createBorrowExtensionApprovalRequired: jest
+              .fn()
+              .mockResolvedValue([]),
+            createBorrowExtensionDecision: jest.fn().mockResolvedValue([]),
+            createRepairApprovalRequired: jest.fn().mockResolvedValue([]),
+            createRepairReadyForCollection: jest.fn().mockResolvedValue([]),
             publishCommitted: jest.fn(),
           },
         },

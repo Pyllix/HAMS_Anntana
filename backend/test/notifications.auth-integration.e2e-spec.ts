@@ -1531,7 +1531,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
           resourceType: NotificationResourceType.BORROW_TRANSACTION,
           resourceId: borrowId,
           eventKey: `read-all-test:${randomUUID()}`,
-          ...(createdAt ? { createdAt } : {}),
+          createdAt: createdAt ?? new Date(),
         },
         select: { id: true },
       });
@@ -1793,6 +1793,101 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       .set('X-CSRF-Token', otherUserCsrf.token)
       .send({ userId: firstCenterUserId })
       .expect(400);
+  });
+
+  it('keeps an arrival after the read-all cutoff unread even when its source transaction started earlier', async () => {
+    const existing = await prisma.notification.create({
+      data: {
+        userId: firstCenterUserId,
+        type: NotificationType.BORROW_APPROVAL_REQUIRED,
+        title: 'Existing read-all fixture',
+        message: 'Read-state integration fixture',
+        resourceType: NotificationResourceType.BORROW_TRANSACTION,
+        resourceId: randomUUID(),
+        eventKey: `read-all-existing:${randomUUID()}`,
+      },
+      select: { id: true },
+    });
+    const stream = await openStream(firstCenterCookie);
+    expect((await stream.reader.next(5_000)).frame?.event).toBe(
+      'notifications.sync_required',
+    );
+    const csrf = await getCsrfProof(firstCenterCookie);
+    const notifications = app.get<NotificationsService>(NotificationsService);
+    const sourceId = randomUUID();
+    borrowIds.push(sourceId);
+    let sourceStarted!: () => void;
+    const sourceTransactionStarted = new Promise<void>((resolve) => {
+      sourceStarted = resolve;
+    });
+    let permitInsertion!: () => void;
+    const insertionGate = new Promise<void>((resolve) => {
+      permitInsertion = resolve;
+    });
+    const sourceArrival = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT CURRENT_TIMESTAMP`;
+        sourceStarted();
+        await insertionGate;
+        return notifications.createBorrowApprovalRequired(
+          tx,
+          { id: sourceId, borrowNo: 'Read-all concurrent source' },
+          'Read-all test asset',
+        );
+      },
+      { timeout: 10_000 },
+    );
+    try {
+      await sourceTransactionStarted;
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      jest
+        .spyOn(notifications, 'markAllReadForUser')
+        .mockImplementationOnce(async (userId, cutoffAt) => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          permitInsertion();
+          notifications.publishCommitted(await sourceArrival);
+          jest.restoreAllMocks();
+          return notifications.markAllReadForUser(userId, cutoffAt);
+        });
+      const response = await request(server())
+        .patch('/notifications/read-all')
+        .set('Origin', 'http://localhost:5173')
+        .set('Cookie', csrf.cookie)
+        .set('X-CSRF-Token', csrf.token)
+        .send({})
+        .expect(200);
+      const readAll = requireRecord(response.body, 'read-all');
+      expect(requireNumber(readAll, 'updatedCount')).toBeGreaterThanOrEqual(1);
+      const arrival = (await sourceArrival).find(
+        ({ userId }) => userId === firstCenterUserId,
+      );
+      if (!arrival) throw new Error('Concurrent notification was not created');
+      const received = await waitForCreatedNotification(
+        stream.reader,
+        sourceId,
+        NotificationType.BORROW_APPROVAL_REQUIRED,
+      );
+      expect(received.readAt).toBeNull();
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.changed',
+      );
+      const history = parseNotificationListResponse(
+        await request(server())
+          .get('/notifications?limit=100')
+          .set('Cookie', firstCenterCookie)
+          .expect(200),
+      );
+      const byId = new Map(history.data.map((item) => [item.id, item]));
+      expect(byId.get(existing.id)?.readAt).toBe(
+        requireString(readAll, 'readAt'),
+      );
+      expect(byId.get(arrival.id)?.readAt).toBeNull();
+    } finally {
+      jest.restoreAllMocks();
+      permitInsertion();
+      await sourceArrival;
+      stream.controller.abort();
+    }
   });
 
   it('notifies only the department borrower after a committed approval', async () => {
@@ -3783,5 +3878,88 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       ),
     ).toHaveLength(4);
     restartedBorrowerStream.controller.abort();
+  });
+
+  it('excludes ineligible borrowers from deadline notifications while still notifying active center staff about overdue loans', async () => {
+    await refreshTicket03Sessions();
+    const now = new Date();
+    const deadline = new Date(now.getTime() + 60 * 60 * 1000);
+    borrowDeadlineNow = now;
+    const fixtures: Array<{ id: string; userId: string; cookie: string }> = [];
+    for (const borrower of [
+      { userId: departmentUserId, cookie: departmentCookie },
+      { userId: extensionRequesterUserId, cookie: extensionRequesterCookie },
+    ]) {
+      const assetId = await createDeadlineTestAsset(
+        `Ineligible borrower test asset ${randomUUID().slice(0, 8)}`,
+      );
+      const response = await request(server())
+        .post('/borrowings')
+        .set('Cookie', firstCenterCookie)
+        .send({
+          assetId,
+          borrowerId: borrower.userId,
+          deliveryMethod: 'PICKUP',
+          expectedReturnDate: deadline.toISOString(),
+        })
+        .expect(201);
+      const id = parseBorrowingResponse(response).id;
+      borrowIds.push(id);
+      fixtures.push({ id, ...borrower });
+    }
+    const firstCenterStream = await openStream(firstCenterCookie);
+    const secondCenterStream = await openStream(secondCenterCookie);
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      expect((await stream.reader.next(5_000)).frame?.event).toBe(
+        'notifications.sync_required',
+      );
+    }
+    try {
+      await prisma.user.update({
+        where: { id: departmentUserId },
+        data: { banned: true },
+      });
+      await prisma.user.update({
+        where: { id: extensionRequesterUserId },
+        data: { deletedAt: new Date() },
+      });
+      const scheduler = app.get(BorrowDeadlineNotificationsService);
+      await scheduler.runSweepOnce();
+      borrowDeadlineNow = new Date(deadline.getTime() + 1);
+      await scheduler.runSweepOnce();
+      await waitForCreatedNotification(
+        firstCenterStream.reader,
+        fixtures[0].id,
+        NotificationType.BORROW_OVERDUE,
+      );
+      await waitForCreatedNotification(
+        secondCenterStream.reader,
+        fixtures[1].id,
+        NotificationType.BORROW_OVERDUE,
+      );
+    } finally {
+      await prisma.user.update({
+        where: { id: departmentUserId },
+        data: { banned: false },
+      });
+      await prisma.user.update({
+        where: { id: extensionRequesterUserId },
+        data: { deletedAt: null },
+      });
+      firstCenterStream.controller.abort();
+      secondCenterStream.controller.abort();
+    }
+    // Re-enable the accounts only to inspect their persisted history through HTTP.
+    for (const fixture of fixtures) {
+      const history = parseNotificationListResponse(
+        await request(server())
+          .get('/notifications?limit=100')
+          .set('Cookie', fixture.cookie)
+          .expect(200),
+      );
+      expect(
+        history.data.filter(({ resourceId }) => resourceId === fixture.id),
+      ).toEqual([]);
+    }
   });
 });

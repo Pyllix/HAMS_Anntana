@@ -2,7 +2,9 @@
 
 วันที่: 2026-10-13
 
-สถานะ: BE implementation ของ Ticket 01–02 มี schema/migration, GET รายการ/จำนวนยังไม่อ่าน, PATCH อ่านรายรายการ/ทั้งหมด, SSE และเหตุการณ์คำขอยืมรออนุมัติแล้ว; API/SSE integration ผ่าน PostgreSQL บน `DEMO_DATABASE_URL`; เหตุการณ์ยืม/ซ่อมรายการอื่นและการเตือนวันคืนอยู่ใน Ticket 03–05
+สถานะ: BE implementation ของ Ticket 01–05 มี API รายการ/จำนวนยังไม่อ่าน, PATCH อ่านรายรายการ/ทั้งหมด, SSE, เหตุการณ์ยืม/ต่ออายุ/ซ่อม และการเตือนวันคืนแล้ว ใช้ API/SSE integration กับ PostgreSQL บน `DEMO_DATABASE_URL` สำหรับตรวจพฤติกรรม
+
+BE ต้อง apply migration `20261013170000_notification_insert_timestamp` ก่อนใช้งานโค้ดแก้ไข read-all โดยใช้ `prisma migrate deploy` ใน environment เป้าหมาย โค้ดสร้าง notification กำหนด `createdAt` จากเวลา BE เดียวกับ cutoff; database default สำรองใช้เวลาตอน insert
 
 ## SSE คืออะไร
 
