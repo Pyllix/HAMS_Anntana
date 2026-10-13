@@ -121,19 +121,15 @@ export class NotificationsService {
     userId: string,
     cutoffAt: Date,
   ): Promise<NotificationReadAllResponseDto> {
-    // The controller captures the cutoff before I/O; one statement keeps the update atomic.
-    const changed = await this.prisma.$queryRaw<{ readAt: Date }[]>`
-      WITH cutoff AS (
-        SELECT ${cutoffAt}::timestamp(3) AS value
-      )
-      UPDATE public.notifications AS target
-      SET read_at = cutoff.value
-      FROM cutoff
-      WHERE target.user_id = ${userId}
-        AND target.read_at IS NULL
-        AND target.created_at <= cutoff.value
-      RETURNING target.read_at AS "readAt"
-    `;
+    const changed = await this.prisma.notification.updateManyAndReturn({
+      where: {
+        userId,
+        readAt: null,
+        createdAt: { lte: cutoffAt },
+      },
+      data: { readAt: cutoffAt },
+      select: { readAt: true },
+    });
 
     if (changed.length > 0) this.publishReadStateChanged(userId);
     return {

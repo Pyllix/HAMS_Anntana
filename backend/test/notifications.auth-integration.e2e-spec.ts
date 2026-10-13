@@ -1338,11 +1338,16 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     jest
       .spyOn(notificationsService, 'markAllReadForUser')
       .mockImplementation(async (userId, cutoffAt) => {
-        const arrival = await createReadAllFixture(
-          'after-handler-cutoff',
-          new Date(cutoffAt.getTime() + 10_000),
-        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        const arrival = await createReadAllFixture('after-handler-cutoff');
         handlerCutoffFixtureId = arrival.id;
+        const arrivalRow = await prisma.notification.findUnique({
+          where: { id: arrival.id },
+          select: { createdAt: true },
+        });
+        expect(arrivalRow?.createdAt.getTime()).toBeGreaterThan(
+          cutoffAt.getTime(),
+        );
         jest.restoreAllMocks();
         return notificationsService.markAllReadForUser(userId, cutoffAt);
       });
