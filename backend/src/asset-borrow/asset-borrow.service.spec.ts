@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
 import { PrismaService } from '../prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   UserRole,
   ReturnCondition,
@@ -54,6 +55,11 @@ const mockPrismaService = {
   },
 };
 
+const mockNotificationsService = {
+  createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+  publishCommitted: jest.fn(),
+};
+
 describe('AssetBorrowService', () => {
   let service: AssetBorrowService;
   let prisma: any;
@@ -63,6 +69,7 @@ describe('AssetBorrowService', () => {
       providers: [
         AssetBorrowService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -153,6 +160,13 @@ describe('AssetBorrowService', () => {
       const dtoOther = { ...dto, borrowerId: 'user-id-99' }; // Client passes another ID
       await service.createBorrow(dtoOther, parcelUser);
 
+      expect(
+        mockNotificationsService.createBorrowApprovalRequired,
+      ).toHaveBeenCalledTimes(1);
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledTimes(
+        1,
+      );
+
       // Verify it ignored user-id-99 and used parcelUser's own ID with RESERVED / PENDING_APPROVE
       expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -202,6 +216,13 @@ describe('AssetBorrowService', () => {
 
       const dtoForOther = { ...dto, borrowerId: 'user-id-99' };
       await service.createBorrow(dtoForOther, acStaffUser);
+
+      expect(
+        mockNotificationsService.createBorrowApprovalRequired,
+      ).not.toHaveBeenCalled();
+      expect(mockNotificationsService.publishCommitted).toHaveBeenCalledWith(
+        [],
+      );
 
       expect(prisma.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({

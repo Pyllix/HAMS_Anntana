@@ -48,6 +48,7 @@ model User {
   cancelledBorrowTransactions BorrowTransaction[] @relation("BorrowCancelledBy")
   requestedBorrowExtensions   BorrowExtension[]   @relation("ExtensionRequestedBy")
   reviewedBorrowExtensions    BorrowExtension[]   @relation("ExtensionReviewedBy")
+  notifications                Notification[]
 
   //Spare parts relations
   sparepartAdds SparepartAdd[]

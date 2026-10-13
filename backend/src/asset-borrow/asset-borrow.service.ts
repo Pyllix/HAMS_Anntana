@@ -22,6 +22,7 @@ import {
   SwapCheckResponseDto,
 } from './dto/borrow-recommendation-response.dto';
 import { paginate, PaginatedResult } from '../common/utils/paginate.util';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   ReturnCondition,
   ReturnMethod,
@@ -104,7 +105,10 @@ export const BORROW_TRANSACTION_INCLUDE = {
 
 @Injectable()
 export class AssetBorrowService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async generateBorrowNo(
     tx?: Prisma.TransactionClient,
@@ -265,7 +269,7 @@ export class AssetBorrowService {
         ? pendingTxStatusId
         : borrowedTxStatusId;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Verify Asset exists, belongs to Asset Center, and is eligible
       const existingAsset = await tx.asset.findUnique({
         where: { id: dto.assetId },
@@ -335,8 +339,23 @@ export class AssetBorrowService {
         },
       });
 
-      return this.getBorrowTransactionWithIncludes(transaction.id, tx);
+      const pendingNotifications =
+        requestSource === RequestSource.SELF_SERVICE
+          ? await this.notifications.createBorrowApprovalRequired(
+              tx,
+              { id: transaction.id, borrowNo: transaction.borrowNo },
+              existingAsset.name,
+            )
+          : [];
+
+      return {
+        borrow: await this.getBorrowTransactionWithIncludes(transaction.id, tx),
+        notifications: pendingNotifications,
+      };
     });
+
+    this.notifications.publishCommitted(result.notifications);
+    return result.borrow;
   }
 
   async approveBorrow(id: string, user: any) {

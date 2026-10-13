@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { Client } from 'pg';
 import { AssetBorrowService } from '../src/asset-borrow/asset-borrow.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { PrismaService } from '../src/prisma.service';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -87,6 +88,13 @@ describeWithDatabase(
         providers: [
           AssetBorrowService,
           { provide: PrismaService, useValue: database },
+          {
+            provide: NotificationsService,
+            useValue: {
+              createBorrowApprovalRequired: jest.fn().mockResolvedValue([]),
+              publishCommitted: jest.fn(),
+            },
+          },
         ],
       }).compile();
       service = module.get(AssetBorrowService);

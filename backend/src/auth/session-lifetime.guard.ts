@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { SessionLifetimeService } from './session-lifetime.service';
+import { readSessionToken } from './auth-cookies';
 
 const SESSIONLESS_AUTH_ROUTES = new Set([
   'GET /auth/csrf',
@@ -13,12 +14,6 @@ const SESSIONLESS_AUTH_ROUTES = new Set([
   'POST /auth/sign-out',
   'POST /auth/send-verification-email',
 ]);
-
-const SESSION_COOKIE_NAMES = [
-  'better-auth.session_token',
-  '__Secure-better-auth.session_token',
-  '__Host-better-auth.session_token',
-];
 
 @Injectable()
 export class SessionLifetimeGuard implements CanActivate {
@@ -31,12 +26,7 @@ export class SessionLifetimeGuard implements CanActivate {
     const route = this.routeKey(request);
     if (SESSIONLESS_AUTH_ROUTES.has(route)) return true;
 
-    const cookieToken = SESSION_COOKIE_NAMES.map((name) =>
-      this.readCookie(request, name),
-    )
-      .map((token) => token?.split('.', 1)[0])
-      .find((token): token is string => Boolean(token));
-    const token = cookieToken;
+    const token = readSessionToken(request);
     if (!token) return true;
 
     const userActivity = request.headers['x-user-activity'] === '1';
@@ -56,23 +46,6 @@ export class SessionLifetimeGuard implements CanActivate {
     return true;
   }
 
-  private readCookie(request: Request, name: string): string | undefined {
-    const parsed = (request as Request & { cookies?: Record<string, string> })
-      .cookies;
-    if (parsed?.[name]) return parsed[name];
-
-    for (const part of request.headers.cookie?.split(';') ?? []) {
-      const separator = part.indexOf('=');
-      if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
-      const value = part.slice(separator + 1).trim();
-      try {
-        return decodeURIComponent(value);
-      } catch {
-        return value;
-      }
-    }
-    return undefined;
-  }
   private routeKey(request: Request): string {
     const path = (request.baseUrl ?? '') + (request.path ?? '');
     const normalized = path.replace(/\/+$/, '');
