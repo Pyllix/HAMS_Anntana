@@ -42,8 +42,13 @@ import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useRejectModalStore } from "../stores/useRejectModalStore";
 import { useRejectExtensionModalStore } from "../stores/useRejectExtensionModalStore";
 import { useCompleteReturnModalStore } from "../stores/useCompleteReturnModalStore";
+import NotificationResourceDialog from "../components/notifications/NotificationResourceDialog";
+import { useNotificationResourceParams } from "../hooks/useNotificationResourceParams";
+import { assetCenterTabForNotification } from "../services/notificationTargets";
 
 type TabId = "borrow" | "approve" | "extension" | "return";
+
+const BORROW_RESOURCE_TYPES = ["BORROW_TRANSACTION", "BORROW_EXTENSION"];
 
 export default function AssetCenterBorrowReturn() {
   const user = useAuthStore((state) => state.user);
@@ -73,6 +78,26 @@ export default function AssetCenterBorrowReturn() {
   const pendingExtensionCount = pendingExtensionQuery.data?.meta.total;
 
   const [activeTab, setActiveTab] = useState<TabId>("borrow");
+  const {
+    resource: notificationResource,
+    notificationType,
+    clear: clearNotificationResource,
+  } = useNotificationResourceParams();
+  const borrowResource =
+    notificationResource &&
+    BORROW_RESOURCE_TYPES.includes(notificationResource.resourceType)
+      ? notificationResource
+      : null;
+  const borrowResourceKey = borrowResource
+    ? `${notificationType ?? ""}:${borrowResource.resourceType}:${borrowResource.resourceId}`
+    : null;
+  const [openedResourceKey, setOpenedResourceKey] = useState<string | null>(null);
+  // มาจากการแจ้งเตือน: คำขอที่ต้องพิจารณาเปิดแท็บอนุมัติที่ตรงกัน ส่วนแจ้งเตือนอื่นแสดงแค่รายละเอียดล่าสุด
+  if (borrowResourceKey !== openedResourceKey) {
+    setOpenedResourceKey(borrowResourceKey);
+    const notificationTab = assetCenterTabForNotification(notificationType);
+    if (borrowResourceKey && notificationTab) setActiveTab(notificationTab);
+  }
   const [inputSearch, setInputSearch] = useState("");
   const [category, setCategory] = useState("ALL");
   const [type, setType] = useState("ALL");
@@ -319,6 +344,15 @@ export default function AssetCenterBorrowReturn() {
       {isFormOpenReject && <RejectBorrowModal />}
       {isFormOpenCompleteReturn && <CompleteReturnModal />}
       {isFormOpenRejectExtension && <RejectExtensionModal />}
+      {borrowResource && (
+        <NotificationResourceDialog
+          key={borrowResourceKey}
+          resourceType={borrowResource.resourceType}
+          resourceId={borrowResource.resourceId}
+          notificationType={notificationType}
+          onClose={clearNotificationResource}
+        />
+      )}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />

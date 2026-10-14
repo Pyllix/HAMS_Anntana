@@ -1,6 +1,11 @@
 import { Shield } from "lucide-react";
 import NotificationBell from "../components/notifications/NotificationBell";
-import ParcelNotificationBell from "../components/notifications/ParcelNotificationBell";
+import ServerNotificationBell from "../components/notifications/ServerNotificationBell";
+import {
+  resolveAssetCenterNotificationTarget,
+  resolveDepartmentNotificationTarget,
+  resolveParcelNotificationTarget,
+} from "../services/notificationTargets";
 import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
@@ -20,6 +25,8 @@ export default function Header() {
   const headerTitle = currentRoute?.title ?? "ระบบการจัดการ";
   const isRepairWorkPage = pathname === "/accept-work";
   const isParcelStaff = user?.role === ROLES.PARCEL_STAFF;
+  const isDepartmentStaff = user?.role === ROLES.DEPARTMENT_STAFF;
+  const isAssetCenterStaff = user?.role === ROLES.ASSET_CENTER_STAFF;
   const userInitial = user?.firstname?.charAt(0).toUpperCase() || "U";
   const userFullName = `${user?.firstname ?? ""} ${user?.lastname ?? ""}`.trim() || "User";
 
@@ -30,7 +37,27 @@ export default function Header() {
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
         {isRepairWorkPage && <NotificationBell />}
-        {isParcelStaff && <ParcelNotificationBell />}
+        {/* key ตาม user.id: สลับบัญชีแล้ว bell ถูกสร้างใหม่ ไม่มี state/connection ของบัญชีเก่าค้าง */}
+        {isParcelStaff && (
+          <ServerNotificationBell
+            key={user.id}
+            resolveTarget={resolveParcelNotificationTarget}
+            ariaLabel="การแจ้งเตือนเจ้าหน้าที่พัสดุ"
+          />
+        )}
+        {isDepartmentStaff && (
+          <ServerNotificationBell
+            key={user.id}
+            resolveTarget={resolveDepartmentNotificationTarget}
+          />
+        )}
+        {isAssetCenterStaff && (
+          <ServerNotificationBell
+            key={user.id}
+            resolveTarget={resolveAssetCenterNotificationTarget}
+            ariaLabel="การแจ้งเตือนเจ้าหน้าที่ศูนย์ครุภัณฑ์"
+          />
+        )}
         <div className="flex items-center gap-3 border-l border-slate-200 pl-3 sm:pl-4">
           <EmployeePhotoDisplay
             userId={user?.id}

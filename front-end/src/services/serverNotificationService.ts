@@ -1,4 +1,5 @@
 import { API_BASE_PATH, apiClient } from "./apiClient";
+import type { NotificationEventSource } from "./notificationStream";
 import type {
   NotificationReadAllResult,
   NotificationUnreadCount,
@@ -8,7 +9,7 @@ import type {
 
 const NOTIFICATION_PATH = "/notifications";
 
-export async function getParcelNotifications(
+export async function getNotifications(
   page = 1,
   limit = 20,
 ): Promise<ServerNotificationPage> {
@@ -19,14 +20,14 @@ export async function getParcelNotifications(
   return response.data;
 }
 
-export async function getParcelUnreadCount(): Promise<number> {
+export async function getUnreadNotificationCount(): Promise<number> {
   const response = await apiClient.get<NotificationUnreadCount>(
     `${NOTIFICATION_PATH}/unread-count`,
   );
   return response.data.count;
 }
 
-export async function markParcelNotificationRead(
+export async function markNotificationRead(
   notificationId: string,
 ): Promise<ServerNotification> {
   const response = await apiClient.patch<ServerNotification>(
@@ -36,7 +37,7 @@ export async function markParcelNotificationRead(
   return response.data;
 }
 
-export async function markAllParcelNotificationsRead(): Promise<NotificationReadAllResult> {
+export async function markAllNotificationsRead(): Promise<NotificationReadAllResult> {
   const response = await apiClient.patch<NotificationReadAllResult>(
     `${NOTIFICATION_PATH}/read-all`,
     {},
@@ -44,9 +45,9 @@ export async function markAllParcelNotificationsRead(): Promise<NotificationRead
   return response.data;
 }
 
-export function openParcelNotificationStream(): EventSource {
+// SSE ยืนยันตัวตนด้วย session cookie (backend อ่าน cookie จาก request) จึงต้องส่ง credentials ไปด้วย
+export function openNotificationStream(): NotificationEventSource {
   return new EventSource(`${API_BASE_PATH}${NOTIFICATION_PATH}/stream`, {
     withCredentials: true,
   });
 }
-

@@ -11,11 +11,31 @@ import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useRequestReturnModalStore } from "../stores/useRequestReturnModalStore";
 import { useExtensionModalStore } from "../stores/useExtensionModalStore";
 import { useSelfBorrowModalStore } from "../stores/useSelfBorrowModalStore";
+import NotificationResourceDialog from "../components/notifications/NotificationResourceDialog";
+import { useNotificationResourceParams } from "../hooks/useNotificationResourceParams";
 
 type TabId = "borrow" | "return";
 
+const BORROW_RESOURCE_TYPES = ["BORROW_TRANSACTION", "BORROW_EXTENSION"];
+
 export default function DepartMentBorrowReturn() {
   const [activeTab, setActiveTab] = useState<TabId>("borrow");
+  const { resource: notificationResource, clear: clearNotificationResource } =
+    useNotificationResourceParams();
+  const borrowResource =
+    notificationResource &&
+    BORROW_RESOURCE_TYPES.includes(notificationResource.resourceType)
+      ? notificationResource
+      : null;
+  const borrowResourceKey = borrowResource
+    ? `${borrowResource.resourceType}:${borrowResource.resourceId}`
+    : null;
+  const [openedResourceKey, setOpenedResourceKey] = useState<string | null>(null);
+  // มาจากการแจ้งเตือนการยืม: สลับไปแท็บคืนครุภัณฑ์ซึ่งเป็นรายการยืมของแผนก
+  if (borrowResourceKey !== openedResourceKey) {
+    setOpenedResourceKey(borrowResourceKey);
+    if (borrowResourceKey) setActiveTab("return");
+  }
   const [inputSearch, setInputSearch] = useState("");
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useSelfBorrowModalStore();
@@ -115,6 +135,14 @@ export default function DepartMentBorrowReturn() {
       {isFormOpen && <SelfBorrowModal />}
       {isRequestReturnOpen && <RequestReturnModal />}
       {isExtensionOpen && <RequestExtensionModal />}
+      {borrowResource && (
+        <NotificationResourceDialog
+          key={borrowResourceKey}
+          resourceType={borrowResource.resourceType}
+          resourceId={borrowResource.resourceId}
+          onClose={clearNotificationResource}
+        />
+      )}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />

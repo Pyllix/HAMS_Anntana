@@ -20,6 +20,8 @@ import { useAuthStore } from "../stores/authStore";
 import { ROLES } from "../router/roles";
 import StatCards from "../components/borrow-return/StatCards";
 import type { StatCardData } from "../components/borrow-return/StatCards";
+import NotificationResourceDialog from "../components/notifications/NotificationResourceDialog";
+import { useNotificationResourceParams } from "../hooks/useNotificationResourceParams";
 
 // จัดกลุ่มสถานะงานซ่อม (job status code) สำหรับการ์ดสรุป
 const STATUS_GROUPS = [
@@ -71,6 +73,10 @@ export default function TrackingAssetCenter({}) {
     queryFn: getLookUp,
   });
   const statusOptions = lookups?.jobStatuses ?? [];
+  const { resource: notificationResource, clear: clearNotificationResource } =
+    useNotificationResourceParams();
+  const repairResource =
+    notificationResource?.resourceType === "REPAIR_JOB" ? notificationResource : null;
 
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
@@ -331,6 +337,15 @@ export default function TrackingAssetCenter({}) {
           statusCodes={statusCodes}
         />
       </div>
+
+      {repairResource && (
+        <NotificationResourceDialog
+          key={repairResource.resourceId}
+          resourceType={repairResource.resourceType}
+          resourceId={repairResource.resourceId}
+          onClose={clearNotificationResource}
+        />
+      )}
     </div>
   );
 }

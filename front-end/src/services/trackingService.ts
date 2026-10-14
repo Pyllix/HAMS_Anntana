@@ -181,3 +181,9 @@ export async function getLookUp(): Promise<RepairsLookupMeta> {
 
   return res.data;
 }
+
+// ใช้เปิดรายละเอียดงานซ่อมจากการแจ้งเตือน
+export async function getRepairById(id: string): Promise<TrackRes> {
+  const res = await apiClient.get<TrackRes>(`/repairs/${encodeURIComponent(id)}`);
+  return res.data;
+}

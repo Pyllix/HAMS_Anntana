@@ -375,3 +375,40 @@ export async function reviewBorrowExtension(
   );
   return res.data;
 }
+
+export type BorrowingDetail = BorrowHistory & {
+  extensions?: Array<
+    Pick<
+      BorrowExtension,
+      | "id"
+      | "status"
+      | "roundNumber"
+      | "currentReturnDate"
+      | "requestedReturnDate"
+      | "reason"
+      | "rejectReason"
+      | "createdAt"
+    >
+  >;
+};
+
+// ใช้เปิดรายละเอียดจากการแจ้งเตือน (backend ตรวจสิทธิ์ตามแผนกให้แล้ว)
+export async function getBorrowingById(id: string): Promise<BorrowingDetail> {
+  const res = await apiClient.get<BorrowingDetail>(
+    `/borrowings/${encodeURIComponent(id)}`,
+  );
+  return res.data;
+}
+
+const EXTENSION_LOOKUP_LIMIT = 100;
+
+// backend ยังไม่มี GET /borrowings/extensions/:id จึงค้นจากคำขอล่าสุดของแผนก (สูงสุด 100 รายการ)
+export async function findBorrowExtensionById(
+  id: string,
+): Promise<BorrowExtension | null> {
+  const res = await apiClient.get<{ data: BorrowExtension[] }>(
+    "/borrowings/extensions/requests",
+    { params: { page: 1, limit: EXTENSION_LOOKUP_LIMIT } },
+  );
+  return res.data.data.find((extension) => extension.id === id) ?? null;
+}
