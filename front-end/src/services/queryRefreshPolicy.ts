@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 const assets = ["assets", "equipment-assets-paginated", "kpi-status", "kpi-total-assets", "kpi-normal-assets", "kpi-damaged-assets", "asset-viability-list", "asset-viability-detail", "asset-viability", "assetViability", "borrowRecommendations"];
 const repairs = ["pendingEvaluations", "repairHistory", "repairConfirmations", "repairsHistory", "spare-approval-requests", "outsource-approval-requests", "unrepairable-receipts", "mechanicWorkloads", "repairMechanics", "mechanics"];
 export function queryFamiliesForWrite(path: string): string[] {
-  if (path.startsWith("/borrowings")) return [...assets, "borrowHistory"];
+  if (path.startsWith("/borrowings")) return [...assets, "borrowHistory", "borrowExtensions"];
   if (path.startsWith("/repairs")) return [...repairs, ...assets, "borrowHistory", "spareParts"];
   if (path.startsWith("/spare-parts")) return ["spareParts", "partOrders", ...repairs];
   if (path.startsWith("/asset")) return assets;

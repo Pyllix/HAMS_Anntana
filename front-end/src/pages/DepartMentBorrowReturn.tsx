@@ -5,9 +5,11 @@ import { getAssetTypes } from "../services/assetService";
 import AvailableAssetsTable from "../components/borrow-return/AvailableAssetsTable";
 import DepartmentBorrowingsTable from "../components/borrow-return/DepartmentBorrowingsTable";
 import RequestReturnModal from "../components/borrow-return/RequestReturnModal";
+import RequestExtensionModal from "../components/borrow-return/RequestExtensionModal";
 import SelfBorrowModal from "../components/borrow-return/SelfBorrowModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useRequestReturnModalStore } from "../stores/useRequestReturnModalStore";
+import { useExtensionModalStore } from "../stores/useExtensionModalStore";
 import { useSelfBorrowModalStore } from "../stores/useSelfBorrowModalStore";
 
 type TabId = "borrow" | "return";
@@ -18,6 +20,7 @@ export default function DepartMentBorrowReturn() {
   const [type, setType] = useState("ALL");
   const { isFormOpen } = useSelfBorrowModalStore();
   const isRequestReturnOpen = useRequestReturnModalStore((s) => s.isFormOpen);
+  const isExtensionOpen = useExtensionModalStore((s) => s.isFormOpen);
 
   const { data: assetTypes } = useQuery({
     queryKey: ["assetTypes"],
@@ -111,6 +114,7 @@ export default function DepartMentBorrowReturn() {
       {/* Modal */}
       {isFormOpen && <SelfBorrowModal />}
       {isRequestReturnOpen && <RequestReturnModal />}
+      {isExtensionOpen && <RequestExtensionModal />}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />

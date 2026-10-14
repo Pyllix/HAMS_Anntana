@@ -41,6 +41,22 @@ export function getBorrowErrorMessage(err: any): string {
     return "ไม่สามารถทำรายการได้ เนื่องจากสถานะของรายการยืมมีการเปลี่ยนแปลงไปแล้ว กรุณารีเฟรชหน้าจอแล้วลองใหม่อีกครั้ง";
   }
 
+  if (/already a pending extension request/i.test(raw)) {
+    return "รายการยืมนี้มีคำขอต่อเวลาที่รออนุมัติอยู่แล้ว";
+  }
+
+  if (/cannot request extension: transaction must be in borrowed/i.test(raw)) {
+    return "ขอต่อเวลาได้เฉพาะรายการที่อยู่ในสถานะกำลังยืมเท่านั้น";
+  }
+
+  if (/must be after current return date/i.test(raw)) {
+    return "วันที่ขอคืนใหม่ต้องอยู่หลังกำหนดคืนเดิม";
+  }
+
+  if (/cannot (review|cancel) extension: current status/i.test(raw)) {
+    return "คำขอต่อเวลานี้ถูกดำเนินการไปแล้ว กรุณารีเฟรชหน้าจอแล้วลองใหม่อีกครั้ง";
+  }
+
   return raw || "เกิดข้อผิดพลาดในการทำรายการ กรุณาลองใหม่อีกครั้ง";
 }
 
@@ -130,6 +146,8 @@ export interface BorrowHistory {
   isOverdue?: boolean;
   remainingDays?: number;
   overdueDays?: number;
+  extensionCount?: number;
+  hasPendingExtension?: boolean;
   asset: {
     id: string;
     noid?: string;
@@ -288,6 +306,72 @@ export async function getBorrowRecommendations(params: {
   const res = await apiClient.get<BorrowRecommendations>(
     "/borrowings/recommendations",
     { params },
+  );
+  return res.data;
+}
+
+export type BorrowExtensionStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+interface ExtensionUser {
+  id: string;
+  employeeId: string;
+  firstname: string;
+  lastname: string;
+}
+
+export interface BorrowExtension {
+  id: string;
+  borrowTransactionId: string;
+  extensionType: "DESK" | "ONLINE";
+  status: BorrowExtensionStatus;
+  roundNumber: number;
+  currentReturnDate: string;
+  requestedReturnDate: string;
+  reason: string;
+  rejectReason: string | null;
+  createdAt: string;
+  requestedByUser: ExtensionUser;
+  reviewedByUser: ExtensionUser | null;
+  borrowTransaction: {
+    id: string;
+    borrowNo: string;
+    expectedReturnDate: string | null;
+    asset: { id: string; noid?: string; name: string; model: string };
+    borrower: ExtensionUser & { section_id: string };
+  };
+}
+
+export interface CreateExtensionReq {
+  requestedReturnDate: string;
+  reason: string;
+}
+
+// ใช้ให้แผนกขอต่อเวลายืม (ศูนย์ครุภัณฑ์เป็นผู้อนุมัติ)
+export async function createBorrowExtension(
+  id: string,
+  data: CreateExtensionReq,
+) {
+  const res = await apiClient.post(`/borrowings/${id}/extensions`, data);
+  return res.data;
+}
+
+export interface ReviewExtensionReq {
+  status: "APPROVED" | "REJECTED";
+  rejectReason?: string;
+}
+
+// ใช้ให้ศูนย์ครุภัณฑ์อนุมัติ/ปฏิเสธคำขอต่อเวลา
+export async function reviewBorrowExtension(
+  extensionId: string,
+  data: ReviewExtensionReq,
+) {
+  const res = await apiClient.patch(
+    `/borrowings/extensions/${extensionId}/review`,
+    data,
   );
   return res.data;
 }

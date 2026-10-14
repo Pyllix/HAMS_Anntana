@@ -1,8 +1,9 @@
 import { useForegroundQuery } from "../hooks/useServerPage";
-import { getSummary, statusCount } from "../services/pagedApi";
+import { getPage, getSummary, statusCount } from "../services/pagedApi";
 import type { AssetSummary, StatusSummary } from "../services/pagedApi";
 import QueryStatus from "../components/shared/QueryStatus";
 import {
+  CalendarClock,
   Check,
   ChevronDown,
   Clock,
@@ -33,13 +34,16 @@ import PendingApprovalTable from "../components/borrow-return/PendingApprovalTab
 import PendingHandoverTable from "../components/borrow-return/PendingHandoverTable";
 import PendingPickupTable from "../components/borrow-return/PendingPickupTable";
 import PendingCompleteReturnTable from "../components/borrow-return/PendingCompleteReturnTable";
+import PendingExtensionTable from "../components/borrow-return/PendingExtensionTable";
 import RejectBorrowModal from "../components/borrow-return/RejectBorrowModal";
+import RejectExtensionModal from "../components/borrow-return/RejectExtensionModal";
 import CompleteReturnModal from "../components/borrow-return/CompleteReturnModal";
 import ToastContainer from "../components/borrow-return/ToastContainer";
 import { useRejectModalStore } from "../stores/useRejectModalStore";
+import { useRejectExtensionModalStore } from "../stores/useRejectExtensionModalStore";
 import { useCompleteReturnModalStore } from "../stores/useCompleteReturnModalStore";
 
-type TabId = "borrow" | "approve" | "return";
+type TabId = "borrow" | "approve" | "extension" | "return";
 
 export default function AssetCenterBorrowReturn() {
   const user = useAuthStore((state) => state.user);
@@ -63,6 +67,10 @@ export default function AssetCenterBorrowReturn() {
     (signal) => getSummary<StatusSummary>("/borrowings/summary", {}, signal), true);
   const pendingApproveCount = statusCount(borrowSummaryQuery.data, ["PENDING_APPROVE", "APPROVED"]);
   const pendingReturnCount = statusCount(borrowSummaryQuery.data, ["PENDING_RETURN", "IN_PICKUP"]);
+  // ใช้ limit=1 เพื่อดึงแค่จำนวนคำขอต่อเวลาที่รออนุมัติ (meta.total) มาแสดงเป็น badge
+  const pendingExtensionQuery = useForegroundQuery(["borrowExtensions", "pendingCount"],
+    (signal) => getPage("/borrowings/extensions/requests", { status: "PENDING", limit: 1 }, signal), true);
+  const pendingExtensionCount = pendingExtensionQuery.data?.meta.total;
 
   const [activeTab, setActiveTab] = useState<TabId>("borrow");
   const [inputSearch, setInputSearch] = useState("");
@@ -72,6 +80,7 @@ export default function AssetCenterBorrowReturn() {
   const { isFormOpen: isFormOpenReturn } = useReturnModalStore();
   const { isFormOpen: isFormOpenReject } = useRejectModalStore();
   const { isFormOpen: isFormOpenCompleteReturn } = useCompleteReturnModalStore();
+  const isFormOpenRejectExtension = useRejectExtensionModalStore((s) => s.isFormOpen);
 
   const tabs: Array<{
     id: TabId;
@@ -85,6 +94,12 @@ export default function AssetCenterBorrowReturn() {
       label: "อนุมัติคำขอยืม",
       icon: FileCheck,
       badge: pendingApproveCount,
+    },
+    {
+      id: "extension",
+      label: "อนุมัติต่อเวลา",
+      icon: CalendarClock,
+      badge: pendingExtensionCount,
     },
     {
       id: "return",
@@ -285,6 +300,12 @@ export default function AssetCenterBorrowReturn() {
         </div>
       )}
 
+      {activeTab === "extension" && (
+        <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
+          <PendingExtensionTable />
+        </div>
+      )}
+
       {activeTab === "return" && (
         <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
           <PendingPickupTable />
@@ -297,6 +318,7 @@ export default function AssetCenterBorrowReturn() {
       {isFormOpenReturn && <ReturnModal />}
       {isFormOpenReject && <RejectBorrowModal />}
       {isFormOpenCompleteReturn && <CompleteReturnModal />}
+      {isFormOpenRejectExtension && <RejectExtensionModal />}
 
       {/* Toast แจ้งเตือน */}
       <ToastContainer />

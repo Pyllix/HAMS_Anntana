@@ -18,6 +18,7 @@ import {
 } from "../../services/borrowService";
 import { useAuthStore } from "../../stores/authStore";
 import { useRequestReturnModalStore } from "../../stores/useRequestReturnModalStore";
+import { useExtensionModalStore } from "../../stores/useExtensionModalStore";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -164,17 +165,33 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
 
       if (code === "BORROWED") {
         return (
-          <button
-            type="button"
-            onClick={() => useRequestReturnModalStore.getState().openForm(row)}
-            className={`w-28 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors ${
-              row.isOverdue
-                ? "bg-rose-600 hover:bg-rose-700"
-                : "bg-emerald-600 hover:bg-emerald-700"
-            }`}
-          >
-            แจ้งคืน
-          </button>
+          // วางปุ่มซ้อนกันแนวตั้ง เพื่อไม่ให้คอลัมน์จัดการกว้างจนหลุดขอบตาราง
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => useRequestReturnModalStore.getState().openForm(row)}
+              className={`w-28 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors ${
+                row.isOverdue
+                  ? "bg-rose-600 hover:bg-rose-700"
+                  : "bg-emerald-600 hover:bg-emerald-700"
+              }`}
+            >
+              แจ้งคืน
+            </button>
+            {row.hasPendingExtension ? (
+              <span className="inline-flex w-28 justify-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-600">
+                รออนุมัติต่อเวลา
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => useExtensionModalStore.getState().openForm(row)}
+                className="w-28 rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-sm font-medium text-sky-700 shadow-sm transition-colors hover:bg-sky-50"
+              >
+                ขอต่อเวลา
+              </button>
+            )}
+          </div>
         );
       }
 
