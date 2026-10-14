@@ -1,9 +1,10 @@
 import { Shield } from "lucide-react";
 import NotificationBell from "../components/notifications/NotificationBell";
+import ParcelNotificationBell from "../components/notifications/ParcelNotificationBell";
 import { matchPath, NavLink, useLocation } from "react-router-dom";
 import { APP_ROUTE } from "../router/routes.config";
 import { useAuthStore } from "../stores/authStore";
-import { ROLE_LABELS } from "../router/roles";
+import { ROLE_LABELS, ROLES } from "../router/roles";
 import EmployeePhotoDisplay from "../components/shared/EmployeePhotoDisplay";
 
 export default function Header() {
@@ -18,6 +19,7 @@ export default function Header() {
   });
   const headerTitle = currentRoute?.title ?? "ระบบการจัดการ";
   const isRepairWorkPage = pathname === "/accept-work";
+  const isParcelStaff = user?.role === ROLES.PARCEL_STAFF;
   const userInitial = user?.firstname?.charAt(0).toUpperCase() || "U";
   const userFullName = `${user?.firstname ?? ""} ${user?.lastname ?? ""}`.trim() || "User";
 
@@ -28,6 +30,7 @@ export default function Header() {
       </h1>
       <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
         {isRepairWorkPage && <NotificationBell />}
+        {isParcelStaff && <ParcelNotificationBell />}
         <div className="flex items-center gap-3 border-l border-slate-200 pl-3 sm:pl-4">
           <EmployeePhotoDisplay
             userId={user?.id}
