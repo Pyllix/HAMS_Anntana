@@ -83,11 +83,29 @@ void test('presentation center can be found by the ready-assets UI and borrow AP
 void test('presentation uses all original identities and preserves workflow actor keys', () => {
   const fixture = build();
   assert.equal(fixture.users.length, originalUsers.length + 3);
-  assert.equal(originalUsers.length, 28);
+  assert.equal(originalUsers.length, 41);
   assert.equal(
     new Set(originalPresentationUsers.map((user) => user.key)).size,
-    28,
+    originalUsers.length,
   );
+  for (const [role, section] of [
+    ['PARCEL_STAFF', 'PARCEL'],
+    ['ASSET_CENTER_STAFF', 'CENTER'],
+  ]) {
+    const staff = fixture.users.filter((user) => user.role === role);
+    assert.equal(staff.length, 8);
+    assert.ok(
+      staff.every(
+        (user) => user.section === section && user.verified && !user.deleted,
+      ),
+    );
+  }
+  for (const field of ['employeeId', 'userName', 'email'] as const) {
+    assert.equal(
+      new Set(originalUsers.map((user) => user[field])).size,
+      originalUsers.length,
+    );
+  }
   for (const { key, profile } of originalPresentationUsers) {
     const user = fixture.users.find((row) => row.key === key);
     assert.equal(user?.role, profile.role);

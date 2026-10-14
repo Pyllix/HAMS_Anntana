@@ -15,7 +15,10 @@ import {
   seedPresentation,
 } from './presentation/seed';
 import { checkPresentation } from './presentation/check';
-import { restoreOriginalPresentationUsers } from './presentation/users';
+import {
+  extendPresentationStaff,
+  restoreOriginalPresentationUsers,
+} from './presentation/users';
 import { repairPresentationCenterSection } from './presentation/sections';
 import { attachPresentationSampleImages } from './presentation/images';
 import { relabelPresentation } from './presentation/relabel';
@@ -171,6 +174,17 @@ async function main(): Promise<void> {
           process.env.DEMO_PRESENTATION_PASSWORD ?? '',
         )
       : null;
+    if (existing?.userProfile === 'original-seed-v1' || restored) {
+      const staff = await extendPresentationStaff(
+        prisma,
+        buildPresentationFixture(presentationDate(existing!.date)),
+      );
+      existing = staff.manifest;
+      if (staff.added)
+        console.info(
+          `Added ${staff.added} presentation staff accounts; existing passwords and security records preserved.`,
+        );
+    }
     const extension = existing
       ? await extendPresentationParts(
           prisma,
