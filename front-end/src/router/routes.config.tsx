@@ -133,12 +133,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "ประเมินความคุ้มค่าครุภัณฑ์",
     element: <AssetViabilityPage />,
     icon: Scale,
-    roles: [
-      ROLES.PARCEL_STAFF,
-      ROLES.MAINTENANCE_HEAD,
-      ROLES.MANAGER,
-      ROLES.ADMIN,
-    ],
+    roles: [ROLES.PARCEL_STAFF],
     showInNav: true,
   },
   {
