@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Shield,
   Scale,
+  FileText,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../pages/AssetCenterBorrowReturn";
@@ -40,6 +41,7 @@ import OutsourceApprovals from "../pages/OutsourceApprovals";
 import ParcelRepairOperations from "../pages/ParcelRepairOperations";
 import ExpenseForecast from "../pages/ExpenseForecast";
 import AccountSecurity from "../pages/AccountSecurity";
+import WithdrawalReport from "../pages/WithdrawalReport";
 
 interface AppRote {
   path: string;
@@ -178,6 +180,14 @@ export const APP_ROUTE: AppRote[] = [
     element: <OrderSpareParts />,
     icon: ToolCase,
     roles: [ROLES.PARCEL_STAFF],
+    showInNav: true,
+  },
+  {
+    path: "withdrawal-report",
+    title: "รายงานการเบิกอะไหล่",
+    element: <WithdrawalReport />,
+    icon: FileText,
+    roles: [ROLES.PARCEL_STAFF, ROLES.MANAGER],
     showInNav: true,
   },
   {
