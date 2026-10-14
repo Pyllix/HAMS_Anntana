@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { getAssetTypes } from "../services/assetService";
 import { useQuery } from "@tanstack/react-query";
@@ -48,8 +49,9 @@ export default function UnrepairableReceipts({ embedded = false }: { embedded?: 
     <div className="mb-2 flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-white px-5 py-3">
       <label className="relative w-full sm:max-w-sm"><span className="sr-only">ค้นหารหัสหรือชื่อครุภัณฑ์</span><Search size={18} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="ค้นหารหัส / ชื่อครุภัณฑ์ / เลขงานซ่อม" className="w-full rounded-lg border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-emerald-500" /></label>
       <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-xs text-slate-500">หมวดหมู่:<select aria-label="หมวดหมู่ครุภัณฑ์" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }} className="max-w-52 bg-white font-semibold text-emerald-700 outline-none"><option value="">ทั้งหมด</option>{categories.map((name) => <option key={name} value={name}>{name}</option>)}{category && !categories.includes(category) && <option value={category}>{category}</option>}</select></label>
+      {embedded && <div className="ml-auto"><RefreshButton query={query} /></div>}
     </div>
-    <RefreshToolbar query={query} />
+    {!embedded && <RefreshToolbar query={query} />}
     <div className="min-h-[360px] flex-1 overflow-hidden rounded-b-xl bg-white">
       {query.isError && !query.data ? <div role="alert" className="m-6 rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"><p>{receiptError(query.error)}</p></div>
         : query.isLoading ? <div role="status" className="flex justify-center gap-2 py-24 text-sm text-slate-500"><Loader2 size={20} className="animate-spin" />กำลังโหลดรายการรับคืน…</div>
