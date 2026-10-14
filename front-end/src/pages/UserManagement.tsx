@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import UserTable from "../components/user-management/UserTable";
 import InputSearch from "../components/user-management/InputSearch";
 import RoleFilter from "../components/user-management/RoleFilter";
@@ -24,12 +25,13 @@ export default function UserManagement() {
         <InputSearch value={search} onChange={setSearch} />
         <RoleFilter value={role} onChange={setRole} />
         <StatusFilter value={status} onChange={setStatus} />
-        <div className="md:ml-auto">
+        <div className="md:ml-auto flex flex-wrap items-center gap-2">
           <BtnAdd clickOpen={() => setIsOpenAdd(true)} />
         </div>
       </div>
 
       {/* Table */}
+      <RefreshToolbar families={["users"]} />
       <div className="flex-1 overflow-hidden border-none">
         <UserTable search={search} role={role} status={status} />
       </div>

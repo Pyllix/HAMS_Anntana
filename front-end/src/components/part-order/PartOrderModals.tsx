@@ -248,7 +248,7 @@ export function PartOrderCreateModal() {
                     );
                   })
                 )}
-                <QueryStatus query={partsQuery} />
+                <QueryStatus query={partsQuery} retry />
                 <nav aria-label="หน้าอะไหล่" className="flex items-center justify-between gap-2 border-t p-2 text-xs">
   <button type="button" disabled={partsQuery.page === 1 || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page - 1)}>ก่อนหน้า</button>
   <span>หน้า {partsQuery.page} / {partsQuery.totalPages} ({partsQuery.total} รายการ)</span>
@@ -259,7 +259,7 @@ export function PartOrderCreateModal() {
           </div>
 
           {/* สรุปข้อมูลอะไหล่ที่เลือก (Fixed layout to avoid jumping) */}
-          <QueryStatus query={selectedQuery} />
+          <QueryStatus query={selectedQuery} retry />
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 min-h-[58px] flex items-center justify-between text-slate-600">
             {currentPart ? (
               <>

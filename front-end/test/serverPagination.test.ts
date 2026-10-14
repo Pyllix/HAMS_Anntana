@@ -68,3 +68,29 @@ test('a post-write refresh replaces a pending cold-cache read and leaves unrelat
     assert.equal(client.getQueryData(['users', 'page', 1]), 'unaffected');
   } finally { unsubscribe(); client.clear(); }
 });
+
+test('one page refresh updates its visible list and summaries while preserving the selected page and other screens', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, cacheTime: Infinity } } });
+  const keys = [
+    ['assets', 'user-1', 'page', 'selected-filters', 6, 20],
+    ['assets', 'user-1', 'summary'],
+    ['borrowHistory', 'user-1', 'summary'],
+  ];
+  const reads = keys.map(() => 0);
+  const unsubscribes = keys.map((queryKey, index) => {
+    client.setQueryData(queryKey, 'old');
+    return new QueryObserver(client, {
+      queryKey, staleTime: Infinity,
+      queryFn: async () => { reads[index] += 1; return 'updated'; },
+    }).subscribe(() => {});
+  });
+  client.setQueryData(['users', 'user-1', 'page', 1], 'other-screen');
+  client.setQueryData(['assets', 'user-1', 'page', 'selected-filters', 5, 20], 'inactive-page');
+  try {
+    await refreshQueryFamilies(client, new Set(['assets', 'borrowHistory']));
+    assert.deepEqual(reads, [1, 1, 1]);
+    for (const key of keys) assert.equal(client.getQueryData(key), 'updated');
+    assert.equal(client.getQueryData(['users', 'user-1', 'page', 1]), 'other-screen');
+    assert.equal(client.getQueryData(['assets', 'user-1', 'page', 'selected-filters', 5, 20]), 'inactive-page');
+  } finally { unsubscribes.forEach(unsubscribe => unsubscribe()); client.clear(); }
+});

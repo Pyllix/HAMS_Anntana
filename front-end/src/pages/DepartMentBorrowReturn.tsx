@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { Search, ChevronDown, Repeat, Undo2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -56,9 +57,12 @@ export default function DepartMentBorrowReturn() {
 
       {/* ครุภัณฑ์ที่แผนกยืมอยู่ และใครเป็นผู้ยืม (กดขอคืนได้จากตารางนี้) */}
       {activeTab === "return" && (
-        <div className="shrink-0">
-          <DepartmentBorrowingsTable />
-        </div>
+        <>
+          <RefreshToolbar families={["assets", "borrowHistory"]} />
+          <div className="shrink-0">
+            <DepartmentBorrowingsTable />
+          </div>
+        </>
       )}
 
       {activeTab === "borrow" && (
@@ -102,6 +106,7 @@ export default function DepartMentBorrowReturn() {
           </div>
 
           {/* Table แสดงเฉพาะครุภัณฑ์ของศูนย์ครุภัณฑ์กลางที่ว่างและใช้งานได้เท่านั้น */}
+          <RefreshToolbar families={["assets", "borrowHistory"]} />
           <div className="flex-1 overflow-hidden min-h-[420px]">
             <AvailableAssetsTable search={inputSearch} typeFilter={type} />
           </div>

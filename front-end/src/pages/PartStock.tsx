@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary } from "../services/pagedApi";
 import type { SpareSummary } from "../services/pagedApi";
@@ -188,7 +189,7 @@ export default function PartStock() {
           </div>
         </div>
 
-        {/* Add Button - แสดงเฉพาะผู้มีสิทธิ์จัดการสต็อกอะไหล่ */}
+        {/* Add Buttons - แสดงเฉพาะผู้มีสิทธิ์จัดการสต็อกอะไหล่ */}
         {canManage && (
           <div className="md:ml-auto flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
@@ -216,6 +217,7 @@ export default function PartStock() {
       </div>
 
       {/* Table */}
+      <RefreshToolbar families={["spareParts"]} />
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <SparePartTable
           search={inputSearch}

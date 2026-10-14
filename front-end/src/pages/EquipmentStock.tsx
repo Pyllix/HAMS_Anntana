@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useServerPage, useForegroundQuery } from "../hooks/useServerPage";
 import { getPage, getSummary } from "../services/pagedApi";
 import type { AssetSummary } from "../services/pagedApi";
@@ -395,7 +396,7 @@ export default function EquipmentStock() {
         </div>
 
         {/* Action Buttons: Print Report & Add Equipment */}
-        <div className="md:ml-auto flex items-center gap-2.5 w-full sm:w-auto shrink-0 justify-end">
+        <div className="md:ml-auto flex flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0 justify-end">
           <button
             type="button"
             onClick={() => setIsPrintDialogOpen(true)}
@@ -421,6 +422,7 @@ export default function EquipmentStock() {
       </div>
 
       {/* Table */}
+      <RefreshToolbar families={["equipment-assets-paginated"]} />
       <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === "WAIT_DISPOSAL" ? (
           <WaitDisposalTable

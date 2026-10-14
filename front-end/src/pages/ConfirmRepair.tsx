@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import ConfirmRepairTable from "../components/confirm-repair/ConfirmRepairTable";
@@ -57,6 +58,7 @@ export default function ConfirmRepair() {
         </div>
       </div>
 
+      <RefreshToolbar families={["repairConfirmations"]} />
       <div className="flex-1 overflow-hidden border-none">
         <ConfirmRepairTable search={search} status={status} />
       </div>

@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useState, useEffect } from "react";
 import { Search, ChevronDown } from "lucide-react";
 import type { PriorityFilter, AssessmentTab } from "../types/TypeAssessment";
@@ -131,6 +132,7 @@ export default function PendingEvaluationsPage() {
             </div>
 
             {/* Table Container */}
+            <RefreshToolbar families={["pendingEvaluations"]} />
             <div className="flex-1 overflow-hidden border-none">
               <PendingEvaluationTable
                 search={debouncedSearch}

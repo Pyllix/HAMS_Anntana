@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useState } from "react";
 import { Search, Plus, ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -100,6 +101,7 @@ export default function OrderSpareParts() {
       </div>
 
       {/* Table Container */}
+      <RefreshToolbar families={["partOrders"]} />
       <div className="bg-bg-component shadow-sm w-full rounded-sm overflow-hidden flex-1 flex flex-col min-h-0">
         <PartOrderTable
           search={search}

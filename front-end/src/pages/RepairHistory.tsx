@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -118,6 +119,7 @@ export default function RepairHistory() {
       </div>
 
       {/* Table Section: ขยายเต็มพื้นที่ที่เหลือ (flex-1) */}
+      <RefreshToolbar families={["repairHistory"]} />
       <div className="flex-1 overflow-hidden border-none">
         <RepairHistoryTable
           search={search}

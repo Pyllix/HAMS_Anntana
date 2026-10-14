@@ -1,3 +1,4 @@
+import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { AssetSummary, StatusSummary } from "../services/pagedApi";
@@ -272,6 +273,7 @@ export default function AssetCenterBorrowReturn() {
 
           {/* Table */}
           {/* 3. ให้กล่องนี้ยืดจนสุด (flex-1) และซ่อนส่วนเกิน (overflow-hidden) เพื่อให้ Table Scroll ภายในตัวเองได้ */}
+          <RefreshToolbar families={["assets", "borrowHistory"]} />
           <div className="flex-1 overflow-hidden min-h-[420px]">
             <AssetsTable search={inputSearch} category={category} type={type} />
           </div>
@@ -280,6 +282,7 @@ export default function AssetCenterBorrowReturn() {
 
       {activeTab === "approve" && (
         <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
+          <RefreshToolbar families={["assets", "borrowHistory"]} />
           <PendingApprovalTable />
           <PendingHandoverTable />
         </div>
@@ -287,6 +290,7 @@ export default function AssetCenterBorrowReturn() {
 
       {activeTab === "return" && (
         <div className="flex-1 min-h-0 table-scroll flex flex-col gap-4 md:gap-6">
+          <RefreshToolbar families={["assets", "borrowHistory"]} />
           <PendingPickupTable />
           <PendingCompleteReturnTable />
         </div>

@@ -189,7 +189,7 @@ export default function InternalSpareFields({
               )}
             </div>
 
-            <QueryStatus query={partsQuery} />
+            <QueryStatus query={partsQuery} retry />
             <nav aria-label="หน้าอะไหล่" className="flex items-center justify-between gap-2 border-t p-2 text-xs">
   <button type="button" disabled={partsQuery.page === 1 || partsQuery.isFetching} onClick={() => partsQuery.setPage(partsQuery.page - 1)}>ก่อนหน้า</button>
   <span>หน้า {partsQuery.page} / {partsQuery.totalPages} ({partsQuery.total} รายการ)</span>
