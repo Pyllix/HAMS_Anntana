@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useServerPage, useDebouncedSearch } from "../hooks/useServerPage";
 import { getOutsourceApprovalRequestsPage } from "../services/outsourceApprovalService";
 import QueryStatus from "../components/shared/QueryStatus";
@@ -8,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  RefreshCw,
   Search,
   Truck,
 } from "lucide-react";
@@ -69,25 +69,25 @@ export default function OutsourceApprovals({ embedded = false }: { embedded?: bo
       }`}
     >
       <QueryStatus query={query} />
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-5">
         <div>
           <h2 className="text-xl font-bold">รายการขออนุมัติส่งซ่อมภายนอก</h2>
           <p className="mt-1 text-xs text-slate-500">
             ตรวจสอบงาน เลือกบริษัท และบันทึกเอกสารก่อนส่งครุภัณฑ์ออกซ่อม
           </p>
         </div>
-        <button type="button" disabled={query.isFetching} onClick={() => void query.refetch()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-white disabled:opacity-50"><RefreshCw size={15} className={query.isFetching ? "animate-spin" : ""} />รีเฟรช</button>
       </div>
 
       {success && <div role="status" className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18} />{success}</div>}
 
       <div className="mb-2 flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-white px-5 py-3">
         <label className="relative w-full sm:max-w-lg"><span className="sr-only">ค้นหาคำขอส่งซ่อมภายนอก</span><Search size={18} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="ค้นหาเลขคำขอ / เลขงาน / ครุภัณฑ์ / ชื่อช่าง" className="w-full rounded-lg border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-emerald-500" /></label>
+        <div className="ml-auto"><RefreshButton query={query} /></div>
       </div>
 
       <div className="min-h-[380px] flex-1 overflow-hidden rounded-b-xl bg-white">
         {query.isError && !query.data ? (
-          <div role="alert" className="m-6 rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"><p>{outsourceApprovalError(query.error)}</p><button type="button" onClick={() => void query.refetch()} className="mt-3 font-semibold underline">ลองโหลดอีกครั้ง</button></div>
+          <div role="alert" className="m-6 rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"><p>{outsourceApprovalError(query.error)}</p></div>
         ) : query.isLoading ? (
           <div role="status" className="flex justify-center gap-2 py-24 text-sm text-slate-500"><Loader2 size={20} className="animate-spin" />กำลังโหลดคำขอส่งซ่อมภายนอก…</div>
         ) : (

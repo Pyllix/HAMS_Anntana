@@ -1,7 +1,11 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { hashPassword } from 'better-auth/crypto';
 import { originalSections, originalUsers } from '../demo-identities';
-import { presentationId, type DemoUser } from './fixtures';
+import {
+  presentationId,
+  type DemoUser,
+  type PresentationFixture,
+} from './fixtures';
 import {
   nextDocument,
   readPresentationManifest,
@@ -52,6 +56,82 @@ export async function createPresentationUser(
       },
     },
   });
+}
+
+/** Add staff to an existing presentation set without resetting existing accounts. */
+export async function extendPresentationStaff(
+  prisma: PrismaClient,
+  fixture: PresentationFixture,
+): Promise<{ manifest: PresentationManifest; added: number }> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(90261009)`;
+      const manifest = await readPresentationManifest(tx);
+      if (!manifest || manifest.userProfile !== 'original-seed-v1')
+        throw new Error(
+          'Configure original presentation users before adding staff',
+        );
+      const missing = fixture.users.filter(
+        (user) =>
+          (user.role === 'PARCEL_STAFF' ||
+            user.role === 'ASSET_CENTER_STAFF') &&
+          originalProfile(user.key) &&
+          !manifest.rows.some(
+            (row) => row.kind === 'user' && row.key === user.key,
+          ),
+      );
+      if (!missing.length) return { manifest, added: 0 };
+      const hashes = new Map<string, string>();
+      for (const user of missing) {
+        const profile = originalProfile(user.key)!;
+        const conflict = await tx.user.findFirst({
+          where: {
+            OR: [
+              { id: presentationId(`user:${user.key}`) },
+              { email: profile.email },
+              { employeeId: profile.employeeId },
+              { userName: profile.userName },
+            ],
+          },
+        });
+        if (conflict)
+          throw new Error(
+            `Added staff identity already exists: ${profile.userName}`,
+          );
+        const section = await tx.section.findUnique({
+          where: { id: presentationId(`section:${user.section}`) },
+        });
+        if (!section || section.deletedAt)
+          throw new Error(
+            `Active presentation section is missing: ${user.section}`,
+          );
+        if (!hashes.has(profile.password))
+          hashes.set(profile.password, await hashPassword(profile.password));
+        const created = await createPresentationUser(
+          tx,
+          user,
+          section.id,
+          profile.employeeId,
+          hashes.get(profile.password)!,
+          fixture.date,
+        );
+        manifest.rows.push({
+          kind: 'user',
+          key: user.key,
+          id: created.id,
+          document: profile.employeeId,
+          role: user.role,
+          state: 'VERIFIED · 2FA preparation may be required',
+        });
+      }
+      await tx.company.update({
+        where: { id: presentationId('marker') },
+        data: { remark: JSON.stringify(manifest) },
+      });
+      return { manifest, added: missing.length };
+    },
+    { isolationLevel: 'Serializable', maxWait: 10000, timeout: 120000 },
+  );
 }
 
 /** Explicit one-time migration: preserve user IDs and business/security records. */

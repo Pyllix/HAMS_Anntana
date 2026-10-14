@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -158,6 +159,9 @@ export default function BorrowHistory() {
               ))}
             </select>
           </div>
+        </div>
+        <div className="md:ml-auto">
+          <RefreshButton families={["borrowHistory"]} />
         </div>
       </div>
 

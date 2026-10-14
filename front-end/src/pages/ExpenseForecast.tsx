@@ -1,10 +1,10 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp,
   Building2,
   Calendar,
-  RefreshCw,
   ShieldCheck,
   ArrowUpRight,
   PieChart,
@@ -157,22 +157,15 @@ export default function ExpenseForecast() {
           </select>
         </div>
 
-        {/* Fixed 12 Months Badge & Refresh Group */}
-        <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+        {/* Fixed 12 Months Badge */}
+        <div className="flex items-center w-full sm:w-auto">
           <div className="flex items-center gap-1.5 bg-white border border-slate-200 shadow-xs rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700">
             <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>ทำนาย 12 เดือน (1 ปี)</span>
           </div>
-
-          {/* Refresh Button */}
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="p-1.5 sm:p-2 bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 shadow-xs rounded-xl transition-all shrink-0 cursor-pointer"
-            title="รีเฟรชข้อมูล"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin text-emerald-600" : ""}`} />
-          </button>
+        </div>
+        <div className="flex w-full justify-end sm:w-auto sm:ml-auto">
+          <RefreshButton query={{ isFetching, refetch }} />
         </div>
       </div>
 
