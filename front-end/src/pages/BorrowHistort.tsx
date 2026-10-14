@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -160,11 +160,13 @@ export default function BorrowHistory() {
             </select>
           </div>
         </div>
+        <div className="md:ml-auto">
+          <RefreshButton families={["borrowHistory"]} />
+        </div>
       </div>
 
       {/* Table */}
       {/* 3. ให้ตารางยืดจนสุดพื้นที่ (flex-1) และเกิด Scroll ภายในตัวเอง (overflow-hidden) */}
-      <RefreshToolbar families={["borrowHistory"]} />
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <AssetsHistoryTable
           inputSearch={inputSearch}

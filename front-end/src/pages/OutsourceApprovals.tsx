@@ -1,5 +1,4 @@
 import RefreshButton from "../components/shared/RefreshButton";
-import RefreshToolbar from "../components/shared/RefreshToolbar";
 import { useServerPage, useDebouncedSearch } from "../hooks/useServerPage";
 import { getOutsourceApprovalRequestsPage } from "../services/outsourceApprovalService";
 import QueryStatus from "../components/shared/QueryStatus";
@@ -83,10 +82,9 @@ export default function OutsourceApprovals({ embedded = false }: { embedded?: bo
 
       <div className="mb-2 flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-white px-5 py-3">
         <label className="relative w-full sm:max-w-lg"><span className="sr-only">ค้นหาคำขอส่งซ่อมภายนอก</span><Search size={18} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="ค้นหาเลขคำขอ / เลขงาน / ครุภัณฑ์ / ชื่อช่าง" className="w-full rounded-lg border border-slate-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-emerald-500" /></label>
-        {embedded && <div className="ml-auto"><RefreshButton query={query} /></div>}
+        <div className="ml-auto"><RefreshButton query={query} /></div>
       </div>
 
-      {!embedded && <RefreshToolbar query={query} />}
       <div className="min-h-[380px] flex-1 overflow-hidden rounded-b-xl bg-white">
         {query.isError && !query.data ? (
           <div role="alert" className="m-6 rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"><p>{outsourceApprovalError(query.error)}</p></div>

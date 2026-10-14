@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -116,10 +116,12 @@ export default function RepairHistory() {
           options={statusOptions}
           onChange={(value) => setStatus(value as RepairStatusFilter)}
         />
+        <div className="md:ml-auto">
+          <RefreshButton families={["repairHistory"]} />
+        </div>
       </div>
 
       {/* Table Section: ขยายเต็มพื้นที่ที่เหลือ (flex-1) */}
-      <RefreshToolbar families={["repairHistory"]} />
       <div className="flex-1 overflow-hidden border-none">
         <RepairHistoryTable
           search={search}

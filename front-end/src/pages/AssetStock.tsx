@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useServerPage, useForegroundQuery } from "../hooks/useServerPage";
 import { getPage, getSummary } from "../services/pagedApi";
 import type { AssetSummary } from "../services/pagedApi";
@@ -254,6 +254,7 @@ export default function AssetStock() {
 
         {/* ปุ่มพิมพ์รายงาน (ชิดขวาสุด) */}
         <div className="md:ml-auto flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <RefreshButton families={["assets"]} />
           <button
             type="button"
             onClick={() => setIsPrintDialogOpen(true)}
@@ -267,7 +268,6 @@ export default function AssetStock() {
       </div>
 
       {/* Table */}
-      <RefreshToolbar families={["assets"]} />
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <StockAssetsTable
           assets={assetResponse?.data ?? []}

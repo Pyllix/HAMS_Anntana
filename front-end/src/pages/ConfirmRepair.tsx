@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import ConfirmRepairTable from "../components/confirm-repair/ConfirmRepairTable";
@@ -29,11 +29,11 @@ export default function ConfirmRepair() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="ค้นหารหัสงาน ชื่อครุภัณฑ์..."
-            className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
           />
         </div>
 
-        <div className="relative inline-flex items-center h-8 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-56 shrink-0 justify-between">
+        <div className="relative inline-flex items-center h-10 px-4 rounded-lg border border-slate-200 bg-white text-sm hover:border-slate-300 transition-colors cursor-pointer w-56 shrink-0 justify-between">
           <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
             <span className="text-slate-500 shrink-0">สถานะ: </span>
             <span className="font-semibold text-emerald-600 truncate">
@@ -56,9 +56,11 @@ export default function ConfirmRepair() {
             ))}
           </select>
         </div>
+        <div className="md:ml-auto">
+          <RefreshButton families={["repairConfirmations"]} />
+        </div>
       </div>
 
-      <RefreshToolbar families={["repairConfirmations"]} />
       <div className="flex-1 overflow-hidden border-none">
         <ConfirmRepairTable search={search} status={status} />
       </div>

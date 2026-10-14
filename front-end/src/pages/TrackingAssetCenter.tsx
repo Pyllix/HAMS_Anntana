@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -321,11 +321,13 @@ export default function TrackingAssetCenter({}) {
             )}
           </div>
         )}
+        <div className="md:ml-auto">
+          <RefreshButton families={["repairsHistory"]} />
+        </div>
       </div>
 
       {/* Table */}
       {/* 3. ดันตารางให้กินพื้นที่ที่เหลือทั้งหมด (flex-1) พร้อมกับบังคับให้ Scroll เกิดเฉพาะในกล่องนี้ (overflow-hidden) */}
-      <RefreshToolbar families={["repairsHistory"]} />
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <TrackTable
           sectionId={effectiveSectionId !== "ALL" ? effectiveSectionId : undefined}

@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -164,9 +164,10 @@ export default function ExpenseForecast() {
             <span>ทำนาย 12 เดือน (1 ปี)</span>
           </div>
         </div>
+        <div className="flex w-full justify-end sm:w-auto sm:ml-auto">
+          <RefreshButton query={{ isFetching, refetch }} />
+        </div>
       </div>
-
-      <RefreshToolbar query={{ isFetching, refetch }} />
 
       {/* KPI Cards (Compact Single-Screen Fit) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">

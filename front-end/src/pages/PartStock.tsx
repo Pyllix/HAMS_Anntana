@@ -1,4 +1,4 @@
-import RefreshToolbar from "../components/shared/RefreshToolbar";
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary } from "../services/pagedApi";
 import type { SpareSummary } from "../services/pagedApi";
@@ -189,35 +189,38 @@ export default function PartStock() {
           </div>
         </div>
 
-        {/* Add Buttons - แสดงเฉพาะผู้มีสิทธิ์จัดการสต็อกอะไหล่ */}
-        {canManage && (
-          <div className="md:ml-auto flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => useSparePartFormModalStore.getState().openAdd()}
-              className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
-            >
-              <Plus className="h-4 w-4 stroke-[2.5]" />
-              เพิ่มอะไหล่ใหม่
-            </button>
+        {/* Action Buttons */}
+        <div className="md:ml-auto flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <RefreshButton families={["spareParts"]} />
+          {/* Add Buttons - แสดงเฉพาะผู้มีสิทธิ์จัดการสต็อกอะไหล่ */}
+          {canManage && (
+            <>
+              <button
+                type="button"
+                onClick={() => useSparePartFormModalStore.getState().openAdd()}
+                className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-600 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer"
+              >
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+                เพิ่มอะไหล่ใหม่
+              </button>
 
-            {/* ปุ่มบันทึกรับคืน */}
-            <button
-              type="button"
-              onClick={() =>
-                useSparePartReturnModalStore.getState().openModal(null as any)
-              }
-              className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 h-10 px-4 rounded-lg border border-emerald-600 bg-white text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer"
-            >
-              <HardDriveDownload className="h-4 w-4 stroke-[2.5]" />
-              บันทึกรับคืน
-            </button>
-          </div>
-        )}
+              {/* ปุ่มบันทึกรับคืน */}
+              <button
+                type="button"
+                onClick={() =>
+                  useSparePartReturnModalStore.getState().openModal(null as any)
+                }
+                className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 h-10 px-4 rounded-lg border border-emerald-600 bg-white text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer"
+              >
+                <HardDriveDownload className="h-4 w-4 stroke-[2.5]" />
+                บันทึกรับคืน
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Table */}
-      <RefreshToolbar families={["spareParts"]} />
       <div className="flex-1 overflow-hidden min-h-[420px]">
         <SparePartTable
           search={inputSearch}
