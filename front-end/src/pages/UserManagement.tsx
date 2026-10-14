@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import UserTable from "../components/user-management/UserTable";
 import InputSearch from "../components/user-management/InputSearch";
 import RoleFilter from "../components/user-management/RoleFilter";
@@ -24,7 +25,8 @@ export default function UserManagement() {
         <InputSearch value={search} onChange={setSearch} />
         <RoleFilter value={role} onChange={setRole} />
         <StatusFilter value={status} onChange={setStatus} />
-        <div className="md:ml-auto">
+        <div className="md:ml-auto flex flex-wrap items-center gap-2">
+          <RefreshButton families={["users"]} />
           <BtnAdd clickOpen={() => setIsOpenAdd(true)} />
         </div>
       </div>

@@ -218,7 +218,7 @@ export default function AssetsTable({ search, category, type }: Props) {
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       <QueryStatus query={listQuery} />
-      {isRecommendationOpen && !recommendationPoolQuery.data && <div><QueryStatus query={recommendationPoolQuery} /><button type="button" className="px-3 py-1 text-sm" onClick={() => useBorrowRecommendationStore.getState().close()}>ยกเลิก</button></div>}
+      {isRecommendationOpen && !recommendationPoolQuery.data && <div><QueryStatus query={recommendationPoolQuery} retry /><button type="button" className="px-3 py-1 text-sm" onClick={() => useBorrowRecommendationStore.getState().close()}>ยกเลิก</button></div>}
       {isRecommendationOpen && !!recommendationPoolQuery.data && (
         <BorrowRecommendationDialog
           pool={borrowableAssets}

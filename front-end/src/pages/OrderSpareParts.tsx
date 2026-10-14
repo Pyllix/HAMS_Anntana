@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useState } from "react";
 import { Search, Plus, ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -85,18 +86,18 @@ export default function OrderSpareParts() {
           </button>
         )}
 
-        {/* Spacer */}
-        <div className="flex-1 hidden md:block" />
-
         {/* ปุ่มสั่งซื้ออะไหล่เพิ่ม */}
-        <button
-          type="button"
-          onClick={() => openCreateModal()}
-          className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer shrink-0 active:scale-95"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          สั่งซื้ออะไหล่เพิ่ม
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <RefreshButton families={["partOrders"]} />
+          <button
+            type="button"
+            onClick={() => openCreateModal()}
+            className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer shrink-0 active:scale-95"
+          >
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            สั่งซื้ออะไหล่เพิ่ม
+          </button>
+        </div>
       </div>
 
       {/* Table Container */}

@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getPage, getSummary, statusCount } from "../services/pagedApi";
 import type { AssetSummary, StatusSummary } from "../services/pagedApi";
@@ -205,37 +206,44 @@ export default function AssetCenterBorrowReturn() {
       <QueryStatus query={assetSummaryQuery} />
       <QueryStatus query={borrowSummaryQuery} />
       {/* Tab Navigation แยกหน้า ยืม-คืน / อนุมัติ */}
-      <div className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-              {!!tab.badge && (
-                <span
-                  className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold ${
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "bg-amber-500 text-white"
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {!!tab.badge && (
+                  <span
+                    className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-amber-500 text-white"
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {activeTab !== "borrow" && (
+          <div className="ml-auto">
+            <RefreshButton families={["assets", "borrowHistory"]} />
+          </div>
+        )}
       </div>
 
       {activeTab === "borrow" && (
@@ -307,6 +315,9 @@ export default function AssetCenterBorrowReturn() {
                   ))}
                 </select>
               </div>
+            </div>
+            <div className="md:ml-auto">
+              <RefreshButton families={["assets", "borrowHistory"]} />
             </div>
           </div>
 

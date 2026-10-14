@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { Search, ChevronDown, Repeat, Undo2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -55,33 +56,42 @@ export default function DepartMentBorrowReturn() {
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6">
       {/* Tab Navigation แยกหน้า ยืม / คืน */}
-      <div className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm w-full sm:w-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+        {activeTab === "return" && (
+          <div className="ml-auto">
+            <RefreshButton families={["assets", "borrowHistory"]} />
+          </div>
+        )}
       </div>
 
       {/* ครุภัณฑ์ที่แผนกยืมอยู่ และใครเป็นผู้ยืม (กดขอคืนได้จากตารางนี้) */}
       {activeTab === "return" && (
-        <div className="shrink-0">
-          <DepartmentBorrowingsTable />
-        </div>
+        <>
+          <div className="shrink-0">
+            <DepartmentBorrowingsTable />
+          </div>
+        </>
       )}
 
       {activeTab === "borrow" && (
@@ -121,6 +131,9 @@ export default function DepartMentBorrowReturn() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="md:ml-auto">
+              <RefreshButton families={["assets", "borrowHistory"]} />
             </div>
           </div>
 

@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useForegroundQuery } from "../hooks/useServerPage";
 import { getSummary, statusCount } from "../services/pagedApi";
 import type { StatusSummary } from "../services/pagedApi";
@@ -326,6 +327,9 @@ export default function TrackingAssetCenter({}) {
             )}
           </div>
         )}
+        <div className="md:ml-auto">
+          <RefreshButton families={["repairsHistory"]} />
+        </div>
       </div>
 
       {/* Table */}

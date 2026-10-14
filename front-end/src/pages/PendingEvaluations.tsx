@@ -1,3 +1,4 @@
+import RefreshButton from "../components/shared/RefreshButton";
 import { useState, useEffect } from "react";
 import { Search, ChevronDown } from "lucide-react";
 import type { PriorityFilter, AssessmentTab } from "../types/TypeAssessment";
@@ -127,6 +128,9 @@ export default function PendingEvaluationsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="md:ml-auto">
+                <RefreshButton families={["pendingEvaluations"]} />
               </div>
             </div>
 
