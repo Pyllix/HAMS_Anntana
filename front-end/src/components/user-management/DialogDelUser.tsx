@@ -125,7 +125,7 @@ export default function DialogDelUser({
             onClick={onClose}
             className="flex-1 rounded-xl border border-gray-300 bg-white py-3.5 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
           >
-            Cancel
+            ยกเลิก
           </button>
           <button
             type="button"
