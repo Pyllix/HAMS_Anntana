@@ -130,7 +130,7 @@ export default function NotificationResourceDialog({
                   รายการนี้ได้รับการดำเนินการแล้ว ข้อมูลด้านล่างเป็นสถานะล่าสุด
                 </p>
               )}
-              <ResourceDetailBody detail={query.data} />
+              <ResourceDetailBody detail={query.data} notificationType={notificationType} />
             </>
           ) : null}
         </div>
@@ -149,7 +149,10 @@ export default function NotificationResourceDialog({
   );
 }
 
-function ResourceDetailBody({ detail }: { detail: ResourceDetail }) {
+function ResourceDetailBody({ detail, notificationType }: {
+  detail: ResourceDetail;
+  notificationType?: string | null;
+}) {
   if (detail.kind === "BORROW_TRANSACTION") {
     const borrow = detail.data;
     const lastExtension = borrow.extensions?.at(-1);
@@ -210,6 +213,8 @@ function ResourceDetailBody({ detail }: { detail: ResourceDetail }) {
   }
 
   const job = detail.data;
+  const isUnrepairableReceipt = notificationType === "REPAIR_UNREPAIRABLE_RECEIVED";
+  const receivedByParcel = isUnrepairableReceipt && !!job.unrepairableReason && job.jobStatus?.code === "COMPLETED" && !!job.returnDate;
   return (
     <DetailList
       rows={[
@@ -218,7 +223,14 @@ function ResourceDetailBody({ detail }: { detail: ResourceDetail }) {
         ["แผนก", job.section?.name ?? "-"],
         ["ผู้แจ้ง", fullName(job.reporter)],
         ["อาการ", job.symptom || "-"],
-        ["สถานะ", job.jobStatus?.name ?? "-"],
+        ["สถานะ", receivedByParcel ? "ซ่อมไม่ได้ / พัสดุรับมอบแล้ว" : job.jobStatus?.name ?? "-"],
+        ...(isUnrepairableReceipt
+          ? ([
+              ["เหตุผลที่ซ่อมไม่ได้", job.unrepairableReason || "-"],
+              ["พัสดุผู้รับมอบ", fullName(job.receiver)],
+              ["วันที่พัสดุรับมอบ", formatDate(job.returnDate)],
+            ] as Array<[string, ReactNode]>)
+          : []),
         ["วันที่แจ้ง", formatDate(job.createdAt)],
       ]}
     />

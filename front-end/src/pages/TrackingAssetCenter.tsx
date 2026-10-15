@@ -74,7 +74,7 @@ export default function TrackingAssetCenter({}) {
     queryFn: getLookUp,
   });
   const statusOptions = lookups?.jobStatuses ?? [];
-  const { resource: notificationResource, clear: clearNotificationResource } =
+  const { resource: notificationResource, notificationType, clear: clearNotificationResource } =
     useNotificationResourceParams();
   const repairResource =
     notificationResource?.resourceType === "REPAIR_JOB" ? notificationResource : null;
@@ -347,6 +347,7 @@ export default function TrackingAssetCenter({}) {
           key={repairResource.resourceId}
           resourceType={repairResource.resourceType}
           resourceId={repairResource.resourceId}
+          notificationType={notificationType}
           onClose={clearNotificationResource}
         />
       )}

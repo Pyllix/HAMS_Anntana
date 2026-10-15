@@ -13,6 +13,7 @@ export interface TrackRes {
   companyId: string | null;
   billNo: string | null;
   diagnosis: string;
+  unrepairableReason?: string | null;
   symptom: string;
   solution: string;
   causeId: number;
@@ -51,6 +52,12 @@ export interface TrackRes {
     lastname: string;
     email: string;
   };
+
+  receiver?: {
+    id: string;
+    firstname: string;
+    lastname: string;
+  } | null;
 
   jobStatus: {
     id: number;

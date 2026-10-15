@@ -4,6 +4,8 @@
 
 สถานะ: แผนต้นทางที่แปลงเป็นสเปกแล้ว ยังไม่ได้แก้โค้ด runtime หรือสร้าง migration
 
+เพิ่มเติม 2026-10-16: เพิ่มแจ้งผลถึงหน่วยงานหลังพัสดุรับมอบเครื่องซ่อมไม่ได้แล้ว (`REPAIR_UNREPAIRABLE_RECEIVED`) ตาม [รายละเอียด FE/BE และ migration](../unrepairable-receipt-notifications.md) โดยยังไม่แจ้งตอนรอพัสดุรับมอบ
+
 สเปกหลักสำหรับพัฒนาอยู่ใน [local issue tracker](../../.scratch/in-app-notifications-sse/spec.md) สถานะ ready-for-agent ใช้สเปกนั้นเป็นข้อกำหนดหลัก โดยจุดทดสอบ API/SSE กับฐานข้อมูลทดสอบจริงได้รับการยืนยันแล้ว
 
 ## 1. ขอบเขตที่ตกลง

@@ -254,6 +254,7 @@ test("department staff notifications open the matching page with the resource id
     ["BORROW_EXTENSION_APPROVED", "BORROW_EXTENSION", "/borrow-request"],
     ["BORROW_EXTENSION_REJECTED", "BORROW_EXTENSION", "/borrow-request"],
     ["REPAIR_READY_FOR_COLLECTION", "REPAIR_JOB", "/track-status"],
+    ["REPAIR_UNREPAIRABLE_RECEIVED", "REPAIR_JOB", "/track-status"],
   ] as const;
 
   for (const [type, resourceType, path] of cases) {
@@ -297,6 +298,7 @@ test("asset center notifications open the matching page, tab and resource", () =
     ["BORROW_EXTENSION_APPROVAL_REQUIRED", "BORROW_EXTENSION", "/borrow-return-assets_center", "extension"],
     ["BORROW_OVERDUE", "BORROW_TRANSACTION", "/borrow-return-assets_center", null],
     ["REPAIR_READY_FOR_COLLECTION", "REPAIR_JOB", "/track-status", null],
+    ["REPAIR_UNREPAIRABLE_RECEIVED", "REPAIR_JOB", "/track-status", null],
     // แจ้งเตือนฝั่งผู้ยืม เมื่อเจ้าหน้าที่ศูนย์เป็นผู้ยืมเอง
     ["BORROW_APPROVED", "BORROW_TRANSACTION", "/borrow-return-assets_center", null],
     ["BORROW_DUE_SOON", "BORROW_TRANSACTION", "/borrow-return-assets_center", null],
@@ -360,6 +362,7 @@ test("overdue is danger, due soon is warning, approvals are action, everything e
   assert.equal(notificationTone("BORROW_APPROVAL_REQUIRED"), "action");
   assert.equal(notificationTone("BORROW_EXTENSION_APPROVAL_REQUIRED"), "action");
   assert.equal(notificationTone("BORROW_APPROVED"), "default");
+  assert.equal(notificationTone("REPAIR_UNREPAIRABLE_RECEIVED"), "default");
   assert.equal(notificationTone("UNKNOWN"), "default");
 });
 

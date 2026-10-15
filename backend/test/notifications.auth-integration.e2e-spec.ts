@@ -2885,7 +2885,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     await expectNoEvent(parcelStream.reader, 'notification.created', 250);
   });
 
-  it('notifies the owning section when repair enters waiting delivery and excludes unrepairable jobs', async () => {
+  it('notifies owning sections about repair collection and confirmed unrepairable custody', async () => {
     const departmentStream = await openStream(departmentCookie);
     const departmentMemberStream = await openStream(extensionRequesterCookie);
     const otherDepartmentStream = await openStream(repairOtherDepartmentCookie);
@@ -3217,15 +3217,163 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       departmentCookie,
     );
     const unrepairableJobId = requireString(unrepairableRequest, 'id');
+    const unrepairableJobNo = requireString(unrepairableRequest, 'jobNo');
+    const unrepairableAssetCode = `NT-UN-${randomUUID().slice(0, 8)}`;
+    await prisma.asset.update({
+      where: { id: unrepairableAssetId },
+      data: { noid: unrepairableAssetCode },
+    });
     await diagnose(unrepairableJobId, 'UNREPAIRABLE', {
       unrepairableReason: 'Integration test: cannot repair',
     });
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: unrepairableJobId },
+      }),
+    ).toBe(0);
     await stepForward(unrepairableJobId);
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: unrepairableJobId },
+      }),
+    ).toBe(0);
+    await patchRepair(
+      `/repairs/${unrepairableJobId}/complete-unrepairable`,
+      departmentCookie,
+      { storageLocation: 'Repair notification test area' },
+      403,
+    );
+
+    // A failed notification insert must roll back custody and emit no SSE.
+    await prisma.$executeRaw`
+      CREATE OR REPLACE FUNCTION public.raise_unrepairable_notification_for_test()
+      RETURNS trigger AS $$
+      BEGIN
+        IF NEW.type::text = 'REPAIR_UNREPAIRABLE_RECEIVED' THEN
+          RAISE EXCEPTION 'unrepairable receipt notification rollback test';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `;
+    await prisma.$executeRaw`
+      CREATE TRIGGER raise_unrepairable_notification_for_test
+      BEFORE INSERT ON public.notifications
+      FOR EACH ROW EXECUTE FUNCTION public.raise_unrepairable_notification_for_test()
+    `;
+    try {
+      await patchRepair(
+        `/repairs/${unrepairableJobId}/complete-unrepairable`,
+        repairParcelCookie,
+        { storageLocation: 'Repair notification test area' },
+        500,
+      );
+    } finally {
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS raise_unrepairable_notification_for_test
+        ON public.notifications
+      `;
+      await prisma.$executeRaw`
+        DROP FUNCTION IF EXISTS public.raise_unrepairable_notification_for_test()
+      `;
+    }
+    const rolledBackReceipt = await prisma.repairJob.findUniqueOrThrow({
+      where: { id: unrepairableJobId },
+      include: {
+        jobStatus: true,
+        asset: { include: { status: true } },
+        repairJobSteps: {
+          where: { stepMaster: { stepNumber: 6 } },
+        },
+      },
+    });
+    expect(rolledBackReceipt.jobStatus.code).toBe('UNREPAIRABLE');
+    expect(rolledBackReceipt.receiverId).toBeNull();
+    expect(rolledBackReceipt.returnDate).toBeNull();
+    expect(rolledBackReceipt.asset.status.code).toBe('UNDER_REPAIR');
+    expect(rolledBackReceipt.repairJobSteps[0]?.completeAt).toBeNull();
+    expect(
+      await prisma.notification.count({
+        where: { resourceId: unrepairableJobId },
+      }),
+    ).toBe(0);
+    for (const stream of streams) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    const receiptCsrf = await getCsrfProof(repairParcelCookie);
+    const receiptResponses = await Promise.all(
+      [1, 2].map(() =>
+        request(server())
+          .patch(`/repairs/${unrepairableJobId}/complete-unrepairable`)
+          .set('Origin', 'http://localhost:5173')
+          .set('Cookie', receiptCsrf.cookie)
+          .set('X-CSRF-Token', receiptCsrf.token)
+          .send({ storageLocation: 'Repair notification test area' }),
+      ),
+    );
+    expect(receiptResponses.some(({ status }) => status === 200)).toBe(true);
+    expect(
+      receiptResponses.every(({ status }) => [200, 400].includes(status)),
+    ).toBe(true);
+    const receiptRows = await prisma.notification.findMany({
+      where: { resourceId: unrepairableJobId },
+      orderBy: { userId: 'asc' },
+    });
+    expect(receiptRows.map(({ userId }) => userId)).toEqual(
+      readyRecipients.map(({ id }) => id).sort(),
+    );
+    for (const row of receiptRows) {
+      expect(row).toMatchObject({
+        type: NotificationType.REPAIR_UNREPAIRABLE_RECEIVED,
+        title: 'เครื่องซ่อมไม่ได้ พัสดุรับมอบแล้ว',
+        resourceType: NotificationResourceType.REPAIR_JOB,
+        readAt: null,
+        eventKey: `${NotificationType.REPAIR_UNREPAIRABLE_RECEIVED}:${unrepairableJobId}`,
+      });
+      expect(row.message).toContain(unrepairableJobNo);
+      expect(row.message).toContain(unrepairableAssetCode);
+      expect(row.message).toContain('พัสดุรับมอบเพื่อเก็บรอจำหน่ายแล้ว');
+    }
+    const expectReceiptEvent = async (
+      stream: { reader: SseEventReader },
+      jobId: string,
+    ) => {
+      let event = await stream.reader.next(5_000);
+      while (event.frame?.event === 'heartbeat') {
+        event = await stream.reader.next(5_000);
+      }
+      expect(event.frame).toMatchObject({
+        event: 'notification.created',
+        data: {
+          type: NotificationType.REPAIR_UNREPAIRABLE_RECEIVED,
+          resourceType: NotificationResourceType.REPAIR_JOB,
+          resourceId: jobId,
+          readAt: null,
+        },
+      });
+    };
+    await expectReceiptEvent(departmentStream, unrepairableJobId);
+    await expectReceiptEvent(departmentMemberStream, unrepairableJobId);
+    const departmentNotifications = parseNotificationListResponse(
+      await request(server())
+        .get('/notifications?limit=100')
+        .set('Cookie', departmentCookie)
+        .expect(200),
+    );
+    expect(departmentNotifications.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: NotificationType.REPAIR_UNREPAIRABLE_RECEIVED,
+          resourceId: unrepairableJobId,
+        }),
+      ]),
+    );
     await patchRepair(
       `/repairs/${unrepairableJobId}/complete-unrepairable`,
       repairParcelCookie,
       { storageLocation: 'Repair notification test area' },
-      200,
+      400,
     );
     expect(
       await prisma.notification.count({
@@ -3241,6 +3389,55 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       }),
     ).toBe(0);
     for (const stream of streams) {
+      await expectNoEvent(stream.reader, 'notification.created', 250);
+    }
+
+    const centerUnrepairableAssetId = await createRepairTestAsset(
+      testSectionId,
+      firstCenterUserId,
+      'Center unrepairable receipt notification test asset',
+    );
+    const centerUnrepairableRequest = await createRepairRequest(
+      centerUnrepairableAssetId,
+      firstCenterCookie,
+    );
+    const centerUnrepairableJobId = requireString(
+      centerUnrepairableRequest,
+      'id',
+    );
+    await diagnose(centerUnrepairableJobId, 'UNREPAIRABLE', {
+      unrepairableReason:
+        'Integration test: central equipment cannot be repaired',
+    });
+    await stepForward(centerUnrepairableJobId);
+    await patchRepair(
+      `/repairs/${centerUnrepairableJobId}/complete-unrepairable`,
+      repairParcelCookie,
+      { storageLocation: 'Central equipment disposal holding area' },
+      200,
+    );
+    const centerReceiptRows = await prisma.notification.findMany({
+      where: { resourceId: centerUnrepairableJobId },
+      orderBy: { userId: 'asc' },
+      select: { userId: true, type: true },
+    });
+    expect(centerReceiptRows.map(({ userId }) => userId)).toEqual(
+      expectedCenterRecipients.map(({ id }) => id),
+    );
+    expect(
+      centerReceiptRows.every(
+        ({ type }) => type === NotificationType.REPAIR_UNREPAIRABLE_RECEIVED,
+      ),
+    ).toBe(true);
+    for (const stream of [firstCenterStream, secondCenterStream]) {
+      await expectReceiptEvent(stream, centerUnrepairableJobId);
+    }
+    for (const stream of [
+      departmentStream,
+      departmentMemberStream,
+      otherDepartmentStream,
+      parcelStream,
+    ]) {
       await expectNoEvent(stream.reader, 'notification.created', 250);
     }
   });
@@ -3871,10 +4068,8 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
       afterRestartApi.data.filter(
         ({ resourceId, type }) =>
           resourceId === centerServiceBorrowId &&
-          [
-            NotificationType.BORROW_DUE_SOON,
-            NotificationType.BORROW_OVERDUE,
-          ].includes(type),
+          (type === NotificationType.BORROW_DUE_SOON ||
+            type === NotificationType.BORROW_OVERDUE),
       ),
     ).toHaveLength(4);
     restartedBorrowerStream.controller.abort();
