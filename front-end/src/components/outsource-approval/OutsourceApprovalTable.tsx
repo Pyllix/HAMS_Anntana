@@ -27,9 +27,9 @@ export default function OutsourceApprovalTable({
   onReject: (request: OutsourceApprovalRequest) => void;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className={rows.length ? "h-full table-scroll" : "table-scroll"}>
       <table className="w-full min-w-[1080px] text-left text-xs">
-        <thead className="border-b border-slate-100 bg-white text-[11px] font-semibold text-slate-600">
+        <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white text-[11px] font-semibold text-slate-600">
           <tr>
             <th className="px-5 py-4">เลขที่คำขอ</th>
             <th className="px-4 py-4">วันที่ / เวลา</th>
