@@ -299,10 +299,11 @@ export default function AssetTable({
 
           const isOpen = openActionDropdown === row.id;
           const isDamaged = row.status?.code === "DAMAGED";
+          const isWaitDisposal = row.status?.code === "WAIT_DISPOSAL";
 
           return (
             <div className="flex items-center gap-2 whitespace-nowrap">
-              {!isDamaged && (
+              {!isDamaged && !isWaitDisposal && (
                 <button
                   type="button"
                   title="แก้ไข"
@@ -342,17 +343,66 @@ export default function AssetTable({
                     />
                     <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95">
                       {isDamaged ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenActionDropdown(null);
-                            openSendAssessment(row);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
-                        >
-                          <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
-                          <span className="font-semibold">ส่งประเมิน</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openSendAssessment(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
+                          >
+                            <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
+                            <span className="font-semibold">ส่งประเมิน</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openWaitDisposal(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-orange-50 hover:text-[#ea580c] transition-colors text-left cursor-pointer"
+                          >
+                            <Clock className="h-3.5 w-3.5 text-orange-500" />
+                            <span className="font-semibold">รอจำหน่าย</span>
+                          </button>
+                        </>
+                      ) : isWaitDisposal ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openSendAssessment(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 transition-colors text-left cursor-pointer"
+                          >
+                            <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
+                            <span className="font-semibold">ส่งประเมิน</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openConfirmDisposal(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
+                          >
+                            <XCircle className="h-3.5 w-3.5 text-rose-500" />
+                            <span className="font-semibold">จำหน่าย</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionDropdown(null);
+                              openMarkLost(row);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors text-left cursor-pointer"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="font-semibold">ปรับเป็นสูญหาย</span>
+                          </button>
+                        </>
                       ) : (
                         <>
                           <button
