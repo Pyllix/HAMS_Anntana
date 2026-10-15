@@ -6,6 +6,7 @@ import {
   type PresentationFixture,
 } from './fixtures';
 import { readPresentationManifest, type PresentationManifest } from './seed';
+import { isExpandedScenario } from './scenarios';
 
 /** Two receipt lots; the existing repair fixtures retain their older opening dates. */
 export function partReceiptPlan(part: DemoPart, index: number, date: Date) {
@@ -14,7 +15,12 @@ export function partReceiptPlan(part: DemoPart, index: number, date: Date) {
     .map((qty, lot) => {
       const when = new Date(
         date.getTime() -
-          (index < 5 ? 650 - lot * 20 : 45 - lot * 38) * 86_400_000,
+          (part.receiptAgeDays !== undefined
+            ? part.receiptAgeDays - lot * 20
+            : index < 5
+              ? 650 - lot * 20
+              : 45 - lot * 38) *
+            86_400_000,
       );
       return {
         qty,
@@ -87,6 +93,7 @@ export async function extendPresentationParts(
         .map((part, index) => ({ part, index }))
         .filter(
           ({ part }) =>
+            !isExpandedScenario(part.key) &&
             !manifest.rows.some(
               (row) => row.kind === 'part' && row.key === part.key,
             ),

@@ -14,40 +14,52 @@ export async function checkPresentation(
   if (!saved) throw new Error('No completed presentation fixture was found');
   const ids = (kind: string) =>
     saved.rows.filter((row) => row.kind === kind).map((row) => row.id);
-  const [assets, loans, jobs, parts, users, extensions, transfers, disposals] =
-    await Promise.all([
-      prisma.asset.findMany({
-        where: { id: { in: ids('asset') as string[] } },
-        include: { status: true, availabilityStatus: true },
-      }),
-      prisma.borrowTransaction.findMany({
-        where: { asset_id: { in: ids('asset') as string[] } },
-        include: { borrowStatus: true },
-      }),
-      prisma.repairJob.findMany({
-        where: { assetId: { in: ids('asset') as string[] } },
-        include: {
-          jobStatus: true,
-          repairJobSteps: { include: { stepMaster: true } },
-          mechanicRepairs: true,
-        },
-      }),
-      prisma.sparepart.findMany({
-        where: { id: { in: ids('part') as number[] } },
-        include: { sparepartAdds: true, sparepartTxns: true },
-      }),
-      prisma.user.findMany({ where: { id: { in: ids('user') as string[] } } }),
-      prisma.borrowExtension.findMany({
-        where: { id: { in: ids('extension') as string[] } },
-        include: { borrowTransaction: true },
-      }),
-      prisma.transfer.findMany({
-        where: { id: { in: ids('transfer') as string[] } },
-      }),
-      prisma.disposal.findMany({
-        where: { id: { in: ids('disposal') as string[] } },
-      }),
-    ]);
+  const [
+    assets,
+    loans,
+    jobs,
+    parts,
+    users,
+    extensions,
+    transfers,
+    disposals,
+    notifications,
+  ] = await Promise.all([
+    prisma.asset.findMany({
+      where: { id: { in: ids('asset') as string[] } },
+      include: { status: true, availabilityStatus: true },
+    }),
+    prisma.borrowTransaction.findMany({
+      where: { asset_id: { in: ids('asset') as string[] } },
+      include: { borrowStatus: true },
+    }),
+    prisma.repairJob.findMany({
+      where: { assetId: { in: ids('asset') as string[] } },
+      include: {
+        jobStatus: true,
+        repairJobSteps: { include: { stepMaster: true } },
+        mechanicRepairs: true,
+      },
+    }),
+    prisma.sparepart.findMany({
+      where: { id: { in: ids('part') as number[] } },
+      include: { sparepartAdds: true, sparepartTxns: true },
+    }),
+    prisma.user.findMany({ where: { id: { in: ids('user') as string[] } } }),
+    prisma.borrowExtension.findMany({
+      where: { id: { in: ids('extension') as string[] } },
+      include: { borrowTransaction: true },
+    }),
+    prisma.transfer.findMany({
+      where: { id: { in: ids('transfer') as string[] } },
+    }),
+    prisma.disposal.findMany({
+      where: { id: { in: ids('disposal') as string[] } },
+    }),
+    prisma.notification.findMany({
+      where: { id: { in: ids('notification') as string[] } },
+    }),
+  ]);
   const rowsByKind: Record<ManifestRow['kind'], { id: string | number }[]> = {
     asset: assets,
     borrow: loans,
@@ -57,6 +69,7 @@ export async function checkPresentation(
     extension: extensions,
     transfer: transfers,
     disposal: disposals,
+    notification: notifications,
   };
   const errors: string[] = [];
   const center = await prisma.section.findUnique({

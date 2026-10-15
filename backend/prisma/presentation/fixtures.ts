@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
-import { UserRole, StepActionType } from '@prisma/client';
+import {
+  UserRole,
+  StepActionType,
+  type NotificationType,
+  type NotificationResourceType,
+} from '@prisma/client';
+import { appendPresentationExpansion } from './scenarios';
+import { diversifyPresentation } from './variety';
 import { originalSections } from '../demo-identities';
 import { originalPresentationUsers } from './user-profiles';
 import { assetLabels, partLabels } from './labels';
@@ -34,6 +41,7 @@ export type BorrowState =
   | 'REJECTED'
   | 'CANCELLED';
 export interface DemoAsset {
+  labelIndex?: number;
   key: string;
   name: string;
   model: string;
@@ -65,6 +73,8 @@ export interface DemoBorrow {
   reason: string | null;
 }
 export interface DemoExtension {
+  reason?: string;
+  rejectReason?: string | null;
   key: string;
   borrow: string;
   type: 'ONLINE' | 'DESK';
@@ -87,6 +97,22 @@ export interface DemoRepair {
   cost: number;
   urgency: 'NORMAL' | 'URGENT' | 'EMERGENCY';
   maintenance: boolean;
+  dueDate?: Date;
+  symptom?: string;
+  diagnosis?: string | null;
+  solution?: string | null;
+  action?: 'REPAIR' | 'FABRICATE' | 'MODIFY' | 'PREVENTIVE';
+}
+export interface DemoNotification {
+  key: string;
+  user: string;
+  type: NotificationType;
+  resourceType: NotificationResourceType;
+  resource: string;
+  title: string;
+  message: string;
+  createdAt: Date;
+  readAt: Date | null;
 }
 export interface DemoPartTxn {
   key: string;
@@ -99,6 +125,7 @@ export interface DemoPartTxn {
   date: Date;
 }
 export interface DemoPart {
+  receiptAgeDays?: number;
   key: string;
   name: string;
   unit?: string;
@@ -137,6 +164,7 @@ export interface PresentationFixture {
   txns: DemoPartTxn[];
   transfers: DemoTransfer[];
   disposals: DemoDisposal[];
+  notifications: DemoNotification[];
 }
 
 /** Anchor at noon in Bangkok; relative dates remain ordered at month/year boundaries. */
@@ -197,6 +225,7 @@ export function buildPresentationFixture(date: Date): PresentationFixture {
     txns: [],
     transfers: [],
     disposals: [],
+    notifications: [],
   };
   const asset = (key: string, options: Partial<DemoAsset> = {}): DemoAsset => {
     const result: DemoAsset = {
@@ -790,7 +819,26 @@ export function buildPresentationFixture(date: Date): PresentationFixture {
     status: 'LOST',
     availability: 'UNAVAILABLE',
   });
+  appendPresentationExpansion(fixture);
+  diversifyPresentation(fixture);
+  // Mock return deadlines represent calendar days, without a chosen return time.
+  const returnDay = (date: Date): Date =>
+    new Date(
+      `${new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date)}T00:00:00+07:00`,
+    );
+  for (const loan of fixture.borrows)
+    loan.expectedReturn = returnDay(loan.expectedReturn);
+  for (const request of fixture.extensions) {
+    request.currentDate = returnDay(request.currentDate);
+    request.requestedDate = returnDay(request.requestedDate);
+  }
   fixture.assets.forEach((machine, index) => {
+    machine.labelIndex = index;
     const labels = assetLabels(machine, index);
     machine.name = labels.name;
     machine.model = labels.model;
@@ -831,6 +879,7 @@ export function validateFixture(f: PresentationFixture): void {
     txns: f.txns,
     transfers: f.transfers,
     disposals: f.disposals,
+    notifications: f.notifications,
   };
   for (const [name, rows] of Object.entries(keyedRows))
     unique(
@@ -1025,5 +1074,22 @@ export function validateFixture(f: PresentationFixture): void {
     const machine = f.assets.find((a) => a.key === disposal.asset);
     if (!machine || machine.status !== 'DISPOSAL' || disposal.date > f.date)
       throw new Error(`Invalid disposal: ${disposal.key}`);
+  }
+  for (const notification of f.notifications) {
+    exists(f.users, notification.user, 'notification recipient');
+    const resources =
+      notification.resourceType === 'REPAIR_JOB'
+        ? f.repairs
+        : notification.resourceType === 'BORROW_EXTENSION'
+          ? f.extensions
+          : f.borrows;
+    exists(resources, notification.resource, 'notification resource');
+    if (
+      notification.createdAt > f.date ||
+      (notification.readAt &&
+        (notification.readAt < notification.createdAt ||
+          notification.readAt > f.date))
+    )
+      throw new Error(`Invalid notification dates: ${notification.key}`);
   }
 }

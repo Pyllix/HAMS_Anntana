@@ -23,6 +23,8 @@ import { repairPresentationCenterSection } from './presentation/sections';
 import { attachPresentationSampleImages } from './presentation/images';
 import { relabelPresentation } from './presentation/relabel';
 import { extendPresentationParts } from './presentation/parts';
+import { extendPresentationScenarios } from './presentation/expand';
+import { refinePresentationVariety } from './presentation/refine';
 
 export function assertPresentationTarget(
   url: string | undefined,
@@ -84,6 +86,7 @@ async function main(): Promise<void> {
           'txns',
           'transfers',
           'disposals',
+          'notifications',
         ].map((key) => [
           key,
           (fixture[key as keyof typeof fixture] as unknown[]).length,
@@ -195,17 +198,39 @@ async function main(): Promise<void> {
       console.info(
         `Added ${extension.added} spare parts with receipt history; existing stock and repair records preserved.`,
       );
-    const result = extension
-      ? { manifest: extension.manifest, created: false }
-      : restored
-        ? { manifest: restored, created: false }
-        : existing
-          ? { manifest: existing, created: false }
-          : await seedPresentation(
-              prisma,
-              fixture,
-              process.env.DEMO_PRESENTATION_PASSWORD ?? '',
-            );
+    const expansion =
+      existing && process.argv.includes('--expand-scenarios')
+        ? await extendPresentationScenarios(prisma, fixture)
+        : null;
+    if (expansion)
+      console.info(
+        `Presentation scenarios appended: ${JSON.stringify(expansion.added)}`,
+      );
+    const refinement =
+      existing && process.argv.includes('--diversify-scenarios')
+        ? await refinePresentationVariety(prisma)
+        : null;
+    if (refinement) {
+      existing = await readPresentationManifest(prisma);
+      console.info(
+        `Presentation variety updated: ${JSON.stringify(refinement.changed)}; preserved customized rows: ${refinement.skipped.length}`,
+      );
+    }
+    const result = refinement
+      ? { manifest: existing!, created: false }
+      : expansion
+        ? { manifest: expansion.manifest, created: false }
+        : extension
+          ? { manifest: extension.manifest, created: false }
+          : restored
+            ? { manifest: restored, created: false }
+            : existing
+              ? { manifest: existing, created: false }
+              : await seedPresentation(
+                  prisma,
+                  fixture,
+                  process.env.DEMO_PRESENTATION_PASSWORD ?? '',
+                );
     const warnings = await checkPresentation(prisma, result.manifest);
     await saveJson(output, result.manifest);
     console.info(

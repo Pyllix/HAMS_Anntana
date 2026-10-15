@@ -1,4 +1,5 @@
 import { mapApiRepairJob } from "../../services/repairApiService";
+import "./RepairHistoryTable.css";
 import type { ApiRepairJob } from "../../services/repairApiService";
 import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
 import { getPage } from "../../services/pagedApi";
@@ -348,7 +349,7 @@ export default function RepairHistoryTable({
         id: "jobNo",
         header: "รหัสงาน",
         cell: (info) => (
-          <span className="font-mono text-xs font-bold text-slate-900 whitespace-nowrap">
+          <span className="font-mono text-xs font-bold text-slate-900">
             {info.row.original.jobNo}
           </span>
         ),
@@ -359,11 +360,11 @@ export default function RepairHistoryTable({
         cell: (info) => {
           const job = info.row.original;
           return (
-            <div className="min-w-[200px]">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">
                 {job.asset?.assetName || "-"}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{job.symptom}</p>
+              <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-slate-500">{job.symptom}</p>
               <p className="mt-0.5 font-mono text-[11px] text-slate-400">
                 {job.asset?.assetCode || "-"}
               </p>
@@ -380,7 +381,7 @@ export default function RepairHistoryTable({
         id: "evaluatedAt",
         header: "วันที่ประเมิน",
         cell: (info) => (
-          <span className="whitespace-nowrap text-xs text-slate-600">
+          <span className="text-xs text-slate-600">
             {formatDateTH(info.row.original.evaluatedAt)}
           </span>
         ),
@@ -391,7 +392,7 @@ export default function RepairHistoryTable({
         cell: (info) => {
           const evaluator = info.row.original.evaluator;
           return (
-            <span className="whitespace-nowrap text-xs text-slate-700">
+            <span className="text-xs text-slate-700">
               {evaluator ? `${evaluator.firstName} ${evaluator.lastName}` : "-"}
             </span>
           );
@@ -427,16 +428,17 @@ export default function RepairHistoryTable({
           const progress = getWorkflowProgress(job);
 
           return (
-            <div className="flex items-center justify-start gap-2.5 min-w-[240px]">
+            <div className="repair-history-actions flex min-w-0 flex-col items-start gap-2">
               <button
                 type="button"
                 title="ดูรายละเอียดประวัติงาน"
+                aria-label={`ดูรายละเอียดงาน ${job.jobNo}`}
                 onClick={() => openDetail(job)}
                 className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
               >
                 <Eye className="h-4 w-4" />
               </button>
-              <div className="flex-1">
+              <div className="min-w-0 w-full flex-1">
                 {rejectionReason && (
                   <div className="flex flex-col gap-1.5">
                     <button
@@ -448,7 +450,7 @@ export default function RepairHistoryTable({
                           actionType: job.actionType,
                         })
                       }
-                      className="flex h-8 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                      className="flex min-h-8 w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                     >
                       ดูเหตุผลการปฏิเสธ
                     </button>
@@ -460,9 +462,9 @@ export default function RepairHistoryTable({
                             toReassessmentListItem(job, rejectionReason),
                           )
                         }
-                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+                        className="flex min-h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
                       >
-                        <ClipboardEdit className="h-3.5 w-3.5" />
+                        <ClipboardEdit className="h-3.5 w-3.5 shrink-0" />
                         ประเมินใหม่
                       </button>
                     )}
@@ -483,9 +485,9 @@ export default function RepairHistoryTable({
                           setWorkflowTarget({ job, stage: nextStage });
                         }
                       }}
-                      className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                      className="inline-flex min-h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
                     >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      <ClipboardCheck className="h-3.5 w-3.5 shrink-0" />
                       {nextStage.actionLabel}
                     </button>
                     <p className="mt-1 text-[10px] text-slate-400">
@@ -509,12 +511,12 @@ export default function RepairHistoryTable({
                   </span>
                 )}
                 {isCompleted && (
-                  <span className="flex h-8 w-full items-center justify-center whitespace-nowrap rounded-lg bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-600">
+                  <span className="flex min-h-8 w-full items-center justify-center rounded-lg bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-600">
                     ปิดงานแล้ว
                   </span>
                 )}
                 {isCancelled && (
-                  <span className="flex h-8 w-full items-center justify-center whitespace-nowrap rounded-lg bg-slate-100 px-2.5 text-xs font-semibold text-slate-500">
+                  <span className="flex min-h-8 w-full items-center justify-center rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-500">
                     ยกเลิกแล้ว
                   </span>
                 )}
@@ -536,16 +538,24 @@ export default function RepairHistoryTable({
   });
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mt-4">
+    <div className="flex min-h-0 min-w-0 w-full flex-col h-full bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
       <QueryStatus query={listQuery} />
-      {/* Scrollable Container สำหรับตัวตาราง */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-left border-collapse text-sm text-slate-600">
+      <div className="repair-history-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <table className="repair-history-table w-full table-fixed text-left border-collapse text-sm text-slate-600">
+          <colgroup>
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "25%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "15%" }} />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200 shadow-xs">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-4 py-3.5 whitespace-nowrap">
+                  <th key={header.id} scope="col" className="px-2.5 py-3.5">
                     {header.isPlaceholder ? null : (
                       <table.FlexRender header={header} />
                     )}
@@ -591,7 +601,12 @@ export default function RepairHistoryTable({
                   {row.getAllCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className="px-4 py-3.5 whitespace-nowrap align-middle"
+                      data-label={
+                        typeof cell.column.columnDef.header === "string"
+                          ? cell.column.columnDef.header
+                          : undefined
+                      }
+                      className="px-2.5 py-3.5 align-top"
                     >
                       <table.FlexRender cell={cell} />
                     </td>
@@ -604,7 +619,7 @@ export default function RepairHistoryTable({
       </div>
 
       {/* Pagination - ใช้โครงสร้างเดียวกับ AvailableAssetsTable */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-white border-t border-slate-200">
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-white border-t border-slate-200">
         <div className="text-xs text-slate-500 hidden sm:block">
           หน้า{" "}
           <span className="font-semibold text-slate-700">
@@ -616,7 +631,7 @@ export default function RepairHistoryTable({
           </span>
         </div>
 
-        <div className="flex items-center space-x-1.5 ml-auto sm:ml-0">
+        <div className="flex flex-wrap items-center gap-1.5 ml-auto sm:ml-0">
           <button
             type="button"
             onClick={() => table.previousPage()}

@@ -1,4 +1,5 @@
 import { originalSections } from '../demo-identities';
+import { variedEquipment } from './variety';
 
 // Fictional inventory labels in hospital format; keys remain private scenario identifiers.
 const equipment = [
@@ -15,6 +16,7 @@ const equipment = [
 export function assetLabels(
   asset: { key: string; type: string; section: string; receivedDate: Date },
   index: number,
+  useVariedCatalog = true,
 ) {
   let [name, prefix] = equipment[index % equipment.length] as readonly [
     string,
@@ -25,6 +27,12 @@ export function assetLabels(
     prefix = 'PC';
     name = 'เครื่องคอมพิวเตอร์สำหรับงานทะเบียนครุภัณฑ์';
     model = `PC-${5000 + index * 10}`;
+  }
+  if (useVariedCatalog && asset.key.startsWith('volume-v2-')) {
+    const varied = variedEquipment(asset);
+    name = varied.name;
+    prefix = varied.prefix;
+    model = varied.model;
   }
   if (asset.key.startsWith('rotation-even-')) {
     prefix = 'BP';
@@ -114,6 +122,35 @@ export const partLabels: Record<string, { code: string; name: string }> = {
   },
   'power-cord': { code: 'SP-MED-019', name: 'สายไฟสำหรับอุปกรณ์การแพทย์' },
   'ceramic-fuse': { code: 'SP-MED-020', name: 'ฟิวส์เซรามิก 10A 250V' },
+  'volume-v2-patient-cable': {
+    code: 'SP-MED-021',
+    name: 'สายสัญญาณผู้ป่วยแบบหลายพารามิเตอร์',
+  },
+  'volume-v2-pressure-sensor': {
+    code: 'SP-MED-022',
+    name: 'เซนเซอร์ตรวจวัดแรงดัน',
+  },
+  'volume-v2-power-module': {
+    code: 'SP-MED-023',
+    name: 'ชุดจ่ายไฟเครื่องมือแพทย์',
+  },
+  'volume-v2-pump-motor': { code: 'SP-MED-024', name: 'มอเตอร์ปั๊มสุญญากาศ' },
+  'volume-v2-control-knob': {
+    code: 'SP-MED-025',
+    name: 'ปุ่มปรับควบคุมอัตราการไหล',
+  },
+  'volume-v2-display-panel': {
+    code: 'SP-MED-026',
+    name: 'แผงหน้าจอแสดงผลเครื่องมือแพทย์',
+  },
+  'volume-v2-air-tube': {
+    code: 'SP-MED-027',
+    name: 'สายลมแรงดันสำหรับอุปกรณ์การแพทย์',
+  },
+  'volume-v2-ground-cable': {
+    code: 'SP-MED-028',
+    name: 'สายดินสำหรับอุปกรณ์การแพทย์',
+  },
 };
 export const supplementalUsers: Record<
   string,
