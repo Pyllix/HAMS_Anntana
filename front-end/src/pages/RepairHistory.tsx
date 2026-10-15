@@ -62,7 +62,7 @@ export default function RepairHistory() {
 
   return (
     // ล็อกความสูงเต็มความสูงที่เหลือของจอภาพ และห้าม scroll ระดับเพจ (overflow-hidden)
-    <div className="flex flex-col h-[calc(100vh-6rem)] overflow-hidden space-y-4">
+    <div className="flex min-w-0 w-full flex-col h-[calc(100vh-6rem)] overflow-hidden space-y-4">
       <QueryStatus query={summaryQuery} />
       {/* Summary Cards */}
       <div className="shrink-0 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -122,7 +122,7 @@ export default function RepairHistory() {
       </div>
 
       {/* Table Section: ขยายเต็มพื้นที่ที่เหลือ (flex-1) */}
-      <div className="flex-1 overflow-hidden border-none">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden border-none">
         <RepairHistoryTable
           search={search}
           actionType={actionType}

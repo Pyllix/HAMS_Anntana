@@ -1,0 +1,92 @@
+.repair-history-scroll {
+  container: repair-history / inline-size;
+}
+
+.repair-history-table th,
+.repair-history-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.repair-history-table td > span {
+  max-width: 100%;
+}
+
+.repair-history-table td > span > span {
+  flex-shrink: 0;
+}
+
+.repair-history-table button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@container repair-history (min-width: 75rem) {
+  .repair-history-actions {
+    flex-direction: row;
+  }
+}
+
+/* Keep every field visible when seven readable columns no longer fit. */
+@container repair-history (max-width: 52rem) {
+  .repair-history-table,
+  .repair-history-table tbody,
+  .repair-history-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .repair-history-table colgroup {
+    display: none;
+  }
+
+  .repair-history-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .repair-history-table tbody tr {
+    padding: 0.75rem;
+  }
+
+  .repair-history-table td {
+    display: grid;
+    grid-template-columns: minmax(0, 6.25rem) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .repair-history-table td::before {
+    content: attr(data-label);
+    color: var(--color-slate-500);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .repair-history-table td > * {
+    min-width: 0;
+    justify-self: start;
+  }
+
+  .repair-history-table td[colspan] {
+    display: block;
+    padding: 2rem 0;
+  }
+
+  .repair-history-table td[colspan]::before {
+    content: none;
+  }
+}
+
+@container repair-history (max-width: 22rem) {
+  .repair-history-table td {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+}
