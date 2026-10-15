@@ -1,7 +1,7 @@
 export interface BorrowDto {
   assetId: string;
   borrowerId: string;
-  deliveryMethod: "PICKUP";
+  deliveryMethod: "PICKUP" | "DELIVERY";
 }
 
 export interface Borrow {

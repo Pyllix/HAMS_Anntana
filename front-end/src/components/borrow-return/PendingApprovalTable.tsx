@@ -20,6 +20,8 @@ import {
 } from "../../services/borrowService";
 import { useRejectModalStore } from "../../stores/useRejectModalStore";
 import { useToastStore } from "../../stores/useToastStore";
+import DeliveryMethodBadge from "./DeliveryMethodBadge";
+import BorrowerSectionInfo from "./BorrowerSectionInfo";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -126,6 +128,7 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
           <div className="text-xs text-gray-500">
             รหัสพนักงาน: {row.borrower?.employeeId || "-"}
           </div>
+          <BorrowerSectionInfo sectionId={row.borrower?.section_id} />
         </div>
       );
     },
@@ -149,6 +152,11 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
         <span className="text-sm text-gray-600">{formatThaiDate(dateStr)}</span>
       );
     },
+  },
+  {
+    accessorKey: "delivery_method",
+    header: "วิธีรับ",
+    cell: (info) => <DeliveryMethodBadge method={info.getValue() as string} />,
   },
   {
     id: "actions",
