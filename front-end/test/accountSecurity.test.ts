@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import axios, { type AxiosRequestConfig } from "axios";
 import process from "node:process";
 import { after, before, test } from "node:test";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { createServer, type ViteDevServer } from "vite";
 
 interface RecordedRequest {
@@ -17,6 +19,7 @@ const originalAdapter = axios.defaults.adapter;
 let vite: ViteDevServer | undefined;
 let securityService: any;
 let authStore: any;
+let accountSecurityPage: any;
 
 function requestPath(config: AxiosRequestConfig): string {
   return new URL(`${config.baseURL ?? ""}${config.url ?? "/"}`, "http://local.test").pathname;
@@ -67,6 +70,7 @@ before(async () => {
   });
   securityService = await vite.ssrLoadModule("/src/services/accountSecurityService.ts");
   ({ useAuthStore: authStore } = await vite.ssrLoadModule("/src/stores/authStore.ts"));
+  accountSecurityPage = await vite.ssrLoadModule("/src/pages/AccountSecurity.tsx");
   authStore.getState().login(
     { id: "admin-1", role: "ADMIN" },
     { id: "session-1", expiresAt: "2099-01-01T00:00:00.000Z" },
@@ -138,4 +142,19 @@ test("ADMIN Step-up cache expires in memory without writing credentials to brows
   assert.equal(securityService.isAdminStepUpActive(Date.now() + 300_001), false);
   assert.equal(globalThis.localStorage, undefined);
   assert.equal(globalThis.sessionStorage, undefined);
+});
+
+test("roles exempt from mandatory 2FA only see password controls on account security", () => {
+  const exemptRoles = ["MANAGER", "MAINTENANCE_HEAD", "MAINTENANCE_STAFF", "DEPARTMENT_STAFF"];
+
+  for (const role of exemptRoles) {
+    authStore.getState().login(
+      { id: `user-${role}`, role },
+      { id: `session-${role}`, expiresAt: "2099-01-01T00:00:00.000Z" },
+    );
+    const markup = renderToStaticMarkup(React.createElement(accountSecurityPage.default));
+
+    assert.match(markup, /เปลี่ยนรหัสผ่าน/, `${role} should keep password controls`);
+    assert.doesNotMatch(markup, /Authenticator|Recovery Codes|2FA/, `${role} should not see 2FA content`);
+  }
 });

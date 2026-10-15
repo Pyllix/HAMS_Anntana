@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { User } from "../../types/TypeUser";
 import { useAuthStore } from "../../stores/authStore";
+import { requiresTwoFactor } from "../../router/roles";
 import {
   adminResetPassword,
   adminResetTwoFactor,
@@ -67,11 +68,12 @@ export default function DialogAdminSecurityActions({
     setReason("");
     setIdentityVerified(false);
     setError("");
-  }, [isOpen, user.id]);
+  }, [isOpen, user.id, user.role]);
 
   if (!isOpen) return null;
 
   const isOwnAccount = user.id === actorUserId;
+  const targetRequiresTwoFactor = requiresTwoFactor(user.role);
   const actionLabel = action === "password" ? "รีเซ็ตรหัสผ่าน" : "รีเซ็ต 2FA";
 
   const performAction = async () => {
@@ -157,7 +159,11 @@ export default function DialogAdminSecurityActions({
             <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">บัญชีนี้เป็นบัญชีที่คุณกำลังใช้งาน เปลี่ยนรหัสผ่านหรือแอปยืนยันตัวตนได้ที่เมนู “ความปลอดภัยบัญชี” หากต้องรีเซ็ต 2FA ให้ผู้ดูแลระบบคนอื่นช่วยดำเนินการ</p>
           ) : action === null ? (
             <>
-              <p className="text-sm leading-relaxed text-slate-500">เลือกสิ่งที่ต้องการรีเซ็ต โดยต้องยืนยันตัวตนก่อนทำรายการ</p>
+              <p className="text-sm leading-relaxed text-slate-500">
+                {targetRequiresTwoFactor
+                  ? "เลือกสิ่งที่ต้องการรีเซ็ต โดยต้องยืนยันตัวตนก่อนทำรายการ"
+                  : "การรีเซ็ตรหัสผ่านต้องยืนยันตัวตนผู้ดูแลระบบก่อนทำรายการ"}
+              </p>
               <div className="space-y-3">
                 <button type="button" onClick={() => { setAction("password"); setError(""); }} className="group flex w-full min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"><KeyRound className="h-5 w-5" /></span>
@@ -167,14 +173,16 @@ export default function DialogAdminSecurityActions({
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400 group-hover:text-emerald-600" />
                 </button>
-                <button type="button" onClick={() => { setAction("two-factor"); setError(""); }} className="group flex w-full min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"><ShieldAlert className="h-5 w-5" /></span>
-                  <span className="min-w-0 flex-1 break-words">
-                    <strong className="block text-sm font-semibold leading-6 text-slate-900">รีเซ็ต 2FA</strong>
-                    <span className="mt-1 block text-xs leading-relaxed text-slate-500">ให้ผู้ใช้ตั้งค่าการยืนยันตัวตนสองขั้นตอนใหม่ หลังตรวจสอบเจ้าของบัญชีแล้ว</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400 group-hover:text-emerald-600" />
-                </button>
+                {targetRequiresTwoFactor && (
+                  <button type="button" onClick={() => { setAction("two-factor"); setError(""); }} className="group flex w-full min-w-0 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100"><ShieldAlert className="h-5 w-5" /></span>
+                    <span className="min-w-0 flex-1 break-words">
+                      <strong className="block text-sm font-semibold leading-6 text-slate-900">รีเซ็ต 2FA</strong>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-500">ให้ผู้ใช้ตั้งค่าการยืนยันตัวตนสองขั้นตอนใหม่ หลังตรวจสอบเจ้าของบัญชีแล้ว</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-400 group-hover:text-emerald-600" />
+                  </button>
+                )}
               </div>
             </>
           ) : (
