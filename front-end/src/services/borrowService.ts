@@ -60,10 +60,17 @@ export function getBorrowErrorMessage(err: any): string {
   return raw || "เกิดข้อผิดพลาดในการทำรายการ กรุณาลองใหม่อีกครั้ง";
 }
 
+export type DeliveryMethod = "PICKUP" | "DELIVERY";
+
+export const DELIVERY_METHOD_LABELS: Record<DeliveryMethod, string> = {
+  PICKUP: "รับเองที่ศูนย์ครุภัณฑ์",
+  DELIVERY: "ให้เจ้าหน้าที่นำส่ง",
+};
+
 export interface BorrowReq {
   assetId: string;
   borrowerId?: string;
-  deliveryMethod: string;
+  deliveryMethod: DeliveryMethod;
   expectedReturnDate?: string;
 }
 

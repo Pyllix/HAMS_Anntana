@@ -1,4 +1,4 @@
-import { Building2, Loader2, Package, Tag, X } from "lucide-react";
+import { Building2, Loader2, Package, Tag, Truck, X } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSelfBorrowModalStore } from "../../stores/useSelfBorrowModalStore";
@@ -6,6 +6,8 @@ import { useAuthStore } from "../../stores/authStore";
 import {
   postBorrow,
   getBorrowErrorMessage,
+  DELIVERY_METHOD_LABELS,
+  type DeliveryMethod,
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
@@ -17,6 +19,14 @@ function getTomorrowDateString() {
   return tomorrow.toISOString().split("T")[0];
 }
 
+const DELIVERY_OPTIONS: Array<{
+  value: DeliveryMethod;
+  icon: typeof Package;
+}> = [
+  { value: "PICKUP", icon: Building2 },
+  { value: "DELIVERY", icon: Truck },
+];
+
 export default function SelfBorrowModal() {
   const queryClient = useQueryClient();
   const showToast = useToastStore((s) => s.showToast);
@@ -24,6 +34,8 @@ export default function SelfBorrowModal() {
   const { closeForm, selectedAsset: asset } = useSelfBorrowModalStore();
 
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [deliveryMethod, setDeliveryMethod] =
+    useState<DeliveryMethod>("PICKUP");
 
   const { mutate: handleBorrowSubmit, isPending: isSubmitting } = useMutation(
     {
@@ -51,13 +63,18 @@ export default function SelfBorrowModal() {
       return;
     }
 
+    if (!expectedReturnDate) {
+      showToast("warning", "กรุณาเลือกวันที่ต้องการคืน");
+      return;
+    }
+
     handleBorrowSubmit({
       assetId: asset.id,
       borrowerId: user?.id,
-      deliveryMethod: "PICKUP",
-      expectedReturnDate: expectedReturnDate
-        ? new Date(`${expectedReturnDate}T17:00:00.000Z`).toISOString()
-        : undefined,
+      deliveryMethod,
+      expectedReturnDate: new Date(
+        `${expectedReturnDate}T17:00:00.000Z`,
+      ).toISOString(),
     });
   };
 
@@ -144,7 +161,7 @@ export default function SelfBorrowModal() {
                 htmlFor="expectedReturnDate"
                 className="text-xs font-semibold text-gray-700"
               >
-                วันที่ต้องการคืน (ถ้าไม่ระบุ เจ้าหน้าที่จะกำหนดให้ภายหลัง)
+                วันที่ต้องการคืน <span className="text-red-500">*</span>
               </label>
               <ThaiDatePicker
                 id="expectedReturnDate"
@@ -155,10 +172,45 @@ export default function SelfBorrowModal() {
               />
             </div>
 
+            {/* วิธีรับครุภัณฑ์ */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-gray-700">
+                วิธีรับครุภัณฑ์ <span className="text-red-500">*</span>
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="วิธีรับครุภัณฑ์"
+                className="grid grid-cols-2 gap-2"
+              >
+                {DELIVERY_OPTIONS.map(({ value, icon: Icon }) => {
+                  const selected = deliveryMethod === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setDeliveryMethod(value)}
+                      className={`flex items-center gap-2 px-3.5 py-2.5 text-xs rounded-lg border transition-colors ${
+                        selected
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-medium"
+                          : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      {DELIVERY_METHOD_LABELS[value]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Info Alert Box */}
             <div className="px-4 py-2.5 bg-sky-500/5 border border-sky-500/20 rounded-lg text-sky-800 text-xs">
               คำขอนี้จะถูกส่งไปให้เจ้าหน้าที่ศูนย์ครุภัณฑ์อนุมัติก่อน
-              เมื่ออนุมัติแล้วให้มารับครุภัณฑ์ที่ศูนย์ครุภัณฑ์กลาง
+              {deliveryMethod === "PICKUP"
+                ? " เมื่ออนุมัติแล้วให้มารับครุภัณฑ์ที่ศูนย์ครุภัณฑ์กลาง"
+                : " เมื่ออนุมัติแล้วเจ้าหน้าที่จะนำครุภัณฑ์ไปส่งที่หน่วยงานของท่าน"}
             </div>
 
             {/* Action Buttons */}

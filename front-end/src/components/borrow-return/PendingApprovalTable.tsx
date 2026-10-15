@@ -20,6 +20,7 @@ import {
 } from "../../services/borrowService";
 import { useRejectModalStore } from "../../stores/useRejectModalStore";
 import { useToastStore } from "../../stores/useToastStore";
+import DeliveryMethodBadge from "./DeliveryMethodBadge";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -149,6 +150,11 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
         <span className="text-sm text-gray-600">{formatThaiDate(dateStr)}</span>
       );
     },
+  },
+  {
+    accessorKey: "delivery_method",
+    header: "วิธีรับ",
+    cell: (info) => <DeliveryMethodBadge method={info.getValue() as string} />,
   },
   {
     id: "actions",
