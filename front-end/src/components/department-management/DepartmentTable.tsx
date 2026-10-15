@@ -62,14 +62,7 @@ const columns: Array<ColumnDef<typeof features, Department>> = [
     ),
   },
 
-  // 5. หมายเหตุ (ยังไม่มีข้อมูลนี้ในระบบหลังบ้าน)
-  {
-    id: "remark",
-    header: "หมายเหตุ",
-    cell: () => <span className="text-sm text-slate-400">-</span>,
-  },
-
-  // 6. จัดการ (Icon Actions: แก้ไข, ลบ)
+  // 5. จัดการ (Icon Actions: แก้ไข, ลบ)
   {
     id: "actions",
     header: "จัดการ",
