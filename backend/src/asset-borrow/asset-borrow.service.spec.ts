@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AssetBorrowService } from './asset-borrow.service';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { orderAwarePages } from '../../test/helpers/order-aware-pages';
 import {
   UserRole,
   ReturnCondition,
@@ -122,6 +123,26 @@ describe('AssetBorrowService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('does not lose or repeat extensions created at the same time across pages', async () => {
+    const requests = [
+      { id: '1', createdAt: '2026-10-01T00:00:00Z' },
+      { id: '3', createdAt: '2026-10-01T00:00:00Z' },
+      { id: '2', createdAt: '2026-10-01T00:00:00Z' },
+      { id: '4', createdAt: '2026-10-02T00:00:00Z' },
+    ];
+    mockPrismaService.borrowExtension.findMany.mockImplementation(
+      orderAwarePages(requests),
+    );
+    mockPrismaService.borrowExtension.count.mockResolvedValue(4);
+    mockPrismaService.$transaction.mockImplementation(
+      async (queries: unknown[]) => Promise.all(queries),
+    );
+    const first = await service.findAllExtensions({ page: 1, limit: 2 });
+    const second = await service.findAllExtensions({ page: 2, limit: 2 });
+    expect(first).toMatchObject({ data: [requests[3], requests[1]] });
+    expect(second).toMatchObject({ data: [requests[2], requests[0]] });
   });
 
   describe('createBorrow', () => {

@@ -3,6 +3,7 @@ import { AssetService } from './asset.service';
 import { PrismaService } from 'src/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ImageAttachmentService } from '../images/image-attachment.service';
+import { orderAwarePages } from '../../test/helpers/order-aware-pages';
 
 describe('AssetService', () => {
   let service: AssetService;
@@ -92,6 +93,49 @@ describe('AssetService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('does not lose or repeat disposal records with the same approval date across pages', async () => {
+    const records = [
+      { id: '1', approvedDate: '2026-10-01' },
+      { id: '3', approvedDate: '2026-10-01' },
+      { id: '2', approvedDate: '2026-10-01' },
+      { id: '4', approvedDate: '2026-10-02' },
+    ];
+    mockPrismaService.disposal.findMany.mockImplementation(
+      orderAwarePages(records),
+    );
+    mockPrismaService.disposal.count.mockResolvedValue(4);
+    const first = await service.findAllDisposalRecords({ page: 1, limit: 2 });
+    const second = await service.findAllDisposalRecords({ page: 2, limit: 2 });
+    expect([...first.data, ...second.data].map((row) => row.id)).toEqual([
+      '4',
+      '3',
+      '2',
+      '1',
+    ]);
+    expect(second.meta.hasNextPage).toBe(false);
+  });
+
+  it('does not lose or repeat transfers with the same transfer date across pages', async () => {
+    const records = [
+      { id: '1', transferDate: '2026-10-01' },
+      { id: '3', transferDate: '2026-10-01' },
+      { id: '2', transferDate: '2026-10-01' },
+      { id: '4', transferDate: '2026-10-02' },
+    ];
+    mockPrismaService.transfer.findMany.mockImplementation(
+      orderAwarePages(records),
+    );
+    mockPrismaService.transfer.count.mockResolvedValue(4);
+    const first = await service.findAllTransferRecords({ page: 1, limit: 2 });
+    const second = await service.findAllTransferRecords({ page: 2, limit: 2 });
+    expect([...first.data, ...second.data].map((row) => row.id)).toEqual([
+      '4',
+      '3',
+      '2',
+      '1',
+    ]);
   });
 
   describe('findAll', () => {

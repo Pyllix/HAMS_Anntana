@@ -20,6 +20,18 @@ export async function getPage<T>(path: string, filters: Filters, signal?: AbortS
   }
   return data;
 }
+// Small lookup lists still need every page; table queries should keep using getPage.
+export async function getAllPages<T>(path: string, filters: Filters = {}, signal?: AbortSignal): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await getPage<T>(path, { ...filters, page, limit: 100 }, signal);
+    if (result.meta.page !== page || (result.data.length === 0 && page < result.meta.totalPages)) {
+      throw new Error("API ส่งข้อมูล pagination ไม่ครบ กรุณาลองใหม่");
+    }
+    rows.push(...result.data);
+    if (page >= result.meta.totalPages) return rows;
+  }
+}
 export async function getSummary<T>(path: string, filters: Filters = {}, signal?: AbortSignal): Promise<T> {
   const { data } = await apiClient.get<T>(path, { params: apiFilters(filters), signal });
   return data;
