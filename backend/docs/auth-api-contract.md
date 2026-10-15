@@ -78,7 +78,7 @@ Routes that **do not** count as user activity and must omit this header:
 - Background polling (notifications, status checks)
 - Auto-refresh requests initiated by the system
 
-The Frontend is responsible for adding `X-User-Activity: 1` to requests that originate from genuine user interactions (clicks, form submissions, explicit data loads). A marked request is accepted only while the existing idle and absolute deadlines are still in the future; it updates the idle deadline to 60 minutes after the request, capped by the original 12-hour sign-in deadline. Polling requests never move that deadline.
+The Frontend is responsible for adding `X-User-Activity: 1` to requests that originate from genuine user interactions (clicks, form submissions, explicit data loads). A marked request is accepted only while the existing idle and absolute deadlines are still in the future; it updates the idle deadline to 8 hours after the request, capped by the original 12-hour sign-in deadline. Polling requests never move that deadline.
 
 ---
 
@@ -130,7 +130,7 @@ GET /auth/session
 | `200` | `{ "session": null, "user": { "id", "email", "role", "enrollmentComplete": true }, "twoFactorRequired": true }` | Valid TOTP pre-auth context; no full Session
 | `200` | `{ "session": null }` | No auth context or a revoked legacy un-enrolled Session |
 
-For a valid Session, `expiresAt` is the effective deadline: the earlier of 60 minutes after the last genuine user action and 12 hours after sign-in. Only an authenticated cookie request marked `X-User-Activity: 1` advances the idle deadline.
+For a valid Session, `expiresAt` is the effective deadline: the earlier of 8 hours after the last genuine user action and 12 hours after sign-in. Only an authenticated cookie request marked `X-User-Activity: 1` advances the idle deadline.
 
 > `enrollmentComplete: false` is returned only with a valid pre-auth context.
 > Frontend uses this field to decide whether to show the enrollment screen.
@@ -338,7 +338,7 @@ All error responses follow:
 | `INVALID_CURRENT_PASSWORD` | 400 | Wrong current password in change-password |
 | `PASSWORD_POLICY_VIOLATION` | 400 | New password too weak |
 | `NOT_AUTHENTICATED` | 401 | Request requires Session; none present |
-| `SESSION_EXPIRED` | 401 | Session expired (idle 60 min or 12 h absolute) |
+| `SESSION_EXPIRED` | 401 | Session expired (idle 8 h or 12 h absolute) |
 | `STEP_UP_REQUIRED` | 403 | Sensitive action needs fresh TOTP step-up |
 | `STEP_UP_EXPIRED` | 403 | Step-up window (5 min) passed |
 | `NOT_ADMIN` | 403 | Non-ADMIN calling ADMIN-only endpoint |
@@ -359,7 +359,7 @@ All error responses follow:
 | Rule | Value |
 |---|---|
 | Absolute Session lifetime | 12 hours from sign-in; fixed and never sliding |
-| Idle expiry | 60 minutes of no genuine user activity |
+| Idle expiry | 8 hours of no genuine user activity |
 | Idle timer refresh | `X-User-Activity: 1` on an authenticated Session Cookie request |
 | Idle timer reset does NOT extend | 12-hour absolute cap |
 | Tab/browser close | Does **not** sign out |

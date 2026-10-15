@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { sharedPrisma } from '../common/config/database.config';
 
 export const SESSION_ABSOLUTE_LIFETIME_MS = 12 * 60 * 60 * 1000;
-export const SESSION_IDLE_LIFETIME_MS = 60 * 60 * 1000;
+export const SESSION_IDLE_LIFETIME_MS = 8 * 60 * 60 * 1000;
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 8;
 
 type SessionRecord = {

@@ -105,13 +105,13 @@ describe('SessionLifetimeService', () => {
   it('keeps a polling request from moving the idle deadline', async () => {
     const session = createSession();
     sessions.set(session.token, session);
-    jest.advanceTimersByTime(55 * 60 * 1000);
+    jest.advanceTimersByTime((7 * 60 + 55) * 60 * 1000);
 
     const window = await service.enforceSession(session.token, false);
 
     expect(window).toEqual({
-      expiresAt: new Date('2026-09-25T01:00:00.000Z'),
-      idleExpiresAt: new Date('2026-09-25T01:00:00.000Z'),
+      expiresAt: new Date('2026-09-25T08:00:00.000Z'),
+      idleExpiresAt: new Date('2026-09-25T08:00:00.000Z'),
       absoluteExpiresAt: new Date('2026-09-25T12:00:00.000Z'),
     });
     expect(session.updatedAt).toEqual(session.createdAt);
@@ -126,8 +126,8 @@ describe('SessionLifetimeService', () => {
     const window = await service.enforceSession(session.token, true);
 
     expect(window).toEqual({
-      expiresAt: new Date('2026-09-25T01:55:00.000Z'),
-      idleExpiresAt: new Date('2026-09-25T01:55:00.000Z'),
+      expiresAt: new Date('2026-09-25T08:55:00.000Z'),
+      idleExpiresAt: new Date('2026-09-25T08:55:00.000Z'),
       absoluteExpiresAt: new Date('2026-09-25T12:00:00.000Z'),
     });
     expect(session.updatedAt).toEqual(new Date('2026-09-25T00:55:00.000Z'));
@@ -140,13 +140,13 @@ describe('SessionLifetimeService', () => {
     prismaSession.updateMany.mockImplementation(async () => {
       const activityAt = new Date();
       session.updatedAt = activityAt;
-      session.expiresAt = new Date(activityAt.getTime() + 60 * 60 * 1000);
+      session.expiresAt = new Date(activityAt.getTime() + 8 * 60 * 60 * 1000);
       return { count: 0 };
     });
 
     const window = await service.enforceSession(session.token, true);
 
-    expect(window?.expiresAt).toEqual(new Date('2026-09-25T01:00:00.000Z'));
+    expect(window?.expiresAt).toEqual(new Date('2026-09-25T08:00:00.000Z'));
     expect(window?.absoluteExpiresAt).toEqual(
       new Date('2026-09-25T12:00:00.000Z'),
     );
@@ -175,14 +175,14 @@ describe('SessionLifetimeService', () => {
     expect(firstDevice.updatedAt).toEqual(new Date('2026-09-25T00:30:00.000Z'));
     expect(secondDevice.updatedAt).toEqual(secondDevice.createdAt);
     expect(secondWindow?.expiresAt).toEqual(
-      new Date('2026-09-25T01:00:00.000Z'),
+      new Date('2026-09-25T08:00:00.000Z'),
     );
   });
 
-  it('expires a session at the 60-minute idle boundary, even with an activity header', async () => {
+  it('expires a session at the 8-hour idle boundary, even with an activity header', async () => {
     const session = createSession();
     sessions.set(session.token, session);
-    jest.advanceTimersByTime(60 * 60 * 1000);
+    jest.advanceTimersByTime(8 * 60 * 60 * 1000);
 
     await expect(
       service.enforceSession(session.token, true),
