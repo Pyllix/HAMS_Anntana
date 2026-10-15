@@ -10,6 +10,8 @@ import {
   type TwoFactorStatus,
 } from "../services/accountSecurityService";
 import { getTwoFactorErrorMessage } from "../services/authService";
+import { requiresTwoFactor } from "../router/roles";
+import { useAuthStore } from "../stores/authStore";
 
 function errorMessage(error: unknown): string {
   const value = error as {
@@ -68,6 +70,8 @@ function TextField({
 }
 
 export default function AccountSecurity() {
+  const role = useAuthStore((state) => state.role);
+  const twoFactorRequired = requiresTwoFactor(role);
   const [status, setStatus] = useState<TwoFactorStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState("");
@@ -88,6 +92,7 @@ export default function AccountSecurity() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    if (!twoFactorRequired) return;
     let active = true;
     void getTwoFactorStatus()
       .then((result) => {
@@ -102,7 +107,7 @@ export default function AccountSecurity() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [twoFactorRequired]);
 
   const beginReplacement = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -192,12 +197,14 @@ export default function AccountSecurity() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-emerald-600" />
-          <div>
+          <div className="min-w-0">
             <h2 className="text-xl font-bold text-slate-900">ความปลอดภัยบัญชี</h2>
             <p className="mt-1 text-sm text-slate-600">
-              จัดการ Authenticator, Recovery Codes และรหัสผ่านของบัญชีที่กำลังใช้งาน
+              {twoFactorRequired
+                ? "จัดการ Authenticator, Recovery Codes และรหัสผ่านของบัญชีที่กำลังใช้งาน"
+                : "จัดการรหัสผ่านของบัญชีที่กำลังใช้งาน"}
             </p>
-            {loadingStatus ? (
+            {twoFactorRequired && (loadingStatus ? (
               <p className="mt-3 text-sm text-slate-500">กำลังตรวจสอบสถานะ 2FA...</p>
             ) : statusError ? (
               <p role="alert" className="mt-3 text-sm text-rose-700">{statusError}</p>
@@ -205,12 +212,7 @@ export default function AccountSecurity() {
               <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
                 {status?.enrolled ? "2FA เปิดใช้งานอยู่" : "ยังไม่ได้ตั้งค่า 2FA"}
               </p>
-            )}
-            {status?.required && (
-              <p className="mt-2 text-sm text-emerald-800">
-                Role นี้ต้องใช้ 2FA เพื่อเข้าใช้งาน และไม่มีตัวเลือกปิด 2FA
-              </p>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -224,56 +226,61 @@ export default function AccountSecurity() {
         </div>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-emerald-600" />
-          <h3 className="text-lg font-semibold text-slate-900">เปลี่ยน Authenticator</h3>
-        </div>
-        {!status?.enrolled || loadingStatus ? (
-          <p className="text-sm text-slate-600">ต้องตั้งค่า 2FA ให้เสร็จก่อนจึงเปลี่ยน Authenticator ได้</p>
-        ) : replacementUri ? (
-          <form onSubmit={confirmReplacement} className="space-y-4">
-            <p className="text-sm text-slate-600">สแกน QR ด้วยแอป Authenticator ใหม่ Secret นี้จะแสดงเฉพาะระหว่างการตั้งค่านี้</p>
-            <div className="flex flex-col items-center gap-3 rounded-lg bg-slate-50 p-4">
-              <QRCodeSVG value={replacementUri} size={192} level="M" />
-              <p className="break-all text-center font-mono text-sm text-slate-800">{replacementSecret || "เปิด QR ในแอป Authenticator"}</p>
+      {twoFactorRequired && (
+        <>
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-emerald-600" />
+              <h3 className="text-lg font-semibold text-slate-900">เปลี่ยน Authenticator</h3>
             </div>
-            <TextField label="รหัส 6 หลักจาก Authenticator ใหม่" value={replacementCode} onChange={setReplacementCode} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            <div className="flex flex-wrap gap-3">
-              <button disabled={busy || replacementCode.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังยืนยัน..." : "ยืนยัน Authenticator ใหม่"}</button>
-              <button type="button" disabled={busy} onClick={() => { setReplacementUri(""); setReplacementCode(""); setNotice(""); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">ยกเลิกและซ่อน Secret</button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={beginReplacement} className="space-y-4">
-            <p className="text-sm text-slate-600">ต้องยืนยันรหัสผ่านและ TOTP ปัจจุบันก่อน ระบบจะใช้ Authenticator ใหม่หลังยืนยันรหัสจากแอปใหม่แล้วเท่านั้น</p>
-            <TextField label="รหัสผ่านปัจจุบัน" value={currentPassword} onChange={setCurrentPassword} type="password" autoComplete="current-password" />
-            <TextField label="TOTP ปัจจุบัน" value={currentTotp} onChange={setCurrentTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            <button disabled={busy || currentPassword.length === 0 || currentTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังตรวจสอบ..." : "เริ่มเปลี่ยน Authenticator"}</button>
-          </form>
-        )}
-      </section>
+            {!status?.enrolled || loadingStatus ? (
+              <p className="text-sm text-slate-600">ต้องตั้งค่า 2FA ให้เสร็จก่อนจึงเปลี่ยน Authenticator ได้</p>
+            ) : replacementUri ? (
+              <form onSubmit={confirmReplacement} className="space-y-4">
+                <p className="text-sm text-slate-600">สแกน QR ด้วยแอป Authenticator ใหม่ Secret นี้จะแสดงเฉพาะระหว่างการตั้งค่านี้</p>
+                <div className="flex flex-col items-center gap-3 rounded-lg bg-slate-50 p-4">
+                  <QRCodeSVG value={replacementUri} size={192} level="M" />
+                  <p className="break-all text-center font-mono text-sm text-slate-800">{replacementSecret || "เปิด QR ในแอป Authenticator"}</p>
+                </div>
+                <TextField label="รหัส 6 หลักจาก Authenticator ใหม่" value={replacementCode} onChange={setReplacementCode} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
+                <div className="flex flex-wrap gap-3">
+                  <button disabled={busy || replacementCode.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังยืนยัน..." : "ยืนยัน Authenticator ใหม่"}</button>
+                  <button type="button" disabled={busy} onClick={() => { setReplacementUri(""); setReplacementCode(""); setNotice(""); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">ยกเลิกและซ่อน Secret</button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={beginReplacement} className="space-y-4">
+                <p className="text-sm text-slate-600">ต้องยืนยันรหัสผ่านและ TOTP ปัจจุบันก่อน ระบบจะใช้ Authenticator ใหม่หลังยืนยันรหัสจากแอปใหม่แล้วเท่านั้น</p>
+                <TextField label="รหัสผ่านปัจจุบัน" value={currentPassword} onChange={setCurrentPassword} type="password" autoComplete="current-password" />
+                <TextField label="TOTP ปัจจุบัน" value={currentTotp} onChange={setCurrentTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
+                <button disabled={busy || currentPassword.length === 0 || currentTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังตรวจสอบ..." : "เริ่มเปลี่ยน Authenticator"}</button>
+              </form>
+            )}
+          </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h3 className="text-lg font-semibold text-slate-900">ออก Recovery Codes ชุดใหม่</h3>
-        {!status?.enrolled || loadingStatus ? (
-          <p className="mt-2 text-sm text-slate-600">ต้องตั้งค่า 2FA ให้เสร็จก่อนจึงออก Recovery Codes ได้</p>
-        ) : recoveryCodesVisible ? (
-          <div className="mt-4 space-y-4">
-            <p className="text-sm text-amber-800">Recovery Codes ชุดเดิมถูกยกเลิกแล้ว บันทึกรหัสชุดใหม่นี้ไว้ในที่ปลอดภัย รหัสจะแสดงเฉพาะครั้งนี้</p>
-            <ul className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-4 font-mono text-sm text-slate-900 sm:grid-cols-5">
-              {recoveryCodes.map((code) => <li key={code}>{code}</li>)}
-            </ul>
-            <button type="button" onClick={() => { setRecoveryCodes(null); setNotice("ซ่อน Recovery Codes แล้ว หากต้องการชุดใหม่อีกครั้งต้องยืนยัน TOTP ใหม่"); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">บันทึกแล้ว ซ่อนรหัส</button>
-          </div>
-        ) : (
-          <form onSubmit={handleRegenerateCodes} className="mt-3 space-y-4">
-            <p className="text-sm text-slate-600">ต้องยืนยัน TOTP ปัจจุบันทุกครั้ง แม้ Browser นี้จะถูกเชื่อถือสำหรับการ Login</p>
-            <TextField label="TOTP ปัจจุบัน" value={recoveryTotp} onChange={setRecoveryTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            <button disabled={busy || recoveryTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังออก Recovery Codes..." : "ยืนยันและออกชุดใหม่"}</button>
-          </form>
-        )}
-      </section>
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <h3 className="text-lg font-semibold text-slate-900">ออก Recovery Codes ชุดใหม่</h3>
+            {!status?.enrolled || loadingStatus ? (
+              <p className="mt-2 text-sm text-slate-600">ต้องตั้งค่า 2FA ให้เสร็จก่อนจึงออก Recovery Codes ได้</p>
+            ) : recoveryCodesVisible ? (
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-amber-800">Recovery Codes ชุดเดิมถูกยกเลิกแล้ว บันทึกรหัสชุดใหม่นี้ไว้ในที่ปลอดภัย รหัสจะแสดงเฉพาะครั้งนี้</p>
+                <ul className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-4 font-mono text-sm text-slate-900 sm:grid-cols-5">
+                  {recoveryCodes.map((code) => <li key={code}>{code}</li>)}
+                </ul>
+                <button type="button" onClick={() => { setRecoveryCodes(null); setNotice("ซ่อน Recovery Codes แล้ว หากต้องการชุดใหม่อีกครั้งต้องยืนยัน TOTP ใหม่"); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">บันทึกแล้ว ซ่อนรหัส</button>
+              </div>
+            ) : (
+              <form onSubmit={handleRegenerateCodes} className="mt-3 space-y-4">
+                <p className="text-sm text-slate-600">ต้องยืนยัน TOTP ปัจจุบันทุกครั้ง แม้ Browser นี้จะถูกเชื่อถือสำหรับการ Login</p>
+                <TextField label="TOTP ปัจจุบัน" value={recoveryTotp} onChange={setRecoveryTotp} inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
+                <button disabled={busy || recoveryTotp.length !== 6} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">{busy ? "กำลังออก Recovery Codes..." : "ยืนยันและออกชุดใหม่"}</button>
+              </form>
+            )}
+          </section>
+
+        </>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h3 className="text-lg font-semibold text-slate-900">เปลี่ยนรหัสผ่าน</h3>

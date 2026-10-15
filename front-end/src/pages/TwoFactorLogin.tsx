@@ -10,6 +10,15 @@ import {
 import { establishClientSession } from "../services/clientAuthState";
 import useSignOut from "../hooks/useSignOut";
 
+export function parseTwoFactorInput(rawCode: string, useRecoveryCode: boolean) {
+  return {
+    useRecoveryCode,
+    code: useRecoveryCode
+      ? rawCode.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()
+      : rawCode.replace(/\D/g, "").slice(0, 6),
+  };
+}
+
 export default function TwoFactorLogin() {
   const navigate = useNavigate();
   const { signOut, isSigningOut, signOutError } = useSignOut();
@@ -82,13 +91,19 @@ export default function TwoFactorLogin() {
             id="login-two-factor-code"
             type="text"
             inputMode={useRecoveryCode ? "text" : "numeric"}
-            autoComplete="one-time-code"
+            autoComplete={useRecoveryCode ? "off" : "one-time-code"}
             autoCapitalize={useRecoveryCode ? "characters" : "off"}
             maxLength={useRecoveryCode ? 8 : 6}
+            placeholder={useRecoveryCode ? "เช่น A1B2C3D4" : "000000"}
             value={code}
-            onChange={(event) => setCode(useRecoveryCode
-              ? event.target.value.replace(/[^a-fA-F0-9]/g, "").slice(0, 8).toUpperCase()
-              : event.target.value.replace(/\D/g, "").slice(0, 6))}
+            onChange={(event) => {
+              const result = parseTwoFactorInput(event.target.value, useRecoveryCode);
+              if (result.useRecoveryCode !== useRecoveryCode) {
+                setUseRecoveryCode(result.useRecoveryCode);
+                setErrorMessage("");
+              }
+              setCode(result.code);
+            }}
             required
             className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-center font-mono text-xl tracking-[0.35em] outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200"
           />

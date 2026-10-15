@@ -18,6 +18,7 @@ let signInResponse: unknown;
 let sessionResponse: unknown;
 let vite: ViteDevServer | undefined;
 let authService: any;
+let twoFactorLoginPage: any;
 
 function requestPath(config: AxiosRequestConfig): string {
   return new URL(`${config.baseURL ?? ""}${config.url ?? "/"}`, "http://local.test").pathname;
@@ -71,6 +72,7 @@ before(async () => {
     appType: "custom",
   });
   authService = await vite.ssrLoadModule("/src/services/authService.ts");
+  twoFactorLoginPage = await vite.ssrLoadModule("/src/pages/TwoFactorLogin.tsx");
 });
 
 after(async () => {
@@ -139,6 +141,25 @@ test("TOTP and recovery verification send the browser-trust choice to their publ
   assert.ok(totpRequest.withCredentials && recoveryRequest.withCredentials);
   assert.equal(totpRequest.csrf, "csrf-test-token");
   assert.equal(recoveryRequest.csrf, "csrf-test-token");
+});
+
+test("TOTP and recovery code input stay in the mode selected by the user", () => {
+  assert.deepEqual(
+    twoFactorLoginPage.parseTwoFactorInput("A1B2C3D4", false),
+    { useRecoveryCode: false, code: "1234" },
+  );
+  assert.deepEqual(
+    twoFactorLoginPage.parseTwoFactorInput("A1B2C3D4", true),
+    { useRecoveryCode: true, code: "A1B2C3D4" },
+  );
+  assert.deepEqual(
+    twoFactorLoginPage.parseTwoFactorInput("123456", false),
+    { useRecoveryCode: false, code: "123456" },
+  );
+  assert.deepEqual(
+    twoFactorLoginPage.parseTwoFactorInput("12345678", true),
+    { useRecoveryCode: true, code: "12345678" },
+  );
 });
 
 test("enrollment sends codes and acknowledgement only to the pre-auth 2FA endpoints", async () => {

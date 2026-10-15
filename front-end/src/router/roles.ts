@@ -10,6 +10,10 @@ export const ROLES = {
 
 export type RoleType = (typeof ROLES)[keyof typeof ROLES];
 
+export function requiresTwoFactor(role: RoleType | null | undefined): boolean {
+  return role === ROLES.ADMIN || role === ROLES.PARCEL_STAFF || role === ROLES.ASSET_CENTER_STAFF;
+}
+
 // ชื่อบทบาทภาษาไทยสำหรับแสดงผล
 export const ROLE_LABELS: Record<RoleType, string> = {
   ADMIN: "ผู้ดูแลระบบ",
