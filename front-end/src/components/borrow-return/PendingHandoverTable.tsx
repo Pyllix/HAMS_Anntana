@@ -20,6 +20,7 @@ import {
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import DeliveryMethodBadge from "./DeliveryMethodBadge";
+import BorrowerSectionInfo from "./BorrowerSectionInfo";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -114,6 +115,7 @@ const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
           <div className="text-xs text-gray-500">
             รหัสพนักงาน: {row.borrower?.employeeId || "-"}
           </div>
+          <BorrowerSectionInfo sectionId={row.borrower?.section_id} />
         </div>
       );
     },
