@@ -1,5 +1,6 @@
 import axios from "axios";
 import { apiClient } from "./apiClient";
+import { getAllPages } from "./pagedApi";
 import type {
   RepairActionType,
   RepairAvailabilityCode,
@@ -514,19 +515,13 @@ export async function fetchRepairReceivers(
   const fallback = job.reporter ? [job.reporter] : [];
   if (!job.sectionId) return fallback;
 
-  const response = await apiClient.get<ApiPaginatedResponse<ApiUser> | ApiUser[]>(
-    `/users`,
-    {
-
-      params: { section_id: job.sectionId, page: 1, limit: PAGE_SIZE },
-    },
-  );
+  const sectionUsers = await getAllPages<ApiUser>("/users", { section_id: job.sectionId });
   const section: ApiSection = {
     id: job.sectionId,
     code: job.section?.sectionCode,
     name: job.section?.sectionName,
   };
-  const users = getPageData(response.data)
+  const users = sectionUsers
     .map((user) => mapUser(user, section))
     .filter((user): user is RepairUser => Boolean(user));
 

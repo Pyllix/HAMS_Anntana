@@ -1486,7 +1486,7 @@ export class RepairsService {
     );
     const now = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updatedJob = await tx.repairJob.update({
         where: { id: jobId },
         data: {
@@ -1524,8 +1524,21 @@ export class RepairsService {
         }
       }
 
-      return updatedJob;
+      return {
+        response: updatedJob,
+        notificationsToPublish:
+          await this.notifications.createRepairUnrepairableReceived(tx, {
+            id: job.id,
+            jobNo: job.jobNo,
+            assetName: job.asset.name,
+            assetCode: job.asset.noid,
+            sectionId: job.sectionId,
+          }),
+      };
     });
+
+    this.notifications.publishCommitted(result.notificationsToPublish);
+    return result.response;
   }
 
   // ───────────────────────────────────────────────────────────────────────────

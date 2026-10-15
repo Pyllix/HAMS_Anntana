@@ -860,7 +860,7 @@ export class AssetService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.disposal.findMany({
         where,
-        orderBy: { approvedDate: 'desc' },
+        orderBy: [{ approvedDate: 'desc' }, { id: 'desc' }],
         include: { asset: { include: ASSET_INCLUDE } },
         skip,
         take: limit,
@@ -980,7 +980,7 @@ export class AssetService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.transfer.findMany({
         where,
-        orderBy: { transferDate: 'desc' },
+        orderBy: [{ transferDate: 'desc' }, { id: 'desc' }],
         include: {
           asset: { include: ASSET_INCLUDE },
           fromSection: {

@@ -126,6 +126,7 @@ describe('RepairsService', () => {
           useValue: {
             createRepairApprovalRequired: jest.fn().mockResolvedValue([]),
             createRepairReadyForCollection: jest.fn().mockResolvedValue([]),
+            createRepairUnrepairableReceived: jest.fn().mockResolvedValue([]),
             publishCommitted: jest.fn(),
           },
         },

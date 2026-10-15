@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import { getAllPages } from "./pagedApi";
 import type {
   AssetType,
   Asset,
@@ -185,9 +186,7 @@ export async function getEquipmentTypes(): Promise<any[]> {
 }
 
 export async function getAllUsers(): Promise<any[]> {
-  const res = await apiClient.get("/users");
-  const raw = res.data;
-  return Array.isArray(raw) ? raw : (raw?.data ?? []);
+  return getAllPages("/users");
 }
 
 export async function getAllAssets(

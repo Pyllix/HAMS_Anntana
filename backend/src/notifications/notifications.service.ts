@@ -412,6 +412,29 @@ export class NotificationsService {
     });
   }
 
+  async createRepairUnrepairableReceived(
+    tx: Prisma.TransactionClient,
+    repairJob: SectionRepairNotificationDetails & { assetCode: string | null },
+  ): Promise<NotificationDeliveryRow[]> {
+    const recipientIds = await this.findActiveUserIds(tx, {
+      section_id: repairJob.sectionId,
+      role: {
+        in: [UserRole.DEPARTMENT_STAFF, UserRole.ASSET_CENTER_STAFF],
+      },
+    });
+    const assetLabel = repairJob.assetCode
+      ? `${repairJob.assetName} (${repairJob.assetCode})`
+      : repairJob.assetName;
+    return this.createForRecipients(tx, recipientIds, {
+      type: NotificationType.REPAIR_UNREPAIRABLE_RECEIVED,
+      title: 'เครื่องซ่อมไม่ได้ พัสดุรับมอบแล้ว',
+      message: `งานซ่อม ${repairJob.jobNo} สำหรับ ${assetLabel} ซ่อมไม่ได้ พัสดุรับมอบเพื่อเก็บรอจำหน่ายแล้ว`,
+      resourceType: NotificationResourceType.REPAIR_JOB,
+      resourceId: repairJob.id,
+      eventKey: `${NotificationType.REPAIR_UNREPAIRABLE_RECEIVED}:${repairJob.id}`,
+    });
+  }
+
   private async createForRecipients(
     tx: Prisma.TransactionClient,
     recipientIds: readonly string[],

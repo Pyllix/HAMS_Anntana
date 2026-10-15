@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import { getPage } from "./pagedApi";
 import type { BorrowRecommendations } from "../types/TypeBorrow";
 
 // แปล error message ดิบจาก API ของ borrow ให้เป็นข้อความที่อ่านเข้าใจง่ายขึ้น
@@ -409,13 +410,19 @@ export async function getBorrowingById(id: string): Promise<BorrowingDetail> {
 
 const EXTENSION_LOOKUP_LIMIT = 100;
 
-// backend ยังไม่มี GET /borrowings/extensions/:id จึงค้นจากคำขอล่าสุดของแผนก (สูงสุด 100 รายการ)
+// ค้นต่อทีละหน้าจนพบคำขอหรือถึงหน้าสุดท้าย โดยใช้ขอบเขตสิทธิ์จาก API เดิม
 export async function findBorrowExtensionById(
   id: string,
 ): Promise<BorrowExtension | null> {
-  const res = await apiClient.get<{ data: BorrowExtension[] }>(
-    "/borrowings/extensions/requests",
-    { params: { page: 1, limit: EXTENSION_LOOKUP_LIMIT } },
-  );
-  return res.data.data.find((extension) => extension.id === id) ?? null;
+  for (let page = 1; ; page += 1) {
+    const result = await getPage<BorrowExtension>("/borrowings/extensions/requests", {
+      page, limit: EXTENSION_LOOKUP_LIMIT,
+    });
+    if (result.meta.page !== page || (result.data.length === 0 && page < result.meta.totalPages)) {
+      throw new Error("API ส่งข้อมูล pagination ไม่ครบ กรุณาลองใหม่");
+    }
+    const extension = result.data.find((item) => item.id === id);
+    if (extension) return extension;
+    if (page >= result.meta.totalPages) return null;
+  }
 }

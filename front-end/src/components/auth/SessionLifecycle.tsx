@@ -268,7 +268,7 @@ export default function SessionLifecycle() {
     >
       <p className="font-semibold text-amber-950">เซสชันใกล้หมดอายุ</p>
       <p className="mt-1 text-sm text-amber-900">
-        เซสชันจะหมดเมื่อไม่มีการใช้งานครบ 60 นาที และสิ้นสุดสูงสุด 12 ชั่วโมงหลังเข้าสู่ระบบ
+        เซสชันจะหมดเมื่อไม่มีการใช้งานครบ 8 ชั่วโมง และสิ้นสุดสูงสุด 12 ชั่วโมงหลังเข้าสู่ระบบ
         การใช้งานต่อจะเลื่อนเฉพาะเวลา idle
       </p>
       {continueError && (

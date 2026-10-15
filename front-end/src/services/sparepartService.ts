@@ -1,4 +1,4 @@
-import { getPage } from "./pagedApi";
+import { getAllPages, getPage } from "./pagedApi";
 import type { Filters, Page } from "./pagedApi";
 import { apiClient } from "./apiClient";
 import { isSessionExpiredApiError } from "./serviceErrorPolicy";
@@ -59,10 +59,7 @@ const defaultGroups: SparepartGroup[] = [
 ];
 
 export async function getSparepartGroups(): Promise<SparepartGroup[]> {
-  const { data } = await apiClient.get<SparepartGroup[] | { data: SparepartGroup[] }>("/spare-part-groups");
-  const groups = Array.isArray(data) ? data : data.data;
-  if (!Array.isArray(groups)) throw new Error("API ส่งหมวดหมู่อะไหล่ไม่ถูกต้อง");
-  return groups;
+  return getAllPages<SparepartGroup>("/spare-part-groups");
 }
 
 const TIMESTAMPS_KEY = "hams_spareparts_timestamps_v1";
