@@ -29,6 +29,11 @@ import {
   formatThaiMonth,
   ExpenseBreakdown,
 } from "../services/forecastService";
+import {
+  calculateForecastKpis,
+  formatForecastValue,
+  getForecastStatusCopy,
+} from "../services/forecastPresentation";
 import ForecastLineChart, { DataPoint } from "../components/forecast/ForecastLineChart";
 
 export default function ExpenseForecast() {
@@ -113,28 +118,18 @@ export default function ExpenseForecast() {
     return calculateMonthlySectionRanking(selectedPoint.cost, selectedPoint.date, availableSections);
   }, [selectedPoint, forecastData]);
 
-  const kpis = useMemo(() => {
-    if (!forecastData?.ensemble || forecastData.ensemble.length === 0) {
-      return { total: 0, avg: 0, maxMonth: "-", maxVal: 0, minMonth: "-", minVal: 0 };
-    }
-    const total = forecastData.ensemble.reduce((acc, curr) => acc + curr.forecast, 0);
-    const avg = total / forecastData.ensemble.length;
-    let max = forecastData.ensemble[0];
-    let min = forecastData.ensemble[0];
-    forecastData.ensemble.forEach((item) => {
-      if (item.forecast > max.forecast) max = item;
-      if (item.forecast < min.forecast) min = item;
-    });
-
-    return {
-      total,
-      avg,
-      maxMonth: max.date,
-      maxVal: max.forecast,
-      minMonth: min.date,
-      minVal: min.forecast,
-    };
-  }, [forecastData]);
+  const kpis = useMemo(
+    () =>
+      calculateForecastKpis(
+        forecastData?.forecast_status === "available"
+          ? forecastData.ensemble
+          : [],
+      ),
+    [forecastData],
+  );
+  const forecastStatusCopy = forecastData
+    ? getForecastStatusCopy(forecastData.forecast_status)
+    : null;
 
   return (
     <div className="p-2 sm:p-2.5 max-w-[1600px] mx-auto flex flex-col gap-2">
@@ -184,7 +179,7 @@ export default function ExpenseForecast() {
           </div>
           <div className="mt-1.5">
             <h3 className="text-xl sm:text-2xl font-black tracking-tight text-slate-800">
-              {isLoading ? "..." : `฿${kpis.total.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`}
+              {isLoading ? "..." : formatForecastValue(kpis.total)}
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">ยอดรวม {predictionMonths} เดือนล่วงหน้า</p>
           </div>
@@ -203,7 +198,7 @@ export default function ExpenseForecast() {
           </div>
           <div className="mt-1.5">
             <h3 className="text-xl sm:text-2xl font-black tracking-tight text-emerald-600">
-              {isLoading ? "..." : `฿${kpis.avg.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`}
+              {isLoading ? "..." : formatForecastValue(kpis.average)}
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">เฉลี่ยต่อเดือนโดยประมาณ</p>
           </div>
@@ -222,10 +217,10 @@ export default function ExpenseForecast() {
           </div>
           <div className="mt-1.5">
             <h3 className="text-xl sm:text-2xl font-black tracking-tight text-amber-600">
-              {isLoading ? "..." : kpis.maxMonth}
+              {isLoading ? "..." : kpis.peakMonth || "—"}
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              จุดพีค: ฿{kpis.maxVal.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+              จุดพีค: {formatForecastValue(kpis.peakValue)}
             </p>
           </div>
         </div>
@@ -325,18 +320,33 @@ export default function ExpenseForecast() {
 
             {/* Mode 1: Forecast Line Chart */}
             {mainGraphMode === "forecast" ? (
-              <ForecastLineChart
-                history={forecastData?.history || []}
-                ensemble={forecastData?.ensemble || []}
-                isLoading={isLoading}
-                selectedDate={selectedPoint?.date}
-                onSelectPoint={(point) => {
-                  setSelectedPoint(point);
-                  if (sideTab === "table") {
-                    setSideTab("breakdown");
-                  }
-                }}
-              />
+              <>
+                <ForecastLineChart
+                  history={forecastData?.history || []}
+                  ensemble={forecastData?.ensemble || []}
+                  isLoading={isLoading}
+                  selectedDate={selectedPoint?.date}
+                  onSelectPoint={(point) => {
+                    setSelectedPoint(point);
+                    if (sideTab === "table") {
+                      setSideTab("breakdown");
+                    }
+                  }}
+                />
+                {!isLoading && forecastData && forecastStatusCopy && (
+                  <div
+                    role="status"
+                    className={`mt-3 rounded-xl border px-3 py-2.5 text-xs ${
+                      forecastData.forecast_status === "available"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : "border-amber-200 bg-amber-50 text-amber-900"
+                    }`}
+                  >
+                    <p className="font-bold">{forecastStatusCopy.title}</p>
+                    <p className="mt-0.5 opacity-80">{forecastStatusCopy.message}</p>
+                  </div>
+                )}
+              </>
             ) : (
               /* Mode 2: Asset Lifespan Budget Planning View */
               <div className="space-y-2">
@@ -1053,7 +1063,7 @@ export default function ExpenseForecast() {
                             กำลังโหลด...
                           </td>
                         </tr>
-                      ) : forecastData?.ensemble?.map((item, i) => {
+                      ) : forecastData?.ensemble?.length ? forecastData.ensemble.map((item, i) => {
                         const isRowSelected = selectedPoint?.date === item.date;
                         return (
                           <tr
@@ -1101,7 +1111,13 @@ export default function ExpenseForecast() {
                             </td>
                           </tr>
                         );
-                      })}
+                      }) : (
+                        <tr>
+                          <td colSpan={3} className="py-8 px-3 text-center text-slate-500">
+                            {forecastStatusCopy?.message || "ยังไม่มีผลการพยากรณ์"}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

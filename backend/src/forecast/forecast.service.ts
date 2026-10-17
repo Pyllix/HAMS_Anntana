@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import {
   MonthlySectionRankingDto as MonthlySectionRanking,
@@ -8,10 +8,8 @@ import {
   AssetTypeLifespanSummaryDto as AssetTypeLifespanSummary,
   AssetLifespanSummaryDto as AssetLifespanSummary,
   ForecastResponseDto as ForecastResponse,
-  SectionInfoDto,
-  TopSectionInfoDto,
-  ForecastModelsDto,
 } from './dto';
+import { FORECAST_SETTINGS, type ForecastSettings } from './forecast-settings';
 
 export type {
   MonthlySectionRanking,
@@ -27,7 +25,11 @@ export type {
 export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(FORECAST_SETTINGS)
+    private readonly forecastSettings: ForecastSettings,
+  ) {}
 
   /**
    * พยากรณ์งบประมาณและดึงประวัติจริง 2 ประเภทรายจ่าย:
@@ -389,29 +391,58 @@ export class ForecastService {
       this.logger.warn(`Error evaluating asset lifespan: ${err.message}`);
     }
 
-    if (history.length < 3) {
+    const responseContext = {
+      section_id: sectionId || 'all',
+      section_name: sectionName,
+      historical_data_count: history.length,
+      prediction_length: predictionLength,
+      is_data_masked: true,
+      history,
+      sections: allSections,
+      top_sections: topSections,
+      asset_lifespan: assetLifespan,
+    };
+
+    if (!this.forecastSettings.enabled) {
       return {
+        ...responseContext,
         source: 'fallback',
-        section_id: sectionId || 'all',
-        section_name: sectionName,
-        has_sufficient_data: false,
-        historical_data_count: history.length,
-        prediction_length: predictionLength,
-        message: 'ข้อมูลในอดีตมีน้อยเกินไป (ต้องการอย่างน้อย 3 เดือน)',
-        is_data_masked: true,
-        history,
-        sections: allSections,
-        top_sections: topSections,
+        forecast_status: 'disabled',
+        has_sufficient_data: history.length >= 3,
+        message:
+          'ปิดการพยากรณ์ด้วย Gemini แล้ว โดยข้อมูลค่าใช้จ่ายย้อนหลังและอายุครุภัณฑ์ยังใช้งานได้',
         models: {},
         ensemble: [],
-        asset_lifespan: assetLifespan,
+      };
+    }
+
+    if (history.length < 3) {
+      return {
+        ...responseContext,
+        source: 'fallback',
+        forecast_status: 'insufficient_data',
+        has_sufficient_data: false,
+        message: 'ข้อมูลในอดีตมีน้อยเกินไป (ต้องการอย่างน้อย 3 เดือน)',
+        models: {},
+        ensemble: [],
+      };
+    }
+
+    if (!this.forecastSettings.apiKey) {
+      return {
+        ...responseContext,
+        source: 'fallback',
+        forecast_status: 'unavailable',
+        has_sufficient_data: true,
+        message:
+          'ยังไม่ได้ตั้งค่า Gemini API key จึงไม่สามารถพยากรณ์ได้ ข้อมูลย้อนหลังยังใช้งานได้',
+        models: {},
+        ensemble: [],
       };
     }
 
     // 4. พยากรณ์งบประมาณด้วย Google Gemini AI 100% (Pure Generative AI)
     let ensemble: ForecastItem[] = [];
-    let errorMessage: string | undefined = undefined;
-
     try {
       ensemble = await this.generateGeminiForecasts(
         history,
@@ -421,32 +452,30 @@ export class ForecastService {
         assetLifespan,
       );
     } catch (err) {
-      this.logger.error(`Error in Gemini forecasting: ${err.message}`);
-      errorMessage = err.message;
+      const reason = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(`Error in Gemini forecasting: ${reason}`);
     }
 
+    const isForecastAvailable = ensemble.length > 0;
     return {
-      source: 'gemini_api',
-      section_id: sectionId || 'all',
-      section_name: sectionName,
-      has_sufficient_data: ensemble.length > 0,
-      historical_data_count: history.length,
-      prediction_length: predictionLength,
-      message: errorMessage,
-      is_data_masked: true,
-      history,
-      sections: allSections,
-      top_sections: topSections,
-      models: {
-        gemini: ensemble.map((e) => ({
-          date: e.date,
-          forecast: e.forecast,
-          lower_bound: e.lower_bound,
-          upper_bound: e.upper_bound,
-        })),
-      },
+      ...responseContext,
+      source: isForecastAvailable ? 'gemini_api' : 'fallback',
+      forecast_status: isForecastAvailable ? 'available' : 'unavailable',
+      has_sufficient_data: true,
+      message: isForecastAvailable
+        ? 'พยากรณ์สำเร็จ'
+        : 'ไม่สามารถติดต่อบริการพยากรณ์ได้ ข้อมูลค่าใช้จ่ายย้อนหลังและอายุครุภัณฑ์ยังใช้งานได้',
+      models: isForecastAvailable
+        ? {
+            gemini: ensemble.map((e) => ({
+              date: e.date,
+              forecast: e.forecast,
+              lower_bound: e.lower_bound,
+              upper_bound: e.upper_bound,
+            })),
+          }
+        : {},
       ensemble,
-      asset_lifespan: assetLifespan,
     };
   }
 
@@ -462,14 +491,18 @@ export class ForecastService {
     topSections: Array<{ id: string; name: string; total_cost: number }>,
     assetLifespan?: AssetLifespanSummary,
   ): Promise<ForecastItem[]> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey.trim() === '') {
+    if (!this.forecastSettings.enabled) {
+      throw new Error('Gemini forecasting is disabled');
+    }
+
+    const apiKey = this.forecastSettings.apiKey;
+    if (!apiKey) {
       throw new Error(
         'กรุณาระบุ GEMINI_API_KEY ในไฟล์ .env เพื่อใช้งานการพยากรณ์งบประมาณด้วย Google Gemini AI',
       );
     }
 
-    const configuredModel = process.env.GEMINI_MODEL?.trim();
+    const configuredModel = this.forecastSettings.model?.trim();
     const fallbackModels = [
       'gemini-3.1-flash-lite',
       'gemini-flash-lite-latest',
@@ -553,9 +586,16 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
       upper_bound?: number;
     }> = [];
 
-    let lastError: any = null;
+    let lastError: unknown = null;
+    const deadline = Date.now() + this.forecastSettings.timeoutMs;
 
     for (const model of candidateModels) {
+      const remainingTimeoutMs = deadline - Date.now();
+      if (remainingTimeoutMs <= 0) {
+        lastError = new Error('Gemini request timeout budget exhausted');
+        break;
+      }
+
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       try {
         this.logger.log(`Requesting Gemini forecast with model: ${model}...`);
@@ -569,7 +609,7 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
               temperature: 0.1,
             },
           }),
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(remainingTimeoutMs),
         });
 
         if (!geminiRes.ok) {
@@ -601,19 +641,18 @@ Respond ONLY with valid JSON containing an array of EXACTLY ${predictionLength} 
         break; // สำเร็จแล้ว ออกจาก candidate loop
       } catch (err) {
         lastError = err;
+        const reason = err instanceof Error ? err.message : 'Unknown error';
         this.logger.warn(
-          `Gemini model ${model} failed (${err.message}). Trying fallback model...`,
+          `Gemini model ${model} failed (${reason}). Trying fallback model...`,
         );
       }
     }
 
     if (geminiForecasts.length === 0) {
       this.logger.error(
-        `All Gemini candidate models failed. Last error: ${lastError?.message}`,
+        `All Gemini candidate models failed. Last error: ${lastError instanceof Error ? lastError.message : 'Unknown error'}`,
       );
-      throw new Error(
-        `การพยากรณ์ล้มเหลว: ${lastError?.message || 'ไม่สามารถติดต่อโมเดลใดๆ ได้'}`,
-      );
+      throw new Error('Gemini forecasting request failed');
     }
 
     // สร้าง Map เพื่อตรวจเช็คว่า AI ส่งมาครบทุก targetMonth หรือไม่

@@ -76,5 +76,31 @@ describe('ForecastController', () => {
       );
       expect(result).toEqual(mockResult);
     });
+
+    it('passes the disabled state together with independent history and asset data', async () => {
+      const mockResult = {
+        forecast_status: 'disabled',
+        source: 'fallback',
+        section_id: 'all',
+        section_name: 'ทุกแผนก',
+        has_sufficient_data: true,
+        historical_data_count: 4,
+        prediction_length: 12,
+        message: 'ปิดการพยากรณ์ด้วย Gemini',
+        history: [{ date: '2026-07', cost: 10000 }],
+        ensemble: [],
+        asset_lifespan: { total_active_assets: 3 },
+      };
+      mockForecastService.getExpenseForecast.mockResolvedValue(mockResult);
+
+      const result = await controller.getExpenseForecast({ sectionId: 'all' });
+
+      expect(result).toMatchObject({
+        forecast_status: 'disabled',
+        history: [{ date: '2026-07', cost: 10000 }],
+        ensemble: [],
+        asset_lifespan: { total_active_assets: 3 },
+      });
+    });
   });
 });

@@ -13,9 +13,9 @@ export class ForecastController {
   @Get('expenses')
   @ApiOperation({
     summary:
-      'พยากรณ์งบประมาณและค่าใช้จ่ายซ่อมบำรุงครุภัณฑ์ผ่าน AI API (รองรับการกรองรายแผนก)',
+      'ดูประวัติค่าใช้จ่ายและสถานะการพยากรณ์งบประมาณ (รองรับการกรองรายแผนก)',
     description:
-      'ดึงข้อมูลจากตาราง sparepart_txns และ asset แล้วส่งไปประมวลผลผ่าน Google Gemini AI (Pure Numerical Time-Series) สามารถเลือกดูรายแผนก หรือภาพรวมโรงพยาบาลได้',
+      'ดึงข้อมูลประวัติค่าใช้จ่ายและอายุครุภัณฑ์เสมอ ส่วนการส่งข้อมูลไป Google Gemini ทำเฉพาะเมื่อตั้งค่าเปิดใช้งานและกำหนด API key ครบถ้วน',
   })
   @ApiOkResponse({
     description:

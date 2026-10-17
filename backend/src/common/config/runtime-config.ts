@@ -1,8 +1,10 @@
 export type RuntimeEnvironment = 'development' | 'test' | 'production';
+export type InstallationMode = 'cloud' | 'customer';
 
 export interface RuntimeConfig {
   readonly server: {
     readonly environment: RuntimeEnvironment;
+    readonly installationMode: InstallationMode;
     readonly port: number;
     readonly secureCookies: boolean;
   };
@@ -26,6 +28,12 @@ export interface RuntimeConfig {
     readonly user?: string;
     readonly pass?: string;
     readonly from: string;
+  };
+  readonly forecast: {
+    readonly enabled: boolean;
+    readonly apiKey?: string;
+    readonly model?: string;
+    readonly timeoutMs: number;
   };
 }
 
@@ -75,6 +83,37 @@ export function loadRuntimeConfig(
     addError('NODE_ENV', 'must be development, test, or production.');
   }
   const isProduction = nodeEnvironment === 'production';
+
+  const installationModeName =
+    value(environment.HAMS_INSTALLATION_MODE) || 'cloud';
+  const isSupportedInstallationMode = ['cloud', 'customer'].includes(
+    installationModeName,
+  );
+  if (!isSupportedInstallationMode) {
+    addError('HAMS_INSTALLATION_MODE', 'must be cloud or customer.');
+  }
+  const installationMode: InstallationMode = isSupportedInstallationMode
+    ? (installationModeName as InstallationMode)
+    : 'cloud';
+
+  const geminiApiKey = value(environment.GEMINI_API_KEY);
+  const geminiEnabled = booleanSetting(
+    'GEMINI_ENABLED',
+    environment.GEMINI_ENABLED,
+    installationMode === 'cloud' && Boolean(geminiApiKey),
+    addError,
+  );
+  if (geminiEnabled && !geminiApiKey) {
+    addError('GEMINI_API_KEY', 'is required when GEMINI_ENABLED is true.');
+  }
+  const geminiTimeoutMs = integerSetting({
+    name: 'GEMINI_TIMEOUT_MS',
+    rawValue: environment.GEMINI_TIMEOUT_MS,
+    fallback: 30000,
+    min: 1000,
+    max: 60000,
+    addError,
+  });
 
   const port = integerSetting({
     name: 'PORT',
@@ -184,6 +223,7 @@ export function loadRuntimeConfig(
   return {
     server: {
       environment: nodeEnvironment,
+      installationMode,
       port,
       secureCookies: isProduction,
     },
@@ -207,6 +247,12 @@ export function loadRuntimeConfig(
       user: smtpUser,
       pass: smtpPass,
       from: smtpFrom || 'HAMS System <noreply@hams.local>',
+    },
+    forecast: {
+      enabled: geminiEnabled,
+      apiKey: geminiApiKey,
+      model: value(environment.GEMINI_MODEL),
+      timeoutMs: geminiTimeoutMs,
     },
   };
 }

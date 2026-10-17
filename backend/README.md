@@ -54,6 +54,11 @@ DATABASE_USER="postgres"
 DATABASE_PASSWORD="password"
 ```
 
+### ตั้งค่า Gemini Forecast
+สำหรับการติดตั้งบน server ลูกค้า ให้กำหนด `HAMS_INSTALLATION_MODE="customer"` ระบบจะปิดการส่งข้อมูลไป Gemini เป็นค่าเริ่มต้น แม้จะมี `GEMINI_API_KEY` อยู่ก็ตาม หากได้รับอนุญาตให้ใช้ Gemini ต้องกำหนดทั้ง `GEMINI_ENABLED="true"` และ `GEMINI_API_KEY` ระบบจะปฏิเสธการเริ่มต้นเมื่อเปิดใช้งานแต่ไม่มี key และจำกัดเวลารวมของคำขอผ่าน `GEMINI_TIMEOUT_MS` (ค่าเริ่มต้น 30 วินาที สูงสุด 60 วินาที)
+
+การติดตั้ง cloud ที่มี `GEMINI_API_KEY` อยู่แล้วจะคงพฤติกรรมเดิม หากต้องการปิดให้กำหนด `GEMINI_ENABLED="false"` โดยตรง
+
 ### 4. รัน Database ด้วย Docker
 โปรเจกต์นี้ใช้ PostgreSQL รันผ่าน Docker Compose:
 ```bash
