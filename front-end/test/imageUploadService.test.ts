@@ -12,6 +12,7 @@ import {
   uploadAndVerifyImage,
   validateImageSource,
 } from "../src/services/imageUploadService";
+import { allowedImageUploadEndpoint } from "../src/services/imageUrlPolicy";
 
 const cloudinaryUrl = "https://api.cloudinary.com/v1_1/test-cloud/image/upload";
 
@@ -146,10 +147,8 @@ test("forwards provider proof through the declared transport without decoding it
     },
   };
   const returnedProof = {
-    public_id: "hams-asset-image",
-    version: 17,
-    signature: "provider-signature",
-    provider_metadata: { receipt: "proof-value" },
+    receipt_id: "provider-object",
+    verification: { receipt: "proof-value" },
   };
   let providerRequest: RequestInit | undefined;
   const result = await uploadAndVerifyImage(
@@ -169,6 +168,17 @@ test("forwards provider proof through the declared transport without decoding it
   assert.equal(providerRequest?.credentials, "omit");
   assert.equal((providerRequest?.headers as Record<string, string> | undefined)?.Authorization, undefined);
   assert.equal(result.uploadId, "upload-transport");
+});
+
+test("permits same-origin image transport while keeping external destinations allowlisted", () => {
+  assert.equal(
+    allowedImageUploadEndpoint("/api/images/uploads/local", "https://hams.example"),
+    "https://hams.example/api/images/uploads/local",
+  );
+  assert.throws(
+    () => allowedImageUploadEndpoint("https://uploads.example.invalid/image", "https://hams.example"),
+    { code: "IMAGE_URL_NOT_ALLOWED" },
+  );
 });
 
 test("Employee Photo bytes use no-store, no credentials, URL/status/type checks, and no direct URL fallback", async () => {

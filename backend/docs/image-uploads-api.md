@@ -80,7 +80,7 @@ For an existing record, supply its canonical ID. For a create form, omit `target
 }
 ```
 
-The browser uses the declared `transport` to send the file and returned fields as `multipart/form-data`. The flattened `url`, `method`, and `fields` remain temporarily for clients that have not migrated. Do not send a file, Base64, URL, filename, provider secret, or arbitrary transformation to HAMS. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
+The browser uses the declared `transport` to send the file and returned fields as `multipart/form-data`. The flattened `url`, `method`, and `fields` remain temporarily for clients that have not migrated. The client accepts a same-origin HAMS endpoint or the current Cloudinary upload endpoint; it does not accept arbitrary external URLs. Do not send a file, Base64, URL, filename, provider secret, or arbitrary transformation to HAMS. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
 
 Both purposes use Cloudinary's `/image/upload` REST endpoint. The signed `type` form field is `upload` for Asset Image and `authenticated` for Employee Photo; forward every returned field unchanged.
 

@@ -99,18 +99,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     evidence: Readonly<Record<string, unknown>>,
   ): string {
     this.credentials(storageContext);
-    const normalized = this.normalizeEvidence(evidence);
-    if (
-      normalized.publicId !== publicId ||
-      !Number.isSafeInteger(normalized.version) ||
-      normalized.version < 1 ||
-      !/^[a-f\d]{40}$/i.test(normalized.signature)
-    ) {
-      throw new ImageStorageError(
-        'EVIDENCE_INVALID',
-        'The provider upload evidence is invalid',
-      );
-    }
+    const normalized = this.validateEvidence(publicId, evidence);
     return `${normalized.publicId}\n${normalized.version}\n${normalized.signature}`;
   }
 
@@ -118,18 +107,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     input: VerifyUploadedObjectInput,
   ): Promise<VerifiedImageObject> {
     const credentials = this.credentials(input.storageContext);
-    const normalized = this.normalizeEvidence(input.evidence);
-    if (
-      normalized.publicId !== input.publicId ||
-      !Number.isSafeInteger(normalized.version) ||
-      normalized.version < 1 ||
-      !/^[a-f\d]{40}$/i.test(normalized.signature)
-    ) {
-      throw new ImageStorageError(
-        'EVIDENCE_INVALID',
-        'The provider upload evidence is invalid',
-      );
-    }
+    const normalized = this.validateEvidence(input.publicId, input.evidence);
 
     const responseSignature = this.apiSignature(
       {
@@ -432,7 +410,10 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     return `if (${formats}.indexOf((resource_info.format || "").toLowerCase()) < 0 || resource_info.bytes > ${input.policy.maxSourceBytes} || !resource_info.width || !resource_info.height || (resource_info.pages && resource_info.pages !== 1) || resource_info.nb_frames > 1 || resource_info.width * resource_info.height > ${input.policy.maxSourcePixels}) { ${fail} } else { ${accept} }`;
   }
 
-  private normalizeEvidence(evidence: Readonly<Record<string, unknown>>): {
+  private validateEvidence(
+    expectedPublicId: string,
+    evidence: Readonly<Record<string, unknown>>,
+  ): {
     readonly publicId: string;
     readonly version: number;
     readonly signature: string;
@@ -443,6 +424,17 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
       typeof publicId !== 'string' ||
       typeof version !== 'number' ||
       typeof signature !== 'string'
+    ) {
+      throw new ImageStorageError(
+        'EVIDENCE_INVALID',
+        'The provider upload evidence is invalid',
+      );
+    }
+    if (
+      publicId !== expectedPublicId ||
+      !Number.isSafeInteger(version) ||
+      version < 1 ||
+      !/^[a-f\d]{40}$/i.test(signature)
     ) {
       throw new ImageStorageError(
         'EVIDENCE_INVALID',

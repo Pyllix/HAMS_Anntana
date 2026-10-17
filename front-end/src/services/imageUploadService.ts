@@ -1,12 +1,9 @@
 import type { AxiosInstance } from "axios";
 import { apiClient } from "./apiClient";
-import {
-  cloudinaryUrl,
-  cloudinaryUploadTransport,
-  uploadToCloudinary,
-  type CloudinarySignedFormTransport,
-} from "./cloudinaryImageTransport";
 import { ImageUploadError } from "./imageUploadError";
+import { allowedImageUrl } from "./imageUrlPolicy";
+import { uploadImageWithInstructions } from "./imageUploadTransport";
+import type { MultipartFormImageTransport } from "./multipartFormImageTransport";
 import {
   cacheEmployeePhotoGrant,
   clearEmployeePhotoGrantCache,
@@ -55,10 +52,10 @@ export interface ImageUploadIntent {
   attachmentWindowSeconds: number;
   acceptedSourceMimeTypes: readonly string[];
   uploadInstructions: {
-    transport?: CloudinarySignedFormTransport;
-    url: string;
-    method: string;
-    fields: Record<string, string>;
+    transport?: MultipartFormImageTransport;
+    url?: string;
+    method?: string;
+    fields?: Readonly<Record<string, string>>;
     expiresAt: string;
   };
 }
@@ -136,7 +133,7 @@ async function fetchImageBlob(
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
 ): Promise<Blob> {
-  const url = cloudinaryUrl(urlValue);
+  const url = allowedImageUrl(urlValue);
   const bounded = boundedSignal(signal, 20_000);
   try {
     let response: Response;
@@ -157,7 +154,7 @@ async function fetchImageBlob(
       );
     }
 
-    if (response.url) cloudinaryUrl(response.url);
+    if (response.url) allowedImageUrl(response.url);
     if (!response.ok) {
       throw new ImageUploadError(
         "IMAGE_READ_UNAVAILABLE",
@@ -267,16 +264,15 @@ export async function getEmployeePhotoBlob(
   }
 }
 
-async function uploadToProvider(
+async function uploadWithInstructions(
   file: File,
   intent: ImageUploadIntent,
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
-): Promise<{ proof: Readonly<Record<string, unknown>>; legacyEvidence: { publicId: string; version: number; signature: string } }> {
-  const transport = cloudinaryUploadTransport(intent.uploadInstructions);
+): Promise<Readonly<Record<string, unknown>>> {
   const bounded = boundedSignal(signal, 60_000);
   try {
-    return await uploadToCloudinary(file, transport, {
+    return await uploadImageWithInstructions(file, intent.uploadInstructions, {
       signal: bounded.signal,
       fetchImpl,
     });
@@ -311,22 +307,20 @@ export async function uploadAndVerifyImage(
   if (
     intent.purpose !== purpose ||
     !intent.uploadId ||
-    !intent.uploadInstructions?.url ||
+    (!intent.uploadInstructions?.transport && !intent.uploadInstructions?.url) ||
     !Array.isArray(intent.acceptedSourceMimeTypes) ||
     !intent.acceptedSourceMimeTypes.includes(source.contentType)
   ) {
     throw new ImageUploadError("UPLOAD_INTENT_INVALID", "ระบบอนุญาตชนิดไฟล์นี้ไม่ได้");
   }
 
-  const { proof, legacyEvidence } = await uploadToProvider(file, intent, options.signal, fetchImpl);
+  const completionBody = await uploadWithInstructions(file, intent, options.signal, fetchImpl);
   options.onStage?.("verifying");
   const { data: completion } = await withBoundedApiRequest(options.signal, (signal) =>
     api.post<{
     status: string;
     attachmentExpiresAt?: string | null;
-    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, intent.uploadInstructions.transport
-      ? { proof }
-      : legacyEvidence, { signal }),
+    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, completionBody, { signal }),
   );
   if (completion.status !== "VERIFIED_PENDING") {
     throw new ImageUploadError("UPLOAD_NOT_VERIFIED", "ระบบยังตรวจสอบรูปไม่ผ่าน จึงยังบันทึกรูปนี้ไม่ได้");
@@ -356,7 +350,7 @@ export async function uploadAndVerifyImage(
     );
     if (!previewBlob) throw new ImageUploadError("UPLOAD_PREVIEW_NOT_AVAILABLE", "โหลดตัวอย่างรูปที่ตรวจสอบแล้วไม่ได้");
   } else {
-    previewUrl = cloudinaryUrl(preview.url);
+    previewUrl = allowedImageUrl(preview.url);
   }
 
   return {
