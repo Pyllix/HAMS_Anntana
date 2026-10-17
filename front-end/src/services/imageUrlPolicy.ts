@@ -4,64 +4,47 @@ function currentOrigin(): string | undefined {
   return typeof window === "undefined" ? undefined : window.location.origin;
 }
 
-function resolveImageUrl(
-  value: unknown,
-  applicationOrigin = currentOrigin(),
-): URL {
+function resolveImageUrl(value: unknown, applicationOrigin = currentOrigin()): URL {
   if (typeof value !== "string") {
-    throw new ImageUploadError(
-      "IMAGE_URL_INVALID",
-      "ที่อยู่รูปจากระบบไม่ถูกต้อง",
-    );
+    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
   }
   try {
     if (value.startsWith("/") && !value.startsWith("//")) {
-      if (!applicationOrigin)
-        throw new Error("Application origin is unavailable");
+      if (!applicationOrigin) throw new Error("Application origin is unavailable");
       return new URL(value, applicationOrigin);
     }
     return new URL(value);
   } catch {
-    throw new ImageUploadError(
-      "IMAGE_URL_INVALID",
-      "ที่อยู่รูปจากระบบไม่ถูกต้อง",
-    );
+    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
   }
 }
 
-function hasSafeOrigin(
-  parsed: URL,
-  applicationOrigin = currentOrigin(),
-): boolean {
-  return (
-    parsed.origin === applicationOrigin ||
+function hasAllowedAddress(parsed: URL, applicationOrigin = currentOrigin()): boolean {
+  const sameOrigin = parsed.origin === applicationOrigin;
+  const knownProvider =
     parsed.hostname === "api.cloudinary.com" ||
-    parsed.hostname === "res.cloudinary.com"
+    parsed.hostname === "res.cloudinary.com";
+  const isLocalHttp =
+    sameOrigin &&
+    parsed.protocol === "http:" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+  return (
+    (sameOrigin || knownProvider) &&
+    (parsed.protocol === "https:" || isLocalHttp) &&
+    parsed.username === "" &&
+    parsed.password === "" &&
+    (parsed.port === "" || sameOrigin) &&
+    parsed.hash === ""
   );
 }
 
-export function allowedImageUrl(
-  value: unknown,
-  applicationOrigin = currentOrigin(),
-): string {
+function rejectDisallowedImageUrl(): never {
+  throw new ImageUploadError("IMAGE_URL_NOT_ALLOWED", "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้");
+}
+
+export function allowedImageUrl(value: unknown, applicationOrigin = currentOrigin()): string {
   const parsed = resolveImageUrl(value, applicationOrigin);
-  const isLocalHttp =
-    parsed.origin === applicationOrigin &&
-    parsed.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
-  if (
-    !hasSafeOrigin(parsed, applicationOrigin) ||
-    (parsed.protocol !== "https:" && !isLocalHttp) ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    (parsed.port !== "" && parsed.origin !== applicationOrigin) ||
-    parsed.hash !== ""
-  ) {
-    throw new ImageUploadError(
-      "IMAGE_URL_NOT_ALLOWED",
-      "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้",
-    );
-  }
+  if (!hasAllowedAddress(parsed, applicationOrigin)) rejectDisallowedImageUrl();
   return parsed.toString();
 }
 
@@ -74,22 +57,11 @@ export function allowedImageUploadEndpoint(
     parsed.hostname === "api.cloudinary.com" &&
     /^\/v1_1\/[^/]+\/image\/upload$/.test(parsed.pathname);
   const isSameOrigin = parsed.origin === applicationOrigin;
-  const isLocalHttp =
-    isSameOrigin &&
-    parsed.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
   if (
     !(isCloudinaryUpload || isSameOrigin) ||
-    (parsed.protocol !== "https:" && !isLocalHttp) ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    (parsed.port !== "" && parsed.origin !== applicationOrigin) ||
-    parsed.hash !== ""
+    !hasAllowedAddress(parsed, applicationOrigin)
   ) {
-    throw new ImageUploadError(
-      "IMAGE_URL_NOT_ALLOWED",
-      "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้",
-    );
+    rejectDisallowedImageUrl();
   }
   return parsed.toString();
 }
