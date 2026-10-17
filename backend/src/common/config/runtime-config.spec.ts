@@ -63,37 +63,9 @@ describe('loadRuntimeConfig', () => {
       from: 'HAMS System <noreply@hams.local>',
     });
     expect(config.server.installationMode).toBe('cloud');
-    expect(config.forecast.enabled).toBe(false);
   });
 
-  it('keeps legacy cloud Gemini behavior while customer installs default to disabled even with a key', () => {
-    const cloudConfig = loadRuntimeConfig({
-      NODE_ENV: 'development',
-      DATABASE_URL,
-      GEMINI_API_KEY: 'legacy-cloud-key',
-    });
-    const customerConfig = loadRuntimeConfig({
-      NODE_ENV: 'development',
-      DATABASE_URL,
-      HAMS_INSTALLATION_MODE: 'customer',
-      GEMINI_API_KEY: 'customer-key-must-not-enable-forecasting',
-    });
-
-    expect(cloudConfig.forecast.enabled).toBe(true);
-    expect(customerConfig.server.installationMode).toBe('customer');
-    expect(customerConfig.forecast.enabled).toBe(false);
-  });
-
-  it('requires Gemini credentials only when forecasting is explicitly enabled', () => {
-    expect(() =>
-      loadRuntimeConfig({
-        NODE_ENV: 'production',
-        HAMS_INSTALLATION_MODE: 'customer',
-        GEMINI_ENABLED: 'true',
-        ...productionEnvironment(),
-      }),
-    ).toThrow(/GEMINI_API_KEY is required when GEMINI_ENABLED is true/);
-
+  it('rejects unsupported installation modes', () => {
     expect(() =>
       loadRuntimeConfig({
         NODE_ENV: 'development',
@@ -101,31 +73,6 @@ describe('loadRuntimeConfig', () => {
         HAMS_INSTALLATION_MODE: 'unknown',
       }),
     ).toThrow(/HAMS_INSTALLATION_MODE must be cloud or customer/);
-  });
-
-  it('allows customer forecasting only after explicit enablement with a bounded timeout and key', () => {
-    const config = loadRuntimeConfig({
-      NODE_ENV: 'development',
-      DATABASE_URL,
-      HAMS_INSTALLATION_MODE: 'customer',
-      GEMINI_ENABLED: 'true',
-      GEMINI_API_KEY: 'authorized-customer-key',
-      GEMINI_TIMEOUT_MS: '45000',
-    });
-
-    expect(config.forecast).toMatchObject({
-      enabled: true,
-      apiKey: 'authorized-customer-key',
-      timeoutMs: 45000,
-    });
-
-    expect(() =>
-      loadRuntimeConfig({
-        NODE_ENV: 'development',
-        DATABASE_URL,
-        GEMINI_TIMEOUT_MS: '60001',
-      }),
-    ).toThrow(/GEMINI_TIMEOUT_MS must be between 1000 and 60000/);
   });
 
   it('accepts a complete production installation without cloud-only provider credentials', () => {

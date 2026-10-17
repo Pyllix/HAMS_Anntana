@@ -314,7 +314,8 @@ export class ForecastResponseDto {
     enum: ['disabled', 'insufficient_data', 'unavailable', 'available'],
     example: 'disabled',
   })
-  forecast_status:
+  /** Keep the established snake_case API wire name consumed by the frontend. */
+  readonly forecast_status:
     | 'disabled'
     | 'insufficient_data'
     | 'unavailable'

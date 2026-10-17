@@ -240,6 +240,85 @@ describe('ForecastService', () => {
         .spyOn(service['logger'], 'error')
         .mockImplementation(() => undefined);
       jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+      const assetRow = {
+        asset_id: 'asset-1',
+        name: 'Analyzer',
+        model: 'A1',
+        noid: null,
+        type_id: 1,
+        type_name: 'Medical equipment',
+        useful_life: 5,
+        receive_date: '2010-01-01',
+        expiry_date: '2015-01-01',
+        age_years: 16,
+        price: 100000,
+        status_name: 'ใช้งานปกติ',
+        section_id: 'sec-1',
+        section_name: 'แผนกรังสีวิทยา',
+        is_exceeded: true,
+      };
+      mockPrismaService.section.findMany.mockResolvedValue([
+        { id: 'sec-1', name: 'แผนกรังสีวิทยา', code: 'RAD' },
+      ]);
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          {
+            month: '2026-05',
+            section_id: 'sec-1',
+            section_name: 'แผนกรังสีวิทยา',
+            total_cost: 20000,
+            repairs_cost: 15000,
+            acquisitions_cost: 5000,
+          },
+          {
+            month: '2026-06',
+            section_id: 'sec-1',
+            section_name: 'แผนกรังสีวิทยา',
+            total_cost: 25000,
+            repairs_cost: 20000,
+            acquisitions_cost: 5000,
+          },
+          {
+            month: '2026-07',
+            section_id: 'sec-1',
+            section_name: 'แผนกรังสีวิทยา',
+            total_cost: 30000,
+            repairs_cost: 25000,
+            acquisitions_cost: 5000,
+          },
+        ])
+        .mockResolvedValueOnce([assetRow]);
+
+      const result = await service.getExpenseForecast(6, 'all');
+
+      expect(result.forecast_status).toBe('unavailable');
+      expect(result.has_sufficient_data).toBe(true);
+      expect(result.history).toHaveLength(3);
+      expect(result.asset_lifespan?.total_active_assets).toBe(1);
+      expect(result.ensemble).toEqual([]);
+      expect(result.message).not.toContain('private provider response detail');
+      expect(result.message).toContain('ไม่สามารถติดต่อ');
+      expect(fetchMock).toHaveBeenCalled();
+      expect(loggerError).toHaveBeenCalled();
+    });
+
+    it('stops fallback requests when the total Gemini time budget expires', async () => {
+      forecastSettings.enabled = true;
+      forecastSettings.apiKey = 'test-gemini-key';
+      forecastSettings.timeoutMs = 5000;
+      let now = 1000;
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const timeoutSignal = jest.spyOn(AbortSignal, 'timeout');
+      jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => undefined);
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementationOnce(() => {
+          now = 6001;
+          return Promise.reject(new Error('provider request failed'));
+        });
       mockPrismaService.section.findMany.mockResolvedValue([
         { id: 'sec-1', name: 'แผนกรังสีวิทยา', code: 'RAD' },
       ]);
@@ -275,13 +354,9 @@ describe('ForecastService', () => {
       const result = await service.getExpenseForecast(6, 'all');
 
       expect(result.forecast_status).toBe('unavailable');
-      expect(result.has_sufficient_data).toBe(true);
-      expect(result.history).toHaveLength(3);
-      expect(result.ensemble).toEqual([]);
-      expect(result.message).not.toContain('private provider response detail');
-      expect(result.message).toContain('ไม่สามารถติดต่อ');
-      expect(fetchMock).toHaveBeenCalled();
-      expect(loggerError).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(timeoutSignal).toHaveBeenCalledWith(5000);
+      expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
     });
 
     it('should filter by specific sectionId when provided', async () => {

@@ -55,7 +55,8 @@ DATABASE_PASSWORD="password"
 ```
 
 ### ตั้งค่า Gemini Forecast
-สำหรับการติดตั้งบน server ลูกค้า ให้กำหนด `HAMS_INSTALLATION_MODE="customer"` ระบบจะปิดการส่งข้อมูลไป Gemini เป็นค่าเริ่มต้น แม้จะมี `GEMINI_API_KEY` อยู่ก็ตาม หากได้รับอนุญาตให้ใช้ Gemini ต้องกำหนดทั้ง `GEMINI_ENABLED="true"` และ `GEMINI_API_KEY` ระบบจะปฏิเสธการเริ่มต้นเมื่อเปิดใช้งานแต่ไม่มี key และจำกัดเวลารวมของคำขอผ่าน `GEMINI_TIMEOUT_MS` (ค่าเริ่มต้น 30 วินาที สูงสุด 60 วินาที)
+
+สำหรับการติดตั้งบน server ลูกค้า ให้ใช้ค่าจาก [`.env.customer.example`](.env.customer.example) ร่วมกับค่าฐานข้อมูล, auth และ SMTP ของเครื่องนั้น ระบบจะปิดการส่งข้อมูลไป Gemini เป็นค่าเริ่มต้น แม้จะมี `GEMINI_API_KEY` อยู่ก็ตาม หากได้รับอนุญาตให้ใช้ Gemini ต้องกำหนดทั้ง `GEMINI_ENABLED="true"` และ `GEMINI_API_KEY` ระบบจะปฏิเสธการเริ่มต้นเมื่อเปิดใช้งานแต่ไม่มี key และจำกัดเวลารวมของคำขอผ่าน `GEMINI_TIMEOUT_MS` (ค่าเริ่มต้น 30 วินาที สูงสุด 60 วินาที)
 
 การติดตั้ง cloud ที่มี `GEMINI_API_KEY` อยู่แล้วจะคงพฤติกรรมเดิม หากต้องการปิดให้กำหนด `GEMINI_ENABLED="false"` โดยตรง
 
@@ -64,6 +65,7 @@ DATABASE_PASSWORD="password"
 ```bash
 docker compose up -d
 ```
+
 *(ถ้าต้องการปิด Database ให้ใช้คำสั่ง `docker compose down`)*
 
 **การเปิดดู Database ด้วย DBeaver (Optional):**
@@ -76,12 +78,12 @@ docker compose up -d
 - **Password**: `password`
 *(ค่าทั้งหมดอ้างอิงจากไฟล์ `.env` ที่ตั้งไว้)*
 
-
 ### 5. ตั้งค่า Database Schema (Prisma)
 หลังจาก Database รันขึ้นมาแล้ว ให้รันคำสั่งเพื่อสร้าง Table และเพิ่มข้อมูลจำลอง (Seed data) เบื้องต้น:
 ```bash
 pnpm run prisma:reset
 ```
+
 *(คำสั่งนี้จะทำการ generate client, migrate database, และ seed ข้อมูลให้ครบจบในคำสั่งเดียว)*
 *(หมายเหตุ: สามารถใช้คำสั่ง `pnpm run prisma:studio` เพื่อเปิดหน้าเว็บสำหรับดูและแก้ไขข้อมูลใน Database ได้ตลอดเวลา)*
 
@@ -92,6 +94,7 @@ pnpm run prisma:reset
 ```bash
 pnpm run start:dev
 ```
+
 Backend จะทำงานที่ `http://localhost:3000` 
 - ลองทดสอบ API Reference (Swagger/Scalar) ได้ที่: `http://localhost:3000/reference`
 
@@ -143,7 +146,7 @@ pnpm run test:asset-status:e2e
 │   └── main.ts               # Entry file of the application
 ├── test/                     # End-to-end testing files and configurations
 │   ├── app.e2e-spec.ts       # E2E test specifications
-│   └── jest-e2e.json         # Jest E2E configuration 
+│   └── jest-e2e.json         # Jest E2E configuration
 ├── eslint.config.mjs         # ESLint configuration
 ├── nest-cli.json             # NestJS CLI configuration
 ├── package.json              # Project dependencies and scripts
