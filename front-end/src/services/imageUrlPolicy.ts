@@ -42,6 +42,13 @@ function rejectDisallowedImageUrl(): never {
   throw new ImageUploadError("IMAGE_URL_NOT_ALLOWED", "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้");
 }
 
+export function isCloudinaryUploadEndpoint(parsed: URL): boolean {
+  return (
+    parsed.hostname === "api.cloudinary.com" &&
+    /^\/v1_1\/[^/]+\/image\/upload$/.test(parsed.pathname)
+  );
+}
+
 export function allowedImageUrl(value: unknown, applicationOrigin = currentOrigin()): string {
   const parsed = resolveImageUrl(value, applicationOrigin);
   if (!hasAllowedAddress(parsed, applicationOrigin)) rejectDisallowedImageUrl();
@@ -53,12 +60,9 @@ export function allowedImageUploadEndpoint(
   applicationOrigin = currentOrigin(),
 ): string {
   const parsed = resolveImageUrl(value, applicationOrigin);
-  const isCloudinaryUpload =
-    parsed.hostname === "api.cloudinary.com" &&
-    /^\/v1_1\/[^/]+\/image\/upload$/.test(parsed.pathname);
   const isSameOrigin = parsed.origin === applicationOrigin;
   if (
-    !(isCloudinaryUpload || isSameOrigin) ||
+    !(isCloudinaryUploadEndpoint(parsed) || isSameOrigin) ||
     !hasAllowedAddress(parsed, applicationOrigin)
   ) {
     rejectDisallowedImageUrl();

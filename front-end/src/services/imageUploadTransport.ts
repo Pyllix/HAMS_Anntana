@@ -1,7 +1,4 @@
-import {
-  uploadToLegacyCloudinary,
-  type LegacyCloudinaryUploadInstructions,
-} from "./cloudinaryImageTransport";
+import { uploadToLegacyCloudinary } from "./cloudinaryImageTransport";
 import { ImageUploadError } from "./imageUploadError";
 import { uploadMultipartFormImage } from "./multipartFormImageTransport";
 
@@ -10,6 +7,7 @@ export interface ImageUploadInstructions {
   readonly url?: string;
   readonly method?: string;
   readonly fields?: Readonly<Record<string, string>>;
+  readonly expiresAt?: string;
 }
 
 export async function uploadImageWithInstructions(
@@ -29,7 +27,12 @@ export async function uploadImageWithInstructions(
     return { proof };
   }
 
-  if (!instructions.url || !instructions.method || !instructions.fields) {
+  if (
+    !instructions.url ||
+    !instructions.method ||
+    !instructions.fields ||
+    !instructions.expiresAt
+  ) {
     throw new ImageUploadError(
       "UPLOAD_INSTRUCTIONS_INVALID",
       "คำสั่งอัปโหลดรูปไม่ถูกต้อง",
@@ -37,7 +40,12 @@ export async function uploadImageWithInstructions(
   }
   const evidence = await uploadToLegacyCloudinary(
     file,
-    instructions as LegacyCloudinaryUploadInstructions,
+    {
+      url: instructions.url,
+      method: instructions.method,
+      fields: instructions.fields,
+      expiresAt: instructions.expiresAt,
+    },
     options,
   );
   return evidence;

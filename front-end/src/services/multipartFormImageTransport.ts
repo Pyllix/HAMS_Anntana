@@ -29,7 +29,8 @@ export function validateMultipartFormImageTransport(
     Object.values(transport.fields).some(
       (field) => typeof field !== "string",
     ) ||
-    typeof transport.expiresAt !== "string"
+    typeof transport.expiresAt !== "string" ||
+    !Number.isFinite(Date.parse(transport.expiresAt))
   ) {
     throw new ImageUploadError(
       "UPLOAD_INSTRUCTIONS_INVALID",

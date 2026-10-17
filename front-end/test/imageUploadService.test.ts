@@ -13,6 +13,7 @@ import {
   validateImageSource,
 } from "../src/services/imageUploadService";
 import { allowedImageUploadEndpoint } from "../src/services/imageUrlPolicy";
+import { validateMultipartFormImageTransport } from "../src/services/multipartFormImageTransport";
 
 const cloudinaryUrl = "https://api.cloudinary.com/v1_1/test-cloud/image/upload";
 
@@ -58,6 +59,7 @@ test("uploads directly using every backend instruction, verifies, then returns a
               signature: "temporary-signature",
               transformation: "signed-by-server",
             },
+            expiresAt: "2099-01-01T00:00:00.000Z",
           },
         } };
       }
@@ -178,6 +180,19 @@ test("permits same-origin image transport while keeping external destinations al
   assert.throws(
     () => allowedImageUploadEndpoint("https://uploads.example.invalid/image", "https://hams.example"),
     { code: "IMAGE_URL_NOT_ALLOWED" },
+  );
+});
+
+test("rejects multipart upload instructions without a parseable expiry", () => {
+  assert.throws(
+    () => validateMultipartFormImageTransport({
+      kind: "multipart-form-v1",
+      endpoint: cloudinaryUrl,
+      method: "POST",
+      fields: {},
+      expiresAt: "",
+    }),
+    { code: "UPLOAD_INSTRUCTIONS_INVALID" },
   );
 });
 

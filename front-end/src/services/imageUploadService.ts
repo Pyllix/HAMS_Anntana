@@ -270,15 +270,10 @@ async function uploadWithInstructions(
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
 ): Promise<Readonly<Record<string, unknown>>> {
-  const bounded = boundedSignal(signal, 60_000);
-  try {
-    return await uploadImageWithInstructions(file, intent.uploadInstructions, {
-      signal: bounded.signal,
-      fetchImpl,
-    });
-  } finally {
-    bounded.dispose();
-  }
+  return uploadImageWithInstructions(file, intent.uploadInstructions, {
+    signal,
+    fetchImpl,
+  });
 }
 
 export async function uploadAndVerifyImage(

@@ -1,5 +1,8 @@
 import { ImageUploadError } from "./imageUploadError";
-import { allowedImageUploadEndpoint } from "./imageUrlPolicy";
+import {
+  allowedImageUploadEndpoint,
+  isCloudinaryUploadEndpoint,
+} from "./imageUrlPolicy";
 import {
   uploadMultipartFormImage,
   type MultipartFormImageTransport,
@@ -9,6 +12,7 @@ export interface LegacyCloudinaryUploadInstructions {
   readonly url: string;
   readonly method: string;
   readonly fields: Readonly<Record<string, string>>;
+  readonly expiresAt: string;
 }
 
 export function legacyCloudinaryTransport(
@@ -23,8 +27,7 @@ export function legacyCloudinaryTransport(
   const endpoint = allowedImageUploadEndpoint(instructions.url);
   const parsed = new URL(endpoint);
   if (
-    parsed.hostname !== "api.cloudinary.com" ||
-    !/^\/v1_1\/[^/]+\/image\/upload$/.test(parsed.pathname) ||
+    !isCloudinaryUploadEndpoint(parsed) ||
     !instructions.fields ||
     typeof instructions.fields !== "object" ||
     Object.values(instructions.fields).some(
@@ -41,7 +44,7 @@ export function legacyCloudinaryTransport(
     endpoint,
     method: "POST",
     fields: instructions.fields,
-    expiresAt: "",
+    expiresAt: instructions.expiresAt,
   };
 }
 
