@@ -36,7 +36,7 @@ export class ImageUploadsController {
   @ApiOperation({
     summary: 'Create a direct image upload intent',
     description:
-      'Allocates a single-use image identity and returns server-signed Cloudinary upload fields. HAMS never receives image bytes.',
+      'Allocates a single-use image identity and returns a storage-provider upload transport. HAMS never receives image bytes.',
   })
   @ApiBody({ type: CreateImageUploadDto })
   @ApiResponse({ status: 201, description: 'Upload authorization created' })
@@ -62,7 +62,7 @@ export class ImageUploadsController {
   @ApiOperation({
     summary: 'Verify an uploaded image as a pending image',
     description:
-      'Checks provider-signed upload evidence and independently verifies the preallocated object. Does not attach the image to a record.',
+      'Checks opaque provider evidence and independently verifies the preallocated object. Does not attach the image to a record.',
   })
   @ApiBody({ type: CompleteImageUploadDto })
   @ApiResponse({ status: 200, description: 'Verified pending upload status' })
@@ -87,7 +87,11 @@ export class ImageUploadsController {
         role: session.user.role as UserRole,
       },
       uploadId,
-      dto,
+      dto.proof ?? {
+        publicId: dto.publicId,
+        version: dto.version,
+        signature: dto.signature,
+      },
     );
   }
 

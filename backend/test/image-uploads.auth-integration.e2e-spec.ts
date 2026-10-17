@@ -57,6 +57,13 @@ interface UploadIntentResponse {
   readonly signatureExpiresAt: string;
   readonly intentExpiresAt: string;
   readonly uploadInstructions: {
+    readonly transport: {
+      readonly kind: 'multipart-form-v1';
+      readonly endpoint: string;
+      readonly method: 'POST';
+      readonly fields: Readonly<Record<string, string>>;
+      readonly expiresAt: string;
+    };
     readonly method: string;
     readonly url: string;
     readonly fields: Readonly<Record<string, string>>;
@@ -129,6 +136,13 @@ class DeterministicImageStorage implements ImageStoragePort {
   }
 
   createUploadInstructions(input: UploadInstructionsInput): {
+    transport: {
+      kind: 'multipart-form-v1';
+      endpoint: string;
+      method: 'POST';
+      fields: Record<string, string>;
+      expiresAt: Date;
+    };
     url: string;
     method: 'POST';
     fields: Record<string, string>;
@@ -142,16 +156,46 @@ class DeterministicImageStorage implements ImageStoragePort {
       );
     }
     this.createdInstructions.push(input);
+    const endpoint = 'https://cloudinary.test/image/upload';
+    const fields = {
+      api_key: 'test-api-key',
+      public_id: input.publicId,
+      signature: 'test-only-signature',
+    };
     return {
-      url: 'https://cloudinary.test/image/upload',
-      method: 'POST',
-      fields: {
-        api_key: 'test-api-key',
-        public_id: input.publicId,
-        signature: 'test-only-signature',
+      transport: {
+        kind: 'multipart-form-v1',
+        endpoint,
+        method: 'POST',
+        fields,
+        expiresAt: input.signatureExpiresAt,
       },
+      url: endpoint,
+      method: 'POST',
+      fields,
       expiresAt: input.signatureExpiresAt,
     };
+  }
+
+  fingerprintUploadEvidence(
+    publicId: string,
+    _storageContext: { provider: string; accountId: string },
+    evidence: Readonly<Record<string, unknown>>,
+  ): string {
+    const proofId = evidence.public_id ?? evidence.publicId;
+    const version = evidence.version;
+    const signature = evidence.signature;
+    if (
+      proofId !== publicId ||
+      typeof version !== 'number' ||
+      typeof signature !== 'string'
+    ) {
+      throw new ImageStorageError(
+        'EVIDENCE_INVALID',
+        'The provider evidence is invalid',
+      );
+    }
+    return `${proofId}\n${version}\n${signature}`;
   }
 
   verifyUploadedObject(input: VerifyUploadedObjectInput): Promise<{
@@ -177,7 +221,9 @@ class DeterministicImageStorage implements ImageStoragePort {
         ),
       );
     }
-    if (input.evidence.signature !== 'a'.repeat(40)) {
+    const signature = input.evidence.signature;
+    const version = input.evidence.version;
+    if (signature !== 'a'.repeat(40) || typeof version !== 'number') {
       return Promise.reject(
         new ImageStorageError(
           'EVIDENCE_INVALID',
@@ -189,7 +235,7 @@ class DeterministicImageStorage implements ImageStoragePort {
     const height = Math.min(600, input.policy.maxEdge);
     return Promise.resolve({
       publicId: input.publicId,
-      version: input.evidence.version,
+      version,
       resourceType: 'image',
       deliveryType: input.deliveryType,
       createdAt: this.clock.now(),
@@ -224,6 +270,8 @@ class DeterministicImageStorage implements ImageStoragePort {
       expiresAt: actualExpiry,
     };
   }
+
+  validateShortLivedReadGrant(): void {}
 
   deleteObject(reference: ImageObjectReference): Promise<void> {
     this.deleteCalls.push(reference);
@@ -316,9 +364,11 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
       .post(`/images/uploads/${intentBody.uploadId}/complete`)
       .set(headers)
       .send({
-        publicId: intentBody.uploadInstructions.fields.public_id,
-        version: 1,
-        signature: 'a'.repeat(40),
+        proof: {
+          public_id: intentBody.uploadInstructions.fields.public_id,
+          version: 1,
+          signature: 'a'.repeat(40),
+        },
       });
     expect(complete.status).toBe(200);
     return intentBody;
@@ -623,6 +673,51 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
     expect(response.status).toBe(403);
     expect(response.headers['cache-control']).toBe('private, no-store');
     expect(storage.createdInstructions).toHaveLength(before);
+  });
+
+  it('accepts opaque provider proof through the declared multipart transport', async () => {
+    const cookie = await issueCsrfCookie(adminCookie);
+    const csrfToken = cookie
+      .split(`${csrfCookieName}=`)
+      .at(-1)
+      ?.split(';', 1)[0];
+    const headers = {
+      Origin: 'http://localhost:5173',
+      Cookie: cookie,
+      'X-CSRF-Token': decodeURIComponent(csrfToken ?? ''),
+    };
+    const intentResponse = await request(server())
+      .post('/images/uploads')
+      .set(headers)
+      .send({
+        purpose: 'ASSET_IMAGE',
+        sourceContentType: 'image/jpeg',
+        sourceSizeBytes: 1024,
+      });
+    expect(intentResponse.status).toBe(201);
+    const intent = responseBody<UploadIntentResponse>(intentResponse);
+    expect(intent.uploadInstructions.transport).toMatchObject({
+      kind: 'multipart-form-v1',
+      endpoint: 'https://cloudinary.test/image/upload',
+      method: 'POST',
+    });
+
+    const proof = {
+      public_id: intent.uploadInstructions.fields.public_id,
+      version: 1,
+      signature: 'a'.repeat(40),
+      provider_metadata: { receipt: 'opaque-to-HAMS' },
+    };
+    const completion = await request(server())
+      .post(`/images/uploads/${intent.uploadId}/complete`)
+      .set(headers)
+      .send({ proof });
+
+    expect(completion.status).toBe(200);
+    expect(responseBody<UploadStatusResponse>(completion).status).toBe(
+      'VERIFIED_PENDING',
+    );
+    expect(storage.verifiedEvidence.at(-1)?.evidence).toEqual(proof);
   });
 
   it('rejects a session request without CSRF proof', async () => {

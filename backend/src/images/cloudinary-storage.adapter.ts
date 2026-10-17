@@ -71,28 +71,59 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
       type: input.deliveryType,
     };
     const signature = this.apiSignature(signedFields, credentials.apiSecret);
+    const endpoint = `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/upload`;
+    const fields = {
+      ...signedFields,
+      api_key: credentials.apiKey,
+      signature,
+    };
 
     return {
-      url: `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/upload`,
-      method: 'POST',
-      fields: {
-        ...signedFields,
-        api_key: credentials.apiKey,
-        signature,
+      transport: {
+        kind: 'multipart-form-v1',
+        endpoint,
+        method: 'POST',
+        fields,
+        expiresAt: input.signatureExpiresAt,
       },
+      url: endpoint,
+      method: 'POST',
+      fields,
       expiresAt: input.signatureExpiresAt,
     };
+  }
+
+  fingerprintUploadEvidence(
+    publicId: string,
+    storageContext: ImageStorageContext,
+    evidence: Readonly<Record<string, unknown>>,
+  ): string {
+    this.credentials(storageContext);
+    const normalized = this.normalizeEvidence(evidence);
+    if (
+      normalized.publicId !== publicId ||
+      !Number.isSafeInteger(normalized.version) ||
+      normalized.version < 1 ||
+      !/^[a-f\d]{40}$/i.test(normalized.signature)
+    ) {
+      throw new ImageStorageError(
+        'EVIDENCE_INVALID',
+        'The provider upload evidence is invalid',
+      );
+    }
+    return `${normalized.publicId}\n${normalized.version}\n${normalized.signature}`;
   }
 
   async verifyUploadedObject(
     input: VerifyUploadedObjectInput,
   ): Promise<VerifiedImageObject> {
     const credentials = this.credentials(input.storageContext);
+    const normalized = this.normalizeEvidence(input.evidence);
     if (
-      input.evidence.publicId !== input.publicId ||
-      !Number.isSafeInteger(input.evidence.version) ||
-      input.evidence.version < 1 ||
-      !/^[a-f\d]{40}$/i.test(input.evidence.signature)
+      normalized.publicId !== input.publicId ||
+      !Number.isSafeInteger(normalized.version) ||
+      normalized.version < 1 ||
+      !/^[a-f\d]{40}$/i.test(normalized.signature)
     ) {
       throw new ImageStorageError(
         'EVIDENCE_INVALID',
@@ -102,12 +133,12 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
 
     const responseSignature = this.apiSignature(
       {
-        public_id: input.evidence.publicId,
-        version: String(input.evidence.version),
+        public_id: normalized.publicId,
+        version: String(normalized.version),
       },
       credentials.apiSecret,
     );
-    if (!this.constantTimeEqual(responseSignature, input.evidence.signature)) {
+    if (!this.constantTimeEqual(responseSignature, normalized.signature)) {
       throw new ImageStorageError(
         'EVIDENCE_INVALID',
         'The provider upload evidence is invalid',
@@ -120,7 +151,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     const result = await this.fetchResource(lookupUrl, credentials);
     if (
       result.public_id !== input.publicId ||
-      result.version !== input.evidence.version ||
+      result.version !== normalized.version ||
       result.resource_type !== 'image' ||
       result.type !== input.deliveryType
     ) {
@@ -155,7 +186,7 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
 
     return {
       publicId: input.publicId,
-      version: input.evidence.version,
+      version: normalized.version,
       resourceType: 'image',
       deliveryType: input.deliveryType,
       createdAt,
@@ -224,6 +255,32 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
       url: `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/download?${query.toString()}`,
       expiresAt: new Date(expirySeconds * 1000),
     };
+  }
+
+  validateShortLivedReadGrant(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): void {
+    const credentials = this.credentials(reference.storageContext);
+    const parsedUrl = new URL(grant.url);
+    if (
+      reference.resourceType !== 'image' ||
+      reference.deliveryType !== 'authenticated' ||
+      parsedUrl.protocol !== 'https:' ||
+      parsedUrl.hostname !== 'api.cloudinary.com' ||
+      parsedUrl.pathname !== `/v1_1/${credentials.cloudName}/image/download` ||
+      parsedUrl.searchParams.get('public_id') !== reference.publicId ||
+      parsedUrl.searchParams.get('type') !== 'authenticated' ||
+      parsedUrl.searchParams.get('format') !== 'jpg' ||
+      parsedUrl.searchParams.get('signature') === null ||
+      Number(parsedUrl.searchParams.get('expires_at')) !==
+        Math.floor(grant.expiresAt.getTime() / 1000)
+    ) {
+      throw new ImageStorageError(
+        'OBJECT_POLICY_REJECTED',
+        'The provider returned an invalid read grant',
+      );
+    }
   }
 
   async deleteObject(reference: ImageObjectReference): Promise<void> {
@@ -373,6 +430,26 @@ export class CloudinaryStorageAdapter implements ImageStoragePort {
     const fail = `upload_options.allowed_formats = ${invalidFormat};`;
     const accept = `upload_options.context = "hams_policy_rev=${input.policy.revision}";`;
     return `if (${formats}.indexOf((resource_info.format || "").toLowerCase()) < 0 || resource_info.bytes > ${input.policy.maxSourceBytes} || !resource_info.width || !resource_info.height || (resource_info.pages && resource_info.pages !== 1) || resource_info.nb_frames > 1 || resource_info.width * resource_info.height > ${input.policy.maxSourcePixels}) { ${fail} } else { ${accept} }`;
+  }
+
+  private normalizeEvidence(evidence: Readonly<Record<string, unknown>>): {
+    readonly publicId: string;
+    readonly version: number;
+    readonly signature: string;
+  } {
+    const publicId = evidence.public_id ?? evidence.publicId;
+    const { version, signature } = evidence;
+    if (
+      typeof publicId !== 'string' ||
+      typeof version !== 'number' ||
+      typeof signature !== 'string'
+    ) {
+      throw new ImageStorageError(
+        'EVIDENCE_INVALID',
+        'The provider upload evidence is invalid',
+      );
+    }
+    return { publicId, version, signature };
   }
 
   private credentials(context?: ImageStorageContext): CloudinaryCredentials {

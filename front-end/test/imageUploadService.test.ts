@@ -111,6 +111,66 @@ test("uploads directly using every backend instruction, verifies, then returns a
   });
 });
 
+test("forwards provider proof through the declared transport without decoding it in the upload flow", async () => {
+  const calls: Array<{ path: string; body?: unknown }> = [];
+  const api = {
+    async post(path: string, body?: unknown) {
+      calls.push({ path, body });
+      if (path === "/images/uploads") {
+        return { data: {
+          uploadId: "upload-transport",
+          purpose: "ASSET_IMAGE",
+          acceptedSourceMimeTypes: ["image/jpeg"],
+          uploadInstructions: {
+            transport: {
+              kind: "multipart-form-v1",
+              endpoint: cloudinaryUrl,
+              method: "POST",
+              fields: { public_id: "hams-asset-image" },
+              expiresAt: "2099-01-01T00:00:00.000Z",
+            },
+            url: cloudinaryUrl,
+            method: "POST",
+            fields: { public_id: "hams-asset-image" },
+          },
+        } };
+      }
+      return { data: { status: "VERIFIED_PENDING" } };
+    },
+    async get() {
+      return { data: {
+        purpose: "ASSET_IMAGE",
+        status: "VERIFIED_PENDING",
+        url: "https://res.cloudinary.com/test/image/upload/v17/asset.jpg",
+      } };
+    },
+  };
+  const returnedProof = {
+    public_id: "hams-asset-image",
+    version: 17,
+    signature: "provider-signature",
+    provider_metadata: { receipt: "proof-value" },
+  };
+  let providerRequest: RequestInit | undefined;
+  const result = await uploadAndVerifyImage(
+    makeFile("asset.jpg", "image/jpeg"),
+    "ASSET_IMAGE",
+    undefined,
+    {
+      api: api as never,
+      fetchImpl: (async (_url, init) => {
+        providerRequest = init;
+        return new Response(JSON.stringify(returnedProof), { status: 200 });
+      }) as typeof fetch,
+    },
+  );
+
+  assert.deepEqual(calls[1].body, { proof: returnedProof });
+  assert.equal(providerRequest?.credentials, "omit");
+  assert.equal((providerRequest?.headers as Record<string, string> | undefined)?.Authorization, undefined);
+  assert.equal(result.uploadId, "upload-transport");
+});
+
 test("Employee Photo bytes use no-store, no credentials, URL/status/type checks, and no direct URL fallback", async () => {
   let request: RequestInit | undefined;
   const blob = new Blob(["synthetic image"], { type: "image/jpeg" });

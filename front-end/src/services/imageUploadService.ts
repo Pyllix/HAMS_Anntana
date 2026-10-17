@@ -1,6 +1,13 @@
 import type { AxiosInstance } from "axios";
 import { apiClient } from "./apiClient";
 import {
+  cloudinaryUrl,
+  cloudinaryUploadTransport,
+  uploadToCloudinary,
+  type CloudinarySignedFormTransport,
+} from "./cloudinaryImageTransport";
+import { ImageUploadError } from "./imageUploadError";
+import {
   cacheEmployeePhotoGrant,
   clearEmployeePhotoGrantCache,
   deleteEmployeePhotoGrant,
@@ -39,15 +46,7 @@ const EXTENSION_TYPES: Record<string, string> = {
   heif: "image/heif",
 };
 
-export class ImageUploadError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "ImageUploadError";
-    this.code = code;
-  }
-}
+export { ImageUploadError } from "./imageUploadError";
 
 export interface ImageUploadIntent {
   uploadId: string;
@@ -56,6 +55,7 @@ export interface ImageUploadIntent {
   attachmentWindowSeconds: number;
   acceptedSourceMimeTypes: readonly string[];
   uploadInstructions: {
+    transport?: CloudinarySignedFormTransport;
     url: string;
     method: string;
     fields: Record<string, string>;
@@ -101,29 +101,6 @@ export function validateImageSource(file: File): { contentType: string } {
   return { contentType };
 }
 
-function providerUrl(value: unknown): string {
-  if (typeof value !== "string") {
-    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
-  }
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.port !== "" ||
-    parsed.hash !== "" ||
-    !["api.cloudinary.com", "res.cloudinary.com"].includes(parsed.hostname)
-  ) {
-    throw new ImageUploadError("IMAGE_URL_NOT_ALLOWED", "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้");
-  }
-  return parsed.toString();
-}
-
 function boundedSignal(parent: AbortSignal | undefined, timeoutMs: number) {
   const controller = new AbortController();
   const abortFromParent = () => controller.abort(parent?.reason);
@@ -159,7 +136,7 @@ async function fetchImageBlob(
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
 ): Promise<Blob> {
-  const url = providerUrl(urlValue);
+  const url = cloudinaryUrl(urlValue);
   const bounded = boundedSignal(signal, 20_000);
   try {
     let response: Response;
@@ -180,7 +157,7 @@ async function fetchImageBlob(
       );
     }
 
-    if (response.url) providerUrl(response.url);
+    if (response.url) cloudinaryUrl(response.url);
     if (!response.ok) {
       throw new ImageUploadError(
         "IMAGE_READ_UNAVAILABLE",
@@ -295,66 +272,14 @@ async function uploadToProvider(
   intent: ImageUploadIntent,
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
-): Promise<{ publicId: string; version: number; signature: string }> {
-  const targetUrl = providerUrl(intent.uploadInstructions?.url);
-  if (intent.uploadInstructions.method !== "POST") {
-    throw new ImageUploadError("UPLOAD_INSTRUCTIONS_INVALID", "คำสั่งอัปโหลดรูปไม่ถูกต้อง");
-  }
-  const fields = intent.uploadInstructions.fields;
-  if (!fields || typeof fields !== "object" || Object.values(fields).some((value) => typeof value !== "string")) {
-    throw new ImageUploadError("UPLOAD_INSTRUCTIONS_INVALID", "คำสั่งอัปโหลดรูปไม่ถูกต้อง");
-  }
-
-  const formData = new FormData();
-  Object.entries(fields).forEach(([name, value]) => formData.append(name, value));
-  formData.append("file", file, file.name);
-
+): Promise<{ proof: Readonly<Record<string, unknown>>; legacyEvidence: { publicId: string; version: number; signature: string } }> {
+  const transport = cloudinaryUploadTransport(intent.uploadInstructions);
   const bounded = boundedSignal(signal, 60_000);
   try {
-    let response: Response;
-    try {
-      response = await fetchImpl(targetUrl, {
-        method: intent.uploadInstructions.method,
-        body: formData,
-        credentials: "omit",
-        cache: "no-store",
-        redirect: "error",
-        signal: bounded.signal,
-      });
-    } catch (error) {
-      if (bounded.signal.aborted) throw error;
-      throw new ImageUploadError(
-        "PROVIDER_UPLOAD_FAILED",
-        "ส่งรูปไปยังพื้นที่จัดเก็บไม่สำเร็จ กรุณาเลือกไฟล์เดิมเพื่อลองใหม่",
-      );
-    }
-    if (response.url) providerUrl(response.url);
-    if (!response.ok) {
-      throw new ImageUploadError(
-        "PROVIDER_UPLOAD_FAILED",
-        "พื้นที่จัดเก็บปฏิเสธรูปนี้ กรุณาตรวจสอบชนิดและขนาดไฟล์",
-      );
-    }
-    let evidence: { public_id?: unknown; version?: unknown; signature?: unknown };
-    try {
-      evidence = await response.json();
-    } catch {
-      throw new ImageUploadError("UPLOAD_EVIDENCE_INVALID", "ระบบตรวจสอบผลอัปโหลดไม่ได้");
-    }
-    if (
-      typeof evidence.public_id !== "string" ||
-      evidence.public_id !== fields.public_id ||
-      typeof evidence.version !== "number" ||
-      !Number.isInteger(evidence.version) ||
-      typeof evidence.signature !== "string"
-    ) {
-      throw new ImageUploadError("UPLOAD_EVIDENCE_INVALID", "ระบบตรวจสอบผลอัปโหลดไม่ได้");
-    }
-    return {
-      publicId: evidence.public_id,
-      version: evidence.version,
-      signature: evidence.signature,
-    };
+    return await uploadToCloudinary(file, transport, {
+      signal: bounded.signal,
+      fetchImpl,
+    });
   } finally {
     bounded.dispose();
   }
@@ -393,13 +318,15 @@ export async function uploadAndVerifyImage(
     throw new ImageUploadError("UPLOAD_INTENT_INVALID", "ระบบอนุญาตชนิดไฟล์นี้ไม่ได้");
   }
 
-  const evidence = await uploadToProvider(file, intent, options.signal, fetchImpl);
+  const { proof, legacyEvidence } = await uploadToProvider(file, intent, options.signal, fetchImpl);
   options.onStage?.("verifying");
   const { data: completion } = await withBoundedApiRequest(options.signal, (signal) =>
     api.post<{
     status: string;
     attachmentExpiresAt?: string | null;
-    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, evidence, { signal }),
+    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, intent.uploadInstructions.transport
+      ? { proof }
+      : legacyEvidence, { signal }),
   );
   if (completion.status !== "VERIFIED_PENDING") {
     throw new ImageUploadError("UPLOAD_NOT_VERIFIED", "ระบบยังตรวจสอบรูปไม่ผ่าน จึงยังบันทึกรูปนี้ไม่ได้");
@@ -429,7 +356,7 @@ export async function uploadAndVerifyImage(
     );
     if (!previewBlob) throw new ImageUploadError("UPLOAD_PREVIEW_NOT_AVAILABLE", "โหลดตัวอย่างรูปที่ตรวจสอบแล้วไม่ได้");
   } else {
-    previewUrl = providerUrl(preview.url);
+    previewUrl = cloudinaryUrl(preview.url);
   }
 
   return {

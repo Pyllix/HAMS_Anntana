@@ -111,6 +111,13 @@ export class ImageUploadService {
     attachmentWindowSeconds: number;
     acceptedSourceMimeTypes: readonly string[];
     uploadInstructions: {
+      transport: {
+        kind: 'multipart-form-v1';
+        endpoint: string;
+        method: 'POST';
+        fields: Readonly<Record<string, string>>;
+        expiresAt: string;
+      };
       url: string;
       method: 'POST';
       fields: Readonly<Record<string, string>>;
@@ -267,6 +274,13 @@ export class ImageUploadService {
       attachmentWindowSeconds: Math.floor(this.readAttachmentWindow() / 1000),
       acceptedSourceMimeTypes: ACCEPTED_SOURCE_MIME_TYPES,
       uploadInstructions: {
+        transport: {
+          kind: uploadInstructions.transport.kind,
+          endpoint: uploadInstructions.transport.endpoint,
+          method: uploadInstructions.transport.method,
+          fields: uploadInstructions.transport.fields,
+          expiresAt: uploadInstructions.transport.expiresAt.toISOString(),
+        },
         url: uploadInstructions.url,
         method: uploadInstructions.method,
         fields: uploadInstructions.fields,
@@ -282,18 +296,23 @@ export class ImageUploadService {
   ): Promise<UploadStatusResponse> {
     const upload = await this.findOwnedUpload(actor, uploadId);
     this.assertPurposePermission(actor.role, upload.purpose);
-    if (evidence.publicId !== upload.publicId) {
-      throw new BadRequestException({
-        code: 'UPLOAD_EVIDENCE_INVALID',
-        message: 'The upload evidence does not match the allocated image',
-      });
+    let evidenceHash: string;
+    try {
+      evidenceHash = createHash('sha256')
+        .update(
+          this.storage.fingerprintUploadEvidence(
+            upload.publicId,
+            {
+              provider: upload.storageProvider,
+              accountId: upload.storageAccountId,
+            },
+            evidence,
+          ),
+        )
+        .digest('hex');
+    } catch (error) {
+      this.raiseStorageError(error);
     }
-
-    const evidenceHash = createHash('sha256')
-      .update(
-        `${evidence.publicId}\n${evidence.version}\n${evidence.signature}`,
-      )
-      .digest('hex');
     if (upload.status === ImageUploadStatus.VERIFIED_PENDING) {
       if (upload.verifiedEvidenceHash !== evidenceHash) {
         throw new ConflictException({

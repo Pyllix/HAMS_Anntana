@@ -20,6 +20,7 @@ describe('ImageReadService', () => {
   let service: ImageReadService;
   let findFirst: jest.Mock;
   let createShortLivedReadGrant: jest.Mock;
+  let validateShortLivedReadGrant: jest.Mock;
 
   beforeEach(() => {
     findFirst = jest.fn();
@@ -27,6 +28,7 @@ describe('ImageReadService', () => {
       url: `https://api.cloudinary.com/v1_1/test-cloud/image/download?public_id=hams-employee-photo-test-upload&type=authenticated&format=jpg&expires_at=${Math.floor(expiresAt.getTime() / 1000)}&signature=opaque-test-grant`,
       expiresAt,
     }));
+    validateShortLivedReadGrant = jest.fn();
     service = new ImageReadService(
       { user: { findFirst } } as unknown as PrismaService,
       {
@@ -35,6 +37,7 @@ describe('ImageReadService', () => {
           accountId: 'test-cloud',
         })),
         createShortLivedReadGrant,
+        validateShortLivedReadGrant,
         publicUrl: jest.fn(
           () =>
             'https://res.cloudinary.com/test-cloud/image/upload/v17/hams-asset-image-test.jpg',
@@ -83,7 +86,7 @@ describe('ImageReadService', () => {
     );
   });
 
-  it('fails closed when the provider returns a permanent delivery URL', async () => {
+  it('fails closed when the storage adapter rejects a permanent delivery URL', async () => {
     findFirst.mockResolvedValue(photo);
     createShortLivedReadGrant.mockImplementationOnce(
       (_reference: unknown, expiresAt: Date) => ({
@@ -91,6 +94,9 @@ describe('ImageReadService', () => {
         expiresAt,
       }),
     );
+    validateShortLivedReadGrant.mockImplementationOnce(() => {
+      throw new Error('The provider returned an invalid read grant');
+    });
 
     await expect(service.readEmployeePhoto('user-id')).rejects.toThrow(
       'The image is temporarily unavailable',

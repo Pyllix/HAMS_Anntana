@@ -43,6 +43,24 @@ For an existing record, supply its canonical ID. For a create form, omit `target
     "image/heif"
   ],
   "uploadInstructions": {
+    "transport": {
+      "kind": "multipart-form-v1",
+      "endpoint": "https://api.cloudinary.com/v1_1/<cloud>/image/upload",
+      "method": "POST",
+      "fields": {
+        "api_key": "<public API key>",
+        "public_id": "hams-asset-image-<uuid>",
+        "overwrite": "false",
+        "backup": "false",
+        "type": "upload",
+        "timestamp": "1790812800",
+        "allowed_formats": "jpg,jpeg,png,webp,heic,heif",
+        "transformation": "<server-signed incoming transformation>",
+        "eval": "<server-signed source policy>",
+        "signature": "<temporary signature>"
+      },
+      "expiresAt": "2026-10-01T01:00:00.000Z"
+    },
     "url": "https://api.cloudinary.com/v1_1/<cloud>/image/upload",
     "method": "POST",
     "fields": {
@@ -62,7 +80,7 @@ For an existing record, supply its canonical ID. For a create form, omit `target
 }
 ```
 
-The browser sends the file and every returned field directly to Cloudinary as `multipart/form-data`. Do not send a file, Base64, URL, filename, Cloudinary secret, or arbitrary transformation to HAMS. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
+The browser uses the declared `transport` to send the file and returned fields as `multipart/form-data`. The flattened `url`, `method`, and `fields` remain temporarily for clients that have not migrated. Do not send a file, Base64, URL, filename, provider secret, or arbitrary transformation to HAMS. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
 
 Both purposes use Cloudinary's `/image/upload` REST endpoint. The signed `type` form field is `upload` for Asset Image and `authenticated` for Employee Photo; forward every returned field unchanged.
 
@@ -72,13 +90,15 @@ The provider signature, HAMS intent, and pending attachment use separate clocks.
 
 `POST /images/uploads/:uploadId/complete`
 
-Pass only the signed identity fields from Cloudinary's upload result. HAMS checks that provider signature and independently looks up the preallocated image through Cloudinary's authenticated API. The client does not get to choose a URL, provider, public ID, delivery type, or transformation.
+Send the provider result unchanged as opaque `proof`. The active storage adapter interprets and checks the proof, then independently looks up the preallocated image. The client does not get to choose a URL, provider, object identity, delivery policy, or transformation. The original flattened body remains temporarily accepted for existing callers.
 
 ```json
 {
-  "publicId": "hams-asset-image-<uuid>",
-  "version": 1790812800,
-  "signature": "<Cloudinary response signature>"
+  "proof": {
+    "public_id": "hams-asset-image-<uuid>",
+    "version": 1790812800,
+    "signature": "<provider response signature>"
+  }
 }
 ```
 

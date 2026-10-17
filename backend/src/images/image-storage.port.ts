@@ -28,17 +28,21 @@ export interface UploadInstructionsInput {
 }
 
 export interface UploadInstructions {
+  readonly transport: {
+    readonly kind: 'multipart-form-v1';
+    readonly endpoint: string;
+    readonly method: 'POST';
+    readonly fields: Readonly<Record<string, string>>;
+    readonly expiresAt: Date;
+  };
+  /** Temporary compatibility fields for callers being migrated to transport. */
   readonly url: string;
   readonly method: 'POST';
   readonly fields: Readonly<Record<string, string>>;
   readonly expiresAt: Date;
 }
 
-export interface UploadEvidence {
-  readonly publicId: string;
-  readonly version: number;
-  readonly signature: string;
-}
+export type UploadEvidence = Readonly<Record<string, unknown>>;
 
 export interface VerifyUploadedObjectInput {
   readonly publicId: string;
@@ -78,6 +82,11 @@ export interface ShortLivedImageGrant {
 export interface ImageStoragePort {
   getProviderContext(): ImageStorageContext;
   createUploadInstructions(input: UploadInstructionsInput): UploadInstructions;
+  fingerprintUploadEvidence(
+    publicId: string,
+    storageContext: ImageStorageContext,
+    evidence: UploadEvidence,
+  ): string;
   verifyUploadedObject(
     input: VerifyUploadedObjectInput,
   ): Promise<VerifiedImageObject>;
@@ -86,6 +95,10 @@ export interface ImageStoragePort {
     reference: ImageObjectReference,
     expiresAt: Date,
   ): ShortLivedImageGrant;
+  validateShortLivedReadGrant(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): void;
   deleteObject(reference: ImageObjectReference): Promise<void>;
   deleteAllocatedImageVariants(input: {
     readonly publicId: string;
