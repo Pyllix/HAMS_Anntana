@@ -29,8 +29,7 @@ import { TwoFactorService } from '../src/auth/two-factor.service';
 import { auth } from '../src/auth/auth';
 
 // The setup file rejects missing or unsafe TEST_DATABASE_URL values before this suite loads.
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = describe;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,7 +71,7 @@ function isHttpOnly(res: request.Response, name: string): boolean {
 // Suite
 // ---------------------------------------------------------------------------
 
-describeWithDatabase(
+describe(
   'Auth Contract (HTTP + Real BetterAuth + PostgreSQL)',
   () => {
     let app: INestApplication;

@@ -28,7 +28,7 @@ import {
   type VerifyUploadedObjectInput,
 } from '../src/images/image-storage.port';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 const sharedPassword = 'TestPassword@1234!';
 const originalCompletionAttemptLimit =
   process.env.IMAGE_UPLOAD_MAX_COMPLETION_ATTEMPTS_PER_INTENT;
@@ -365,9 +365,6 @@ describe('Image upload API (real HAMS auth + PostgreSQL)', () => {
   }
 
   beforeAll(async () => {
-    if (!testDatabaseUrl) {
-      throw new Error('TEST_DATABASE_URL is required for image upload tests');
-    }
     process.env.TWO_FACTOR_ENCRYPTION_KEY = 'a'.repeat(64);
     process.env.IMAGE_UPLOAD_MAX_COMPLETION_ATTEMPTS_PER_INTENT = '2';
     process.env.IMAGE_UPLOAD_MAX_INTENTS_PER_ACTOR_PER_HOUR = '100';

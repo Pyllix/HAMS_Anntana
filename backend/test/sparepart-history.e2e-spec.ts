@@ -10,10 +10,9 @@ import { SparePartsController } from '../src/spare-parts/spare-parts.controller'
 import { SparePartsService } from '../src/spare-parts/spare-parts.service';
 import { PrismaService } from '../src/prisma.service';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
-describeWithDatabase('Spare part history API (PostgreSQL)', () => {
+describe('Spare part history API (PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
   let userId: string;
@@ -114,12 +113,6 @@ describeWithDatabase('Spare part history API (PostgreSQL)', () => {
   }
 
   beforeAll(async () => {
-    if (!testDatabaseUrl || !/test/i.test(new URL(testDatabaseUrl).pathname)) {
-      throw new Error(
-        'TEST_DATABASE_URL must point to a dedicated database with "test" in its name',
-      );
-    }
-
     prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: testDatabaseUrl }),
     });

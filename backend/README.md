@@ -101,9 +101,16 @@ pnpm run start:dev  # Start in development (watch) mode
 pnpm run build      # Build the application for production
 pnpm run format     # Format source files using Prettier
 pnpm run lint       # Lint source files using ESLint
-pnpm run test       # Run unit tests
+pnpm run test:unit  # Run mocked unit tests without opening a DB connection
+pnpm run test       # Run all specs; requires TEST_DATABASE_URL
 pnpm dlx prisma studio # เปิด UI สำหรับดูข้อมูลใน Database ของ Prisma
 ```
+
+## Test database safety
+
+Jest runners (`test`, `test:unit`, `test:e2e`, and `test:auth-integration`) validate `TEST_DATABASE_URL` before loading the application or test files. It must be a PostgreSQL URL whose database name contains a standalone `test` token, such as `hams_test`. The runner points `DATABASE_URL` at that validated target; it never falls back to the development `DATABASE_URL`. Missing or unsafe settings stop the run before any test can connect or write data.
+
+`pnpm run test:unit` excludes the two service suites that write through shared Prisma and does not open a database connection. It still requires a valid `TEST_DATABASE_URL` because the shared guard runs before test files load. `pnpm run test:database-guard` verifies the safety checks without connecting to PostgreSQL. Every Jest command requires a dedicated test database configured in `TEST_DATABASE_URL`.
 
 ## Cross-module asset status integration tests
 

@@ -3,6 +3,7 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/database-test-setup.cjs"],
   "transform": {
     "^.+\\.(t|j|mj)s$": "ts-jest"
   },

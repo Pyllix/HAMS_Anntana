@@ -26,7 +26,7 @@ import {
 
 jest.setTimeout(60_000);
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 interface SseFrame {
   event: string;
@@ -708,14 +708,6 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
   }
 
   beforeAll(async () => {
-    if (!testDatabaseUrl) {
-      throw new Error(
-        'TEST_DATABASE_URL is required for this integration suite',
-      );
-    }
-    if (!/test/i.test(new URL(testDatabaseUrl).pathname)) {
-      throw new Error('TEST_DATABASE_URL must name a disposable test database');
-    }
     process.env.TWO_FACTOR_ENCRYPTION_KEY = 'a'.repeat(64);
 
     const pg = await import('pg');
