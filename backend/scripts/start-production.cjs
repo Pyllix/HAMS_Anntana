@@ -1,4 +1,4 @@
-function startProduction(startServer = () => require('../dist/main')) {
+function startProduction(startServer = () => require('../dist/src/main')) {
   process.env.NODE_ENV = 'production';
   startServer();
 }

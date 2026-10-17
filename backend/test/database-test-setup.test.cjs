@@ -1,10 +1,12 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
 const setupPath = path.join(__dirname, 'database-test-setup.cjs');
+const backendRoot = path.resolve(__dirname, '..');
 const inheritedEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(
     ([key]) =>
@@ -30,6 +32,38 @@ function runSetup(environment) {
     },
   );
 }
+
+test('every database-backed Jest entrypoint loads the database guard', () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(backendRoot, 'package.json'), 'utf8'),
+  );
+  const jestScripts = Object.entries(packageJson.scripts).filter(([, script]) =>
+    /\bjest\b/.test(script),
+  );
+  assert.ok(jestScripts.length > 0, 'Jest scripts must be discoverable');
+
+  for (const [scriptName, script] of jestScripts) {
+    const configArgument = script.match(/--config(?:=|\s+)([^\s]+)/)?.[1];
+    let config;
+
+    if (!configArgument) {
+      config = packageJson.jest;
+    } else if (configArgument.endsWith('.cjs')) {
+      config = require(path.resolve(backendRoot, configArgument));
+    } else {
+      config = JSON.parse(
+        fs.readFileSync(path.resolve(backendRoot, configArgument), 'utf8'),
+      );
+    }
+
+    assert.ok(
+      config.setupFiles?.some((file) =>
+        file.endsWith('database-test-setup.cjs'),
+      ),
+      `${scriptName} must load the database guard`,
+    );
+  }
+});
 
 test('rejects missing TEST_DATABASE_URL before loading a test module', () => {
   const result = runSetup({

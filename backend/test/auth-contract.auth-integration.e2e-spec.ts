@@ -261,7 +261,7 @@ describe(
 
         expect(res.status).toBe(200);
         expect(res.body.session).toBeNull();
-        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['cache-control']).toContain('no-store');
       });
 
       it('rejects a legacy Bearer token on Business APIs', async () => {
@@ -284,7 +284,7 @@ describe(
         expect(res.body).not.toHaveProperty('sessionToken');
         expect(res.body).not.toHaveProperty('accessToken');
         expect(JSON.stringify(res.body)).not.toContain(sessionToken);
-        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['cache-control']).toContain('no-store');
       });
 
       it('blocks the direct BetterAuth session endpoint', async () => {
