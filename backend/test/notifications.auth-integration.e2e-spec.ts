@@ -604,6 +604,7 @@ describe('Notification API and SSE (real auth + PostgreSQL)', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
     expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
     if (!response.body) throw new Error('SSE response has no body');
     return { reader: new SseEventReader(response.body), controller };
   }

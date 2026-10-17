@@ -38,12 +38,14 @@ export function isCsrfToken(
 }
 
 export function trustedOrigins(): string[] {
-  const candidates = [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:5173',
-  ];
+  const candidates = [process.env.FRONTEND_URL || 'http://localhost:5173'];
+  if (process.env.NODE_ENV !== 'production') {
+    candidates.push(
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+    );
+  }
 
   const origins = [
     ...new Set(candidates.map(normalizeOrigin).filter(isString)),

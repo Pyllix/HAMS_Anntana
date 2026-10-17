@@ -1,3 +1,4 @@
+import { runtimeConfig } from './common/config/bootstrap-config';
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -93,6 +94,6 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(runtimeConfig.server.port);
 }
 bootstrap();

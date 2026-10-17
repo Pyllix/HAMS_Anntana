@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { runtimeConfig } from './bootstrap-config';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -26,10 +26,8 @@ process.emitWarning = function (warning: string | Error, ...args: any[]) {
  * รัน Pipelining เต็มสปีด รองรับทั้ง Localhost และ Render Cloud DB
  */
 export const sharedPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: process.env.DATABASE_POOL_MAX
-    ? parseInt(process.env.DATABASE_POOL_MAX, 10)
-    : 20,
+  connectionString: runtimeConfig.database.url,
+  max: runtimeConfig.database.poolMax,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });

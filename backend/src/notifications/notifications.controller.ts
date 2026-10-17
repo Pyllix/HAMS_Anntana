@@ -110,6 +110,8 @@ export class NotificationsController {
   }
 
   @Sse('stream')
+  @Header('Cache-Control', 'no-store, no-cache, no-transform')
+  @Header('X-Accel-Buffering', 'no')
   @ApiOperation({
     summary: 'Stream new notifications using Server-Sent Events',
   })

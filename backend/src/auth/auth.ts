@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { runtimeConfig } from '../common/config/bootstrap-config';
 import { betterAuth, getCurrentAdapter } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -50,6 +50,8 @@ const noPermRole = ac.newRole({
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const auth = betterAuth({
+  secret: runtimeConfig.auth.secret,
+  baseURL: runtimeConfig.auth.baseUrl,
   database: prismaAdapter(sharedPrisma, {
     provider: 'postgresql',
   }),
@@ -62,7 +64,7 @@ export const auth = betterAuth({
     autoSignInAfterVerification: false,
     expiresIn: 3600, // 1 hour
     sendVerificationEmail: async ({ user, url }) => {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const frontendUrl = runtimeConfig.auth.frontendUrl;
       const targetUrl = new URL(url);
       if (
         !targetUrl.searchParams.has('callbackURL') ||
@@ -145,7 +147,7 @@ export const auth = betterAuth({
     disableSessionRefresh: true,
   },
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === 'production',
+    useSecureCookies: runtimeConfig.server.secureCookies,
     cookiePrefix: 'better-auth',
     crossSubDomainCookies: {
       enabled: false, // host-only cookies

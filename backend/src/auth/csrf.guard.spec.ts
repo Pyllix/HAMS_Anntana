@@ -103,6 +103,43 @@ describe('CsrfGuard', () => {
     );
   });
 
+  describe('trusted origins by environment', () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousFrontendUrl = process.env.FRONTEND_URL;
+    const previousPreviewPattern = process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+
+    afterAll(() => {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+      else process.env.FRONTEND_URL = previousFrontendUrl;
+      if (previousPreviewPattern === undefined) {
+        delete process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+      } else {
+        process.env.VERCEL_PREVIEW_ORIGIN_PATTERN = previousPreviewPattern;
+      }
+    });
+
+    it('keeps local origins available during development', () => {
+      process.env.NODE_ENV = 'development';
+      process.env.FRONTEND_URL = 'http://localhost:5173';
+      delete process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+
+      expect(trustedOrigins()).toContain('http://localhost:5173');
+      expect(isTrustedOrigin('http://localhost:3000')).toBe(true);
+    });
+
+    it('limits production origins to the configured HTTPS site and its preview rule', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.FRONTEND_URL = 'https://hams.example.test';
+      delete process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;
+
+      expect(trustedOrigins()).toEqual(['https://hams.example.test']);
+      expect(isTrustedOrigin('https://hams.example.test')).toBe(true);
+      expect(isTrustedOrigin('http://localhost:5173')).toBe(false);
+    });
+  });
+
   describe('Vercel preview origins', () => {
     const pattern = 'https://hams-anntana-test-*-pyllix.vercel.app';
     const previousPattern = process.env.VERCEL_PREVIEW_ORIGIN_PATTERN;

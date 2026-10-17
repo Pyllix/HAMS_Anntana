@@ -11,7 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node scripts/start-production.cjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -103,7 +103,7 @@
       "^.+\\.(t|j|mj)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!(@thallesp|otplib|@otplib|@scure))"
+      "node_modules/(?!\\.pnpm[\\\\/](?:@thallesp\\+nestjs-better-auth[^\\\\/]*|otplib@[^\\\\/]*|@otplib\\+[^\\\\/]*|@scure\\+base@[^\\\\/]*|@noble\\+hashes@[^\\\\/]*)[\\\\/]node_modules[\\\\/]|@thallesp[\\\\/]|otplib[\\\\/]|@otplib[\\\\/]|@scure[\\\\/]|@noble[\\\\/])"
     ],
     "moduleNameMapper": {
       "^@thallesp/nestjs-better-auth$": "<rootDir>/__mocks__/@thallesp/nestjs-better-auth.ts",

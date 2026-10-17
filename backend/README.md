@@ -44,6 +44,7 @@ cp .env.example .env
 ```
 ตรวจสอบและแก้ไขค่าในไฟล์ `.env` (ค่าเริ่มต้นสามารถใช้งานกับ Docker ด้านล่างได้เลย):
 ```env
+NODE_ENV="development"
 DATABASE_URL="postgresql://postgres:password@localhost:5432/hams_db?schema=public"
 BETTER_AUTH_SECRET="your_better_auth_secret" # สามารถนำ secret มาใส่ได้จาก https://better-auth-secret.com/
 BETTER_AUTH_URL="http://localhost:3000"
@@ -99,12 +100,15 @@ Backend จะทำงานที่ `http://localhost:3000`
 pnpm start          # Start the application
 pnpm run start:dev  # Start in development (watch) mode
 pnpm run build      # Build the application for production
+pnpm run start:prod # Start built application with production settings
 pnpm run format     # Format source files using Prettier
 pnpm run lint       # Lint source files using ESLint
 pnpm run test:unit  # Run mocked unit tests without opening a DB connection
 pnpm run test       # Run all specs; requires TEST_DATABASE_URL
 pnpm dlx prisma studio # เปิด UI สำหรับดูข้อมูลใน Database ของ Prisma
 ```
+
+`start:prod` sets `NODE_ENV=production` before loading the built application. Use this command for a production launch; the environment file must still provide the production secrets, HTTPS URLs, database, and SMTP settings.
 
 ## Test database safety
 

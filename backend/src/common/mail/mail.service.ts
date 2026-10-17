@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { runtimeConfig } from '../config/bootstrap-config';
 
 export interface SendVerificationEmailParams {
   to: string;
@@ -24,15 +25,8 @@ export class MailService {
   private defaultFrom: string;
 
   constructor() {
-    const host = process.env.SMTP_HOST || 'localhost';
-    const port = parseInt(process.env.SMTP_PORT || '1025', 10);
-    const secure = process.env.SMTP_SECURE === 'true';
-    const requireTLS = process.env.SMTP_REQUIRE_TLS === 'true';
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-
-    this.defaultFrom =
-      process.env.SMTP_FROM || 'HAMS System <noreply@hams.local>';
+    const { host, port, secure, requireTLS, user, pass } = runtimeConfig.smtp;
+    this.defaultFrom = runtimeConfig.smtp.from;
 
     this.transporter = nodemailer.createTransport({
       host,

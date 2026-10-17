@@ -1,3 +1,4 @@
+import './common/config/bootstrap-config';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaService } from './prisma.service';

@@ -14,6 +14,7 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
+import { runtimeConfig } from '../common/config/bootstrap-config';
 import {
   ApiCookieAuth,
   ApiBody,
@@ -342,7 +343,7 @@ export class AuthController {
         headers.set(key, Array.isArray(value) ? value.join(', ') : value);
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = runtimeConfig.auth.frontendUrl;
     const callbackURL = dto.callbackURL || `${frontendUrl}/login?verified=true`;
 
     try {
