@@ -252,6 +252,93 @@ test("permits same-origin image transport while keeping external destinations al
   );
 });
 
+test("uploads and previews a local Employee Photo through HAMS with an expiring same-origin grant", async () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { origin: "https://hams.example.test" } },
+  });
+  const uploadId = "c4c51a2e-3c27-4e68-9954-0c7c03b1564b";
+  const grantUrl = `/api/images/employees/hams-employee-photo-${uploadId}/v1.jpg?expiresAt=4070908800&signature=${"b".repeat(43)}`;
+  const calls: Array<{ method: string; path: string; body?: unknown; options?: unknown }> = [];
+  const api = {
+    async post(path: string, body?: unknown, options?: unknown) {
+      calls.push({ method: "POST", path, body, options });
+      if (path === "/images/uploads") {
+        return { data: {
+          uploadId,
+          purpose: "EMPLOYEE_PHOTO",
+          targetId: "employee-1",
+          acceptedSourceMimeTypes: ["image/jpeg"],
+          uploadInstructions: {
+            transport: {
+              kind: "hams-binary-v1",
+              endpoint: `/images/uploads/${uploadId}/file`,
+              method: "POST",
+              fields: {},
+              expiresAt: "2099-01-01T00:00:00.000Z",
+            },
+          },
+        } };
+      }
+      if (path.endsWith("/file")) {
+        return { data: { publicId: `hams-employee-photo-${uploadId}`, version: 1 } };
+      }
+      assert.equal(path, `/images/uploads/${uploadId}/complete`);
+      return { data: { status: "VERIFIED_PENDING" } };
+    },
+    async get(path: string, options?: unknown) {
+      calls.push({ method: "GET", path, options });
+      return { data: {
+        purpose: "EMPLOYEE_PHOTO",
+        status: "VERIFIED_PENDING",
+        url: grantUrl,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      } };
+    },
+  };
+  const file = makeFile("employee.jpg", "image/jpeg");
+  let requestedUrl = "";
+  let previewRequest: RequestInit | undefined;
+
+  try {
+    const result = await uploadAndVerifyImage(file, "EMPLOYEE_PHOTO", "employee-1", {
+      api: api as never,
+      fetchImpl: (async (url, init) => {
+        requestedUrl = String(url);
+        previewRequest = init;
+        return new Response(new Blob(["normalized JPEG"], { type: "image/jpeg" }), {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }) as typeof fetch,
+    });
+
+    assert.equal(result.purpose, "EMPLOYEE_PHOTO");
+    assert.equal(result.previewUrl, null);
+    assert.equal(result.previewBlob?.type, "image/jpeg");
+    assert.equal(requestedUrl, `https://hams.example.test${grantUrl}`);
+    assert.equal(previewRequest?.cache, "no-store");
+    assert.equal(previewRequest?.credentials, "omit");
+    assert.deepEqual(calls.map(({ method, path }) => `${method} ${path}`), [
+      "POST /images/uploads",
+      `POST /images/uploads/${uploadId}/file`,
+      `POST /images/uploads/${uploadId}/complete`,
+      `GET /images/uploads/${uploadId}/preview`,
+    ]);
+    assert.deepEqual(calls[0].body, {
+      purpose: "EMPLOYEE_PHOTO",
+      sourceContentType: "image/jpeg",
+      sourceSizeBytes: file.size,
+      targetId: "employee-1",
+    });
+    assert.equal(calls[1].body, file);
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
 test("rejects multipart upload instructions without a parseable expiry", () => {
   assert.throws(
     () => validateMultipartFormImageTransport({
@@ -327,6 +414,45 @@ test("Employee Photo bytes use no-store, no credentials, URL/status/type checks,
     url: "https://user@api.cloudinary.com/v1_1/test-cloud/image/download/signed",
     expiresAt: "2099-01-01T00:00:00.000Z",
   }, { fetchImpl: fetchImpl as typeof fetch }), { code: "IMAGE_URL_NOT_ALLOWED" });
+});
+
+test("reads a local Employee Photo from its short-lived same-origin grant without session cookies", async () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { origin: "https://hams.example.test" } },
+  });
+  let requestedUrl = "";
+  let request: RequestInit | undefined;
+  const blob = new Blob(["normalized local photo"], { type: "image/jpeg" });
+  const signature = "a".repeat(43);
+  const localGrantUrl = `/api/images/employees/hams-employee-photo-8ec777e7-357b-4f1b-bc6b-343eeaa76903/v1.jpg?expiresAt=4070908800&signature=${signature}`;
+
+  try {
+    const result = await fetchEmployeePhotoBlobFromGrant({
+      hasEmployeePhoto: true,
+      url: localGrantUrl,
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    }, {
+      fetchImpl: (async (url, init) => {
+        requestedUrl = String(url);
+        request = init;
+        return new Response(blob, {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }) as typeof fetch,
+    });
+
+    assert.equal(result?.type, "image/jpeg");
+    assert.equal(requestedUrl, `https://hams.example.test${localGrantUrl}`);
+    assert.equal(request?.cache, "no-store");
+    assert.equal(request?.credentials, "omit");
+    assert.equal((request?.headers as Record<string, string>)?.["Cache-Control"], "no-store");
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 });
 
 test("current Employee Photo grant uses the authenticated HAMS route before direct no-store byte fetch", async () => {

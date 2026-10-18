@@ -129,17 +129,31 @@ export interface LocalImageStoragePort extends ImageStoragePort {
     readonly stream: Readable;
     readonly bytes: number;
   }>;
+  openPrivateEmployeePhoto(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): Promise<{
+    readonly stream: Readable;
+    readonly bytes: number;
+  }>;
 }
 
 export function isLocalImageStoragePort(
   storage: ImageStoragePort,
 ): storage is LocalImageStoragePort {
-  return (
+  const hasLocalOperations =
     'receiveLocalUpload' in storage &&
     typeof storage.receiveLocalUpload === 'function' &&
     'openPublicAsset' in storage &&
-    typeof storage.openPublicAsset === 'function'
-  );
+    typeof storage.openPublicAsset === 'function' &&
+    'openPrivateEmployeePhoto' in storage &&
+    typeof storage.openPrivateEmployeePhoto === 'function';
+  if (!hasLocalOperations) return false;
+  try {
+    return storage.getProviderContext().provider === 'local';
+  } catch {
+    return false;
+  }
 }
 
 export function isVersionedAssetImageUrl(

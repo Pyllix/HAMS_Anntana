@@ -8,19 +8,23 @@ import {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  canActivate(): boolean {
     return true;
   }
 }
 
 export const Session = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
-    const req = ctx.switchToHttp().getRequest();
-    return req.session || { user: req.user };
+    const request = ctx.switchToHttp().getRequest<{
+      session?: unknown;
+      user?: unknown;
+    }>();
+    return request.session || { user: request.user };
   },
 );
 
 export const Public = () => SetMetadata('isPublic', true);
+export const AllowAnonymous = Public;
 export const Optional = () => SetMetadata('isOptional', true);
 
 export class AuthModule {

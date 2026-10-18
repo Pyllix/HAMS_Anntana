@@ -38,7 +38,7 @@ export class ImageUploadsController {
   @ApiOperation({
     summary: 'Create a direct image upload intent',
     description:
-      'Allocates a single-use image identity and returns a storage-provider upload transport. HAMS never receives image bytes.',
+      'Allocates a single-use image identity and returns the configured upload transport. Cloud mode sends bytes to the provider; local mode sends bytes to the authenticated HAMS binary route.',
   })
   @ApiBody({ type: CreateImageUploadDto })
   @ApiResponse({ status: 201, description: 'Upload authorization created' })

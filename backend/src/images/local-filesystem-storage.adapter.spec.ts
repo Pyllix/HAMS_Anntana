@@ -23,6 +23,7 @@ const fixtureDirectory = join(
   '../../test/fixtures/cloudinary-contract',
 );
 const uploadId = 'c4c51a2e-3c27-4e68-9954-0c7c03b1564b';
+const employeePhotoReadGrantSecret = 'test-employee-photo-read-grant-secret';
 
 describe('LocalFilesystemStorageAdapter', () => {
   let root: string;
@@ -31,11 +32,15 @@ describe('LocalFilesystemStorageAdapter', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'hams-local-image-store-'));
-    storage = new LocalFilesystemStorageAdapter({
-      provider: 'local',
-      storageRoot: join(root, 'images'),
-      tempRoot: join(root, 'temp'),
-    });
+    storage = new LocalFilesystemStorageAdapter(
+      {
+        provider: 'local',
+        storageRoot: join(root, 'images'),
+        tempRoot: join(root, 'temp'),
+      },
+      undefined,
+      employeePhotoReadGrantSecret,
+    );
     context = storage.getProviderContext();
   });
 
@@ -66,6 +71,131 @@ describe('LocalFilesystemStorageAdapter', () => {
       expiresAt: new Date('2026-10-18T01:00:00.000Z'),
     });
   });
+
+  it('issues a local upload transport for an authenticated Employee Photo', () => {
+    const instructions = storage.createUploadInstructions({
+      purpose: 'EMPLOYEE_PHOTO',
+      publicId: 'hams-employee-photo-' + uploadId,
+      storageContext: context,
+      deliveryType: 'authenticated',
+      policy: imageUploadPolicy('EMPLOYEE_PHOTO'),
+      issuedAt: new Date('2026-10-18T00:00:00.000Z'),
+      signatureExpiresAt: new Date('2026-10-18T01:00:00.000Z'),
+    });
+
+    expect(instructions.transport).toEqual({
+      kind: 'hams-binary-v1',
+      endpoint: `/images/uploads/${uploadId}/file`,
+      method: 'POST',
+      fields: {},
+      expiresAt: new Date('2026-10-18T01:00:00.000Z'),
+    });
+  });
+
+  it('issues a short-lived same-origin grant for a private Employee Photo', () => {
+    const expiresAt = new Date('2026-10-18T00:05:00.000Z');
+    const reference = {
+      publicId: 'hams-employee-photo-' + uploadId,
+      storageContext: context,
+      resourceType: 'image' as const,
+      deliveryType: 'authenticated' as const,
+      version: 1,
+    };
+
+    const grant = storage.createShortLivedReadGrant(reference, expiresAt);
+
+    expect(grant.url).toMatch(
+      new RegExp(
+        '^/api/images/employees/hams-employee-photo-' +
+          uploadId +
+          '/v1\\.jpg\\?expiresAt=1792281900&signature=[A-Za-z0-9_-]+$',
+      ),
+    );
+    expect(grant.expiresAt).toEqual(expiresAt);
+    expect(() =>
+      storage.validateShortLivedReadGrant(reference, grant),
+    ).not.toThrow();
+  });
+
+  it.each([
+    'jpeg.jpg',
+    'transparent.png',
+    'static.webp',
+    'portrait.heic',
+    'portrait.heif',
+  ])(
+    'normalizes and serves a real %s Employee Photo only with a valid, live grant',
+    async (fileName) => {
+      const publicId = 'hams-employee-photo-' + uploadId;
+      const source = await readFile(join(fixtureDirectory, fileName));
+      const policy = imageUploadPolicy('EMPLOYEE_PHOTO');
+      const evidence = await storage.receiveLocalUpload({
+        publicId,
+        stream: Readable.from([source]),
+        policy,
+        receivedAt: new Date(),
+      });
+      const verified = await storage.verifyUploadedObject({
+        publicId,
+        storageContext: context,
+        deliveryType: 'authenticated',
+        evidence,
+        policy,
+      });
+      const reference = {
+        publicId,
+        storageContext: context,
+        resourceType: 'image' as const,
+        deliveryType: 'authenticated' as const,
+        version: verified.version,
+      };
+      const grant = storage.createShortLivedReadGrant(
+        reference,
+        new Date(Date.now() + 5 * 60 * 1000),
+      );
+
+      const image = await storage.openPrivateEmployeePhoto(reference, grant);
+      const chunks: Buffer[] = [];
+      for await (const chunk of image.stream) {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new Error(
+            'The Employee Photo stream returned non-binary content',
+          );
+        }
+        chunks.push(
+          Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+        );
+      }
+      const output = Buffer.concat(chunks);
+      const metadata = await sharp(output).metadata();
+
+      expect(image.bytes).toBe(output.length);
+      expect(metadata.format).toBe('jpeg');
+      expect(metadata.width).toBeLessThanOrEqual(512);
+      expect(metadata.height).toBeLessThanOrEqual(512);
+      await expect(storage.openPublicAsset(reference)).rejects.toMatchObject({
+        code: 'OBJECT_POLICY_REJECTED',
+      });
+      expect(() => storage.publicUrl(reference)).toThrow();
+
+      const tamperedGrant = {
+        ...grant,
+        url: grant.url.replace(/signature=./, 'signature=x'),
+      };
+      await expect(
+        storage.openPrivateEmployeePhoto(reference, tamperedGrant),
+      ).rejects.toMatchObject({ code: 'OBJECT_POLICY_REJECTED' });
+
+      const expiredGrant = storage.createShortLivedReadGrant(
+        reference,
+        new Date(Date.now() - 1000),
+      );
+      await expect(
+        storage.openPrivateEmployeePhoto(reference, expiredGrant),
+      ).rejects.toMatchObject({ code: 'OBJECT_POLICY_REJECTED' });
+    },
+    30_000,
+  );
 
   it.each([
     'jpeg.jpg',
@@ -134,25 +264,30 @@ describe('LocalFilesystemStorageAdapter', () => {
     30_000,
   );
 
-  it('returns the same receipt when the upload response was lost and the client retries', async () => {
-    const publicId = `hams-asset-image-${uploadId}`;
-    const source = await readFile(join(fixtureDirectory, 'jpeg.jpg'));
-    const input = {
-      publicId,
-      policy: imageUploadPolicy('ASSET_IMAGE'),
-      receivedAt: new Date(),
-    };
-    const first = await storage.receiveLocalUpload({
-      ...input,
-      stream: Readable.from([source]),
-    });
-    const retry = await storage.receiveLocalUpload({
-      ...input,
-      stream: Readable.from([source]),
-    });
+  it.each(['ASSET_IMAGE', 'EMPLOYEE_PHOTO'] as const)(
+    'returns the same receipt after a lost %s upload response and retry',
+    async (purpose) => {
+      const prefix =
+        purpose === 'ASSET_IMAGE' ? 'asset-image' : 'employee-photo';
+      const publicId = `hams-${prefix}-${uploadId}`;
+      const source = await readFile(join(fixtureDirectory, 'jpeg.jpg'));
+      const input = {
+        publicId,
+        policy: imageUploadPolicy(purpose),
+        receivedAt: new Date(),
+      };
+      const first = await storage.receiveLocalUpload({
+        ...input,
+        stream: Readable.from([source]),
+      });
+      const retry = await storage.receiveLocalUpload({
+        ...input,
+        stream: Readable.from([source]),
+      });
 
-    expect(retry).toEqual(first);
-  });
+      expect(retry).toEqual(first);
+    },
+  );
 
   it('uses the original receipt time when verification resumes from an existing output', async () => {
     const publicId = `hams-asset-image-${uploadId}`;

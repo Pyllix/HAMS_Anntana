@@ -80,9 +80,9 @@ For an existing record, supply its canonical ID. For a create form, omit `target
 }
 ```
 
-The browser uses the declared `transport` to send the file and returned fields as `multipart/form-data`. The flattened `url`, `method`, and `fields` remain temporarily for clients that have not migrated. The client accepts a same-origin HAMS endpoint or the current Cloudinary upload endpoint; it does not accept arbitrary external URLs. Do not send a file, Base64, URL, filename, provider secret, or arbitrary transformation to HAMS. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
+The browser uses the declared `transport` to send the file and returned fields as `multipart/form-data`. The flattened `url`, `method`, and `fields` remain temporarily for clients that have not migrated. The client accepts a same-origin HAMS endpoint or the current Cloudinary upload endpoint; it does not accept arbitrary external URLs. In Cloudinary mode, upload the file directly to Cloudinary; in local mode, HAMS receives bytes only through the authenticated binary route in `transport`. Do not send a file, Base64, URL, filename, provider secret, or arbitrary transformation in the intent or completion request. With browser `FormData`, let the browser set the multipart `Content-Type` boundary.
 
-Both purposes use Cloudinary's `/image/upload` REST endpoint. The signed `type` form field is `upload` for Asset Image and `authenticated` for Employee Photo; forward every returned field unchanged.
+In Cloudinary mode both purposes use Cloudinary's `/image/upload` REST endpoint. The signed `type` form field is `upload` for Asset Image and `authenticated` for Employee Photo; forward every returned field unchanged. In local mode both purposes use the authenticated HAMS binary endpoint returned in `transport`.
 
 The provider signature, HAMS intent, and pending attachment use separate clocks. The intent currently defaults to one hour and cannot exceed one hour; it limits completion and new claims. The provider's trusted `created_at` starts the configurable attachment window, which defaults to and cannot exceed one hour; intent creation and completion retries do not renew it. Until verification, `attachmentExpiresAt` is `null`. HAMS retains a `reconciliationAfter` tombstone through the later of provider authorization and intent expiry plus the configured settlement horizon; that internal value is visible on status responses and is not a claim deadline.
 
@@ -118,7 +118,7 @@ Current statuses are `AUTHORIZED`, `VERIFIED_PENDING`, `CLAIMED`, `SUPERSEDED`, 
 
 The original uploader may preview a `VERIFIED_PENDING` upload while its attachment window is live and the account still has current permission for that purpose. Another uploader receives `404`; an upload that is no longer pending conflicts, and an expired upload returns `410 UPLOAD_EXPIRED`. The response and errors use `Cache-Control: private, no-store`.
 
-Asset previews use the same server-derived HTTPS versioned public URL as the saved Asset. Employee Photo previews use a Cloudinary `authenticated` download grant with a five-minute default lifetime. Preview does not make Employee Photo bytes public.
+Asset previews use the same server-derived HTTPS versioned URL as the saved Asset. Employee Photo previews use a short-lived grant with a five-minute default lifetime. Cloudinary mode returns an `authenticated` Cloudinary download grant; local mode returns a same-origin HAMS URL signed with a domain-separated HMAC key. Preview does not make Employee Photo bytes public.
 
 ```json
 {
@@ -134,13 +134,13 @@ Asset previews use the same server-derived HTTPS versioned public URL as the sav
 
 `GET /users/:id/photo`
 
-Any authenticated user who can access the existing Users API may request the current Employee Photo by user ID or employee code. This route follows the Users controller's normal authentication/visibility rules and adds no owner-only or ADMIN-only read restriction. It returns a provider-enforced, time-limited `authenticated` download grant and its actual expiry. `IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS` configures the grant from 1 to 3,600 seconds; the default is 300 seconds.
+Any authenticated user who can access the existing Users API may request the current Employee Photo by user ID or employee code. This route follows the Users controller's normal authentication/visibility rules and adds no owner-only or ADMIN-only read restriction. It returns a time-limited grant and its actual expiry. Cloudinary mode returns a provider-enforced `authenticated` download grant; local mode returns a same-origin HAMS URL authenticated by a short-lived HMAC signature. `IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS` configures the grant from 1 to 3,600 seconds; the default is 300 seconds.
 
 ```json
 {
   "hasEmployeePhoto": true,
   "photoRevision": "opaque-image-revision",
-  "url": "https://api.cloudinary.com/v1_1/<cloud>/image/download?...",
+  "url": "<provider-specific signed URL>",
   "expiresAt": "2026-10-01T03:05:00.000Z"
 }
 ```
@@ -149,9 +149,9 @@ When the user has no photo, the route returns `200` with `hasEmployeePhoto: fals
 
 User details, user lists, and `/auth/session` include `hasEmployeePhoto` and `photoRevision`, but never a grant URL or provider locator. Managed Employee Photos keep durable `imageUrl` as `null`; the User create/update DTOs do not accept an Employee Photo URL. These responses do not issue grants for each User in a list.
 
-Logout or session revocation prevents future HAMS grant requests. A grant already issued is a bearer URL and can remain usable until its provider expiry; logout cannot retract bytes already downloaded or cached by a client. The API and tests make no stronger promise.
+Logout or session revocation prevents future HAMS grant requests. A grant already issued is a bearer URL and can remain usable until its expiry; logout cannot retract bytes already downloaded or cached by a client. The local byte route serves Employee Photos with `Cache-Control: private, no-store`, but the grant itself remains a bearer credential until it expires.
 
-**Approved Employee display policy (2026-10-04):** the shared Frontend helper fetches both Employee Photo previews and attached-photo bytes directly from the provider using Fetch `cache: 'no-store'`, request `Cache-Control: no-store`, and `credentials: 'omit'`, then displays a session-memory Blob URL. Validate the provider URL/status/image content type, bound/abort requests, clear/revoke the display on replacement/logout/account switch/unmount, and reject stale async results. A CORS/load failure must not fall back to direct signed-URL display. Cloudinary's observed success header remains `public, max-age=2592000`; the accepted no-store policy governs the controlled HAMS request, not copied-grant navigation or already downloaded bytes. See [G2 evidence](image-read-g2-verification.md) and [ADR 0005](adr/0005-employee-photo-cache-and-isolated-fe-handoff.md). Actual helper/UI acceptance belongs to Tickets 06/07.
+**Approved Employee display policy (2026-10-04):** the shared Frontend helper fetches Employee Photo previews and attached-photo bytes with Fetch `cache: 'no-store'`, request `Cache-Control: no-store`, and `credentials: 'omit'`, then displays a session-memory Blob URL. In Cloudinary mode the helper fetches the provider URL; in local mode it fetches the same-origin HAMS grant URL. Validate the URL/status/image content type, bound/abort requests, clear/revoke the display on replacement/logout/account switch/unmount, and reject stale async results. A CORS/load failure must not fall back to direct signed-URL display. Cloudinary's observed success header remains `public, max-age=2592000`; the accepted no-store policy governs the controlled HAMS request, not copied-grant navigation or already downloaded bytes. See [G2 evidence](image-read-g2-verification.md) and [ADR 0005](adr/0005-employee-photo-cache-and-isolated-fe-handoff.md).
 
 ## Attach an upload through Asset/User CRUD (Ticket 02)
 

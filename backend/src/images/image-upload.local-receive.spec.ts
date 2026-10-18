@@ -50,6 +50,7 @@ describe('ImageUploadService local byte receipt', () => {
       getProviderContext: jest.fn(() => storageContext),
       receiveLocalUpload,
       openPublicAsset: jest.fn(),
+      openPrivateEmployeePhoto: jest.fn(),
     };
     const prisma = { imageUpload: { findFirst } };
     const service = new ImageUploadService(

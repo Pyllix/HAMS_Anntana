@@ -1,6 +1,6 @@
 # Local image storage
 
-Customer deployments can store Asset Images on the HAMS server. The existing
+Customer deployments can store Asset Images and private Employee Photos on the HAMS server. The existing
 Cloudinary provider remains the default unless `IMAGE_STORAGE_PROVIDER=local` is
 selected. Local mode does not need Cloudinary credentials.
 
@@ -26,8 +26,15 @@ converted to JPEG quality 80, capped at 1,600 pixels on the long edge without
 upscaling, rotated from source orientation where supported, flattened onto
 white, converted to sRGB, and stripped of source metadata. Source limits are
 10,000,000 bytes and 25,000,000 pixels. Processing runs in one worker at a time,
-queues at most three more images, and has a 30-second limit. Public files become
-readable only after normalization and verification complete.
+queues at most three more images, and has a 30-second limit. Files become
+readable only after normalization and verification complete. Asset Images use
+a versioned same-origin URL. Employee Photos have no public URL: HAMS issues a
+short-lived, HMAC-signed same-origin grant and serves the normalized JPEG only
+while that grant is valid. Employee Photo responses use
+`Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`.
+`BETTER_AUTH_SECRET` must remain stable across restarts and contain at least 32
+characters in production; the local read grant uses a domain-separated key
+derived from it.
 
 ## Decoder evidence and deployment limits
 
@@ -56,14 +63,17 @@ permissions, and packaged decoder must pass the deployment rehearsal in Ticket
 `LICENSE` file; deployment packaging must retain that license with the
 dependency.
 
-Local mode in this ticket is limited to Asset Images. Private Employee Photos
-remain unavailable in local mode until the private read-grant and access work
-in Ticket 06 is implemented.
+Employee Photo source files use the same input limits as Asset Images and are
+normalized to JPEG capped at 512 pixels on the long edge. Their short-lived
+read grant uses `IMAGE_EMPLOYEE_PHOTO_READ_GRANT_SECONDS` (default 300 seconds,
+maximum 3,600 seconds). The configured reverse proxy must forward the image
+read route to HAMS while preserving its query string.
 
 ## Verification status
 
 The local adapter and normalizer tests use real image fixtures and the real
-filesystem. Frontend upload-service tests verify the same-origin binary route.
-The full browser-to-database HTTPS flow still needs to run against the team's
-integration deployment; the local Docker API was unavailable and
-`TEST_DATABASE_URL` was not configured during this implementation run.
+filesystem. HTTP route tests verify private Employee Photo delivery and grant
+rejection; frontend upload-service tests verify the same-origin byte request
+without session cookies. The full browser-to-database HTTPS flow still needs
+to run against the team's integration deployment. During Ticket 06 work,
+Docker was unavailable and `TEST_DATABASE_URL` was not configured.

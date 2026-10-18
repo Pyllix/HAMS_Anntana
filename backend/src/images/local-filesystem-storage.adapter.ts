@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   lstat,
   mkdir,
@@ -17,9 +18,11 @@ import sharp from 'sharp';
 import type { RuntimeConfig } from '../common/config/runtime-config';
 import {
   ImageStorageError,
+  type ImageDeliveryType,
   type ImageObjectReference,
+  type ImagePurpose,
   type ImageStorageContext,
-  type ImageStoragePort,
+  type LocalImageStoragePort,
   type ImageUploadPolicy,
   type ShortLivedImageGrant,
   type UploadEvidence,
@@ -39,7 +42,7 @@ const ASSET_PUBLIC_ID_PATTERN =
 
 type ImageDirectoryConfig = RuntimeConfig['images'];
 
-export class LocalFilesystemStorageAdapter implements ImageStoragePort {
+export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
   private storageRoot: string | null = null;
   private tempRoot: string | null = null;
   private directoryInitialization: Promise<void> | null = null;
@@ -48,6 +51,8 @@ export class LocalFilesystemStorageAdapter implements ImageStoragePort {
   constructor(
     private readonly config: ImageDirectoryConfig,
     private readonly normalizer = new ImageNormalizer(),
+    private readonly employeePhotoReadGrantSecret = process.env
+      .BETTER_AUTH_SECRET ?? '',
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -66,12 +71,11 @@ export class LocalFilesystemStorageAdapter implements ImageStoragePort {
 
   createUploadInstructions(input: UploadInstructionsInput): UploadInstructions {
     this.assertContext(input.storageContext);
-    if (input.deliveryType !== 'upload') {
-      throw new ImageStorageError(
-        'UNAVAILABLE',
-        'Private Employee Photo reads are enabled by the next image ticket',
-      );
-    }
+    this.assertPurposeIdentity(
+      input.purpose,
+      input.publicId,
+      input.deliveryType,
+    );
     const uploadId = this.uploadIdFromPublicId(input.publicId);
     const endpoint = `/images/uploads/${uploadId}/file`;
     return {
@@ -197,7 +201,7 @@ export class LocalFilesystemStorageAdapter implements ImageStoragePort {
     this.assertContext(input.storageContext);
     this.assertPublicId(input.publicId);
     if (
-      input.deliveryType !== 'upload' ||
+      !this.deliveryTypeMatchesPublicId(input.publicId, input.deliveryType) ||
       input.evidence.publicId !== input.publicId ||
       input.evidence.version !== 1
     ) {
@@ -247,18 +251,88 @@ export class LocalFilesystemStorageAdapter implements ImageStoragePort {
     return { stream: createReadStream(imagePath), bytes: fileStat.size };
   }
 
-  createShortLivedReadGrant(): ShortLivedImageGrant {
-    throw new ImageStorageError(
-      'UNAVAILABLE',
-      'Private Employee Photo grants are implemented by the next image ticket',
+  async openPrivateEmployeePhoto(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): Promise<{ readonly stream: Readable; readonly bytes: number }> {
+    this.assertContext(reference.storageContext);
+    this.assertPrivateEmployeePhotoReference(reference);
+    this.validateShortLivedReadGrant(reference, grant);
+    if (grant.expiresAt.getTime() <= Date.now()) {
+      throw this.policyRejected('The Employee Photo read grant has expired');
+    }
+    await this.ensureDirectories();
+    const imagePath = this.objectPath(reference.publicId, reference.version!);
+    const fileStat = await this.safeFileStat(imagePath);
+    const verifiedMarker = await this.safeFileStat(
+      this.verifiedMarkerPath(reference.publicId),
     );
+    if (
+      !fileStat ||
+      !fileStat.isFile() ||
+      !verifiedMarker ||
+      !verifiedMarker.isDirectory()
+    ) {
+      throw this.objectNotFound();
+    }
+    await this.assertRealPathWithin(this.requireStorageRoot(), imagePath);
+    await this.assertRealPathWithin(
+      this.requireStorageRoot(),
+      this.verifiedMarkerPath(reference.publicId),
+    );
+    return { stream: createReadStream(imagePath), bytes: fileStat.size };
   }
 
-  validateShortLivedReadGrant(): void {
-    throw new ImageStorageError(
-      'UNAVAILABLE',
-      'Private Employee Photo grants are implemented by the next image ticket',
+  createShortLivedReadGrant(
+    reference: ImageObjectReference,
+    expiresAt: Date,
+  ): ShortLivedImageGrant {
+    this.assertContext(reference.storageContext);
+    this.assertPrivateEmployeePhotoReference(reference);
+    if (!Number.isFinite(expiresAt.getTime())) {
+      throw this.policyRejected('The Employee Photo expiry is invalid');
+    }
+    const expiresAtSeconds = Math.floor(expiresAt.getTime() / 1000);
+    const grantExpiry = new Date(expiresAtSeconds * 1000);
+    const signature = this.signEmployeePhotoGrant(reference, expiresAtSeconds);
+    const url =
+      `/api/images/employees/${encodeURIComponent(reference.publicId)}` +
+      `/v${reference.version}.jpg?expiresAt=${expiresAtSeconds}&signature=${signature}`;
+    return { url, expiresAt: grantExpiry };
+  }
+
+  validateShortLivedReadGrant(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): void {
+    this.assertContext(reference.storageContext);
+    this.assertPrivateEmployeePhotoReference(reference);
+    const match =
+      /^\/api\/images\/employees\/([^/?#]+)\/v([1-9]\d*)\.jpg\?expiresAt=(\d{1,12})&signature=([A-Za-z0-9_-]{43})$/.exec(
+        grant.url,
+      );
+    if (!match) throw this.invalidEmployeePhotoGrant();
+    const [, publicId, versionValue, expiryValue, signature] = match;
+    const expiresAtSeconds = Number(expiryValue);
+    if (
+      decodeURIComponent(publicId) !== reference.publicId ||
+      Number(versionValue) !== reference.version ||
+      !Number.isSafeInteger(expiresAtSeconds) ||
+      grant.expiresAt.getTime() !== expiresAtSeconds * 1000
+    ) {
+      throw this.invalidEmployeePhotoGrant();
+    }
+    const expected = Buffer.from(
+      this.signEmployeePhotoGrant(reference, expiresAtSeconds),
+      'base64url',
     );
+    const actual = Buffer.from(signature, 'base64url');
+    if (
+      actual.length !== expected.length ||
+      !timingSafeEqual(actual, expected)
+    ) {
+      throw this.invalidEmployeePhotoGrant();
+    }
   }
 
   async deleteObject(reference: ImageObjectReference): Promise<void> {
@@ -688,10 +762,95 @@ export class LocalFilesystemStorageAdapter implements ImageStoragePort {
     }
   }
 
+  private assertPrivateEmployeePhotoReference(
+    reference: ImageObjectReference,
+  ): void {
+    if (
+      reference.resourceType !== 'image' ||
+      reference.deliveryType !== 'authenticated' ||
+      reference.version === undefined ||
+      !Number.isSafeInteger(reference.version) ||
+      reference.version < 1 ||
+      !/^hams-employee-photo-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        reference.publicId,
+      )
+    ) {
+      throw this.policyRejected(
+        'Only versioned Employee Photos use private local reads',
+      );
+    }
+  }
+
+  private signEmployeePhotoGrant(
+    reference: ImageObjectReference,
+    expiresAtSeconds: number,
+  ): string {
+    const secret = this.employeePhotoReadGrantSecret;
+    if (secret.length < 32) {
+      throw new ImageStorageError(
+        'UNAVAILABLE',
+        'Employee Photo read signing is not configured',
+      );
+    }
+    const signingKey = createHmac('sha256', secret)
+      .update('hams:local-employee-photo-read:v1:key')
+      .digest();
+    const payload = JSON.stringify([
+      reference.storageContext.provider,
+      reference.storageContext.accountId,
+      reference.publicId,
+      reference.resourceType,
+      reference.deliveryType,
+      reference.version,
+      expiresAtSeconds,
+    ]);
+    return createHmac('sha256', signingKey).update(payload).digest('base64url');
+  }
+
+  private invalidEmployeePhotoGrant(): ImageStorageError {
+    return new ImageStorageError(
+      'OBJECT_POLICY_REJECTED',
+      'The Employee Photo read grant is invalid',
+    );
+  }
+
   private assertPublicId(publicId: string): void {
     if (!PUBLIC_ID_PATTERN.test(publicId)) {
       throw this.policyRejected('The allocated image identity is invalid');
     }
+  }
+
+  private assertPurposeIdentity(
+    purpose: ImagePurpose,
+    publicId: string,
+    deliveryType: ImageDeliveryType,
+  ): void {
+    this.assertPublicId(publicId);
+    const expectedPrefix =
+      purpose === 'ASSET_IMAGE' ? 'hams-asset-image-' : 'hams-employee-photo-';
+    const expectedDeliveryType: ImageDeliveryType =
+      purpose === 'ASSET_IMAGE' ? 'upload' : 'authenticated';
+    if (
+      !publicId.toLowerCase().startsWith(expectedPrefix) ||
+      deliveryType !== expectedDeliveryType
+    ) {
+      throw this.policyRejected(
+        'The image purpose does not match its identity',
+      );
+    }
+  }
+
+  private deliveryTypeMatchesPublicId(
+    publicId: string,
+    deliveryType: ImageDeliveryType,
+  ): boolean {
+    if (publicId.toLowerCase().startsWith('hams-asset-image-')) {
+      return deliveryType === 'upload';
+    }
+    if (publicId.toLowerCase().startsWith('hams-employee-photo-')) {
+      return deliveryType === 'authenticated';
+    }
+    return false;
   }
 
   private uploadIdFromPublicId(publicId: string): string {

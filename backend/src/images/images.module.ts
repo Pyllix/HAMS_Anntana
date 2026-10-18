@@ -17,9 +17,14 @@ import { ImageCleanupService } from './image-cleanup.service';
 import { runtimeConfig } from '../common/config/bootstrap-config';
 import { LocalFilesystemStorageAdapter } from './local-filesystem-storage.adapter';
 import { PublicAssetImagesController } from './public-asset-images.controller';
+import { EmployeePhotoImagesController } from './employee-photo-images.controller';
 
 @Module({
-  controllers: [ImageUploadsController, PublicAssetImagesController],
+  controllers: [
+    ImageUploadsController,
+    PublicAssetImagesController,
+    EmployeePhotoImagesController,
+  ],
   providers: [
     PrismaService,
     ImageUploadService,
@@ -39,9 +44,11 @@ import { PublicAssetImagesController } from './public-asset-images.controller';
 })
 export class ImagesModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(ImageNoStoreMiddleware).forRoutes(ImageUploadsController, {
-      path: 'users/:id/photo',
-      method: RequestMethod.GET,
-    });
+    consumer
+      .apply(ImageNoStoreMiddleware)
+      .forRoutes(ImageUploadsController, EmployeePhotoImagesController, {
+        path: 'users/:id/photo',
+        method: RequestMethod.GET,
+      });
   }
 }
