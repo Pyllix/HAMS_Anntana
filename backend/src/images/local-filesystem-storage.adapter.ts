@@ -32,6 +32,11 @@ import {
   type VerifyUploadedObjectInput,
 } from './image-storage.port';
 import { ImageNormalizer } from './image-normalizer';
+import { EMPLOYEE_PHOTO_PUBLIC_ID_PATTERN } from './image-identities';
+import {
+  buildEmployeePhotoReadGrantUrl,
+  parseEmployeePhotoReadGrantUrl,
+} from './employee-photo-read-grant';
 
 const LOCAL_PROVIDER = 'local';
 const LOCAL_ACCOUNT_ID = 'hams-local-image-store-v1';
@@ -39,7 +44,6 @@ const PUBLIC_ID_PATTERN =
   /^hams-(?:asset-image|employee-photo)-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_PUBLIC_ID_PATTERN =
   /^hams-asset-image-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 type ImageDirectoryConfig = RuntimeConfig['images'];
 
 export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
@@ -228,27 +232,7 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
   }> {
     this.assertContext(reference.storageContext);
     this.assertPublicReference(reference);
-    await this.ensureDirectories();
-    const objectDirectory = this.objectDirectory(reference.publicId);
-    const directoryStat = await this.safeFileStat(objectDirectory);
-    if (!directoryStat || !directoryStat.isDirectory()) {
-      throw this.objectNotFound();
-    }
-    const imagePath = this.objectPath(reference.publicId, reference.version!);
-    const fileStat = await this.safeFileStat(imagePath);
-    if (!fileStat || !fileStat.isFile()) throw this.objectNotFound();
-    const verifiedMarker = await this.safeFileStat(
-      this.verifiedMarkerPath(reference.publicId),
-    );
-    if (!verifiedMarker || !verifiedMarker.isDirectory()) {
-      throw this.objectNotFound();
-    }
-    await this.assertRealPathWithin(
-      this.requireStorageRoot(),
-      this.verifiedMarkerPath(reference.publicId),
-    );
-    await this.assertRealPathWithin(this.requireStorageRoot(), imagePath);
-    return { stream: createReadStream(imagePath), bytes: fileStat.size };
+    return this.openVerifiedImage(reference.publicId, reference.version!);
   }
 
   async openPrivateEmployeePhoto(
@@ -261,11 +245,23 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
     if (grant.expiresAt.getTime() <= Date.now()) {
       throw this.policyRejected('The Employee Photo read grant has expired');
     }
+    return this.openVerifiedImage(reference.publicId, reference.version!);
+  }
+
+  private async openVerifiedImage(
+    publicId: string,
+    version: number,
+  ): Promise<{ readonly stream: Readable; readonly bytes: number }> {
     await this.ensureDirectories();
-    const imagePath = this.objectPath(reference.publicId, reference.version!);
+    const objectDirectory = this.objectDirectory(publicId);
+    const directoryStat = await this.safeFileStat(objectDirectory);
+    if (!directoryStat || !directoryStat.isDirectory()) {
+      throw this.objectNotFound();
+    }
+    const imagePath = this.objectPath(publicId, version);
     const fileStat = await this.safeFileStat(imagePath);
     const verifiedMarker = await this.safeFileStat(
-      this.verifiedMarkerPath(reference.publicId),
+      this.verifiedMarkerPath(publicId),
     );
     if (
       !fileStat ||
@@ -275,11 +271,11 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
     ) {
       throw this.objectNotFound();
     }
-    await this.assertRealPathWithin(this.requireStorageRoot(), imagePath);
     await this.assertRealPathWithin(
       this.requireStorageRoot(),
-      this.verifiedMarkerPath(reference.publicId),
+      this.verifiedMarkerPath(publicId),
     );
+    await this.assertRealPathWithin(this.requireStorageRoot(), imagePath);
     return { stream: createReadStream(imagePath), bytes: fileStat.size };
   }
 
@@ -295,9 +291,12 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
     const expiresAtSeconds = Math.floor(expiresAt.getTime() / 1000);
     const grantExpiry = new Date(expiresAtSeconds * 1000);
     const signature = this.signEmployeePhotoGrant(reference, expiresAtSeconds);
-    const url =
-      `/api/images/employees/${encodeURIComponent(reference.publicId)}` +
-      `/v${reference.version}.jpg?expiresAt=${expiresAtSeconds}&signature=${signature}`;
+    const url = buildEmployeePhotoReadGrantUrl({
+      publicId: reference.publicId,
+      version: reference.version!,
+      expiresAtSeconds,
+      signature,
+    });
     return { url, expiresAt: grantExpiry };
   }
 
@@ -307,26 +306,20 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
   ): void {
     this.assertContext(reference.storageContext);
     this.assertPrivateEmployeePhotoReference(reference);
-    const match =
-      /^\/api\/images\/employees\/([^/?#]+)\/v([1-9]\d*)\.jpg\?expiresAt=(\d{1,12})&signature=([A-Za-z0-9_-]{43})$/.exec(
-        grant.url,
-      );
-    if (!match) throw this.invalidEmployeePhotoGrant();
-    const [, publicId, versionValue, expiryValue, signature] = match;
-    const expiresAtSeconds = Number(expiryValue);
+    const parsedGrant = parseEmployeePhotoReadGrantUrl(grant.url);
+    if (!parsedGrant) throw this.invalidEmployeePhotoGrant();
     if (
-      decodeURIComponent(publicId) !== reference.publicId ||
-      Number(versionValue) !== reference.version ||
-      !Number.isSafeInteger(expiresAtSeconds) ||
-      grant.expiresAt.getTime() !== expiresAtSeconds * 1000
+      parsedGrant.publicId !== reference.publicId ||
+      parsedGrant.version !== reference.version ||
+      grant.expiresAt.getTime() !== parsedGrant.expiresAtSeconds * 1000
     ) {
       throw this.invalidEmployeePhotoGrant();
     }
     const expected = Buffer.from(
-      this.signEmployeePhotoGrant(reference, expiresAtSeconds),
+      this.signEmployeePhotoGrant(reference, parsedGrant.expiresAtSeconds),
       'base64url',
     );
-    const actual = Buffer.from(signature, 'base64url');
+    const actual = Buffer.from(parsedGrant.signature, 'base64url');
     if (
       actual.length !== expected.length ||
       !timingSafeEqual(actual, expected)
@@ -771,9 +764,7 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
       reference.version === undefined ||
       !Number.isSafeInteger(reference.version) ||
       reference.version < 1 ||
-      !/^hams-employee-photo-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        reference.publicId,
-      )
+      !EMPLOYEE_PHOTO_PUBLIC_ID_PATTERN.test(reference.publicId)
     ) {
       throw this.policyRejected(
         'Only versioned Employee Photos use private local reads',
@@ -826,13 +817,10 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
     deliveryType: ImageDeliveryType,
   ): void {
     this.assertPublicId(publicId);
-    const expectedPrefix =
-      purpose === 'ASSET_IMAGE' ? 'hams-asset-image-' : 'hams-employee-photo-';
-    const expectedDeliveryType: ImageDeliveryType =
-      purpose === 'ASSET_IMAGE' ? 'upload' : 'authenticated';
+    const matchedPurpose = this.purposeForPublicId(publicId);
     if (
-      !publicId.toLowerCase().startsWith(expectedPrefix) ||
-      deliveryType !== expectedDeliveryType
+      purpose !== matchedPurpose ||
+      deliveryType !== this.deliveryTypeForPurpose(matchedPurpose)
     ) {
       throw this.policyRejected(
         'The image purpose does not match its identity',
@@ -844,13 +832,25 @@ export class LocalFilesystemStorageAdapter implements LocalImageStoragePort {
     publicId: string,
     deliveryType: ImageDeliveryType,
   ): boolean {
-    if (publicId.toLowerCase().startsWith('hams-asset-image-')) {
-      return deliveryType === 'upload';
-    }
-    if (publicId.toLowerCase().startsWith('hams-employee-photo-')) {
-      return deliveryType === 'authenticated';
-    }
-    return false;
+    const purpose = this.purposeForPublicId(publicId);
+    return (
+      purpose !== null && deliveryType === this.deliveryTypeForPurpose(purpose)
+    );
+  }
+
+  private purposeForPublicId(publicId: string): ImagePurpose | null {
+    if (ASSET_PUBLIC_ID_PATTERN.test(publicId)) return 'ASSET_IMAGE';
+    if (EMPLOYEE_PHOTO_PUBLIC_ID_PATTERN.test(publicId))
+      return 'EMPLOYEE_PHOTO';
+    return null;
+  }
+
+  private deliveryTypeForPurpose(
+    purpose: ImagePurpose | null,
+  ): ImageDeliveryType | null {
+    if (purpose === 'ASSET_IMAGE') return 'upload';
+    if (purpose === 'EMPLOYEE_PHOTO') return 'authenticated';
+    return null;
   }
 
   private uploadIdFromPublicId(publicId: string): string {

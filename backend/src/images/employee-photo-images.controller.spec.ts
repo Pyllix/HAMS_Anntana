@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
+import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import type { Server } from 'node:http';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,12 +11,12 @@ import { IMAGE_STORAGE } from './image-storage.port';
 import { LocalFilesystemStorageAdapter } from './local-filesystem-storage.adapter';
 import { EmployeePhotoImagesController } from './employee-photo-images.controller';
 
-const fixtureDirectory = join(
+const FIXTURE_DIRECTORY = join(
   __dirname,
   '../../test/fixtures/cloudinary-contract',
 );
-const uploadId = '8ec777e7-357b-4f1b-bc6b-343eeaa76903';
-const readGrantSecret = 'employee-photo-controller-test-secret-0123456789';
+const UPLOAD_ID = '8ec777e7-357b-4f1b-bc6b-343eeaa76903';
+const READ_GRANT_SECRET = 'employee-photo-controller-test-secret-0123456789';
 
 function httpServer(app: INestApplication): Server {
   return app.getHttpServer() as Server;
@@ -39,12 +39,12 @@ describe('EmployeePhotoImagesController', () => {
         tempRoot: join(root, 'temp'),
       },
       undefined,
-      readGrantSecret,
+      READ_GRANT_SECRET,
     );
     const context = storage.getProviderContext();
-    const publicId = 'hams-employee-photo-' + uploadId;
+    const publicId = 'hams-employee-photo-' + UPLOAD_ID;
     const policy = imageUploadPolicy('EMPLOYEE_PHOTO');
-    const source = await readFile(join(fixtureDirectory, 'jpeg.jpg'));
+    const source = await readFile(join(FIXTURE_DIRECTORY, 'jpeg.jpg'));
     const evidence = await storage.receiveLocalUpload({
       publicId,
       stream: Readable.from([source]),
@@ -76,6 +76,13 @@ describe('EmployeePhotoImagesController', () => {
     }).compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
@@ -116,6 +123,38 @@ describe('EmployeePhotoImagesController', () => {
 
       expect(response.status).toBe(404);
       expect(response.headers['cache-control']).toBe('private, no-store');
+    },
+  );
+
+  it.each([
+    '/api/images/employees/not-an-employee-photo/v1.jpg',
+    '/api/images/employees/hams-employee-photo-8ec777e7-357b-4f1b-bc6b-343eeaa76903/v0.jpg',
+  ])(
+    'rejects invalid Employee Photo route params before reading storage',
+    async (path) => {
+      const openPhoto = jest.spyOn(storage, 'openPrivateEmployeePhoto');
+
+      const response = await request(httpServer(app)).get(
+        `${path}?expiresAt=1792281900&signature=${'a'.repeat(43)}`,
+      );
+
+      expect(response.status).toBe(400);
+      expect(openPhoto).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    (url: string) => url.replace(/expiresAt=\d+/, 'expiresAt=not-a-timestamp'),
+    (url: string) => url.replace(/signature=[^&]+/, 'signature=short'),
+  ])(
+    'rejects malformed read grant query values before reading storage',
+    async (mutateUrl) => {
+      const openPhoto = jest.spyOn(storage, 'openPrivateEmployeePhoto');
+
+      const response = await request(httpServer(app)).get(mutateUrl(grant.url));
+
+      expect(response.status).toBe(400);
+      expect(openPhoto).not.toHaveBeenCalled();
     },
   );
 });

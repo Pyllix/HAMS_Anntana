@@ -23,7 +23,8 @@ const fixtureDirectory = join(
   '../../test/fixtures/cloudinary-contract',
 );
 const uploadId = 'c4c51a2e-3c27-4e68-9954-0c7c03b1564b';
-const employeePhotoReadGrantSecret = 'test-employee-photo-read-grant-secret';
+const EMPLOYEE_PHOTO_READ_GRANT_SECRET =
+  'test-employee-photo-read-grant-secret';
 
 describe('LocalFilesystemStorageAdapter', () => {
   let root: string;
@@ -39,7 +40,7 @@ describe('LocalFilesystemStorageAdapter', () => {
         tempRoot: join(root, 'temp'),
       },
       undefined,
-      employeePhotoReadGrantSecret,
+      EMPLOYEE_PHOTO_READ_GRANT_SECRET,
     );
     context = storage.getProviderContext();
   });
@@ -115,6 +116,12 @@ describe('LocalFilesystemStorageAdapter', () => {
     expect(() =>
       storage.validateShortLivedReadGrant(reference, grant),
     ).not.toThrow();
+    expect(() =>
+      storage.validateShortLivedReadGrant(reference, {
+        ...grant,
+        url: `${grant.url}&signature=${'a'.repeat(43)}`,
+      }),
+    ).toThrow();
   });
 
   it.each([

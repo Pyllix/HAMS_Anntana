@@ -140,6 +140,7 @@ export interface LocalImageStoragePort extends ImageStoragePort {
 
 export function isLocalImageStoragePort(
   storage: ImageStoragePort,
+  context?: ImageStorageContext,
 ): storage is LocalImageStoragePort {
   const hasLocalOperations =
     'receiveLocalUpload' in storage &&
@@ -149,6 +150,7 @@ export function isLocalImageStoragePort(
     'openPrivateEmployeePhoto' in storage &&
     typeof storage.openPrivateEmployeePhoto === 'function';
   if (!hasLocalOperations) return false;
+  if (context) return context.provider === 'local';
   try {
     return storage.getProviderContext().provider === 'local';
   } catch {
