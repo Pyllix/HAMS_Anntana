@@ -83,6 +83,80 @@ describe('loadRuntimeConfig', () => {
     expect(config).not.toHaveProperty('gemini');
   });
 
+  it('configures local image storage without Cloudinary credentials', () => {
+    const storageRoot = path.join(os.tmpdir(), 'hams-image-test-data');
+    const config = loadRuntimeConfig(
+      productionEnvironment({
+        IMAGE_STORAGE_PROVIDER: 'local',
+        IMAGE_STORAGE_ROOT: storageRoot,
+      }),
+    );
+
+    expect(config.images).toEqual({
+      provider: 'local',
+      storageRoot: path.resolve(storageRoot),
+      tempRoot: path.join(path.resolve(storageRoot), '.staging'),
+    });
+  });
+
+  it('requires local image storage paths to be absolute and outside the app directory', () => {
+    expect(() =>
+      loadRuntimeConfig(
+        productionEnvironment({ IMAGE_STORAGE_PROVIDER: 'local' }),
+      ),
+    ).toThrow(/IMAGE_STORAGE_ROOT is required/);
+    expect(() =>
+      loadRuntimeConfig(
+        productionEnvironment({
+          IMAGE_STORAGE_PROVIDER: 'local',
+          IMAGE_STORAGE_ROOT: 'relative-images',
+        }),
+      ),
+    ).toThrow(/IMAGE_STORAGE_ROOT must be an absolute path/);
+    const originalWorkingDirectory = process.cwd();
+    try {
+      process.chdir(os.tmpdir());
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            IMAGE_STORAGE_PROVIDER: 'local',
+            IMAGE_STORAGE_ROOT: path.resolve(__dirname, '../../../images'),
+          }),
+        ),
+      ).toThrow(
+        /IMAGE_STORAGE_ROOT must be outside the application release directory/,
+      );
+    } finally {
+      process.chdir(originalWorkingDirectory);
+    }
+  });
+
+  it.each(['same', 'child', 'parent'])(
+    'requires separate local image and temporary storage roots (%s)',
+    (overlap) => {
+      const storageRoot = path.join(os.tmpdir(), 'hams-image-same-root');
+      const tempRoot =
+        overlap === 'child'
+          ? path.join(
+              storageRoot,
+              'hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b',
+            )
+          : overlap === 'parent'
+            ? path.dirname(storageRoot)
+            : storageRoot;
+
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            IMAGE_STORAGE_PROVIDER: 'local',
+            IMAGE_STORAGE_ROOT: storageRoot,
+            IMAGE_STORAGE_TEMP_ROOT: tempRoot,
+          }),
+        ),
+      ).toThrow(/IMAGE_STORAGE_TEMP_ROOT must be separate/);
+    },
+  );
+
   it('reports all missing production settings by name without printing values', () => {
     const secret = 'do-not-echo-this-secret';
 

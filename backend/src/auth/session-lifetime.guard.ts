@@ -25,6 +25,14 @@ export class SessionLifetimeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const route = this.routeKey(request);
     if (SESSIONLESS_AUTH_ROUTES.has(route)) return true;
+    if (
+      request.method === 'GET' &&
+      /^\/(?:api\/)?images\/assets\//.test(
+        (request.baseUrl ?? '') + (request.path ?? ''),
+      )
+    ) {
+      return true;
+    }
 
     const token = readSessionToken(request);
     if (!token) return true;

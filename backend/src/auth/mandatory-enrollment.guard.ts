@@ -26,16 +26,27 @@ export class MandatoryEnrollmentGuard implements CanActivate {
     // Auth routes must stay available so a user can sign in and complete setup.
     if (path === '/auth' || path.startsWith('/auth/')) return true;
     if (path === '/api/auth' || path.startsWith('/api/auth/')) return true;
-
-    const user = request.user ?? request.session?.user;
-    if (!user?.id || !this.twoFactorService.requiresTwoFactor(user.role ?? '')) {
+    if (
+      request.method === 'GET' &&
+      /^\/(?:api\/)?images\/assets\//.test(path)
+    ) {
       return true;
     }
-    if (await this.twoFactorService.hasCompletedEnrollment(user.id)) return true;
+
+    const user = request.user ?? request.session?.user;
+    if (
+      !user?.id ||
+      !this.twoFactorService.requiresTwoFactor(user.role ?? '')
+    ) {
+      return true;
+    }
+    if (await this.twoFactorService.hasCompletedEnrollment(user.id))
+      return true;
 
     throw new ForbiddenException({
       code: 'ENROLLMENT_REQUIRED',
-      message: 'Complete two-factor authentication enrollment before continuing',
+      message:
+        'Complete two-factor authentication enrollment before continuing',
       statusCode: 403,
     });
   }

@@ -1,11 +1,14 @@
+import { realpathSync } from 'node:fs';
 import {
   normalizeConfigValue,
   parseConfigBoolean,
   parseConfigInteger,
 } from './config-values';
+import path from 'node:path';
 
 export type RuntimeEnvironment = 'development' | 'test' | 'production';
 export type InstallationMode = 'cloud' | 'customer';
+export type ImageStorageProvider = 'cloudinary' | 'local';
 
 export interface RuntimeConfig {
   readonly server: {
@@ -34,6 +37,11 @@ export interface RuntimeConfig {
     readonly user?: string;
     readonly pass?: string;
     readonly from: string;
+  };
+  readonly images: {
+    readonly provider: ImageStorageProvider;
+    readonly storageRoot?: string;
+    readonly tempRoot?: string;
   };
 }
 
@@ -85,6 +93,65 @@ export function loadRuntimeConfig(
   const installationMode: InstallationMode = isSupportedInstallationMode
     ? (installationModeName as InstallationMode)
     : 'cloud';
+
+  const imageProviderName =
+    normalizeConfigValue(environment.IMAGE_STORAGE_PROVIDER) || 'cloudinary';
+  if (!['cloudinary', 'local'].includes(imageProviderName)) {
+    addError('IMAGE_STORAGE_PROVIDER', 'must be cloudinary or local.');
+  }
+  const imageStorageProvider: ImageStorageProvider =
+    imageProviderName === 'local' ? 'local' : 'cloudinary';
+  const imageStorageRoot = normalizeConfigValue(environment.IMAGE_STORAGE_ROOT);
+  const configuredImageTempRoot = normalizeConfigValue(
+    environment.IMAGE_STORAGE_TEMP_ROOT,
+  );
+  let imageTempRoot = configuredImageTempRoot;
+  if (imageStorageProvider === 'local') {
+    if (!imageStorageRoot) {
+      addError(
+        'IMAGE_STORAGE_ROOT',
+        'is required when IMAGE_STORAGE_PROVIDER is local.',
+      );
+    } else if (!path.isAbsolute(imageStorageRoot)) {
+      addError('IMAGE_STORAGE_ROOT', 'must be an absolute path.');
+    } else if (isInsideApplicationDirectory(imageStorageRoot)) {
+      addError(
+        'IMAGE_STORAGE_ROOT',
+        'must be outside the application release directory.',
+      );
+    }
+    if (configuredImageTempRoot && !path.isAbsolute(configuredImageTempRoot)) {
+      addError('IMAGE_STORAGE_TEMP_ROOT', 'must be an absolute path.');
+    } else if (
+      configuredImageTempRoot &&
+      isInsideApplicationDirectory(configuredImageTempRoot)
+    ) {
+      addError(
+        'IMAGE_STORAGE_TEMP_ROOT',
+        'must be outside the application release directory.',
+      );
+    }
+    if (
+      !imageTempRoot &&
+      imageStorageRoot &&
+      path.isAbsolute(imageStorageRoot)
+    ) {
+      imageTempRoot = path.join(imageStorageRoot, '.staging');
+    }
+    if (
+      imageStorageRoot &&
+      imageTempRoot &&
+      path.isAbsolute(imageStorageRoot) &&
+      path.isAbsolute(imageTempRoot) &&
+      rootsOverlap(imageStorageRoot, imageTempRoot) &&
+      !isDefaultStagingRoot(imageStorageRoot, imageTempRoot)
+    ) {
+      addError(
+        'IMAGE_STORAGE_TEMP_ROOT',
+        'must be separate from IMAGE_STORAGE_ROOT (except the default .staging directory).',
+      );
+    }
+  }
 
   const port = integerSetting({
     name: 'PORT',
@@ -217,7 +284,67 @@ export function loadRuntimeConfig(
       pass: smtpPass,
       from: smtpFrom || 'HAMS System <noreply@hams.local>',
     },
+    images: {
+      provider: imageStorageProvider,
+      ...(imageStorageRoot
+        ? { storageRoot: path.resolve(imageStorageRoot) }
+        : {}),
+      ...(imageTempRoot ? { tempRoot: path.resolve(imageTempRoot) } : {}),
+    },
   };
+}
+
+function isInsideApplicationDirectory(candidate: string): boolean {
+  const applicationRoot = canonicalizePath(path.resolve(__dirname, '../../..'));
+  const canonicalCandidate = canonicalizePath(candidate);
+  if (!applicationRoot || !canonicalCandidate) return true;
+  return isContainedPath(applicationRoot, canonicalCandidate);
+}
+
+function rootsOverlap(left: string, right: string): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+  return (
+    isContainedPath(resolvedLeft, resolvedRight) ||
+    isContainedPath(resolvedRight, resolvedLeft)
+  );
+}
+
+function isDefaultStagingRoot(storageRoot: string, tempRoot: string): boolean {
+  return (
+    path.relative(path.resolve(storageRoot), path.resolve(tempRoot)) ===
+    '.staging'
+  );
+}
+
+function isContainedPath(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === '' ||
+    (relative !== '..' &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative))
+  );
+}
+
+function canonicalizePath(candidate: string): string | null {
+  let current = path.resolve(candidate);
+  const missingSegments: string[] = [];
+  while (true) {
+    try {
+      const existingPath = realpathSync.native(current);
+      return path.resolve(existingPath, ...missingSegments.reverse());
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return null;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) return null;
+      missingSegments.push(path.basename(current));
+      current = parent;
+    }
+  }
 }
 
 function postgresUrl(

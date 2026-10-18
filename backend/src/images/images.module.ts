@@ -14,17 +14,25 @@ import { ImageUploadsController } from './image-uploads.controller';
 import { ImageAttachmentService } from './image-attachment.service';
 import { ImageReadService } from './image-read.service';
 import { ImageCleanupService } from './image-cleanup.service';
+import { runtimeConfig } from '../common/config/bootstrap-config';
+import { LocalFilesystemStorageAdapter } from './local-filesystem-storage.adapter';
+import { PublicAssetImagesController } from './public-asset-images.controller';
 
 @Module({
-  controllers: [ImageUploadsController],
+  controllers: [ImageUploadsController, PublicAssetImagesController],
   providers: [
     PrismaService,
     ImageUploadService,
     ImageAttachmentService,
     ImageReadService,
     ImageCleanupService,
-    CloudinaryStorageAdapter,
-    { provide: IMAGE_STORAGE, useExisting: CloudinaryStorageAdapter },
+    {
+      provide: IMAGE_STORAGE,
+      useFactory: () =>
+        runtimeConfig.images.provider === 'local'
+          ? new LocalFilesystemStorageAdapter(runtimeConfig.images)
+          : new CloudinaryStorageAdapter(),
+    },
     { provide: IMAGE_CLOCK, useValue: { now: () => new Date() } },
   ],
   exports: [ImageAttachmentService, ImageReadService, ImageCleanupService],

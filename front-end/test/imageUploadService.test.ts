@@ -172,6 +172,75 @@ test("forwards provider proof through the declared transport without decoding it
   assert.equal(result.uploadId, "upload-transport");
 });
 
+test("uploads local images through the authenticated HAMS API and accepts a same-origin versioned preview", async () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { origin: "https://hams.example.test" } },
+  });
+  const calls: Array<{ method: string; path: string; body?: unknown; options?: unknown }> = [];
+  const file = makeFile("asset.jpg", "image/jpeg");
+  const api = {
+    async post(path: string, body?: unknown, options?: unknown) {
+      calls.push({ method: "POST", path, body, options });
+      if (path === "/images/uploads") {
+        return { data: {
+          uploadId: "c4c51a2e-3c27-4e68-9954-0c7c03b1564b",
+          purpose: "ASSET_IMAGE",
+          acceptedSourceMimeTypes: ["image/jpeg"],
+          uploadInstructions: {
+            transport: {
+              kind: "hams-binary-v1",
+              endpoint: "/images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/file",
+              method: "POST",
+              fields: {},
+              expiresAt: "2099-01-01T00:00:00.000Z",
+            },
+          },
+        } };
+      }
+      if (path.endsWith("/file")) {
+        return { data: { publicId: "hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b", version: 1 } };
+      }
+      assert.equal(path, "/images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/complete");
+      return { data: { status: "VERIFIED_PENDING" } };
+    },
+    async get(path: string) {
+      calls.push({ method: "GET", path });
+      return { data: {
+        purpose: "ASSET_IMAGE",
+        status: "VERIFIED_PENDING",
+        url: "/api/images/assets/hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b/v1.jpg",
+      } };
+    },
+  };
+
+  try {
+    const result = await uploadAndVerifyImage(file, "ASSET_IMAGE", undefined, {
+      api: api as never,
+      fetchImpl: (async () => { throw new Error("local upload must use the HAMS API client"); }) as typeof fetch,
+    });
+
+    assert.equal(result.previewUrl, "https://hams.example.test/api/images/assets/hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b/v1.jpg");
+    const uploadCall = calls.find((call) => call.path.endsWith("/file"));
+    assert.equal(uploadCall?.body, file);
+    assert.deepEqual(uploadCall?.options, {
+      headers: { "Content-Type": "image/jpeg" },
+      signal: undefined,
+      timeout: 60_000,
+    });
+    assert.deepEqual(calls.map(({ method, path }) => `${method} ${path}`), [
+      "POST /images/uploads",
+      "POST /images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/file",
+      "POST /images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/complete",
+      "GET /images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/preview",
+    ]);
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
 test("permits same-origin image transport while keeping external destinations allowlisted", () => {
   assert.equal(
     allowedImageUploadEndpoint("/api/images/uploads/local", "https://hams.example"),

@@ -43,6 +43,14 @@ export class PreAuthGuard implements CanActivate {
 
     const route = this.routeKey(request);
     if (COMMON_ROUTES.has(route)) return true;
+    if (
+      request.method === 'GET' &&
+      /^\/(?:api\/)?images\/assets\//.test(
+        (request.baseUrl ?? '') + (request.path ?? ''),
+      )
+    ) {
+      return true;
+    }
     if (challenge.state === 'ENROLLMENT' && ENROLLMENT_ROUTES.has(route)) {
       return true;
     }

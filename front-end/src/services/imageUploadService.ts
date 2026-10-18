@@ -52,12 +52,20 @@ export interface ImageUploadIntent {
   attachmentWindowSeconds: number;
   acceptedSourceMimeTypes: readonly string[];
   uploadInstructions: {
-    transport?: MultipartFormImageTransport;
+    transport?: MultipartFormImageTransport | HamsBinaryImageTransport;
     url?: string;
     method?: string;
     fields?: Readonly<Record<string, string>>;
     expiresAt: string;
   };
+}
+
+interface HamsBinaryImageTransport {
+  readonly kind: "hams-binary-v1";
+  readonly endpoint: string;
+  readonly method: "POST";
+  readonly fields: Readonly<Record<string, string>>;
+  readonly expiresAt: string;
 }
 
 export interface VerifiedImageUpload {
@@ -269,7 +277,43 @@ async function uploadWithInstructions(
   intent: ImageUploadIntent,
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
+  api: ImageApi,
 ): Promise<Readonly<Record<string, unknown>>> {
+  const transport = intent.uploadInstructions.transport;
+  if (transport?.kind === "hams-binary-v1") {
+    const endpoint = `/images/uploads/${encodeURIComponent(intent.uploadId)}/file`;
+    if (
+      transport.method !== "POST" ||
+      transport.endpoint !== endpoint ||
+      !transport.fields ||
+      Object.keys(transport.fields).length !== 0 ||
+      !Number.isFinite(Date.parse(transport.expiresAt)) ||
+      Date.parse(transport.expiresAt) <= Date.now()
+    ) {
+      throw new ImageUploadError(
+        "UPLOAD_INSTRUCTIONS_INVALID",
+        "คำสั่งอัปโหลดรูปไม่ถูกต้อง",
+      );
+    }
+    try {
+      const { data } = await api.post<Readonly<Record<string, unknown>>>(
+        endpoint,
+        file,
+        {
+          headers: { "Content-Type": acceptedContentType(file) ?? "application/octet-stream" },
+          signal,
+          timeout: 60_000,
+        },
+      );
+      return data;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new ImageUploadError(
+        "LOCAL_UPLOAD_FAILED",
+        "ส่งรูปเข้า HAMS ไม่สำเร็จ กรุณาเลือกไฟล์เดิมเพื่อลองใหม่",
+      );
+    }
+  }
   return uploadImageWithInstructions(file, intent.uploadInstructions, {
     signal,
     fetchImpl,
@@ -309,7 +353,13 @@ export async function uploadAndVerifyImage(
     throw new ImageUploadError("UPLOAD_INTENT_INVALID", "ระบบอนุญาตชนิดไฟล์นี้ไม่ได้");
   }
 
-  const completionBody = await uploadWithInstructions(file, intent, options.signal, fetchImpl);
+  const completionBody = await uploadWithInstructions(
+    file,
+    intent,
+    options.signal,
+    fetchImpl,
+    api,
+  );
   options.onStage?.("verifying");
   const { data: completion } = await withBoundedApiRequest(options.signal, (signal) =>
     api.post<{

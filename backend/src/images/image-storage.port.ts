@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 export const IMAGE_STORAGE = Symbol('IMAGE_STORAGE');
 
 export type ImagePurpose = 'ASSET_IMAGE' | 'EMPLOYEE_PHOTO';
@@ -28,19 +30,29 @@ export interface UploadInstructionsInput {
 }
 
 export interface UploadInstructions {
-  readonly transport: {
-    readonly kind: 'multipart-form-v1';
-    readonly endpoint: string;
-    readonly method: 'POST';
-    readonly fields: Readonly<Record<string, string>>;
-    readonly expiresAt: Date;
-  };
+  readonly transport: ImageUploadTransport;
   /** Temporary compatibility fields for callers being migrated to transport. */
   readonly url: string;
   readonly method: 'POST';
   readonly fields: Readonly<Record<string, string>>;
   readonly expiresAt: Date;
 }
+
+export type ImageUploadTransport =
+  | {
+      readonly kind: 'multipart-form-v1';
+      readonly endpoint: string;
+      readonly method: 'POST';
+      readonly fields: Readonly<Record<string, string>>;
+      readonly expiresAt: Date;
+    }
+  | {
+      readonly kind: 'hams-binary-v1';
+      readonly endpoint: string;
+      readonly method: 'POST';
+      readonly fields: Readonly<Record<string, string>>;
+      readonly expiresAt: Date;
+    };
 
 export type UploadEvidence = Readonly<Record<string, unknown>>;
 
@@ -104,6 +116,61 @@ export interface ImageStoragePort {
     readonly publicId: string;
     readonly storageContext: ImageStorageContext;
   }): Promise<void>;
+}
+
+export interface LocalImageStoragePort extends ImageStoragePort {
+  receiveLocalUpload(input: {
+    readonly publicId: string;
+    readonly stream: Readable;
+    readonly policy: ImageUploadPolicy;
+    readonly receivedAt: Date;
+  }): Promise<UploadEvidence>;
+  openPublicAsset(reference: ImageObjectReference): Promise<{
+    readonly stream: Readable;
+    readonly bytes: number;
+  }>;
+}
+
+export function isLocalImageStoragePort(
+  storage: ImageStoragePort,
+): storage is LocalImageStoragePort {
+  return (
+    'receiveLocalUpload' in storage &&
+    typeof storage.receiveLocalUpload === 'function' &&
+    'openPublicAsset' in storage &&
+    typeof storage.openPublicAsset === 'function'
+  );
+}
+
+export function isVersionedAssetImageUrl(
+  url: string,
+  reference: ImageObjectReference,
+): boolean {
+  if (
+    reference.resourceType !== 'image' ||
+    reference.deliveryType !== 'upload' ||
+    !reference.version ||
+    !Number.isSafeInteger(reference.version)
+  ) {
+    return false;
+  }
+  if (reference.storageContext.provider === 'local') {
+    return (
+      url ===
+      `/api/images/assets/${encodeURIComponent(reference.publicId)}/v${reference.version}.jpg`
+    );
+  }
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.pathname.split('/').includes(`v${reference.version}`)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export type ImageStorageErrorCode =

@@ -12,6 +12,7 @@ import {
   IMAGE_STORAGE,
   type ImageObjectReference,
   type ImageStoragePort,
+  isVersionedAssetImageUrl,
 } from './image-storage.port';
 import {
   managedImageLocator,
@@ -165,12 +166,7 @@ export class ImageReadService {
 
     try {
       const url = this.storage.publicUrl(reference);
-      const parsedUrl = new URL(url);
-      if (
-        parsedUrl.protocol !== 'https:' ||
-        !reference.version ||
-        !parsedUrl.pathname.split('/').includes(`v${reference.version}`)
-      ) {
+      if (!isVersionedAssetImageUrl(url, reference)) {
         throw new Error('Invalid public image URL');
       }
       return {

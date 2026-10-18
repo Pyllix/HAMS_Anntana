@@ -7,10 +7,12 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard, Session } from '@thallesp/nestjs-better-auth';
 import type { UserSession } from '@thallesp/nestjs-better-auth';
+import type { Request } from 'express';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -92,6 +94,32 @@ export class ImageUploadsController {
         version: dto.version,
         signature: dto.signature,
       },
+    );
+  }
+
+  @Post(':uploadId/file')
+  @Roles(UserRole.ADMIN, UserRole.ASSET_CENTER_STAFF, UserRole.PARCEL_STAFF)
+  @ApiOperation({
+    summary: 'Receive an image for configured local storage',
+    description:
+      'Accepts raw image bytes only for an authorized upload owned by the current HAMS session.',
+  })
+  @ApiResponse({ status: 200, description: 'Image bytes received' })
+  @ApiResponse({ status: 401, description: 'Authentication required' })
+  @ApiResponse({ status: 403, description: 'Role cannot upload this purpose' })
+  @ApiResponse({ status: 409, description: 'Upload is unavailable or invalid' })
+  receiveLocalFile(
+    @Param('uploadId', new ParseUUIDPipe()) uploadId: string,
+    @Req() request: Request,
+    @Session() session: UserSession,
+  ): ReturnType<ImageUploadService['receiveLocalUpload']> {
+    return this.imageUploadService.receiveLocalUpload(
+      {
+        userId: session.user.id,
+        role: session.user.role as UserRole,
+      },
+      uploadId,
+      request,
     );
   }
 
