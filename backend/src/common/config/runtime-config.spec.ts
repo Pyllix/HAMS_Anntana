@@ -1,10 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  loadRuntimeConfig,
-  type RuntimeConfigValidator,
-} from './runtime-config';
+import { loadRuntimeConfig } from './runtime-config';
 
 const DATABASE_URL = 'postgresql://hams:secret@localhost:5432/hams_test';
 const TWO_FACTOR_ENCRYPTION_KEY = 'a'.repeat(64);
@@ -128,30 +125,6 @@ describe('loadRuntimeConfig', () => {
         }),
       ),
     ).toThrow(/PORT.*DATABASE_URL.*TWO_FACTOR_ENCRYPTION_KEY.*SMTP_PASS/s);
-  });
-
-  it('lets selected feature slices extend validation', () => {
-    const selectedProviderValidator: RuntimeConfigValidator = (
-      environment,
-      addError,
-    ) => {
-      if (
-        environment.IMAGE_STORAGE_PROVIDER === 'local' &&
-        !environment.IMAGE_DATA_DIR
-      ) {
-        addError(
-          'IMAGE_DATA_DIR',
-          'is required when local image storage is selected',
-        );
-      }
-    };
-
-    expect(() =>
-      loadRuntimeConfig(
-        productionEnvironment({ IMAGE_STORAGE_PROVIDER: 'local' }),
-        [selectedProviderValidator],
-      ),
-    ).toThrow(/IMAGE_DATA_DIR/);
   });
 });
 

@@ -1,3 +1,9 @@
+import {
+  normalizeConfigValue,
+  parseConfigBoolean,
+  parseConfigInteger,
+} from './config-values';
+
 export type RuntimeEnvironment = 'development' | 'test' | 'production';
 export type InstallationMode = 'cloud' | 'customer';
 
@@ -36,15 +42,6 @@ export type RuntimeConfigErrorReporter = (
   reason: string,
 ) => void;
 
-/**
- * A feature slice can supply a validator for its selected provider. Common
- * configuration stays independent of credentials for unselected services.
- */
-export type RuntimeConfigValidator = (
-  environment: Readonly<Record<string, string | undefined>>,
-  addError: RuntimeConfigErrorReporter,
-) => void;
-
 const POSTGRES_PROTOCOLS = new Set(['postgres:', 'postgresql:']);
 const NODE_ENVIRONMENTS = new Set<RuntimeEnvironment>([
   'development',
@@ -54,13 +51,12 @@ const NODE_ENVIRONMENTS = new Set<RuntimeEnvironment>([
 
 export function loadRuntimeConfig(
   environment: Readonly<Record<string, string | undefined>>,
-  selectedFeatureValidators: readonly RuntimeConfigValidator[] = [],
 ): RuntimeConfig {
   const errors: string[] = [];
   const addError: RuntimeConfigErrorReporter = (setting, reason) => {
     errors.push(`${setting} ${reason}`);
   };
-  const environmentName = value(environment.NODE_ENV);
+  const environmentName = normalizeConfigValue(environment.NODE_ENV);
   if (!environmentName) {
     addError(
       'NODE_ENV',
@@ -79,7 +75,7 @@ export function loadRuntimeConfig(
   const isProduction = nodeEnvironment === 'production';
 
   const installationModeName =
-    value(environment.HAMS_INSTALLATION_MODE) || 'cloud';
+    normalizeConfigValue(environment.HAMS_INSTALLATION_MODE) || 'cloud';
   const isSupportedInstallationMode = ['cloud', 'customer'].includes(
     installationModeName,
   );
@@ -108,7 +104,7 @@ export function loadRuntimeConfig(
   });
   const databaseUrl = postgresUrl(environment.DATABASE_URL, addError);
 
-  const authSecret = value(environment.BETTER_AUTH_SECRET);
+  const authSecret = normalizeConfigValue(environment.BETTER_AUTH_SECRET);
   if (isProduction && !authSecret) {
     addError('BETTER_AUTH_SECRET', 'is required in production.');
   } else if (isProduction && authSecret && authSecret.length < 32) {
@@ -132,7 +128,9 @@ export function loadRuntimeConfig(
     addError,
   });
 
-  const twoFactorEncryptionKey = value(environment.TWO_FACTOR_ENCRYPTION_KEY);
+  const twoFactorEncryptionKey = normalizeConfigValue(
+    environment.TWO_FACTOR_ENCRYPTION_KEY,
+  );
   if (isProduction && !twoFactorEncryptionKey) {
     addError('TWO_FACTOR_ENCRYPTION_KEY', 'is required in production.');
   } else if (
@@ -145,7 +143,7 @@ export function loadRuntimeConfig(
     );
   }
 
-  const smtpHost = value(environment.SMTP_HOST);
+  const smtpHost = normalizeConfigValue(environment.SMTP_HOST);
   if (isProduction && !smtpHost) {
     addError('SMTP_HOST', 'is required in production.');
   }
@@ -177,18 +175,14 @@ export function loadRuntimeConfig(
     );
   }
 
-  const smtpUser = value(environment.SMTP_USER);
-  const smtpPass = value(environment.SMTP_PASS);
+  const smtpUser = normalizeConfigValue(environment.SMTP_USER);
+  const smtpPass = normalizeConfigValue(environment.SMTP_PASS);
   if (Boolean(smtpUser) !== Boolean(smtpPass)) {
     addError('SMTP_USER and SMTP_PASS', 'must be configured together.');
   }
-  const smtpFrom = value(environment.SMTP_FROM);
+  const smtpFrom = normalizeConfigValue(environment.SMTP_FROM);
   if (isProduction && !smtpFrom) {
     addError('SMTP_FROM', 'is required in production.');
-  }
-
-  for (const validateSelectedFeature of selectedFeatureValidators) {
-    validateSelectedFeature(environment, addError);
   }
 
   if (errors.length > 0) {
@@ -230,7 +224,7 @@ function postgresUrl(
   rawValue: string | undefined,
   addError: RuntimeConfigErrorReporter,
 ): string | undefined {
-  const candidate = value(rawValue);
+  const candidate = normalizeConfigValue(rawValue);
   if (!candidate) {
     addError('DATABASE_URL', 'is required.');
     return undefined;
@@ -267,7 +261,7 @@ function httpUrl(input: {
   requireHttps: boolean;
   addError: RuntimeConfigErrorReporter;
 }): string {
-  const candidate = value(input.rawValue);
+  const candidate = normalizeConfigValue(input.rawValue);
   if (!candidate && input.required) {
     input.addError(input.name, 'is required in production.');
   }
@@ -312,30 +306,25 @@ function integerSetting(input: {
   max: number;
   addError: RuntimeConfigErrorReporter;
 }): number {
-  const rawValue = value(input.rawValue);
-  if (!rawValue) {
+  const parsed = parseConfigInteger(input.rawValue, input.min, input.max);
+  if (parsed.kind === 'empty') {
     if (input.required) input.addError(input.name, 'is required.');
     return input.fallback;
   }
 
-  if (!/^\d+$/.test(rawValue)) {
+  if (parsed.kind === 'invalid') {
     input.addError(input.name, 'must be a whole number.');
     return input.fallback;
   }
 
-  const parsed = Number(rawValue);
-  if (
-    !Number.isSafeInteger(parsed) ||
-    parsed < input.min ||
-    parsed > input.max
-  ) {
+  if (parsed.kind === 'out-of-range') {
     input.addError(
       input.name,
       `must be between ${input.min} and ${input.max}.`,
     );
     return input.fallback;
   }
-  return parsed;
+  return parsed.value;
 }
 
 function booleanSetting(
@@ -344,15 +333,11 @@ function booleanSetting(
   fallback: boolean,
   addError: RuntimeConfigErrorReporter,
 ): boolean {
-  const candidate = value(rawValue)?.toLowerCase();
-  if (!candidate) return fallback;
-  if (candidate === 'true') return true;
-  if (candidate === 'false') return false;
-  addError(name, 'must be true or false.');
-  return fallback;
-}
-
-function value(input: string | undefined): string | undefined {
-  const normalized = input?.trim();
-  return normalized ? normalized : undefined;
+  const parsed = parseConfigBoolean(rawValue);
+  if (parsed.kind === 'empty') return fallback;
+  if (parsed.kind === 'invalid') {
+    addError(name, 'must be true or false.');
+    return fallback;
+  }
+  return parsed.value;
 }

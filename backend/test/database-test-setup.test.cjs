@@ -86,6 +86,31 @@ test('rejects a non-test PostgreSQL database before loading a test module', () =
   assert.doesNotMatch(result.stdout, /TEST_MODULE_LOADED/);
 });
 
+test('rejects the application database even when URL credentials and defaults differ', () => {
+  const result = runSetup({
+    TEST_DATABASE_URL:
+      'postgresql://test_user:secret@LOCALHOST/hams_test?schema=public',
+    DATABASE_URL:
+      'postgres://app_user:secret@localhost:5432/hams_test?sslmode=require',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /different from DATABASE_URL/i);
+  assert.doesNotMatch(result.stdout, /TEST_MODULE_LOADED/);
+});
+
+test('rejects the application database when PostgreSQL query parameters override its host and port', () => {
+  const result = runSetup({
+    TEST_DATABASE_URL:
+      'postgresql://test_user:secret@localhost/hams_test?host=db.example&port=5433',
+    DATABASE_URL: 'postgres://app_user:secret@db.example:5433/hams_test',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /different from DATABASE_URL/i);
+  assert.doesNotMatch(result.stdout, /TEST_MODULE_LOADED/);
+});
+
 test('rejects a non-PostgreSQL URL before loading a test module', () => {
   const result = runSetup({
     TEST_DATABASE_URL: 'mysql://test_user:secret@localhost:3306/hams_test',
@@ -99,7 +124,7 @@ test('rejects a non-PostgreSQL URL before loading a test module', () => {
 test('uses the explicit test database before loading a test module', () => {
   const result = runSetup({
     TEST_DATABASE_URL: 'postgresql://test_user:secret@localhost:5432/hams_test',
-    DATABASE_URL: 'postgresql://app:secret@db.example/hams_prod',
+    DATABASE_URL: 'postgres://app:secret@localhost:5432/hams_prod',
   });
 
   assert.equal(result.status, 0, result.stderr);

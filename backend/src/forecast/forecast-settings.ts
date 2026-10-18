@@ -1,4 +1,9 @@
 import type { InstallationMode } from '../common/config/runtime-config';
+import {
+  normalizeConfigValue,
+  parseConfigBoolean,
+  parseConfigInteger,
+} from '../common/config/config-values';
 
 export interface ForecastSettings {
   readonly enabled: boolean;
@@ -13,7 +18,7 @@ export function loadForecastSettings(
   environment: Readonly<Record<string, string | undefined>>,
   installationMode: InstallationMode,
 ): ForecastSettings {
-  const apiKey = value(environment.GEMINI_API_KEY);
+  const apiKey = normalizeConfigValue(environment.GEMINI_API_KEY);
   const enabledValue = booleanSetting(
     environment.GEMINI_ENABLED,
     installationMode === 'cloud' && Boolean(apiKey),
@@ -24,10 +29,16 @@ export function loadForecastSettings(
   if (enabledValue && !apiKey) {
     errors.push('GEMINI_API_KEY is required when GEMINI_ENABLED is true.');
   }
-  if (environment.GEMINI_ENABLED?.trim() && enabledValue === undefined) {
+  if (
+    normalizeConfigValue(environment.GEMINI_ENABLED) &&
+    enabledValue === undefined
+  ) {
     errors.push('GEMINI_ENABLED must be true or false.');
   }
-  if (environment.GEMINI_TIMEOUT_MS?.trim() && timeoutValue === undefined) {
+  if (
+    normalizeConfigValue(environment.GEMINI_TIMEOUT_MS) &&
+    timeoutValue === undefined
+  ) {
     errors.push(
       'GEMINI_TIMEOUT_MS must be a whole number between 1000 and 60000.',
     );
@@ -41,7 +52,7 @@ export function loadForecastSettings(
   return {
     enabled: enabledValue ?? false,
     apiKey,
-    model: value(environment.GEMINI_MODEL),
+    model: normalizeConfigValue(environment.GEMINI_MODEL),
     timeoutMs: timeoutValue ?? 30000,
   };
 }
@@ -50,29 +61,16 @@ function booleanSetting(
   rawValue: string | undefined,
   fallback: boolean,
 ): boolean | undefined {
-  const candidate = value(rawValue)?.toLowerCase();
-  if (!candidate) return fallback;
-  if (candidate === 'true') return true;
-  if (candidate === 'false') return false;
-  return undefined;
+  const parsed = parseConfigBoolean(rawValue);
+  if (parsed.kind === 'empty') return fallback;
+  return parsed.kind === 'value' ? parsed.value : undefined;
 }
 
 function integerSetting(
   rawValue: string | undefined,
   fallback: number,
 ): number | undefined {
-  const candidate = value(rawValue);
-  if (!candidate) return fallback;
-  if (!/^\d+$/.test(candidate)) return undefined;
-
-  const parsed = Number(candidate);
-  if (!Number.isSafeInteger(parsed) || parsed < 1000 || parsed > 60000) {
-    return undefined;
-  }
-  return parsed;
-}
-
-function value(input: string | undefined): string | undefined {
-  const normalized = input?.trim();
-  return normalized ? normalized : undefined;
+  const parsed = parseConfigInteger(rawValue, 1000, 60000);
+  if (parsed.kind === 'empty') return fallback;
+  return parsed.kind === 'value' ? parsed.value : undefined;
 }
