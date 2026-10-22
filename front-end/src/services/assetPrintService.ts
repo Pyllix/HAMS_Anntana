@@ -134,6 +134,13 @@ function documentShell(
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${escapeHtml(title)}</title>
   <style>
+    @font-face {
+      font-family: "Noto Sans Thai";
+      src: url("/fonts/NotoSansThai-Variable.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
     @page { size: A4; margin: 12mm; }
     * { box-sizing: border-box; }
     body {
