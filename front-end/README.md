@@ -1,5 +1,11 @@
 # React + Vite
 
+## Node.js runtime
+
+Use Node.js 24.22.1 LTS or a newer 24.x release. `.nvmrc` pins the shared
+development version used by the frontend and backend; `package.json` requires
+at least the October 2026 security release.
+
 ## Use the Render test backend during local frontend development
 
 Copy `front-end/.env.local.example` to `front-end/.env.local`. The example contains:

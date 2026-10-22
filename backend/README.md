@@ -27,7 +27,7 @@ This repository contains the backend service for HAMS, built with:
 สำหรับการเตรียมความพร้อมของ Backend เพื่อให้นำไปเชื่อมต่อกับ Frontend ได้ มีขั้นตอนดังนี้:
 
 ### 1. Prerequisites (สิ่งที่ต้องมี)
-- [Node.js](https://nodejs.org/) (แนะนำเวอร์ชัน 18 ขึ้นไป)
+- [Node.js](https://nodejs.org/) 24.22.1 LTS หรือใหม่กว่าในสาย 24.x (ดู `.nvmrc`)
 - [pnpm](https://pnpm.io/installation) (`npm install -g pnpm`)
 - [Docker](https://www.docker.com/products/docker-desktop/) (สำหรับรัน Database)
 
