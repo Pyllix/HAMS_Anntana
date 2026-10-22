@@ -1,0 +1,80 @@
+# syntax=docker/dockerfile:1
+
+# Build from the repository root:
+#   docker build -f Dockerfile.backend -t hams-backend:local .
+# Build the separate database administration image with --target setup.
+ARG NODE_VERSION=24.22.1
+FROM node:${NODE_VERSION}-bookworm-slim AS base
+
+# Prisma requires OpenSSL. CA certificates also verify HTTPS and SMTP TLS.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/backend
+
+FROM base AS dependencies
+ARG PNPM_VERSION=11.5.0
+RUN npm install --global pnpm@${PNPM_VERSION}
+
+# Include pnpm's build approvals before installing native dependencies.
+COPY backend/package.json backend/pnpm-lock.yaml backend/pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=hams-backend-pnpm-11,target=/pnpm/store \
+    PRISMA_SKIP_POSTINSTALL_GENERATE=true \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store
+
+FROM dependencies AS build
+COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./
+COPY backend/prisma.config.ts ./
+COPY backend/prisma ./prisma
+COPY backend/src ./src
+COPY backend/scripts ./scripts
+
+# Generate the Linux client explicitly; this does not connect to a database.
+RUN pnpm exec prisma generate \
+    && pnpm run build \
+    && test -f dist/src/main.js
+
+# One-off migration/reference seed/bootstrap/handover commands need Prisma CLI,
+# tsx, and the source files. Keep these tools out of the application image.
+# Supply the database URL and other deployment secrets only when running it.
+FROM build AS setup
+ENV NODE_ENV=production
+USER node
+CMD ["pnpm", "exec", "prisma", "migrate", "status"]
+
+FROM build AS production-dependencies
+# Keep the installation store consistent so pruning preserves generated files.
+RUN --mount=type=cache,id=hams-backend-pnpm-11,target=/pnpm/store \
+    CI=true pnpm --config.store-dir=/pnpm/store prune --prod \
+    && node -e "require('@prisma/client'); require('sharp'); require('libheif-js/wasm-bundle');"
+
+FROM base AS runtime
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HAMS_INSTALLATION_MODE=customer \
+    GEMINI_ENABLED=false \
+    IMAGE_STORAGE_PROVIDER=local \
+    IMAGE_STORAGE_ROOT=/var/lib/hams/images \
+    IMAGE_STORAGE_TEMP_ROOT=/var/lib/hams/image-temp
+
+COPY --from=production-dependencies /app/backend/node_modules ./node_modules
+COPY --from=build /app/backend/dist ./dist
+COPY backend/package.json ./
+COPY backend/scripts/start-production.cjs ./scripts/start-production.cjs
+
+# Mount persistent storage here at deployment time, outside the application.
+# New named volumes inherit this ownership; existing/bind mounts need matching
+# permissions for the node user (UID/GID 1000).
+RUN install -d -o node -g node -m 0700 \
+    /var/lib/hams/images /var/lib/hams/image-temp
+
+USER node
+EXPOSE 3000
+
+# HTTP liveness only; deployment tests must also verify DB, SMTP, and storage.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/auth/csrf', {signal: AbortSignal.timeout(3000)}).then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
+
+# No migrations or demo seeds run implicitly when the application starts.
+CMD ["node", "scripts/start-production.cjs"]

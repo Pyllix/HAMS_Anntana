@@ -1,0 +1,50 @@
+# Use the repository root as the build context for the deployment Dockerfiles.
+# Keep source files, lockfiles, Prisma migrations, WASM files, and local fonts.
+
+# Repository metadata and local editor/agent settings.
+**/.git
+**/.agents
+**/.codex
+**/.vscode
+**/.idea
+**/.DS_Store
+**/Thumbs.db
+
+# Install and build dependencies inside Linux containers, not from Windows.
+**/node_modules
+**/dist
+**/build
+**/.vite
+**/.cache
+**/.pnpm-store
+**/*.tsbuildinfo
+backend/generated/prisma
+
+# Supply environment variables and TLS files at runtime, outside the image.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/.ssh
+**/.aws
+
+# Local test output, scratch storage, logs, and database exports.
+**/coverage
+**/.nyc_output
+**/.scratch
+**/.codex-test-tmp
+**/.temp
+**/.tmp
+**/logs
+**/*.log
+**/*.pid
+**/*.dump
+**/*.backup
+**/*.sql.gz
+backend/sandbox
+backend/sync.sql
+
+# Reserved for generated local deployment certificates and rehearsal files.
+deploy/docker-local/.runtime
