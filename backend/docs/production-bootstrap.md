@@ -11,7 +11,7 @@ Production bootstrap uses the reference seed and a separate one-time ADMIN boots
    - `NODE_ENV=production`, `DATABASE_URL`, `BETTER_AUTH_SECRET` (at least 32 characters), and `TWO_FACTOR_ENCRYPTION_KEY` (64 hexadecimal characters).
    - HTTPS URLs in `BETTER_AUTH_URL` and `FRONTEND_URL`.
    - SMTP settings. Use `SMTP_SECURE=true` for implicit TLS or `SMTP_REQUIRE_TLS=true` for required STARTTLS. Add SMTP credentials when the provider requires authentication.
-   - The two real account owners' `BOOTSTRAP_ADMIN_1_EMAIL`, `BOOTSTRAP_ADMIN_1_USERNAME`, `BOOTSTRAP_ADMIN_1_FIRSTNAME`, `BOOTSTRAP_ADMIN_1_LASTNAME`, `BOOTSTRAP_ADMIN_1_EMPLOYEE_ID`, and the matching `_2_` values. The identities must have different email, username and employee ID values.
+   - The two real account owners' `BOOTSTRAP_ADMIN_1_EMAIL`, `BOOTSTRAP_ADMIN_1_USERNAME`, `BOOTSTRAP_ADMIN_1_FIRSTNAME`, and `BOOTSTRAP_ADMIN_1_LASTNAME`, and the matching `_2_` values. The identities must have different email and username values. HAMS generates each employee ID automatically.
 
 Do not configure or store bootstrap passwords. The script generates each initial password from a separate cryptographic random value.
 

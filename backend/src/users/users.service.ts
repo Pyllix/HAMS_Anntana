@@ -27,6 +27,7 @@ import {
   ImageReadService,
   PRIVATE_USER_IMAGE_FIELDS,
 } from '../images/image-read.service';
+import { buildNextEmployeeId, employeeIdPrefix } from './employee-id';
 
 type SecurityAuditAction =
   | 'USER_CREATED'
@@ -62,25 +63,14 @@ export class UsersService {
   async generateEmployeeId(tx?: Prisma.TransactionClient): Promise<string> {
     const client = tx || this.prisma;
     const now = new Date();
-    const thaiYear = String((now.getFullYear() + 543) % 100).padStart(2, '0');
-    const prefix = `GOV-${thaiYear}`;
+    const prefix = employeeIdPrefix(now);
 
     const latest = await client.user.findFirst({
       where: { employeeId: { startsWith: prefix } },
       orderBy: { employeeId: 'desc' },
       select: { employeeId: true },
     });
-
-    let nextSeq = 1;
-    if (latest && latest.employeeId) {
-      const seqStr = latest.employeeId.replace(prefix, '');
-      const parsed = parseInt(seqStr, 10);
-      if (!isNaN(parsed)) {
-        nextSeq = parsed + 1;
-      }
-    }
-
-    return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+    return buildNextEmployeeId(latest?.employeeId, now);
   }
 
   // ─── Create ──────────────────────────────────────────────────────────────────

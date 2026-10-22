@@ -43,7 +43,6 @@ const configuredAdmin = {
   userName: 'first-admin',
   firstname: 'First',
   lastname: 'Admin',
-  employeeId: 'HAMS-ADMIN-001',
 };
 
 describe('production ADMIN bootstrap', () => {
@@ -58,7 +57,7 @@ describe('production ADMIN bootstrap', () => {
     const existingAdmin = {
       id: 'admin-user-1',
       role: UserRole.ADMIN,
-      employeeId: configuredAdmin.employeeId,
+      employeeId: 'GOV-690001',
       userName: configuredAdmin.userName,
       emailVerified: true,
       banned: false,
@@ -112,7 +111,7 @@ describe('production ADMIN bootstrap', () => {
     const existingAdmin = {
       id: 'admin-user-1',
       role: UserRole.ADMIN,
-      employeeId: configuredAdmin.employeeId,
+      employeeId: 'GOV-690001',
       userName: configuredAdmin.userName,
       emailVerified: false,
       banned: false,
@@ -123,8 +122,9 @@ describe('production ADMIN bootstrap', () => {
       .mockResolvedValue(existingAdmin);
     (sharedPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
     (sharedPrisma.user.create as jest.Mock).mockImplementation(
-      ({ data }: { data: { id: string } }) => {
+      ({ data }: { data: { id: string; employeeId: string } }) => {
         existingAdmin.id = data.id;
+        existingAdmin.employeeId = data.employeeId;
         return data;
       },
     );
@@ -182,8 +182,21 @@ describe('production ADMIN bootstrap', () => {
     const previousKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
     process.env.TWO_FACTOR_ENCRYPTION_KEY = 'b'.repeat(64);
     const pending = new Map<string, string>();
+    const employeeIds: string[] = [];
     (sharedPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-    (sharedPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+    (sharedPrisma.user.findFirst as jest.Mock).mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) => {
+        if ('userName' in where) return null;
+        const latestEmployeeId = [...employeeIds].sort().at(-1);
+        return latestEmployeeId ? { employeeId: latestEmployeeId } : null;
+      },
+    );
+    (sharedPrisma.user.create as jest.Mock).mockImplementation(
+      ({ data }: { data: { employeeId: string } }) => {
+        employeeIds.push(data.employeeId);
+        return data;
+      },
+    );
     (sharedPrisma.$transaction as jest.Mock).mockImplementation(
       async (action: (tx: typeof sharedPrisma) => Promise<void>) =>
         action(sharedPrisma),
@@ -213,7 +226,6 @@ describe('production ADMIN bootstrap', () => {
         ...configuredAdmin,
         email: 'second.admin@example.org',
         userName: 'second-admin',
-        employeeId: 'HAMS-ADMIN-002',
       });
 
       const deliveries = (
@@ -226,6 +238,9 @@ describe('production ADMIN bootstrap', () => {
       expect((sharedPrisma.user.create as jest.Mock).mock.calls).toHaveLength(
         2,
       );
+      expect(employeeIds).toHaveLength(2);
+      expect(new Set(employeeIds).size).toBe(2);
+      expect(employeeIds[0]).toMatch(/^GOV-\d{6}$/);
       expect(pending.size).toBe(0);
     } finally {
       if (previousKey === undefined)
