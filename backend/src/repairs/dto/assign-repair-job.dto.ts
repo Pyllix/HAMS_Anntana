@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsInt, IsNotEmpty, IsUUID } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+} from 'class-validator';
 
 export class AssignRepairJobDto {
   @ApiProperty({
@@ -11,13 +17,13 @@ export class AssignRepairJobDto {
   techCategoryId: number;
 
   @ApiProperty({
-    description:
-      'Array of mechanic user UUIDs assigned to this job (at least 1)',
+    description: 'Array of mechanic user IDs assigned to this job (at least 1)',
     type: [String],
-    example: ['uuid-1', 'uuid-2'],
+    example: ['aB12cD34eF56gH78iJ90kL12mN34oP56'],
   })
   @IsArray()
-  @IsUUID('all', { each: true })
-  @IsNotEmpty()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
   mechanicIds: string[];
 }

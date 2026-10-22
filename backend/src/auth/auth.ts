@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../common/config/bootstrap-config';
+import { randomUUID } from 'node:crypto';
 import { betterAuth, getCurrentAdapter } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
@@ -147,6 +148,10 @@ export const auth = betterAuth({
     disableSessionRefresh: true,
   },
   advanced: {
+    database: {
+      // Generate UUIDs here; existing Prisma text ID columns have no DB default.
+      generateId: () => randomUUID(),
+    },
     useSecureCookies: runtimeConfig.server.secureCookies,
     cookiePrefix: 'better-auth',
     crossSubDomainCookies: {

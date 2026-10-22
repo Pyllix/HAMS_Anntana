@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -177,7 +178,8 @@ export class QueryRepairJobDto extends PaginationDto {
   reporterId?: string;
 
   @ApiPropertyOptional({ description: 'Filter by Assigned Mechanic User ID' })
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   mechanicId?: string;
 

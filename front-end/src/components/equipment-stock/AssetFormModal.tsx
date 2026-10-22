@@ -32,6 +32,9 @@ import {
   createImageSaveAttempt,
   type ImageFormSaveAttempt,
 } from "../../services/imageUploadService";
+import type { BudgetType } from "../../types/TypeBudgetType";
+
+const EMPTY_BUDGET_TYPES: BudgetType[] = [];
 
 export default function AssetFormModal() {
   const { isOpen, mode, selectedAsset, closeModal } = useEquipmentModalStore();
@@ -80,11 +83,12 @@ export default function AssetFormModal() {
     enabled: isOpen,
   });
 
-  const { data: budgetTypes = [] } = useQuery({
+  const budgetTypesQuery = useQuery({
     queryKey: ["budgetTypes"],
     queryFn: getBudgetTypes,
     enabled: isOpen,
   });
+  const budgetTypes: BudgetType[] = budgetTypesQuery.data ?? EMPTY_BUDGET_TYPES;
 
   const { data: equipmentTypes = [] } = useQuery({
     queryKey: ["equipmentTypes"],
@@ -189,7 +193,7 @@ export default function AssetFormModal() {
           acqDoc: "",
           company_id: companies[0]?.id ? String(companies[0].id) : "",
           acqType: acqTypes[0]?.name || "จัดซื้อ",
-          budgetType: budgetTypes[0]?.name || "เงินงบประมาณ",
+          budgetType: "",
           price: "",
           receivedDate: new Date().toISOString().split("T")[0],
           warrantyDate: "",
@@ -213,9 +217,16 @@ export default function AssetFormModal() {
       owner_id: current.owner_id || (users[0]?.id ? String(users[0].id) : ""),
       company_id: current.company_id || (companies[0]?.id ? String(companies[0].id) : ""),
       acqType: current.acqType || acqTypes[0]?.name || "จัดซื้อ",
-      budgetType: current.budgetType || budgetTypes[0]?.name || "เงินงบประมาณ",
     }));
-  }, [isOpen, mode, assetTypes, sections, assetStatuses, companies, acqTypes, budgetTypes, users, equipmentTypes]);
+  }, [isOpen, mode, assetTypes, sections, assetStatuses, companies, acqTypes, users, equipmentTypes]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== "create" || !budgetTypesQuery.isSuccess || !budgetTypes.length) return;
+    setFormData((current) => current.budgetType ? current : {
+      ...current,
+      budgetType: budgetTypes[0].name,
+    });
+  }, [isOpen, mode, budgetTypesQuery.isSuccess, budgetTypes]);
 
   const assetDraftKey = "asset:create";
   const assetDraft = useMemo(
@@ -251,6 +262,19 @@ export default function AssetFormModal() {
       );
     },
   });
+  const hasBudgetType = budgetTypes.some((budget) => budget.name === formData.budgetType);
+  const budgetTypeIssue = budgetTypesQuery.isError
+    ? "โหลดรายการประเภทเงินไม่สำเร็จ กรุณาลองใหม่"
+    : !budgetTypesQuery.isSuccess
+      ? "กำลังโหลดรายการประเภทเงิน กรุณารอก่อนบันทึก"
+      : budgetTypes.length === 0
+        ? "ยังไม่มีรายการประเภทเงิน กรุณาเพิ่มข้อมูลประเภทเงินก่อนบันทึกครุภัณฑ์"
+        : !formData.budgetType
+          ? "กรุณาเลือกประเภทเงิน"
+          : !hasBudgetType
+            ? "ประเภทเงินเดิมไม่อยู่ในรายการปัจจุบัน กรุณาเลือกประเภทเงินที่ถูกต้อง"
+            : null;
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (useAuthStore.getState().user?.id !== accountId) {
@@ -262,6 +286,7 @@ export default function AssetFormModal() {
       if (["uploading", "verifying", "error"].includes(imageSelection.state.status)) {
         throw new Error("รูปที่เลือกยังไม่พร้อม กรุณารอการตรวจสอบหรือยกเลิกรูปใหม่ก่อนบันทึก");
       }
+      if (budgetTypeIssue) throw new Error(budgetTypeIssue);
       // Validate essentials
       if (!formData.name.trim()) throw new Error("กรุณากรอกชื่อครุภัณฑ์");
       if (!formData.model.trim()) throw new Error("กรุณากรอกรุ่นครุภัณฑ์");
@@ -283,7 +308,7 @@ export default function AssetFormModal() {
         name: formData.name.trim(),
         model: formData.model.trim(),
         serialNo: formData.serialNo.trim() || undefined,
-        budgetType: formData.budgetType || "เงินงบประมาณ",
+        budgetType: formData.budgetType,
         acqType: formData.acqType || "จัดซื้อ",
         acqDoc: formData.acqDoc.trim() || "-",
         price: String(formData.price),
@@ -755,10 +780,23 @@ export default function AssetFormModal() {
                   </label>
                   <div className="relative">
                     <select
+                      aria-label="ประเภทเงินทุน"
+                      aria-describedby={budgetTypeIssue ? "asset-budget-type-status" : undefined}
+                      aria-invalid={budgetTypesQuery.isSuccess && !hasBudgetType}
                       value={formData.budgetType}
+                      disabled={!budgetTypesQuery.isSuccess || budgetTypes.length === 0}
+                      required
                       onChange={(e) => setFormData({ ...formData, budgetType: e.target.value })}
                       className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2.5 pr-6 text-xs text-slate-700 appearance-none focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                     >
+                      <option value="" disabled>
+                        {!budgetTypesQuery.isSuccess && !budgetTypesQuery.isError ? "กำลังโหลดประเภทเงิน..." : "-- เลือกประเภทเงิน --"}
+                      </option>
+                      {formData.budgetType && !hasBudgetType && (
+                        <option value={formData.budgetType} disabled>
+                          {formData.budgetType} ({budgetTypesQuery.isSuccess ? "ค่าเดิมไม่มีในรายการ" : "ค่าที่บันทึกไว้"})
+                        </option>
+                      )}
                       {budgetTypes.map((b) => (
                         <option key={b.id} value={b.name}>
                           {b.name}
@@ -767,6 +805,16 @@ export default function AssetFormModal() {
                     </select>
                     <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                   </div>
+                  {budgetTypeIssue && (
+                    <p id="asset-budget-type-status" role={budgetTypesQuery.isSuccess || budgetTypesQuery.isError ? "alert" : "status"} className="mt-1 text-xs text-amber-700">
+                      {budgetTypeIssue}
+                    </p>
+                  )}
+                  {budgetTypesQuery.isError && (
+                    <button type="button" onClick={() => void budgetTypesQuery.refetch()} className="mt-1 text-xs text-emerald-700 underline cursor-pointer">
+                      โหลดประเภทเงินอีกครั้ง
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -855,7 +903,7 @@ export default function AssetFormModal() {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending || (saveOutcomeUnknown && !canRecoverImageSave)}
+              disabled={mutation.isPending || (!canRecoverImageSave && (saveOutcomeUnknown || Boolean(budgetTypeIssue)))}
               className="px-6 py-2 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
             >
               {mutation.isPending ? "กำลังบันทึก..." : canRecoverImageSave ? "ตรวจสอบและบันทึกอีกครั้ง" : "บันทึกข้อมูล"}

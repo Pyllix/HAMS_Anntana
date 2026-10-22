@@ -223,6 +223,11 @@ export function SparePartFormModal() {
 
   const [form, setForm] = useState<CreateSparepartDto>(empty);
   const [priceInput, setPriceInput] = useState<string>("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSaveError(null);
+  }, [isOpen, editItem]);
 
   useEffect(() => {
     if (editItem) {
@@ -375,6 +380,7 @@ export function SparePartFormModal() {
   };
 
   const mutation = useMutation({
+    onMutate: () => setSaveError(null),
     mutationFn: async (dto: CreateSparepartDto) => {
       if (editItem) {
         return await updateSparepart(editItem.id, dto);
@@ -386,11 +392,8 @@ export function SparePartFormModal() {
       queryClient.invalidateQueries({ queryKey: ["spareParts"] });
       closeModal();
     },
-    onError: (err: any) => {
-      console.error("Mutation failed:", err);
-      // Even if backend fails, update locally so user is never blocked
-      queryClient.invalidateQueries({ queryKey: ["spareParts"] });
-      closeModal();
+    onError: () => {
+      setSaveError("บันทึกอะไหล่ไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองอีกครั้ง ข้อมูลที่กรอกยังอยู่ในฟอร์ม");
     },
   });
 
@@ -436,6 +439,11 @@ export function SparePartFormModal() {
             }}
             className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
           >
+            {saveError && (
+              <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                {saveError}
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               {/* Left Column */}
               <div className="md:col-span-6 space-y-4">
@@ -698,6 +706,11 @@ export function SparePartFormModal() {
           }}
           className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
         >
+          {saveError && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {saveError}
+            </p>
+          )}
           <div className="space-y-4">
             {/* ข้อมูลพื้นฐาน */}
             <div className="space-y-2.5">

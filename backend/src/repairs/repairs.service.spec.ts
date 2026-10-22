@@ -378,6 +378,52 @@ describe('RepairsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
+    it('rejects a missing or deleted mechanic before writing assignments', async () => {
+      const mechanicId = 'aB12cD34eF56gH78iJ90kL12mN34oP56';
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING_ASSIGN' },
+      });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 2 });
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.assignJob(
+          'job-uuid-1',
+          { techCategoryId: 2, mechanicIds: [mechanicId] },
+          mockHeadUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: mechanicId, deletedAt: null },
+      });
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a real non-maintenance user before writing assignments', async () => {
+      const mechanicId = 'aB12cD34eF56gH78iJ90kL12mN34oP56';
+      mockPrisma.repairJob.findUnique.mockResolvedValue({
+        id: 'job-uuid-1',
+        jobStatus: { code: 'PENDING_ASSIGN' },
+      });
+      mockPrisma.techCategory.findUnique.mockResolvedValue({ id: 2 });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: mechanicId,
+        role: UserRole.DEPARTMENT_STAFF,
+        firstname: 'Test',
+        lastname: 'User',
+      });
+
+      await expect(
+        service.assignJob(
+          'job-uuid-1',
+          { techCategoryId: 2, mechanicIds: [mechanicId] },
+          mockHeadUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
     it('should calculate active job counts in getMechanicWorkloads', async () => {
       mockPrisma.user.findMany.mockResolvedValue([
         {
