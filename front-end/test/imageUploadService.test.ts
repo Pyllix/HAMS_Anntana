@@ -180,6 +180,11 @@ test("uploads local images through the authenticated HAMS API and accepts a same
   });
   const calls: Array<{ method: string; path: string; body?: unknown; options?: unknown }> = [];
   const file = makeFile("asset.jpg", "image/jpeg");
+  const localProof = {
+    publicId: "hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b",
+    version: 1,
+    sourceBytes: file.size,
+  };
   const api = {
     async post(path: string, body?: unknown, options?: unknown) {
       calls.push({ method: "POST", path, body, options });
@@ -200,9 +205,10 @@ test("uploads local images through the authenticated HAMS API and accepts a same
         } };
       }
       if (path.endsWith("/file")) {
-        return { data: { publicId: "hams-asset-image-c4c51a2e-3c27-4e68-9954-0c7c03b1564b", version: 1 } };
+        return { data: localProof };
       }
       assert.equal(path, "/images/uploads/c4c51a2e-3c27-4e68-9954-0c7c03b1564b/complete");
+      assert.deepEqual(body, { proof: localProof });
       return { data: { status: "VERIFIED_PENDING" } };
     },
     async get(path: string) {
@@ -259,6 +265,11 @@ test("uploads and previews a local Employee Photo through HAMS with an expiring 
     value: { location: { origin: "https://hams.example.test" } },
   });
   const uploadId = "c4c51a2e-3c27-4e68-9954-0c7c03b1564b";
+  const localProof = {
+    publicId: `hams-employee-photo-${uploadId}`,
+    version: 1,
+    sourceBytes: 128,
+  };
   const grantUrl = `/api/images/employees/hams-employee-photo-${uploadId}/v1.jpg?expiresAt=4070908800&signature=${"b".repeat(43)}`;
   const calls: Array<{ method: string; path: string; body?: unknown; options?: unknown }> = [];
   const api = {
@@ -282,9 +293,10 @@ test("uploads and previews a local Employee Photo through HAMS with an expiring 
         } };
       }
       if (path.endsWith("/file")) {
-        return { data: { publicId: `hams-employee-photo-${uploadId}`, version: 1 } };
+        return { data: localProof };
       }
       assert.equal(path, `/images/uploads/${uploadId}/complete`);
+      assert.deepEqual(body, { proof: localProof });
       return { data: { status: "VERIFIED_PENDING" } };
     },
     async get(path: string, options?: unknown) {

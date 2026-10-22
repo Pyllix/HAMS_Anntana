@@ -305,7 +305,7 @@ async function uploadWithInstructions(
           timeout: 60_000,
         },
       );
-      return data;
+      return { proof: data };
     } catch (error) {
       if (signal?.aborted) throw error;
       throw new ImageUploadError(
