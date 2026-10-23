@@ -17,26 +17,12 @@ import {
   type BorrowHistory,
 } from "../../services/borrowService";
 import { useCompleteReturnModalStore } from "../../stores/useCompleteReturnModalStore";
+import { formatThaiDisplayDateTime as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
-
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-};
 
 const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
   {

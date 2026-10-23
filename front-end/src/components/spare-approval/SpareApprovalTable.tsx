@@ -2,6 +2,7 @@ import { Eye } from "lucide-react";
 import type { SpareApprovalRequest } from "../../types/TypeSpareApproval";
 
 const dateTime = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
   day: "2-digit",
   month: "2-digit",
   year: "numeric",

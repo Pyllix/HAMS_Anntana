@@ -1,3 +1,4 @@
+import { thaiDayStart, thaiDayEnd, thaiCalendarDate, parseThaiDeadline } from '../common/time/thai-date';
 import {
   BadRequestException,
   ConflictException,
@@ -205,8 +206,9 @@ export class RepairsService {
   private async generateJobNo(tx?: Prisma.TransactionClient): Promise<string> {
     const client = tx || this.prisma;
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const period = thaiCalendarDate(now);
+    const year = period.slice(0, 4);
+    const month = period.slice(5, 7);
     const prefix = `REP-${year}${month}-`;
 
     const latest = await client.repairJob.findFirst({
@@ -833,7 +835,7 @@ export class RepairsService {
           jobTypeId: dto.jobTypeId,
           actionType: dto.actionType,
           jobStatusId: initialJobStatusId,
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          dueDate: dto.dueDate ? parseThaiDeadline(dto.dueDate) : null,
           isRepeatRepair: dto.isRepeatRepair ?? false,
           companyId: null,
           billNo: null,
@@ -1909,7 +1911,7 @@ export class RepairsService {
       }
       where.createdAt = {
         ...(where.createdAt as any),
-        gte: new Date(`${query.startDate}T00:00:00.000Z`),
+        gte: thaiDayStart(query.startDate),
       };
     }
 
@@ -1921,7 +1923,7 @@ export class RepairsService {
       }
       where.createdAt = {
         ...(where.createdAt as any),
-        lte: new Date(`${query.endDate}T23:59:59.999Z`),
+        lte: thaiDayEnd(query.endDate),
       };
     }
 

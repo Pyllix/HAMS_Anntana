@@ -1,3 +1,4 @@
+import { formatThaiCalendarDate } from "../../services/thaiDate";
 import React, { useState, useEffect } from "react";
 import { Camera, X, Check } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -5,17 +6,7 @@ import { useDisposalModalStore } from "../../stores/useDisposalModalStore";
 import { updateAsset, getAssetStatuses } from "../../services/assetService";
 
 function formatThaiDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear() + 543;
-    return `${day}/${month}/${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiCalendarDate(dateString, "2-digit");
 }
 
 export default function WaitDisposalModal() {

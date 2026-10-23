@@ -46,6 +46,7 @@ function formatDate(value?: string | Date | null, includeTime = false): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "long",
     year: "numeric",

@@ -2,6 +2,7 @@ import { Eye } from "lucide-react";
 import type { OutsourceApprovalRequest } from "../../types/TypeOutsourceApproval";
 
 const dateTime = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
@@ -10,6 +11,7 @@ const dateTime = new Intl.DateTimeFormat("th-TH", {
 });
 
 const dateOnly = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
   day: "2-digit",
   month: "short",
   year: "numeric",

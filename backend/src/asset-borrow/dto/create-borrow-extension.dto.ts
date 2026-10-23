@@ -5,7 +5,7 @@ export class CreateBorrowExtensionDto {
   @ApiProperty({
     description:
       'New requested return date/time (ISO 8601 string, must be after current expected return date)',
-    example: '2026-10-15T17:00:00.000Z',
+    example: '2026-10-15T23:59:59.999+07:00',
   })
   @IsNotEmpty()
   @IsDateString({ strict: true })

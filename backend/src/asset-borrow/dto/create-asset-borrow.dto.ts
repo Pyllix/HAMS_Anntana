@@ -30,8 +30,8 @@ export class CreateAssetBorrowDto {
 
   @ApiPropertyOptional({
     description:
-      'Expected return date/time (ISO 8601 string), e.g. 2026-09-30T17:00:00.000Z',
-    example: '2026-09-30T17:00:00.000Z',
+      'Expected return date/time (ISO 8601). A date without a time means the end of that day in Asia/Bangkok.',
+    example: '2026-09-30T23:59:59.999+07:00',
   })
   @IsOptional()
   @IsDateString({ strict: true })

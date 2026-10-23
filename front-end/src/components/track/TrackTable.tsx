@@ -82,11 +82,13 @@ const columns: Array<ColumnDef<typeof features, TrackRes>> = [
 
       const date = new Date(dateVal);
       const formattedDate = date.toLocaleDateString("th-TH", {
+        timeZone: "Asia/Bangkok",
         day: "numeric",
         month: "short",
         year: "numeric",
       });
       const formattedTime = date.toLocaleTimeString("th-TH", {
+        timeZone: "Asia/Bangkok",
         hour: "2-digit",
         minute: "2-digit",
       });

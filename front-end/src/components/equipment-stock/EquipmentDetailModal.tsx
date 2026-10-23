@@ -18,77 +18,18 @@ import {
   fetchDetailedRepairJobs,
   ApiRepairJob,
 } from "../../services/repairApiService";
-
-const THAI_MONTHS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
-
-const THAI_FULL_MONTHS = [
-  "มกราคม",
-  "กุมภาพันธ์",
-  "มีนาคม",
-  "เมษายน",
-  "พฤษภาคม",
-  "มิถุนายน",
-  "กรกฎาคม",
-  "สิงหาคม",
-  "กันยายน",
-  "ตุลาคม",
-  "พฤศจิกายน",
-  "ธันวาคม",
-];
+import { formatThaiCalendarDate, formatThaiDisplayDate } from "../../services/thaiDate";
 
 function formatThaiDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear() + 543;
-    return `${day}/${month}/${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiCalendarDate(dateString, "2-digit");
 }
 
 function formatThaiFullDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = THAI_FULL_MONTHS[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    return `${day} ${month} ${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiCalendarDate(dateString, "long");
 }
 
 function formatHistoryDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = THAI_MONTHS[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    return `${day} ${month} ${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiDisplayDate(dateString);
 }
 
 function calculateJobCost(job: ApiRepairJob): number {

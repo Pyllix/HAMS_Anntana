@@ -1,3 +1,4 @@
+import { formatThaiDisplayNumericDate } from "../../services/thaiDate";
 import { useMemo } from "react";
 import { tableFeatures, useTable } from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -22,13 +23,7 @@ interface DisposalTableProps {
 }
 
 const formatThaiDate = (dateStr?: string | null) => {
-  if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "-";
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear() + 543;
-  return `${day}/${month}/${year}`;
+  return formatThaiDisplayNumericDate(dateStr);
 };
 
 export default function DisposalTable({

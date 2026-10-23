@@ -33,6 +33,7 @@ import {
   type ImageFormSaveAttempt,
 } from "../../services/imageUploadService";
 import type { BudgetType } from "../../types/TypeBudgetType";
+import { calendarDateString, thaiDateString } from "../../services/thaiDate";
 
 const EMPTY_BUDGET_TYPES: BudgetType[] = [];
 
@@ -168,8 +169,8 @@ export default function AssetFormModal() {
           acqType: selectedAsset.acqType || "",
           budgetType: selectedAsset.budgetType || "",
           price: selectedAsset.price ? String(selectedAsset.price) : "",
-          receivedDate: selectedAsset.receivedDate ? selectedAsset.receivedDate.split("T")[0] : "",
-          warrantyDate: selectedAsset.warrantyDate ? selectedAsset.warrantyDate.split("T")[0] : "",
+          receivedDate: calendarDateString(selectedAsset.receivedDate),
+          warrantyDate: calendarDateString(selectedAsset.warrantyDate),
           remark: selectedAsset.remark || "",
           pmType: (selectedAsset as any)?.pmType || "IM",
           calType: (selectedAsset as any)?.calType || "IC",
@@ -195,7 +196,7 @@ export default function AssetFormModal() {
           acqType: acqTypes[0]?.name || "จัดซื้อ",
           budgetType: "",
           price: "",
-          receivedDate: new Date().toISOString().split("T")[0],
+          receivedDate: thaiDateString(),
           warrantyDate: "",
           remark: "",
           pmType: "IM",

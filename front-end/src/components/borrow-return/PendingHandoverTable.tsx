@@ -21,26 +21,12 @@ import {
 import { useToastStore } from "../../stores/useToastStore";
 import DeliveryMethodBadge from "./DeliveryMethodBadge";
 import BorrowerSectionInfo from "./BorrowerSectionInfo";
+import { formatThaiDisplayDateTime as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
-
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-};
 
 function HandoverAction({ transaction }: { transaction: BorrowHistory }) {
   const queryClient = useQueryClient();

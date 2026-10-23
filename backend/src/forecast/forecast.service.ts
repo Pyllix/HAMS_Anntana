@@ -72,7 +72,7 @@ export class ForecastService {
           WITH combined_expenses AS (
             -- 1. ค่าซ่อมแซมและอะไหล่ (sparepart_txns)
             SELECT 
-              TO_CHAR(DATE_TRUNC('month', st.txn_date), 'YYYY-MM') AS month,
+              TO_CHAR(DATE_TRUNC('month', st.txn_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Bangkok'), 'YYYY-MM') AS month,
               s.section_id AS section_id,
               COALESCE(NULLIF(s.name, ''), s.section_code) AS section_name,
               ROUND((st.qty * st.unit_price)::numeric, 2)::float AS repairs_cost,
@@ -83,7 +83,7 @@ export class ForecastService {
             LEFT JOIN sections s ON COALESCE(a.section_id, rj.section_id) = s.section_id
             WHERE st.txn_type = 'WITHDRAW' 
               AND s.section_id IS NOT NULL
-              AND st.txn_date >= '2023-01-01'
+              AND st.txn_date >= TIMESTAMP '2022-12-31 17:00:00'
 
             UNION ALL
 
@@ -117,7 +117,7 @@ export class ForecastService {
           WITH combined_expenses AS (
             -- 1. ค่าซ่อมแซมและอะไหล่ (sparepart_txns)
             SELECT 
-              TO_CHAR(DATE_TRUNC('month', st.txn_date), 'YYYY-MM') AS month,
+              TO_CHAR(DATE_TRUNC('month', st.txn_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Bangkok'), 'YYYY-MM') AS month,
               s.section_id AS section_id,
               COALESCE(NULLIF(s.name, ''), s.section_code) AS section_name,
               ROUND((st.qty * st.unit_price)::numeric, 2)::float AS repairs_cost,
@@ -128,7 +128,7 @@ export class ForecastService {
             LEFT JOIN sections s ON COALESCE(a.section_id, rj.section_id) = s.section_id
             WHERE st.txn_type = 'WITHDRAW' 
               AND s.section_id = ${sectionId}
-              AND st.txn_date >= '2023-01-01'
+              AND st.txn_date >= TIMESTAMP '2022-12-31 17:00:00'
 
             UNION ALL
 
@@ -273,12 +273,12 @@ export class ForecastService {
               at.useful_life,
               TO_CHAR(a.receive_date, 'YYYY-MM-DD') AS receive_date,
               TO_CHAR(a.receive_date + (at.useful_life || ' years')::interval, 'YYYY-MM-DD') AS expiry_date,
-              ROUND(EXTRACT(YEAR FROM AGE(CURRENT_DATE, a.receive_date))::numeric, 1)::float AS age_years,
+              ROUND(EXTRACT(YEAR FROM AGE((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date, a.receive_date))::numeric, 1)::float AS age_years,
               ROUND(a.price::numeric, 0)::float AS price,
               ast.status_name,
               s.section_id,
               COALESCE(NULLIF(s.name, ''), s.section_code) AS section_name,
-              ((a.receive_date + (at.useful_life || ' years')::interval) <= CURRENT_DATE) AS is_exceeded
+              ((a.receive_date + (at.useful_life || ' years')::interval) <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date) AS is_exceeded
             FROM asset a
             JOIN asset_type at ON a.type_id = at.asset_type_id
             JOIN asset_status ast ON a.asset_status_id = ast.asset_status_id
@@ -299,12 +299,12 @@ export class ForecastService {
               at.useful_life,
               TO_CHAR(a.receive_date, 'YYYY-MM-DD') AS receive_date,
               TO_CHAR(a.receive_date + (at.useful_life || ' years')::interval, 'YYYY-MM-DD') AS expiry_date,
-              ROUND(EXTRACT(YEAR FROM AGE(CURRENT_DATE, a.receive_date))::numeric, 1)::float AS age_years,
+              ROUND(EXTRACT(YEAR FROM AGE((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date, a.receive_date))::numeric, 1)::float AS age_years,
               ROUND(a.price::numeric, 0)::float AS price,
               ast.status_name,
               s.section_id,
               COALESCE(NULLIF(s.name, ''), s.section_code) AS section_name,
-              ((a.receive_date + (at.useful_life || ' years')::interval) <= CURRENT_DATE) AS is_exceeded
+              ((a.receive_date + (at.useful_life || ' years')::interval) <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Bangkok')::date) AS is_exceeded
             FROM asset a
             JOIN asset_type at ON a.type_id = at.asset_type_id
             JOIN asset_status ast ON a.asset_status_id = ast.asset_status_id

@@ -19,26 +19,12 @@ import {
   type BorrowHistory,
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
+import { formatThaiDisplayDateTime as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
-
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-};
 
 function ClaimPickupAction({ transaction }: { transaction: BorrowHistory }) {
   const queryClient = useQueryClient();

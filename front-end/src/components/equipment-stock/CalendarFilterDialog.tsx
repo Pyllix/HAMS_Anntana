@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { thaiCalendarToday } from "../../services/thaiDate";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 
 interface CalendarFilterDialogProps {
@@ -31,11 +32,12 @@ export default function CalendarFilterDialog({
   selectedDate,
   onSelectDate,
 }: CalendarFilterDialogProps) {
+  const today = thaiCalendarToday();
   const [currentMonth, setCurrentMonth] = useState(
-    selectedDate ? selectedDate.getMonth() : new Date().getMonth()
+    selectedDate ? selectedDate.getMonth() : today.getMonth()
   );
   const [currentYear, setCurrentYear] = useState(
-    selectedDate ? selectedDate.getFullYear() : new Date().getFullYear()
+    selectedDate ? selectedDate.getFullYear() : today.getFullYear()
   );
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | null>(
     selectedDate
@@ -44,10 +46,10 @@ export default function CalendarFilterDialog({
   useEffect(() => {
     if (isOpen) {
       setCurrentMonth(
-        selectedDate ? selectedDate.getMonth() : new Date().getMonth()
+        selectedDate ? selectedDate.getMonth() : today.getMonth()
       );
       setCurrentYear(
-        selectedDate ? selectedDate.getFullYear() : new Date().getFullYear()
+        selectedDate ? selectedDate.getFullYear() : today.getFullYear()
       );
       setTempSelectedDate(selectedDate);
     }

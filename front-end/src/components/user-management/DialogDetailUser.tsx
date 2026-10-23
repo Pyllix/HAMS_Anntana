@@ -44,6 +44,7 @@ export default function DialogDetailUser({
     try {
       const d = new Date(dateString);
       return d.toLocaleDateString("th-TH", {
+        timeZone: "Asia/Bangkok",
         year: "numeric",
         month: "short",
         day: "numeric",

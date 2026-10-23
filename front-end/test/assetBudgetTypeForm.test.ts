@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import test from "node:test";
 import ts from "typescript";
 
@@ -10,7 +11,7 @@ function elements(value: unknown): Element[] {
   const node = value as Element;
   return [node, ...[node.props.children].flat(Infinity).flatMap(elements)];
 }
-function formHarness(mode: "create" | "edit" = "create", savedBudget = "เงินบริจาค") {
+function formHarness(mode: "create" | "edit" = "create", savedBudget = "เงินบริจาค", dates = {}) {
   const states: unknown[] = [], refs: Array<{ current: unknown }> = [];
   const effectDeps: Array<readonly unknown[] | undefined> = [];
   let si = 0, ri = 0, ei = 0, dirty = false;
@@ -19,7 +20,7 @@ function formHarness(mode: "create" | "edit" = "create", savedBudget = "เง�
   let rows: typeof budgets = [];
   let payload: Record<string, unknown> | undefined;
   let mutation: { mutationFn(): Promise<unknown> };
-  const selectedAsset = mode === "edit" ? { id: "asset-1", budgetType: savedBudget } : null;
+  const selectedAsset = mode === "edit" ? { id: "asset-1", budgetType: savedBudget, ...dates } : null;
   const lookups: Record<string, unknown[]> = {
     assetTypes: [{ id: 1 }], assetStatuses: [{ id: 1, code: "NORMAL" }],
     availabilities: [{ id: 1, code: "AVAILABLE" }], sections: [{ id: "section-1" }],
@@ -45,6 +46,7 @@ function formHarness(mode: "create" | "edit" = "create", savedBudget = "เง�
   };
   const auth = Object.assign((select: (s: unknown) => unknown) => select({ user: { id: "actor-1" } }), { getState: () => ({ user: { id: "actor-1" } }) });
   function requireMock(name: string): unknown {
+    if (name.endsWith("/thaiDate")) return createRequire(new URL("../src/components/equipment-stock/AssetFormModal.tsx", import.meta.url))(name);
     if (name === "react") return { ...react, default: react };
     if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Element["props"]) => ({ type, props }), jsxs: (type: unknown, props: Element["props"]) => ({ type, props }) };
     if (name === "@tanstack/react-query") return {
@@ -134,4 +136,25 @@ test("an old budget absent from the catalog stays visible until the user correct
   await assert.rejects(form.save(), /ประเภทเงิน/);
   form.choose("เงินบริจาค"); await form.save();
   assert.equal(form.payload?.budgetType, "เงินบริจาค");
+});
+
+test("asset create defaults to the Thai date after midnight even when UTC is still yesterday", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-12-31T17:30:00Z") });
+  const form = formHarness();
+  const dates = elements(form.load()).filter(n => n.type === "input" && n.props.type === "date");
+  assert.equal(dates[0].props.value, "2027-01-01");
+  assert.equal(dates[1].props.value, "");
+});
+
+test("asset edit preserves date-only receipt and warranty values in the form and save payload", async () => {
+  const form = formHarness("edit", "เงินบริจาค", { receivedDate: "2026-10-23T00:00:00.000Z", warrantyDate: "2028-02-29" });
+  let dates = elements(form.load()).filter(n => n.type === "input" && n.props.type === "date");
+  assert.equal(dates[0].props.value, "2026-10-23");
+  assert.equal(dates[1].props.value, "2028-02-29");
+  form.fill();
+  dates = elements(form.render()).filter(n => n.type === "input" && n.props.type === "date");
+  (dates[1].props.onChange as (e: unknown) => void)({ target: { value: "2028-12-31" } });
+  await form.save();
+  assert.equal(form.payload?.receivedDate, "2026-10-23");
+  assert.equal(form.payload?.warrantyDate, "2028-12-31");
 });

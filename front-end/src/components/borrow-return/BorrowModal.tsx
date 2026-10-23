@@ -7,6 +7,8 @@ import { useMemo, useState } from "react";
 import { postBorrow, getBorrowErrorMessage } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
+import { borrowDeadlineAtEndOfDay } from "../../services/borrowDeadline";
+import { thaiDateString, thaiTimeString } from "../../services/thaiDate";
 import { useAuthStore } from "../../stores/authStore";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
 import { clearSessionDraft } from "../../services/sessionDraftStorage";
@@ -19,14 +21,9 @@ export default function BorrowModal() {
   const { closeForm, selectedAsset: asset } = useBorrowModalStore();
   const accountId = useAuthStore((state) => state.user?.id);
 
-  // ------------- ทำตัวเเปลของเวลา ------------------
-  // 1. เพิ่มตัวแปรดึงเวลาปัจจุบันไว้ด้านบน (ก่อน return ภายในฟังก์ชัน BorrowModal)
   const now = new Date();
-  // จัดฟอร์แมตวันที่ให้อยู่ในรูป YYYY-MM-DD
-  const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  // จัดฟอร์แมตเวลาให้อยู่ในรูป HH:MM
-  const defaultTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  // ------------- ทำตัวเเปลของเวลา ------------------
+  const defaultDate = thaiDateString(now);
+  const defaultTime = thaiTimeString(now);
 
   const [employeeId, setEmployeeId] = useState("");
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
@@ -116,7 +113,7 @@ export default function BorrowModal() {
       assetId: asset.id,
       borrowerId: user.id,
       deliveryMethod: "PICKUP",
-      expectedReturnDate,
+      expectedReturnDate: borrowDeadlineAtEndOfDay(expectedReturnDate),
     });
   };
 

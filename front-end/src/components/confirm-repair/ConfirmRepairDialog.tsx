@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { thaiDateString } from "../../services/thaiDate";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
@@ -10,9 +11,7 @@ import {
 } from "../../services/confirmRepairService";
 
 function localDateString(): string {
-  const today = new Date();
-  const offset = today.getTimezoneOffset() * 60_000;
-  return new Date(today.getTime() - offset).toISOString().slice(0, 10);
+  return thaiDateString();
 }
 
 export default function ConfirmRepairDialog() {
@@ -152,6 +151,7 @@ export default function ConfirmRepairDialog() {
                     : "-"
                 }
                 secondary={`วันที่แจ้ง: ${new Intl.DateTimeFormat("th-TH", {
+                  timeZone: "Asia/Bangkok",
                   day: "numeric",
                   month: "short",
                   year: "numeric",

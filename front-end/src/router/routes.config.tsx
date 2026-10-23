@@ -13,6 +13,7 @@ import {
   Shield,
   Scale,
   FileText,
+  Package,
 } from "lucide-react";
 import { ROLES, RoleType } from "../router/roles";
 import AssetCenterBorrowReturn from "../pages/AssetCenterBorrowReturn";
@@ -24,6 +25,7 @@ import ConfirmRepair from "../pages/ConfirmRepair";
 import RepairRequestPage from "../pages/RepairRequestPage";
 import RepairHistory from "../pages/RepairHistory";
 import PartStock from "../pages/PartStock";
+import SparepartGroupManagement from "../pages/SparepartGroupManagement";
 import OrderSpareParts from "../pages/OrderSpareParts";
 import AcquisitionTypePage from "../pages/AcquisitionTypePage";
 import CompanySupplierPage from "../pages/CompanySupplierPage";
@@ -255,6 +257,20 @@ export const APP_ROUTE: AppRote[] = [
     element: <DepartmentManagement />,
     icon: Building2,
     roles: [ROLES.ADMIN],
+    showInNav: true,
+  },
+  {
+    path: "spare-part-groups",
+    title: "จัดการกลุ่มอะไหล่",
+    element: <SparepartGroupManagement />,
+    icon: Package,
+    roles: [
+      ROLES.PARCEL_STAFF,
+      ROLES.ASSET_CENTER_STAFF,
+      ROLES.ADMIN,
+      ROLES.MANAGER,
+      ROLES.MAINTENANCE_STAFF,
+    ],
     showInNav: true,
   },
   // -------- ผู้จัดการ ------------

@@ -672,8 +672,8 @@ describe('SparePartsService', () => {
         addBy: 'user-uuid-1',
         sparepartAddDoc: { contains: 'PO-999', mode: 'insensitive' },
         createdAt: {
-          gte: new Date('2026-08-01T00:00:00.000Z'),
-          lte: new Date('2026-08-31T23:59:59.999Z'),
+          gte: new Date('2026-07-31T17:00:00.000Z'),
+          lte: new Date('2026-08-31T16:59:59.999Z'),
         },
         OR: [
           {

@@ -1,6 +1,7 @@
 import { getPage } from "./pagedApi";
 import type { Filters, Page } from "./pagedApi";
 import { apiClient } from "./apiClient";
+import { thaiDateString, timestampDateString } from "./thaiDate";
 import { isSessionExpiredApiError } from "./serviceErrorPolicy";
 import type {
   PartOrder,
@@ -149,8 +150,8 @@ export async function getPartOrders(): Promise<PartOrder[]> {
       // แปลงข้อมูลจาก SparepartAdd ให้เป็น PartOrder เพื่อนำไปแสดงในตาราง
       const mappedOrders: PartOrder[] = historyList.map((item: any) => {
         const orderDateStr = item.createdAt
-          ? new Date(item.createdAt).toISOString().split("T")[0]
-          : "2026-03-20";
+          ? timestampDateString(item.createdAt)
+          : "";
 
         return {
           id: item.id,
@@ -235,7 +236,7 @@ export async function updateOrderStatus(
   status: PartOrderStatus,
 ): Promise<PartOrder> {
   ensureLocalOrdersForCurrentAccount();
-  const today = new Date().toISOString().split("T")[0];
+  const today = thaiDateString();
   try {
     const res = await apiClient.patch(
       `/part-orders/${id}/status`,
@@ -285,7 +286,7 @@ export async function createPartOrder(data: {
     unitPrice: data.unitPrice,
     totalPrice: data.totalPrice,
     sparepart_add_doc: data.orderNo,
-    orderDate: new Date().toISOString().split("T")[0],
+    orderDate: thaiDateString(),
     status: "RECEIVED",
     createdAt: new Date().toISOString(),
   };
@@ -313,7 +314,7 @@ export async function getPartOrdersPage(filters: Filters, signal?: AbortSignal):
     department: "แผนกพัสดุ", sparepart_id: item.sparepartId,
     unitPrice: item.qty ? Number(item.totalPrice) / item.qty : 0,
     totalPrice: Number(item.totalPrice), sparepart_add_doc: item.sparepartAddDoc,
-    orderDate: item.createdAt.slice(0, 10), status: "RECEIVED", createdAt: item.createdAt,
+    orderDate: timestampDateString(item.createdAt), status: "RECEIVED", createdAt: item.createdAt,
   })) };
 }
 export function getLocalPartOrderDrafts(): PartOrder[] {

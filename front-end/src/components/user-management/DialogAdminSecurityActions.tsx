@@ -205,7 +205,7 @@ export default function DialogAdminSecurityActions({
                 )}
 
                 {stepUpExpiresAt && isAdminStepUpActive() && !needsStepUp ? (
-                  <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">ยืนยันตัวตนแล้ว ทำรายการต่อได้ถึง {new Date(stepUpExpiresAt).toLocaleTimeString("th-TH")}</p>
+                  <p className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">ยืนยันตัวตนแล้ว ทำรายการต่อได้ถึง {new Date(stepUpExpiresAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok" })}</p>
                 ) : needsStepUp ? (
                   <div className="space-y-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                     <p className="text-sm font-semibold text-emerald-900">ยืนยันตัวตนก่อนทำรายการ</p>

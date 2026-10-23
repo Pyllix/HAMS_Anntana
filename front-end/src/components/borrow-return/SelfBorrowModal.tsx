@@ -11,13 +11,8 @@ import {
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
-
-// วันที่พรุ่งนี้ (ค่าต่ำสุดที่เลือกได้ เพราะ backend บังคับว่าต้องเป็นอนาคต)
-function getTomorrowDateString() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split("T")[0];
-}
+import { borrowDeadlineAtEndOfDay } from "../../services/borrowDeadline";
+import { addCalendarDays, thaiDateString } from "../../services/thaiDate";
 
 const DELIVERY_OPTIONS: Array<{
   value: DeliveryMethod;
@@ -72,9 +67,7 @@ export default function SelfBorrowModal() {
       assetId: asset.id,
       borrowerId: user?.id,
       deliveryMethod,
-      expectedReturnDate: new Date(
-        `${expectedReturnDate}T17:00:00.000Z`,
-      ).toISOString(),
+      expectedReturnDate: borrowDeadlineAtEndOfDay(expectedReturnDate),
     });
   };
 
@@ -165,7 +158,7 @@ export default function SelfBorrowModal() {
               </label>
               <ThaiDatePicker
                 id="expectedReturnDate"
-                minDate={getTomorrowDateString()}
+                minDate={addCalendarDays(thaiDateString(), 1)}
                 value={expectedReturnDate}
                 onChange={setExpectedReturnDate}
                 placeholder="เลือกวันที่ต้องการคืน"

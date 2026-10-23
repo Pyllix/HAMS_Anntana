@@ -18,6 +18,7 @@ import {
   getBorrowErrorMessage,
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
+import { thaiDateString, thaiTimeString } from "../../services/thaiDate";
 
 export default function ReturnModal() {
   // ปิด Modal กับ รับ Asset
@@ -30,16 +31,9 @@ export default function ReturnModal() {
   const [conditionStatus, setConditionStatus] = useState<"Normal" | "Damage">(
     "Normal",
   );
-  const [returnDate, setReturnDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
-  const [returnTime, setReturnTime] = useState(
-    new Date().toLocaleTimeString("th-TH", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }),
-  );
+  const now = new Date();
+  const [returnDate, setReturnDate] = useState(thaiDateString(now));
+  const [returnTime, setReturnTime] = useState(thaiTimeString(now));
   const [returnRemark, setReturnRemark] = useState("");
 
   const [employeeId, setEmployeeId] = useState("");

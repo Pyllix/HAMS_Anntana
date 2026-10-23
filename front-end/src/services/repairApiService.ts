@@ -1,5 +1,6 @@
 import axios from "axios";
 import { apiClient } from "./apiClient";
+import { calendarDateString, timestampDateString } from "./thaiDate";
 import { getAllPages } from "./pagedApi";
 import type {
   RepairActionType,
@@ -244,21 +245,13 @@ function getCompletedStepNumber(steps: ApiRepairStep[]): number {
   );
 }
 
-function toDateOnly(value?: string | null): string {
-  if (!value) return "";
-  const matchedDate = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-  if (matchedDate) return matchedDate;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
 function getWarrantyMonths(
   completedDate?: string | null,
   warrantyDate?: string | null,
 ): number {
   if (!completedDate || !warrantyDate) return 0;
-  const completed = new Date(completedDate);
-  const warranty = new Date(warrantyDate);
+  const completed = new Date(`${timestampDateString(completedDate)}T00:00:00.000Z`);
+  const warranty = new Date(`${calendarDateString(warrantyDate)}T00:00:00.000Z`);
   if (
     Number.isNaN(completed.getTime()) ||
     Number.isNaN(warranty.getTime()) ||
@@ -291,7 +284,7 @@ export function mapApiRepairJob(job: ApiRepairJob): RepairJob {
   const evaluator =
     mapUser(diagnosisStep?.user, job.section) ||
     mapUser(job.mechanicRepairs?.[0]?.user, job.section);
-  const completedDate = toDateOnly(job.returnDate || finalStep?.completeAt);
+  const completedDate = timestampDateString(job.returnDate || finalStep?.completeAt);
   const confirmedBy = mapUser(finalStep?.user, job.section) || receiver;
 
   return {

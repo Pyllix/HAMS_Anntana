@@ -327,7 +327,7 @@ export default function AssetViabilityDetailModal({
                             )}
                           </div>
                           <span className="text-slate-400 text-[10px]">
-                            {new Date(job.createdAt).toLocaleDateString("th-TH")}
+                            {new Date(job.createdAt).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" })}
                           </span>
                         </div>
 

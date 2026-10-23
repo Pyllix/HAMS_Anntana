@@ -1,6 +1,7 @@
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { thaiDateString } from "../../services/thaiDate";
 
 const THAI_MONTHS = [
   "มกราคม",
@@ -85,9 +86,11 @@ export default function ThaiDatePicker({
   id,
 }: ThaiDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // Local Date objects below are calendar containers, not instants sent to the API.
+  const today = new Date(`${thaiDateString()}T00:00:00`);
   const selectedDate = parseDateString(value);
   const minDateObj = parseDateString(minDate);
-  const [viewDate, setViewDate] = useState(selectedDate ?? new Date());
+  const [viewDate, setViewDate] = useState(selectedDate ?? today);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   // ตำแหน่งของปฏิทิน (fixed, คำนวณจากตำแหน่งปุ่ม) เพื่อไม่ให้ container ที่ scroll ได้
@@ -158,7 +161,7 @@ export default function ThaiDatePicker({
 
   const openPicker = () => {
     if (disabled) return;
-    setViewDate(selectedDate ?? new Date());
+    setViewDate(selectedDate ?? today);
     setIsOpen((prev) => !prev);
   };
 
@@ -189,7 +192,6 @@ export default function ThaiDatePicker({
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  const today = new Date();
   const displayText = selectedDate
     ? `${selectedDate.getDate()} ${THAI_MONTHS[selectedDate.getMonth()]} ${
         selectedDate.getFullYear() + BUDDHIST_YEAR_OFFSET

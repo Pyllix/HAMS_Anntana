@@ -1,5 +1,7 @@
+import { thaiCalendarDate } from '../common/time/thai-date';
+
 export function employeeIdPrefix(now = new Date()): string {
-  const thaiYear = String((now.getFullYear() + 543) % 100).padStart(2, '0');
+  const thaiYear = String((Number(thaiCalendarDate(now).slice(0, 4)) + 543) % 100).padStart(2, '0');
   return `GOV-${thaiYear}`;
 }
 
