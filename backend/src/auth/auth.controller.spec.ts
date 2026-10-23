@@ -417,6 +417,7 @@ describe('AuthController', () => {
       expect(result).toEqual({
         status: true,
         message: 'Verification email sent successfully',
+        retryAfterSeconds: 300,
       });
     });
 
@@ -432,6 +433,30 @@ describe('AuthController', () => {
       await expect(
         controller.sendVerificationEmail(dto, mockRequest),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns the server resend wait as HTTP 429 and Retry-After', async () => {
+      mockSendVerificationEmail.mockRejectedValue({
+        statusCode: 429,
+        body: { retryAfterSeconds: 1800 },
+      });
+      const setHeader = jest.fn();
+      const response = { setHeader } as unknown as Response;
+      await expect(
+        controller.sendVerificationEmail(
+          { email: 'unverified@hospital.go.th' },
+          mockRequest,
+          response,
+        ),
+      ).rejects.toMatchObject({
+        status: 429,
+        response: {
+          code: 'VERIFICATION_EMAIL_RATE_LIMITED',
+          retryAfterSeconds: 1800,
+          message: 'กรุณารอก่อนส่งอีเมลยืนยันอีกครั้ง',
+        },
+      });
+      expect(setHeader).toHaveBeenCalledWith('Retry-After', '1800');
     });
   });
 

@@ -1,13 +1,14 @@
 import { runtimeConfig } from '../common/config/bootstrap-config';
 import { randomUUID } from 'node:crypto';
 import { betterAuth, getCurrentAdapter } from 'better-auth';
-import { createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { openAPI, admin } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
-import { sharedPrisma } from '../common/config/database.config';
+import { sharedPool, sharedPrisma } from '../common/config/database.config';
 import { mailService } from '../common/mail/mail.service';
 import { isValidCsrfRequest, trustedOrigins } from './csrf-protection';
+import { reserveVerificationEmailResend } from './email-verification-resend-policy';
 
 // ─── Access Control ───────────────────────────────────────────────────────────
 // Define admin-level permissions matching better-auth's defaults,
@@ -85,6 +86,37 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      const requestBody: unknown = ctx.body;
+      const resendEmail =
+        requestBody !== null &&
+        typeof requestBody === 'object' &&
+        'email' in requestBody
+          ? requestBody.email
+          : undefined;
+      if (
+        ctx.path === '/send-verification-email' &&
+        typeof resendEmail === 'string'
+      ) {
+        // The deployment proxy overwrites X-Real-IP. Internal callers without
+        // that header share a conservative fallback bucket, not the email quota.
+        const waitSeconds = await reserveVerificationEmailResend(
+          sharedPool,
+          resendEmail,
+          ctx.headers?.get('x-real-ip') || 'internal',
+        );
+        if (waitSeconds > 0) {
+          throw new APIError(
+            'TOO_MANY_REQUESTS',
+            {
+              code: 'VERIFICATION_EMAIL_RATE_LIMITED',
+              message:
+                'Please wait before requesting another verification email',
+              retryAfterSeconds: waitSeconds,
+            },
+            { 'Retry-After': String(waitSeconds) },
+          );
+        }
+      }
       if (
         process.env.AUTH_DB_DIAGNOSTICS !== '1' ||
         ctx.path !== '/sign-in/email'

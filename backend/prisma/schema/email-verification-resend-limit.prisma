@@ -1,0 +1,8 @@
+model EmailVerificationResendLimit {
+  key          String     @id @db.VarChar(100)
+  requestTimes DateTime[] @default([]) @map("request_times") @db.Timestamptz(3)
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("email_verification_resend_limits")
+}

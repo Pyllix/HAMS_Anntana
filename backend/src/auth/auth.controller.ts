@@ -39,6 +39,7 @@ import { AdminStepUpService } from './admin-step-up.service';
 import { SignInDto } from './dto/sign-in.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { SendVerificationEmailDto } from './dto/send-verification-email.dto';
+import { VERIFICATION_RESEND_COOLDOWN_SECONDS } from './email-verification-resend-policy';
 import { TwoFactorService } from './two-factor.service';
 import { TrustedBrowserService } from './trusted-browser.service';
 import { PreAuthService, type PreAuthState } from './pre-auth.service';
@@ -336,6 +337,7 @@ export class AuthController {
   async sendVerificationEmail(
     @Body() dto: SendVerificationEmailDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
@@ -358,10 +360,30 @@ export class AuthController {
       return {
         status: true,
         message: 'Verification email sent successfully',
+        retryAfterSeconds: VERIFICATION_RESEND_COOLDOWN_SECONDS,
       };
     } catch (error: unknown) {
       const details = isRecord(error) ? error : {};
       const body = isRecord(details.body) ? details.body : {};
+      if (
+        details.statusCode === 429 ||
+        details.status === 429 ||
+        details.status === 'TOO_MANY_REQUESTS'
+      ) {
+        const retryAfterSeconds =
+          typeof body.retryAfterSeconds === 'number'
+            ? Math.max(1, Math.ceil(body.retryAfterSeconds))
+            : VERIFICATION_RESEND_COOLDOWN_SECONDS;
+        res?.setHeader('Retry-After', String(retryAfterSeconds));
+        throw new HttpException(
+          {
+            code: 'VERIFICATION_EMAIL_RATE_LIMITED',
+            message: 'กรุณารอก่อนส่งอีเมลยืนยันอีกครั้ง',
+            retryAfterSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
       if (details.status === 400 || details.statusCode === 400) {
         const message =
           typeof body.message === 'string'
