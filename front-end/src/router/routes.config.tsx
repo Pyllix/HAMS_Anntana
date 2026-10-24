@@ -52,6 +52,7 @@ interface AppRote {
   icon?: LucideIcon;
   roles: RoleType[];
   showInNav?: boolean;
+  navRoles?: RoleType[];
 }
 
 export const APP_ROUTE: AppRote[] = [
@@ -264,6 +265,7 @@ export const APP_ROUTE: AppRote[] = [
     title: "จัดการกลุ่มอะไหล่",
     element: <SparepartGroupManagement />,
     icon: Package,
+    navRoles: [ROLES.PARCEL_STAFF],
     roles: [
       ROLES.PARCEL_STAFF,
       ROLES.ASSET_CENTER_STAFF,
