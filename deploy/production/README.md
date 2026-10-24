@@ -69,10 +69,10 @@ Nginx อยู่ใน frontend image อยู่แล้ว ไม่ต้
 
 **ทำเพื่ออะไร:** ยืนยันว่าเข้าเครื่องถูกตัว มีทรัพยากรและสิทธิ์เพียงพอ เวลาเครื่องถูกต้อง และรู้ว่ามีบริการใดใช้พอร์ตอยู่แล้ว ขั้นนี้ตรวจข้อมูล ยังไม่ติดตั้งโปรแกรม
 
-ตัวอย่างการเข้าเครื่องจาก **PowerShell**; แทน `SERVER_IP` ด้วย IP จริงของลูกค้า:
+ตัวอย่างการเข้าเครื่องจาก **PowerShell**; แทน `SERVER_IP` ด้วย IP หรือชื่อ server ที่ใช้ SSH เข้าได้ เช่น `med.hss05.com` ตัวอย่างนี้ใช้พอร์ต SSH `2022` ตามข้อมูลการเชื่อมต่อที่แจ้ง หาก IT กำหนดพอร์ตอื่นให้เปลี่ยนค่า `-p` ให้ตรง:
 
 ```powershell
-ssh web02@SERVER_IP
+ssh -p 2022 web02@SERVER_IP
 ```
 
 ตรวจใน **SSH Ubuntu**:
@@ -182,15 +182,29 @@ python3 --version
 
 Bundle รวมประวัติ Git ที่เข้าถึงได้จาก HEAD ด้วย ไม่ได้จำกัดเฉพาะไฟล์ deploy จึงต้องตรวจว่าไม่มี secrets ที่เคย commit ก่อนส่งให้ปลายทาง และตรวจ SSH host fingerprint ของ server ให้ตรงกับข้อมูลจาก IT คำสั่ง SCP ส่งไฟล์เข้าบัญชี `web02` เท่านั้น ยังไม่ติดตั้งหรือเริ่มระบบ; ถ้าปลายทางมีไฟล์ชื่อเดียวกันอาจถูกเขียนทับ
 
-ตัวอย่างบน **PowerShell เครื่องพัฒนา**; แทน `REPLACE_WITH_SERVER_IP` และใช้บัญชี SSH จริงหากต่างจาก `web02`:
+ก่อนส่งไฟล์ ให้รันใน **SSH ของ server ลูกค้า** ด้วยบัญชี `web02` เพื่อเตรียมโฟลเดอร์รับ bundle:
+
+```bash
+install -d -m 0700 "$HOME/hams-incoming"
+```
+
+คำสั่งนี้สร้าง `/home/web02/hams-incoming` และให้เจ้าของบัญชีเข้าถึงได้คนเดียว เป็นที่พัก bundle ก่อน clone source ไป `/opt/hams/releases` หากสร้างไว้แล้วข้ามได้
+
+จากนั้นรันบล็อกต่อไปนี้บน **PowerShell เครื่องพัฒนา** โดยคัดลอกตั้งแต่ `& {` จนถึง `}` ครบทั้งบล็อก เมื่อถามปลายทางให้กรอก `med.hss05.com:2022` ได้เลย หรือกรอก IP/hostname อย่างเดียวเพื่อใช้พอร์ต SSH ตั้งต้น `2022` สคริปต์จะแยกชื่อ server และพอร์ตให้เอง ไม่ใส่ `web02@` หรือ `https://` ในคำตอบ; ใช้บัญชี SSH จริงหากต่างจาก `web02` และแก้ home path ให้ตรงกับบัญชีนั้นด้วย:
 
 ```powershell
 & {
   $ErrorActionPreference = 'Stop'
-  $hamsServerIp = 'REPLACE_WITH_SERVER_IP'
-  if ([string]::IsNullOrWhiteSpace($hamsServerIp) -or $hamsServerIp -eq 'REPLACE_WITH_SERVER_IP') { throw 'Fill the server IP first.' }
+  $hamsSshTarget = (Read-Host 'กรอก server เช่น med.hss05.com:2022').Trim()
+  $hamsEndpoint = [regex]::Match($hamsSshTarget, '^(?<host>[A-Za-z0-9][A-Za-z0-9.-]*)(?::(?<port>[0-9]{1,5}))?$')
+  if (-not $hamsEndpoint.Success) { throw 'Enter an IPv4 address or hostname, optionally followed by :SSH_PORT.' }
+  $hamsServerIp = $hamsEndpoint.Groups['host'].Value
+  $hamsSshPort = 2022
+  if ($hamsEndpoint.Groups['port'].Success) { $hamsSshPort = [int]$hamsEndpoint.Groups['port'].Value }
+  if ($hamsSshPort -lt 1 -or $hamsSshPort -gt 65535) { throw 'SSH port must be from 1 to 65535.' }
   Set-Location 'F:\BUU\HAMS\HAMS_Anntana'
   git status --short
+  if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect repository.' }
   git ls-files --error-unmatch -- deploy/production/compose.yaml deploy/production/nginx.conf deploy/production/compose.env.example deploy/production/backend.env.example deploy/production/smtp.env.example deploy/production/prepare.sh deploy/production/README.md
   if ($LASTEXITCODE -ne 0) { throw 'Commit the production deployment files before creating a bundle.' }
   $hamsPending = git status --porcelain --untracked-files=normal -- deploy/production Dockerfile.backend Dockerfile.frontend .dockerignore backend/src backend/prisma backend/scripts backend/package.json backend/pnpm-lock.yaml backend/pnpm-workspace.yaml front-end
@@ -205,7 +219,7 @@ Bundle รวมประวัติ Git ที่เข้าถึงได�
   if ($LASTEXITCODE -ne 0) { throw 'Bundle creation failed.' }
   git bundle verify $hamsBundle
   if ($LASTEXITCODE -ne 0) { throw 'Bundle verification failed.' }
-  scp $hamsBundle "web02@${hamsServerIp}:/home/web02/hams-source-${hamsRelease}.bundle"
+  scp -P $hamsSshPort $hamsBundle "web02@${hamsServerIp}:/home/web02/hams-incoming/hams-source-${hamsRelease}.bundle"
   if ($LASTEXITCODE -ne 0) { throw 'Source transfer failed.' }
   Write-Host "Release to use on Ubuntu: $hamsRelease"
 }
@@ -224,8 +238,9 @@ Bundle รวมประวัติ Git ที่เข้าถึงได�
 | `Join-Path $env:TEMP ...` | กำหนดชื่อไฟล์ bundle ชั่วคราวบน Windows ไม่ได้สร้าง config หรือคัดลอก secrets |
 | `git bundle create ... HEAD` | รวม commit ปัจจุบันและประวัติ Git ที่เกี่ยวข้องลงไฟล์เดียวสำหรับขนย้าย |
 | `git bundle verify ...` | ตรวจรูปแบบและความครบของข้อมูล Git ใน bundle ไม่ใช่การรันทดสอบแอป |
-| `$hamsServerIp = ...` | กำหนด IP ปลายทางที่ SCP/SSH เข้าถึงได้; ต้องแทน placeholder ก่อน |
-| `scp ... web02@...` | ส่ง bundle ผ่าน SSH ไป home ของบัญชี `web02` บน server |
+| `$hamsSshTarget = (Read-Host ...)` | ถาม IP/hostname และพอร์ต SSH เช่น `med.hss05.com:2022`; ข้อความใน Read-Host เป็นคำถาม ให้พิมพ์ปลายทางหลังระบบถาม |
+| `$hamsEndpoint` / `$hamsServerIp` / `$hamsSshPort` | แยก server กับพอร์ตออกจากกัน ถ้าไม่ระบุพอร์ตใช้ `2022` และตรวจว่าพอร์ตอยู่ในช่วง 1–65535 |
+| `scp -P ... web02@...` | ใช้พอร์ต SSH ที่แยกไว้ส่ง bundle ไป `/home/web02/hams-incoming/` โดย `-P` ของ SCP เป็นตัวพิมพ์ใหญ่ ต่างจาก `-p` ของ SSH |
 | `Write-Host ...` | แสดงรหัส release ที่ต้องใช้ในขั้น Ubuntu ต่อไป |
 
 สร้าง directory สำหรับ release ใน **SSH Ubuntu**; เปลี่ยน `REPLACE_WITH_RELEASE_COMMIT` เป็นค่าจาก PowerShell:
@@ -235,12 +250,12 @@ Bundle รวมประวัติ Git ที่เข้าถึงได�
   set -eu
   HAMS_RELEASE='REPLACE_WITH_RELEASE_COMMIT'
   printf '%s' "$HAMS_RELEASE" | grep -Eq '^[0-9a-fA-F]{12,40}$'
-  test -f "$HOME/hams-source-$HAMS_RELEASE.bundle"
+  test -f "$HOME/hams-incoming/hams-source-$HAMS_RELEASE.bundle"
   test ! -e /opt/hams/app
   test ! -L /opt/hams/app
   sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" /opt/hams /opt/hams/releases
   test ! -e "/opt/hams/releases/$HAMS_RELEASE"
-  git clone "$HOME/hams-source-$HAMS_RELEASE.bundle" "/opt/hams/releases/$HAMS_RELEASE"
+  git clone "$HOME/hams-incoming/hams-source-$HAMS_RELEASE.bundle" "/opt/hams/releases/$HAMS_RELEASE"
   git -C "/opt/hams/releases/$HAMS_RELEASE" switch --detach "$HAMS_RELEASE"
   test "$(git -C "/opt/hams/releases/$HAMS_RELEASE" rev-parse HEAD)" = "$(git -C "/opt/hams/releases/$HAMS_RELEASE" rev-parse --verify "${HAMS_RELEASE}^{commit}")"
   ln -s "releases/$HAMS_RELEASE" /opt/hams/app
@@ -337,7 +352,7 @@ install -d -m 0700 "$HOME/hams-tls-incoming"
 ตัวอย่าง **PowerShell**; แทน `C:\secure` และ `SERVER_IP` ด้วยค่าจริง:
 
 ```powershell
-scp 'C:\secure\fullchain.pem' 'C:\secure\privkey.pem' web02@SERVER_IP:/home/web02/hams-tls-incoming/
+scp -P 2022 'C:\secure\fullchain.pem' 'C:\secure\privkey.pem' web02@SERVER_IP:/home/web02/hams-tls-incoming/
 ```
 
 จากนั้นใน **SSH**:
