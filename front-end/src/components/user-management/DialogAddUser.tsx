@@ -188,6 +188,11 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
       return;
     }
 
+    if (isSectionRequired && !form.sectionId) {
+      setError("กรุณาเลือกหน่วยงาน");
+      return;
+    }
+
     const [firstname, ...rest] = form.fullName.trim().split(/\s+/);
     const lastname = rest.join(" ");
 
@@ -201,7 +206,7 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
       email: form.email,
       password: form.password,
       role: form.role,
-      ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
+      ...(form.sectionId && { sectionId: form.sectionId }),
     } as UserDto;
 
     submitStartedRef.current = true;
@@ -283,22 +288,21 @@ export default function DialogAddUser({ isOpenAdd, onClose }: Props) {
                   <span className="text-emerald-600">*</span>
                 ) : (
                   <span className="text-xs font-normal text-gray-400">
-                    (ไม่ต้องระบุ)
+                    (ไม่บังคับ)
                   </span>
                 )}
               </label>
               <select
                 name="sectionId"
                 required={isSectionRequired}
-                disabled={!isSectionRequired}
-                value={isSectionRequired ? form.sectionId : ""}
+                value={form.sectionId}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm text-gray-900 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 <option value="" disabled={isSectionRequired}>
                   {isSectionRequired
                     ? "-- โปรดเลือกหน่วยงาน --"
-                    : "-- ผู้ดูแลระบบไม่ต้องระบุหน่วยงาน --"}
+                    : "-- ไม่ระบุหน่วยงาน --"}
                 </option>
                 {sections?.map((section) => (
                   <option key={section.id} value={section.id}>

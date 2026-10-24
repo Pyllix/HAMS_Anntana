@@ -25,14 +25,15 @@ export default function DialogDetailUser({
   onClose,
   user,
 }: DialogDetailUserProps) {
-  if (!isOpen || !user) return null;
-
-  const sectionId = user.section_id;
+  const sectionId = user?.section_id;
 
   const { data: section } = useQuery({
     queryKey: ["section", sectionId],
-    queryFn: () => getSectionById(sectionId),
+    queryFn: () => getSectionById(sectionId!),
+    enabled: isOpen && !!sectionId,
   });
+
+  if (!isOpen || !user) return null;
 
   const fullName =
     `${user.firstname || ""} ${user.lastname || ""}`.trim() || "-";
@@ -135,7 +136,7 @@ export default function DialogDetailUser({
                   หน่วยงาน / แผนก
                 </dt>
                 <dd className="text-sm font-semibold text-gray-900 whitespace-normal">
-                  {section?.name ?? "-"}
+                  {sectionId ? section?.name ?? "-" : "ไม่ระบุหน่วยงาน"}
                 </dd>
               </div>
               <div>
