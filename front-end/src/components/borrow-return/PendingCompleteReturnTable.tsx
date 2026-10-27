@@ -220,7 +220,7 @@ export default function PendingCompleteReturnTable() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9 5l7 7-7"
+                  d="M9 5l7 7-7 7"
                 />
               </svg>
             </button>
