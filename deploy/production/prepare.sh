@@ -3,13 +3,13 @@
 #   sudo bash deploy/production/prepare.sh --init
 #   sudo bash deploy/production/prepare.sh --check
 # Optional: --config-dir /absolute/path (default /etc/hams).
-# Requires Python >= 3.10, OpenSSL, iproute2, Docker Engine and Compose >= 2.30.
+# Requires Python >= 3.10, iproute2, Docker Engine and Compose >= 2.30.
 # Does not install packages, build/start containers, migrate/seed/bootstrap,
 # contact SMTP, change DNS/firewall, or generate a certificate/test CA.
 # --init creates missing configuration for a NEW installation. Existing secrets
 # are validated and retained. --check never creates or changes configuration.
 # Exit codes: 0 = initialization completed / checks passed, 1 = error,
-# 2 = --check found settings or certificate files that still need preparation.
+# 2 = --check found settings that still need preparation.
 set -euo pipefail
 umask 077
 
@@ -17,7 +17,7 @@ usage() {
     printf '%s\n' \
         'Usage: sudo bash deploy/production/prepare.sh --init|--check [--config-dir /etc/hams]' \
         '--init   Prepare files and independent secrets; preserve existing values.' \
-        '--check  Read-only configuration/certificate checks; exit 2 when incomplete.'
+        '--check  Read-only HTTP/SMTP configuration checks; exit 2 when incomplete.'
 }
 
 mode=''
@@ -67,7 +67,7 @@ SOURCE = Path(sys.argv[1])
 MODE = sys.argv[2]
 ROOT = Path(sys.argv[3])
 REPO = SOURCE.parent.parent.resolve()
-ORIGIN = 'https://med.hss05.com:20443'
+ORIGIN = 'http://med.hss05.com:20443'
 PROJECT = 'hams'
 VOLUME = PROJECT + '_postgres-data'
 FILES = ('compose.env', 'backend.env', 'smtp.env', 'postgres-password')
@@ -189,7 +189,6 @@ def validate_secrets():
 def initialize():
     for name in FILES:
         metadata(ROOT / name, secret=True)
-    metadata(ROOT / 'tls', directory=True)
     present = {name: (ROOT / name).exists() for name in FILES}
     if present['backend.env'] != present['postgres-password']:
         fail('Incomplete database/auth secret pair. Restore both matching files; automatic repair/rotation is disabled.')
@@ -227,11 +226,6 @@ def initialize():
                 content = content.replace('HAMS_CONFIG_DIR=/etc/hams', 'HAMS_CONFIG_DIR=' + str(ROOT))
             write_new(ROOT / name, content)
             print('CREATED: ' + name + ' template; fill the deployment values locally.')
-    tls = ROOT / 'tls'
-    if not tls.exists():
-        tls.mkdir(mode=0o750)
-        os.chown(tls, 0, 101)  # nginx user/group in the reviewed frontend image.
-        os.chmod(tls, 0o750)
 
 
 def inspect_configuration():
@@ -283,7 +277,6 @@ def inspect_configuration():
         pending.append('Use SMTP_SECURE=true for implicit TLS on port 465.')
     if port in ('587', '2525') and (smtp.get('SMTP_SECURE') != 'false' or smtp.get('SMTP_REQUIRE_TLS') != 'true'):
         pending.append('Use SMTP_SECURE=false and SMTP_REQUIRE_TLS=true on port 587/2525.')
-    inspect_tls(pending)
     if not pending:
         # Do not inherit shell overrides that could silently select other files,
         # release tags, or listening addresses instead of the reviewed env file.
@@ -299,33 +292,6 @@ def inspect_configuration():
     return pending
 
 
-def inspect_tls(pending):
-    directory = ROOT / 'tls'
-    info = metadata(directory, directory=True)
-    cert, key = directory / 'fullchain.pem', directory / 'privkey.pem'
-    if info is None or not cert.exists() or not key.exists():
-        pending.append('Install the real med.hss05.com fullchain.pem and privkey.pem in tls/; no certificate is generated.')
-        return
-    if info.st_gid != 101 or stat.S_IMODE(info.st_mode) != 0o750:
-        pending.append('tls/ must be root:101 with mode 0750 for the frontend nginx user.')
-    for file in (cert, key):
-        details = metadata(file)
-        mode = stat.S_IMODE(details.st_mode)
-        if details.st_gid != 101 or mode not in ((0o640, 0o644) if file == cert else (0o640,)):
-            pending.append(file.name + ' must be root:101; use 0640 (0644 also allowed for the public certificate).')
-    cert_public = run(['openssl', 'x509', '-in', str(cert), '-pubkey', '-noout'], 'TLS certificate parsing')
-    key_public = run(['openssl', 'pkey', '-in', str(key), '-pubout', '-passin', 'pass:'], 'Unencrypted TLS key parsing')
-    if cert_public.stdout.strip() != key_public.stdout.strip():
-        fail('TLS certificate and private key do not match.')
-    checks = [
-        (['openssl', 'x509', '-in', str(cert), '-noout', '-checkend', '604800'], 'TLS certificate must remain valid for at least seven days.'),
-        (['openssl', 'verify', '-purpose', 'sslserver', '-verify_hostname', 'med.hss05.com', '-untrusted', str(cert), str(cert)], 'TLS chain/hostname must verify against the host trust store.'),
-    ]
-    for arguments, message in checks:
-        if run(arguments, 'TLS validation', check=False).returncode:
-            pending.append(message)
-
-
 def main():
     if sys.version_info < (3, 10):
         fail('Python 3.10 or newer is required.')
@@ -338,7 +304,7 @@ def main():
     for parent in (*reversed(ROOT.parents), ROOT):
         if parent.is_symlink():
             fail('The configuration path must not pass through symbolic links.')
-    for tool in ('docker', 'openssl', 'ip'):
+    for tool in ('docker', 'ip'):
         if shutil.which(tool) is None:
             fail('Install the prerequisite first: ' + tool + '. This script installs nothing.')
     endpoint = (os.environ.get('DOCKER_HOST') if not os.environ.get('DOCKER_CONTEXT') else None)
@@ -382,10 +348,10 @@ def main():
         for message in pending:
             print('PENDING: ' + message)
         if pending:
-            print('PREPARED_NOT_DEPLOY_READY: fill the settings/install the certificate, then run --check.')
+            print('PREPARED_NOT_DEPLOY_READY: fill the settings, then run --check.')
             return 0 if MODE == '--init' else 2
         print('CONFIG_CHECKS_PASS: public origin ' + ORIGIN + '; existing secrets retained.')
-        print('Next: separately verify port forwarding, browser certificate trust, SMTP delivery, migration and handover.')
+        print('Next: separately verify HTTP port forwarding, login/2FA, SMTP delivery, migrations and handover.')
         return 0
 
 

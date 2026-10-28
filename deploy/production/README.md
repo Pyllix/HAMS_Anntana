@@ -1,12 +1,12 @@
 # Deploy HAMS บน Ubuntu ของลูกค้า
 
-ชุดนี้แยกจาก `deploy/docker-local` สำหรับติดตั้งใหม่บนเครื่องลูกค้า โดยไม่ย้ายฐานข้อมูล บัญชีทดสอบ กุญแจ หรือ CA ของ VM มาด้วย ตรวจเอกสารเมื่อ 24 ตุลาคม 2026; ยังไม่ได้รันขั้นติดตั้งบนเครื่องลูกค้าจริง
+ชุดนี้แยกจาก `deploy/docker-local` สำหรับติดตั้งใหม่บนเครื่องลูกค้า โดยไม่ย้ายฐานข้อมูล บัญชีทดสอบ กุญแจ หรือ CA ของ VM มาด้วย ปรับชุด HTTP เมื่อ 28 ตุลาคม 2026; ยังไม่ได้สลับชุด HTTP นี้บนเครื่องลูกค้าจริง
 
 ทำทีละขั้น ถ้าคำสั่งผิดพลาดให้ตรวจขั้นนั้นก่อนเดินต่อ คำสั่งที่ระบุ **PowerShell** รันบน Windows; บล็อก **bash** รันใน SSH ของ Ubuntu ไม่คัดลอกคำสั่ง Windows ลง SSH
 
-**สถานะเอกสาร:** ชุด deploy อยู่ที่ `deploy/production` และใช้ Docker project `hams` แล้ว ต้องกรอก config จริง เตรียม Certificate และผ่านการตรวจแต่ละขั้นก่อนเริ่มบริการบน server
+**สถานะเอกสาร:** ชุด deploy อยู่ที่ `deploy/production` และใช้ Docker project `hams` แล้ว ใช้ HTTP ตามที่ลูกค้าร้องขอ ต้องกรอก config จริงและผ่านการตรวจแต่ละขั้นก่อนเริ่มบริการบน server
 
-แนวทางสำหรับลูกค้าที่มี VM เดียว: ใช้ผลทดสอบฟีเจอร์จาก Ubuntu VM ของทีมเป็นฐาน แล้วติดตั้ง production บน VM ลูกค้าเพื่อตรวจรับก่อนเปิดใช้งาน โดยเน้น DNS/การส่งต่อพอร์ต/Firewall, Certificate, SMTP และการใช้งานผ่าน URL จริง ยังไม่เริ่มบันทึกข้อมูลใช้งานจริงระหว่างตรวจรับ
+แนวทางสำหรับลูกค้าที่มี VM เดียว: ใช้ผลทดสอบฟีเจอร์จาก Ubuntu VM ของทีมเป็นฐาน แล้วติดตั้ง production บน VM ลูกค้าเพื่อตรวจรับก่อนเปิดใช้งาน โดยเน้น DNS/การส่งต่อพอร์ต/Firewall, HTTP, SMTP และการใช้งานผ่าน URL จริง ยังไม่เริ่มบันทึกข้อมูลใช้งานจริงระหว่างตรวจรับ
 
 ลำดับคือ **ส่วน 3–5 เตรียมเครื่อง/source → ส่วน 6–14 ติดตั้งและตรวจบริการ → ส่วน 15 ตรวจรับและจัดการข้อมูลทดสอบ → ส่วน 16 สำรองข้อมูลตั้งต้นก่อนส่งมอบ** การซ้อม restore ใช้ VM ทดสอบของทีม หรือปลายทางแยกที่ IT อนุมัติ ไม่ restore ทับฐานที่จะส่งมอบ
 
@@ -30,23 +30,23 @@
 **ทำเพื่ออะไร:** ให้เข้าใจเส้นทางเว็บ ฐานข้อมูล และ SMTP ก่อนติดตั้ง จะได้กำหนดพอร์ตและ URL ตรงกับระบบเครือข่ายจริง
 
 ```text
-เครื่องผู้ใช้: https://med.hss05.com:20443
-  -> อุปกรณ์ลูกค้าส่งต่อ TCP 20443 ไปยัง IP server:443 โดยคง HTTPS/Host เดิม
-  -> Docker frontend/Nginx:8443 รับและถอดรหัส HTTPS
+เครื่องผู้ใช้: http://med.hss05.com:20443
+  -> อุปกรณ์ลูกค้าส่งต่อ TCP 20443 ไปยัง IP server:443 โดยส่งต่อ HTTP และคง Host เดิม
+  -> Docker frontend/Nginx:8081 รับ HTTP (ไม่มี TLS สำหรับเว็บ)
   -> backend:3000 -> postgres:5432 ภายในเครือข่าย Docker
                  -> SMTP ภายนอกผ่านเครือข่าย smtp-egress
 ```
 
 | รายการ | ค่าของชุดลูกค้า |
 | --- | --- |
-| Public origin สำหรับเว็บ, Auth และอีเมล | `https://med.hss05.com:20443` |
-| พอร์ตที่ Docker เปิดบน server | IPv4 ที่เลือกไว้ พอร์ต `443` |
+| Public origin สำหรับเว็บ, Auth และอีเมล | `http://med.hss05.com:20443` |
+| พอร์ตที่ Docker เปิดบน server | IPv4 ที่เลือกไว้ พอร์ต `443` รับ HTTP แบบ plaintext |
 | Docker project | `hams` |
 | PostgreSQL user / database | `hams_prod` / `hams_prod` |
 | ข้อมูลถาวร | volumes `hams_postgres-data`, `hams_images`, `hams_image-temp` |
 | ไฟล์ตั้งค่าจริง | `/etc/hams` นอก source code |
 | Source รุ่นที่ใช้ | `/opt/hams/app` เป็น symlink ไป `/opt/hams/releases/RELEASE` |
-| SMTP | `smtp.env` รองรับ Brevo/Gmail ตามบัญชีที่เตรียม |
+| SMTP | `smtp.env` ตั้งต้น Gmail STARTTLS 587; รองรับ Brevo เมื่อเปลี่ยนค่า |
 
 Nginx อยู่ใน frontend image อยู่แล้ว ไม่ต้องลง Nginx, Node.js, pnpm, npm หรือ PostgreSQL บน host เพื่อใช้ชุดนี้ Build frontend ใช้ npm ส่วน backend/setup ใช้ pnpm ตาม Dockerfile ของโครงการ
 
@@ -54,12 +54,12 @@ Nginx อยู่ใน frontend image อยู่แล้ว ไม่ต้
 
 ## 2. ข้อมูลที่ต้องยืนยันกับ IT
 
-**ทำเพื่ออะไร:** แยกสิ่งที่ตั้งค่าในแอปออกจาก DNS, การส่งต่อพอร์ต และ Certificate ซึ่งต้องเตรียมร่วมกับผู้ดูแลเครือข่าย
+**ทำเพื่ออะไร:** แยกสิ่งที่ตั้งค่าในแอปออกจาก DNS และการส่งต่อพอร์ต ซึ่งต้องเตรียมร่วมกับผู้ดูแลเครือข่าย
 
 - DNS ของ `med.hss05.com` ต้องชี้ไปยังจุดที่รับบริการนี้ได้จากเครื่องผู้ใช้เป้าหมาย
 - ยืนยันเส้นทางภายนอก `20443 -> server:443` รวมการเข้า URL เดียวกันจาก LAN/VPN หากมีการใช้ split DNS หรือ NAT loopback
-- ชุดนี้ตั้งสมมติฐานว่า HAMS ถอดรหัส HTTPS เอง หากมี reverse proxy อีกชั้น ต้องยืนยัน TLS/SNI/Host และ IP ของ proxy ก่อนใช้ config นี้ โดยเฉพาะ proxy ที่ตัด `:20443` ออกจาก Host อาจทำให้ redirect วน
-- ต้องมี full chain และ private key สำหรับ `med.hss05.com` หรือ wildcard ที่ครอบคลุม พร้อมผู้รับผิดชอบต่ออายุ Certificate
+- ชุดนี้ใช้ HTTP ตลอดเส้นทาง `20443 -> server:443 -> container:8081` พอร์ต 443 ภายในไม่ได้รับ TLS อุปกรณ์ข้างหน้าต้องส่งต่อ TCP/HTTP ไม่บังคับ HTTPS หรือถอดรหัส TLS และต้องคง Host `med.hss05.com:20443`
+- เว็บชุดนี้ไม่ต้องใช้ Certificate แต่ HTTP ไม่เข้ารหัสรหัสผ่าน, TOTP, session และลิงก์ยืนยันระหว่างผู้ใช้กับเว็บ ให้ลูกค้ารับทราบรูปแบบนี้ก่อน cutover; SMTP ยังบังคับ TLS
 - เครือข่ายต้องอนุญาตการดาวน์โหลดแพ็กเกจ/images ขณะติดตั้ง และให้ backend เชื่อมต่อออกไปยัง SMTP ที่เลือก
 - เตรียมเจ้าของบัญชี Admin จริงสองคนและอีเมลที่รับได้ พร้อมปลายทาง backup นอกเครื่องและช่วงเวลาบำรุงรักษา
 
@@ -117,7 +117,7 @@ if command -v ufw >/dev/null; then sudo ufw status verbose; fi
 
 ## 4. ติดตั้ง Docker Engine และเครื่องมือเตรียมไฟล์
 
-**ทำเพื่ออะไร:** ให้ Ubuntu รัน containers และ Compose ได้ พร้อมเครื่องมือสำหรับรับ source, สร้างไฟล์ตั้งค่า และตรวจ Certificate ขั้นนี้ติดตั้งแพ็กเกจและเปิด Docker service บน host
+**ทำเพื่ออะไร:** ให้ Ubuntu รัน containers และ Compose ได้ พร้อมเครื่องมือสำหรับรับ source, สร้างไฟล์ตั้งค่า และตรวจ HTTP/เครือข่าย ขั้นนี้ติดตั้งแพ็กเกจและเปิด Docker service บน host
 
 สำหรับเครื่องใหม่ที่ยังไม่มี Docker ตามผลตรวจของลูกค้า หากมี Docker/containerd จากชุดอื่นอยู่แล้ว ให้ประเมินการย้ายแพ็กเกจก่อน ใช้ Docker Engine บน Ubuntu ไม่ต้องลง Docker Desktop บน server
 
@@ -125,7 +125,7 @@ if command -v ufw >/dev/null; then sudo ufw status verbose; fi
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git python3 openssl iproute2 nano
+sudo apt-get install -y ca-certificates curl git python3 iproute2 nano
 sudo install -d -m 0755 /etc/apt/keyrings
 sudo curl --fail --show-error --silent --location https://download.docker.com/linux/ubuntu/gpg --output /etc/apt/keyrings/docker.asc
 sudo chmod 0644 /etc/apt/keyrings/docker.asc
@@ -134,7 +134,7 @@ sudo chmod 0644 /etc/apt/keyrings/docker.asc
 | คำสั่ง | ทำอะไร |
 | --- | --- |
 | `apt-get update` | ดาวน์โหลดรายการแพ็กเกจล่าสุดจาก repository ที่ตั้งไว้ ยังไม่ได้อัปเกรดโปรแกรมทั้งหมด |
-| `apt-get install -y ...` | ติดตั้งเครื่องมือ: `ca-certificates` สำหรับ trust ของ TLS, `curl` ดาวน์โหลด/ตรวจเว็บ, `git` รับ source, `python3` รัน prepare, `openssl` ตรวจ TLS, `iproute2` ตรวจ IP/พอร์ต และ `nano` แก้ไฟล์; `-y` ตอบตกลงการติดตั้ง |
+| `apt-get install -y ...` | ติดตั้งเครื่องมือ: `ca-certificates` สำหรับ trust ของ TLS ขาออก, `curl` ดาวน์โหลด/ตรวจเว็บ, `git` รับ source, `python3` รัน prepare, `iproute2` ตรวจ IP/พอร์ต และ `nano` แก้ไฟล์; `-y` ตอบตกลงการติดตั้ง |
 | `install -d -m 0755 /etc/apt/keyrings` | เตรียมโฟลเดอร์เก็บกุญแจตรวจลายเซ็นแพ็กเกจให้ผู้ใช้ทั่วไปอ่าน/เข้าถึงได้ แต่แก้ไขได้เฉพาะเจ้าของ |
 | `curl ... --output .../docker.asc` | ดาวน์โหลด public signing key ของ Docker ให้ apt ใช้ตรวจลายเซ็นแพ็กเกจ; ไม่ใช่รหัสผ่านหรือ TLS private key ของเว็บ |
 | `chmod 0644 .../docker.asc` | ให้ root เขียนกุญแจได้ และผู้ใช้อื่นอ่านได้เพื่อใช้ตรวจสอบแพ็กเกจ |
@@ -303,9 +303,8 @@ sudo bash deploy/production/prepare.sh --init
 | `backend.env` | กรอกข้อมูลเจ้าของ Admin สองคน; เก็บ DATABASE_URL และกุญแจที่สร้างไว้ |
 | `smtp.env` | กรอกบัญชี/รหัส SMTP และผู้ส่งที่ได้รับอนุญาต |
 | `postgres-password` | สคริปต์สร้างให้ตรงกับ DATABASE_URL |
-| `tls/` | วาง Certificate จริงในขั้นถัดไป |
 
-`--init` จบด้วย `PREPARED_NOT_DEPLOY_READY` ได้ตามปกติ เพราะยังเว้นข้อมูลจริงและ Certificate ไว้ มันไม่ได้เริ่มฐานข้อมูลหรือเว็บ
+`--init` จบด้วย `PREPARED_NOT_DEPLOY_READY` ได้ตามปกติ เพราะยังเว้นข้อมูลจริงไว้ มันไม่ได้เริ่มฐานข้อมูลหรือเว็บ และไม่สร้าง Certificate สำหรับ HTTP
 
 ```bash
 git -C /opt/hams/app rev-parse --short=12 HEAD
@@ -333,50 +332,24 @@ sudo nano /etc/hams/smtp.env
 - ค่าใน `backend.env`/`smtp.env` ใช้รูปแบบ raw `KEY=value` ไม่ครอบค่าในเครื่องหมายคำพูด ไม่ใช้ `source` โหลดไฟล์เหล่านี้เข้า shell และไม่พิมพ์ secret ออกมาเพื่อส่งในแชต
 - `NODE_ENV`, `FRONTEND_URL`, `BETTER_AUTH_URL` และ image paths มาจาก Compose ไม่ต้องเพิ่มซ้ำใน backend.env; prepare.sh ตรวจว่าชื่อ key ตรงกับแม่แบบ
 
-Brevo ตั้งต้นเป็นพอร์ต 587 พร้อม required STARTTLS หากเปลี่ยนเป็น Gmail ให้แก้ชุดค่าใน `smtp.env` และใช้ Google App Password ตามคำอธิบายในแม่แบบ ไม่ใช้รหัสผ่านบัญชี Google ปกติ
+Gmail ตั้งต้นเป็นพอร์ต 587 พร้อม required STARTTLS ใช้ SMTP_USER เป็นอีเมลเต็ม, SMTP_PASS เป็น App Password ของบัญชีนั้น 16 ตัวติดกัน และ SMTP_FROM ใช้อีเมลเดียวกัน ไม่ใช้รหัสผ่าน Google ปกติ หากไฟล์ smtp.env เดิมเป็น Brevo สคริปต์จะคงค่าเดิมไว้ ต้องแก้เองและ recreate backend เพื่อเปลี่ยน provider
 
-**ผลที่ควรได้:** มีไฟล์ตั้งค่าครบ กรอกข้อมูลจริงแล้ว และรหัส DB ในสองตำแหน่งตรงกัน; ยังต้องวาง Certificate และผ่าน `--check` ก่อน build
+**ผลที่ควรได้:** มีไฟล์ตั้งค่าครบ กรอกข้อมูลจริงแล้ว และรหัส DB ในสองตำแหน่งตรงกัน; ต้องผ่าน `--check` ก่อน build โดยไม่ต้องวาง Certificate สำหรับเว็บ
 
-## 7. ติดตั้ง Certificate จริง
+## 7. ยืนยัน protocol HTTP และเส้นทางพอร์ต
 
-**ทำเพื่ออะไร:** ให้ Nginx แสดง HTTPS สำหรับชื่อเว็บจริง และอ่าน private key ได้ด้วยสิทธิ์ของ container
+**ทำเพื่ออะไร:** ให้ URL ภายนอกตรงกับ protocol ที่ Nginx รับจริง โดยไม่เปลี่ยน NAT/firewall ของลูกค้าอัตโนมัติ
 
-ขอ `fullchain.pem` และ `privkey.pem` ที่ตรงกันจาก IT ผ่านช่องทางที่อนุมัติ ชื่อใน Certificate ต้องครอบคลุม `med.hss05.com` โดยไม่มีเลขพอร์ต กุญแจต้องเป็น PEM ที่ Nginx อ่านได้โดยไม่ต้องถาม passphrase
+ชุดนี้กำหนด `http://med.hss05.com:20443` และยัง bind ที่ server `HAMS_BIND_IP:443` ตามเส้นทาง TCP เดิม แต่ container รับ HTTP ที่ 8081 พอร์ต 443 ภายในจึงเป็น plaintext HTTP ไม่ใช่ HTTPS ไม่ต้องใช้พอร์ต 80 ของ host ซึ่งอาจมี Nginx ที่ลงพร้อม Certbot รับอยู่
 
-หากใช้ SCP รับไฟล์ ให้สร้างโฟลเดอร์รับส่วนตัวใน **SSH** ก่อน:
+- ให้ IT ยืนยัน `TCP 20443 -> server:443` และไม่บังคับ HTTPS/SSL inspection ที่คาดว่า server ต้องรับ TLS
+- `nginx.conf` ไม่มี ssl listener, redirect ไป HTTPS หรือการอ่าน Certificate; frontend ไม่ mount `/etc/hams/tls`
+- `compose.yaml` เปิด `HAMS_ALLOW_INSECURE_HTTP=true` เฉพาะ installation mode customer โดยคง NODE_ENV=production, auth/2FA keys, CSRF และ SMTP TLS
+- `prepare.sh` ไม่สร้าง TLS directory หรือบังคับตรวจไฟล์ Certificate แต่ไม่ลบหรือแก้ไฟล์ TLS เดิม หากมีอยู่ให้เก็บไว้ใน backup
+- เครื่องที่เคยเข้า HTTPS อาจมี HSTS, Secure cookie หรือ HTTPS-only policy ค้างอยู่ ให้ใช้ browser profile ใหม่ในการตรวจรับ HTTP ก่อน ไม่ปิดนโยบายองค์กรเอง
+- หากจะกลับ HTTPS ในอนาคต ต้องปรับ listener/port mount, public URLs, HTTP opt-in และการตรวจ Certificate ให้สอดคล้องกัน ไม่ใช่เพียงวาง Certificate
 
-```bash
-install -d -m 0700 "$HOME/hams-tls-incoming"
-```
-
-ตัวอย่าง **PowerShell**; แทน `C:\secure` และ `SERVER_IP` ด้วยค่าจริง:
-
-```powershell
-scp -P 2022 'C:\secure\fullchain.pem' 'C:\secure\privkey.pem' web02@SERVER_IP:/home/web02/hams-tls-incoming/
-```
-
-จากนั้นใน **SSH**:
-
-```bash
-sudo install -o root -g 101 -m 0640 "$HOME/hams-tls-incoming/fullchain.pem" /etc/hams/tls/fullchain.pem
-sudo install -o root -g 101 -m 0640 "$HOME/hams-tls-incoming/privkey.pem" /etc/hams/tls/privkey.pem
-sudo stat -c '%a %u:%g %n' /etc/hams /etc/hams/tls /etc/hams/tls/fullchain.pem /etc/hams/tls/privkey.pem
-```
-
-| คำสั่ง | ทำอะไร |
-| --- | --- |
-| `install -d -m 0700 ...hams-tls-incoming` | สร้างโฟลเดอร์รับไฟล์ที่บัญชี SSH เข้าถึงได้คนเดียว |
-| `scp ...fullchain.pem ...privkey.pem ...` | ส่ง Certificate chain และ private key จาก Windows ไปโฟลเดอร์รับบน server |
-| `sudo install -o root -g 101 -m 0640 ...` | คัดลอกแต่ละไฟล์ไปตำแหน่งใช้งาน พร้อมตั้งเจ้าของ root, กลุ่ม 101 ของ Nginx และสิทธิ์อ่านที่จำเป็น; ถ้าไฟล์ปลายทางมีอยู่จะถูกแทนที่ |
-| `stat -c '%a %u:%g %n' ...` | แสดง permission, UID:GID และ path เพื่อยืนยันสิทธิ์ โดยไม่แสดงเนื้อหา private key |
-
-TLS directory ต้องเป็น `root:101` mode 0750 เพื่อให้ Nginx ใน container อ่านไฟล์ได้ ไฟล์ที่วางต้องเป็นไฟล์จริง ไม่ใช่ symlink ไปยังพื้นที่อื่น ส่วนสำเนาไฟล์ขาเข้าให้เก็บหรือทำลายตามวิธีจัดการ private key ของ IT
-
-`prepare.sh` ไม่ออก Certificate และไม่ติดตั้ง root CA ให้ หากใช้ CA ภายใน ให้ IT จัดการ trust บน host และเครื่องผู้ใช้อย่างเหมาะสม การตรวจบน host ผ่านไม่รับรองว่า browser ทุกเครื่องไว้ใจ CA แล้ว
-
-ถ้าจะใช้ Let's Encrypt ให้ผู้ดูแลโดเมนเลือกวิธีออกและต่ออายุ: HTTP-01 ต้องเข้าถึงพอร์ต 80, TLS-ALPN-01 ใช้ 443 และ DNS-01 ต้องแก้ DNS การเปิดเว็บที่ 20443 อย่างเดียวไม่พอสำหรับ HTTP-01 ดู [ชนิด challenge](https://letsencrypt.org/docs/challenge-types/)
-
-**ผลที่ควรได้:** มี `fullchain.pem` และ `privkey.pem` ใน `/etc/hams/tls`, ไฟล์เป็น `640 0:101` และ TLS directory เป็น `750 0:101`; ขั้นถัดไปจะตรวจชื่อโดเมน/key/chain/วันหมดอายุอีกครั้ง
+**ผลที่ควรได้:** IT ยืนยันเส้นทาง HTTP และ public URL เดียวกันสำหรับเว็บ, Auth และลิงก์ยืนยันเมล
 
 ## 8. ตรวจค่าก่อน build
 
@@ -391,7 +364,7 @@ sudo bash deploy/production/prepare.sh --check
 - exit 2 / `PENDING`: ยังมีช่องที่ต้องกรอกหรือ Certificate ที่ต้องเตรียม
 - exit 1 / `PREPARATION_STOPPED`: ข้อมูล/สิทธิ์ผิดหรือ prerequisite ไม่พร้อม ให้ตรวจตามข้อความก่อน
 
-ต้องผ่านก่อนทำต่อ สคริปต์ตรวจรหัส DB คู่กัน, กุญแจ, IP ที่อยู่บนเครื่อง, Admin, TLS ของ SMTP, key/chain/hostname/อายุ Certificate อย่างน้อยเจ็ดวัน และ Compose config แต่ไม่ได้ทดสอบการส่งเมลจริงหรือเส้นทางจากภายนอก
+ต้องผ่านก่อนทำต่อ สคริปต์ตรวจรหัส DB คู่กัน, กุญแจ, IP ที่อยู่บนเครื่อง, Admin, TLS ของ SMTP และ Compose config; ไม่บังคับ Certificate ของเว็บ แต่ไม่ได้ทดสอบการส่งเมลจริงหรือเส้นทางจากภายนอก
 
 กำหนด function นี้ใน **SSH หน้าต่างที่ใช้ deploy** หากหลุด SSH ให้กำหนดใหม่ก่อนใช้คำสั่ง `hams`:
 
@@ -411,7 +384,7 @@ Function ล้างเฉพาะ shell overrides ที่อาจทำใ
 
 | คำสั่ง/ส่วนของ function | ทำอะไร |
 | --- | --- |
-| `sudo bash .../prepare.sh --check` | ตรวจ config และ Certificate แบบอ่านอย่างเดียว ไม่สร้างไฟล์หรือเริ่มแอป |
+| `sudo bash .../prepare.sh --check` | ตรวจ config HTTP/SMTP แบบอ่านอย่างเดียว ไม่สร้างไฟล์หรือเริ่มแอป |
 | `hams() { ... }` | สร้างคำสั่งย่อใน SSH session ปัจจุบัน; ต้องคัดลอกทั้ง function และกำหนดใหม่เมื่อเปิด SSH ใหม่ |
 | `sudo env -u ...` | ตัดตัวแปร override ที่ระบุออกเฉพาะ process นี้ เพื่อไม่ให้ค่าค้างใน shell เปลี่ยน project/release/IP ที่ต้องการ |
 | `docker compose --env-file /etc/hams/compose.env` | โหลดตัวแปรที่ Compose ใช้เลือก release/IP/config directory; ส่วน secrets ของ service โหลดจาก env files ที่ระบุใน compose.yaml |
@@ -437,7 +410,7 @@ hams run --rm --no-deps frontend nginx -t
 | `hams pull postgres` | ดาวน์โหลด PostgreSQL image ตามรุ่นที่ระบุใน Compose ยังไม่เริ่มฐานข้อมูล |
 | `hams --profile tools build backend frontend setup` | Build images ทั้งสามจาก source ปัจจุบัน; `--profile tools` เปิดให้เลือก service setup ที่ปกติซ่อนไว้ |
 | `hams --profile tools config --images` | แสดงชื่อ/tag images ที่ Compose จะใช้ ไม่ใช่การดึงหรือเริ่ม images |
-| `hams run --rm --no-deps frontend nginx -t` | เปิด frontend container ชั่วคราวเพื่อเช็ก syntax/config/TLS files; `--rm` ลบ container ชั่วคราวหลังจบ และ `--no-deps` ไม่เริ่ม services ที่พึ่งพา |
+| `hams run --rm --no-deps frontend nginx -t` | เปิด frontend container ชั่วคราวเพื่อเช็ก syntax/config HTTP; `--rm` ลบ container ชั่วคราวหลังจบ และ `--no-deps` ไม่เริ่ม services ที่พึ่งพา |
 
 ต้องได้ `nginx: configuration file ... test is successful` คำสั่ง `run` นี้ตรวจ Nginx ใน container ชั่วคราว ไม่ publish พอร์ตของ service และไม่เริ่ม backend เพราะใช้ `--no-deps` ดู [Compose run](https://docs.docker.com/reference/cli/docker/compose/run/)
 
@@ -471,7 +444,7 @@ hams --profile tools run --rm --no-deps setup pnpm run prisma:seed:reference
 
 ## 11. เริ่มเว็บและตรวจจาก server
 
-**ทำเพื่ออะไร:** เปิด backend/frontend จาก images ที่ build ไว้ แล้วทดสอบ HTTPS และเส้นทาง API ภายใน server ก่อนแยกตรวจเครือข่ายภายนอก
+**ทำเพื่ออะไร:** เปิด backend/frontend จาก images ที่ build ไว้ แล้วทดสอบ HTTP และเส้นทาง API ภายใน server ก่อนแยกตรวจเครือข่ายภายนอก
 
 ```bash
 hams up -d --no-build --pull never --wait backend frontend
@@ -482,37 +455,37 @@ hams ps
 
 ต้องมี postgres/backend/frontend ทำงานและ healthy โดยไม่มี Mailpit ในชุดนี้ `up --wait` ตรวจ container/healthcheck ไม่ใช่หลักฐานว่า SMTP หรือ URL ภายนอกผ่านแล้ว ดู [Compose up](https://docs.docker.com/reference/cli/docker/compose/up/)
 
-ตรวจ HTTPS และ API ที่พอร์ต 443 ของ server โดยยังคง Host ภายนอก 20443:
+ตรวจ HTTP และ API ที่พอร์ต 443 ของ server โดยยังคง Host ภายนอก 20443:
 
 ```bash
 HAMS_SERVER_IP="$(sudo sed -n 's/^HAMS_BIND_IP=//p' /etc/hams/compose.env)"
 curl --fail --silent --show-error \
   --resolve "med.hss05.com:443:$HAMS_SERVER_IP" \
   --header 'Host: med.hss05.com:20443' \
-  --output /dev/null https://med.hss05.com:443/login && echo LOCAL_HTTPS_OK
+  --output /dev/null http://med.hss05.com:443/login && echo LOCAL_HTTP_OK
 curl --fail --silent --show-error \
   --resolve "med.hss05.com:443:$HAMS_SERVER_IP" \
   --header 'Host: med.hss05.com:20443' \
-  --output /dev/null https://med.hss05.com:443/api/auth/csrf && echo LOCAL_API_OK
+  --output /dev/null http://med.hss05.com:443/api/auth/csrf && echo LOCAL_API_OK
 ```
 
-คำสั่งนี้ตรวจ Certificate โดยไม่ปิด verification และไม่พิมพ์ CSRF token แต่ยังไม่ได้ตรวจ NAT/DNS จากเครื่องผู้ใช้
+คำสั่งนี้ใช้ HTTP โดยตั้ง Host ให้ตรง public origin และไม่พิมพ์ CSRF token ยังไม่ได้ตรวจ NAT/DNS จากเครื่องผู้ใช้
 
 | ส่วนของคำสั่งตรวจเว็บ | ทำอะไร |
 | --- | --- |
 | `HAMS_SERVER_IP="$(sudo sed ...)"` | อ่านเฉพาะ `HAMS_BIND_IP` จาก compose.env มาเป็น IP ปลายทาง ไม่ได้โหลด secrets เข้า shell |
 | `curl --fail --silent --show-error` | ส่ง HTTP request, คืน error เมื่อ HTTP 400 ขึ้นไป, ซ่อน progress แต่ยังแสดง error |
-| `--resolve "med.hss05.com:443:..."` | ให้ request นี้ต่อ IP ของ server โดยตรง แต่ยังใช้ชื่อโดเมนจริงตรวจ Certificate/TLS; ไม่แก้ DNS ถาวร |
+| `--resolve "med.hss05.com:443:..."` | ให้ request นี้ต่อ IP ของ server โดยตรง โดยใช้ HTTP และ Host ของระบบ; ไม่แก้ DNS ถาวร |
 | `--header 'Host: med.hss05.com:20443'` | จำลอง Host ที่ Nginx ควรได้รับจากเส้นทางภายนอก แม้กำลังต่อพอร์ตภายใน 443 |
 | `--output /dev/null .../login` | ตรวจว่าเส้นทางหน้า Login ตอบกลับได้ โดยไม่พิมพ์ HTML |
 | `--output /dev/null .../api/auth/csrf` | ตรวจว่า Nginx ส่งต่อ API ไป backend ได้ โดยไม่พิมพ์ token |
 | `&& echo LOCAL_..._OK` | แสดงผลสำเร็จเมื่อ curl จบสำเร็จ; ถ้าไม่เห็นข้อความให้ตรวจ error ก่อน |
 
-**ผลที่ควรได้:** services healthy และเห็นทั้ง `LOCAL_HTTPS_OK` / `LOCAL_API_OK`; ยังต้องเปิด browser จากเครื่องผู้ใช้เพื่อยืนยันเนื้อหาหน้าเว็บและเส้นทางภายนอก
+**ผลที่ควรได้:** services healthy และเห็นทั้ง `LOCAL_HTTP_OK` / `LOCAL_API_OK`; ยังต้องเปิด browser จากเครื่องผู้ใช้เพื่อยืนยันเนื้อหาหน้าเว็บและเส้นทางภายนอก
 
 ## 12. ตรวจ URL จากเครื่องผู้ใช้จริง
 
-**ทำเพื่ออะไร:** ตรวจเส้นทางที่ผู้ใช้จะเข้าใช้งานจริง ทั้ง DNS, port forwarding/firewall, Certificate และหน้าเว็บ ซึ่งการตรวจจาก server เพียงอย่างเดียวยังยืนยันไม่ได้
+**ทำเพื่ออะไร:** ตรวจเส้นทางที่ผู้ใช้จะเข้าใช้งานจริง ทั้ง DNS, port forwarding/firewall, protocol HTTP และหน้าเว็บ ซึ่งการตรวจจาก server เพียงอย่างเดียวยังยืนยันไม่ได้
 
 รัน **PowerShell ของเครื่องผู้ใช้ที่อยู่ในเครือข่ายเป้าหมาย**:
 
@@ -521,13 +494,13 @@ Resolve-DnsName med.hss05.com -Type A
 Test-NetConnection med.hss05.com -Port 20443
 ```
 
-`Resolve-DnsName ... -Type A` ตรวจว่าเครื่องผู้ใช้แปลงชื่อเว็บเป็น IPv4 อะไร ส่วน `Test-NetConnection ... -Port 20443` ตรวจการเชื่อมต่อ TCP ต้องดู `TcpTestSucceeded : True`; ผล TCP ผ่านยังไม่ได้ยืนยัน TLS หรือเนื้อหาหน้าเว็บ
+`Resolve-DnsName ... -Type A` ตรวจว่าเครื่องผู้ใช้แปลงชื่อเว็บเป็น IPv4 อะไร ส่วน `Test-NetConnection ... -Port 20443` ตรวจการเชื่อมต่อ TCP ต้องดู `TcpTestSucceeded : True`; ผล TCP ผ่านยังไม่ได้ยืนยัน protocol หรือเนื้อหาหน้าเว็บ
 
-เปิด browser ที่ `https://med.hss05.com:20443/login` ต้องเป็นหน้า HAMS, Certificate ผ่านโดยไม่ต้องข้ามคำเตือน และไม่มี redirect ไป localhost/443/8443 หรือวนกลับหน้าเดิม หากองค์กรใช้ IPv6 ให้ IT ตรวจ AAAA/เส้นทาง IPv6 แยกด้วย; Compose นี้ publish IPv4
+เปิด browser ที่ `http://med.hss05.com:20443/login` ต้องเป็นหน้า HAMS ผ่าน HTTP ไม่มี redirect ไป HTTPS, localhost, server:443 หรือ container:8081 และไม่มี redirect วน; browser อาจแสดง Not secure ตามปกติของ HTTP หากองค์กรใช้ IPv6 ให้ IT ตรวจ AAAA/เส้นทาง IPv6 แยกด้วย; Compose นี้ publish IPv4
 
 ถ้าตรวจที่ server ผ่านแต่ URL ภายนอกไม่ผ่าน ให้ตรวจ DNS/NAT/firewall/การคง Host กับ IT ก่อนแก้โค้ดแอป ไม่เปิด backend:3000 หรือ postgres:5432 ออกสู่ host เพื่อแก้ปัญหานี้
 
-**ผลที่ควรได้:** DNS ตรงกับที่ IT กำหนด, TCP ผ่าน และ browser เปิดหน้า Login ของ HAMS ด้วย Certificate ที่เชื่อถือได้
+**ผลที่ควรได้:** DNS ตรงกับที่ IT กำหนด, TCP ผ่าน และ browser เปิดหน้า Login ของ HAMS ที่ HTTP origin ที่กำหนด
 
 ## 13. ตรวจ SMTP โดยยังไม่ส่งอีเมล
 
@@ -603,14 +576,14 @@ hams --profile tools run --rm --no-deps setup pnpm run prisma:handover-check
 
 **ทำเพื่ออะไร:** รวบรวมหลักฐานว่าระบบพร้อมสำหรับผู้ใช้จริงหลังย้ายสภาพแวดล้อม การเริ่ม containers ได้เป็นเพียงหนึ่งส่วนของการตรวจรับ
 
-- [ ] เข้าเว็บจากเครื่องเจ้าหน้าที่อีกเครื่องด้วย URL ภายนอกที่กำหนด Certificate และการล็อกอิน/2FA ผ่าน
+- [ ] เข้าเว็บจากเครื่องเจ้าหน้าที่อีกเครื่องด้วย URL ภายนอกที่กำหนด protocol HTTP และการล็อกอิน/2FA ผ่าน
 - [ ] Admin ทั้งสองคนผ่าน handover-check และข้อมูลหน่วยงาน/ผู้ใช้จริงถูกต้อง
 - [ ] เมลยืนยันและการส่งซ้ำรับจริง กดลิงก์ได้ โควตาส่งซ้ำและข้อความผิดพลาดทำงาน
 - [ ] เส้นทางงานหลักและสิทธิ์ตาม role ผ่าน โดยเน้นจุดต่างจาก VM แทนการรับรองจากการเปิด Login ได้อย่างเดียว
 - [ ] อัปโหลด ดู เปลี่ยนรูป JPEG/PNG/WebP/HEIC/HEIF ได้บน Linux และไฟล์เดิมยังอยู่หลัง recreate container
 - [ ] หยุด/เปิดหรือ reboot ตามช่วงทดสอบแล้ว DB รูป และการถอดรหัส 2FA ยังใช้ได้
 - [ ] ซ้อม backup/restore ลงปลายทางแยกครบตามส่วนถัดไป มีสำเนานอกเครื่องและผู้รับผิดชอบชัดเจน
-- [ ] IT ทราบวิธีต่ออายุ Certificate, อ่าน log, start/stop และจัดการอัปเดตตามช่วงเวลาที่ตกลง
+- [ ] IT ทราบว่าเว็บใช้ HTTP และทราบวิธีอ่าน log, start/stop และจัดการอัปเดตตามช่วงเวลาที่ตกลง
 
 ยังไม่ถือว่าพร้อมเปิดจริงจนรายการที่เกี่ยวข้องผ่านบนเครื่องลูกค้า บันทึก release, วันทดสอบ, ผู้ทดสอบ และผลแต่ละรายการ ไม่ใส่ passwords/OTP/recovery codes ในบันทึก
 
@@ -620,7 +593,7 @@ hams --profile tools run --rm --no-deps setup pnpm run prisma:handover-check
 
 1. ก่อนทดสอบ จดรายการบัญชี ข้อมูลงาน และรูปจำลองที่จะสร้าง ใช้ชื่อที่แยกได้ชัดและใช้อีเมลของผู้ร่วมทดสอบเท่านั้น
 2. เมื่อผลตรวจรับผ่าน ให้ทบทวนรายการที่จะนำออกกับผู้ดูแล แล้วจัดการเฉพาะข้อมูลจำลองและรูปที่เกี่ยวข้องตามลำดับความสัมพันธ์ของระบบ หากหน้าเว็บไม่มีวิธีลบรายการนั้น ต้องเตรียมและรีวิววิธี cleanup เฉพาะรายการก่อนลงมือ ไม่สมมติว่าทุกรายการลบผ่าน CRUD ได้
-3. คงข้อมูลอ้างอิง หน่วยงาน/บัญชีจริง และ ADMIN ของลูกค้าที่รับมอบแล้วไว้ พร้อมคง Certificate, SMTP config, DB credentials และกุญแจ Auth/2FA เดิม ไม่ต้องเริ่มยืนยันเมลหรือลงทะเบียน 2FA ใหม่เพียงเพราะจบการทดสอบ
+3. คงข้อมูลอ้างอิง หน่วยงาน/บัญชีจริง และ ADMIN ของลูกค้าที่รับมอบแล้วไว้ พร้อมคง SMTP config, DB credentials และกุญแจ Auth/2FA เดิม ไม่ต้องเริ่มยืนยันเมลหรือลงทะเบียน 2FA ใหม่เพียงเพราะจบการทดสอบ
 4. ไม่ reset ฐานทั้งหมดเป็นขั้นตอนปกติของการส่งมอบ หากตกลงเริ่มฐานใหม่ ต้องยืนยันว่าไม่มีข้อมูลจริงและวางแผน reference seed/bootstrap/ยืนยันเมล/2FA ใหม่ก่อนทำ
 5. ตรวจหน้าเว็บและ ADMIN หลัง cleanup แล้วสำรอง DB + รูป + config/keys + source/images ตามส่วน 16 เก็บหลักฐาน release และผลตรวจรับ ก่อนให้ลูกค้าเริ่มบันทึกข้อมูลจริง
 
@@ -636,7 +609,7 @@ hams --profile tools run --rm --no-deps setup pnpm run prisma:handover-check
 | --- | --- |
 | PostgreSQL dump | ฐาน `hams_prod`; ใช้ `pg_dump -Fc` จาก postgres container |
 | รูปและไฟล์ชั่วคราว | volumes `hams_images`, `hams_image-temp` พร้อม numeric owner/mode |
-| ตั้งค่าและ TLS | `/etc/hams` ทั้ง directory รวม auth/2FA keys, DB/SMTP credentials, Certificate/private key |
+| ตั้งค่าและกุญแจ | `/etc/hams` ทั้ง directory รวม auth/2FA keys และ DB/SMTP credentials; หากมี TLS เดิมให้เก็บสำรองไว้ด้วย |
 | Source และ config deploy | release commit, directory `deploy/production`, symlink ปัจจุบัน |
 | Docker images | image IDs ของ container ที่รันจริง และ archive จาก `docker image save`; รวม setup image ของ release |
 
@@ -738,7 +711,7 @@ BASH
 | `stop --timeout 60 frontend` แล้ว `backend` | ปิดช่องรับงานก่อนแล้วหยุดตัวเขียนข้อมูล เพื่อเก็บ DB และรูปในช่วงที่แอปไม่เปลี่ยนข้อมูล |
 | `pg_dump ... -Fc > database.dump` | อ่านฐานจริงเป็น PostgreSQL custom-format dump ไม่ใช่การลบหรือ restore ฐาน |
 | `test -s ...`, `pg_restore --list` | ตรวจว่า dump ไม่ว่างและอ่านสารบัญได้; ยังไม่ได้ restore หรือพิสูจน์ว่าข้อมูลทุกแถวกู้ได้ |
-| `tar --numeric-owner ...config.tar.gz` | เก็บ `/etc/hams` พร้อม owner แบบตัวเลข รวมกุญแจ/SMTP/TLS ที่ต้องใช้คู่กับ DB |
+| `tar --numeric-owner ...config.tar.gz` | เก็บ `/etc/hams` พร้อม owner แบบตัวเลข รวมกุญแจ/SMTP ที่ต้องใช้คู่กับ DB และไฟล์เดิมอื่นใน directory |
 | `docker run --rm ...` และ `tar ...` ใน loop | ใช้ backend image ที่บันทึกไว้เปิด container ชั่วคราว อ่าน volumes รูปแบบ read-only แล้วเขียน archive ไปโฟลเดอร์ backup; ไม่ต่อ network, ใช้ root เพื่อรักษา owner และลบ container หลังจบ |
 | `gzip -t`, `tar -tzf` | ตรวจว่า archive ที่ระบุเปิดอ่านได้ โดยไม่แตกทับข้อมูลจริง |
 | `sha256sum ... > SHA256SUMS` และ `sha256sum -c ...` | สร้างและตรวจ checksum ของไฟล์หลักสำหรับตรวจความครบหลังคัดลอก; ไม่ได้เข้ารหัสไฟล์หรือแทนการซ้อม restore |
@@ -755,7 +728,7 @@ BASH
 
 ## 17. คำสั่งดูแลตามปกติ
 
-**ทำเพื่ออะไร:** ให้ผู้ดูแลดูสถานะ/ข้อผิดพลาด หยุดเปิดบริการ และเปลี่ยน SMTP หรือ Certificate ได้โดยเข้าใจว่าขั้นใดมีผลต่อ containers ที่รันอยู่
+**ทำเพื่ออะไร:** ให้ผู้ดูแลดูสถานะ/ข้อผิดพลาด หยุดเปิดบริการ และเปลี่ยน SMTP ได้โดยเข้าใจว่าขั้นใดมีผลต่อ containers ที่รันอยู่
 
 ใน SSH ให้กำหนด function `hams` ตามส่วน 8 ก่อน:
 
@@ -799,21 +772,11 @@ hams up -d --no-deps --no-build --pull never --force-recreate --wait backend
 
 บล็อกเปลี่ยน SMTP เริ่มจาก `nano` บันทึกค่าชุดใหม่, `prepare.sh --check` ตรวจ config แล้ว `up --force-recreate` สร้าง backend container ใหม่ให้อ่าน env ใหม่; `--no-deps` ไม่ recreate บริการที่พึ่งพา และ `--wait` รอ backend พร้อมก่อนทดสอบส่งจริง มีช่วง backend หยุดสั้น ๆ
 
-### ต่ออายุ Certificate
+### เปลี่ยน protocol ในอนาคต
 
-รับชุดใหม่จากช่องทางของ IT ตรวจชื่อ/key/chain แล้ววางแทนใน `/etc/hams/tls` ด้วย owner/mode ตามส่วน 7 เก็บชุดเดิมใน backup ที่ป้องกันไว้ก่อนเปลี่ยน จากนั้น:
+ชุดปัจจุบันใช้ HTTP จึงไม่มีขั้นต่ออายุ Certificate ของเว็บ หากลูกค้าต้องการ HTTPS ภายหลัง ให้เตรียมและรีวิว config/TLS/NAT ใหม่ทั้งชุดก่อนสลับ ไม่ใช้ `certbot --nginx` บน host เพื่อแก้ config ใน Docker โดยตรง
 
-```bash
-sudo bash /opt/hams/app/deploy/production/prepare.sh --check
-hams exec -T frontend nginx -t
-hams exec -T frontend nginx -s reload
-```
-
-`prepare.sh --check` ตรวจ key/chain/hostname/อายุและ config, `nginx -t` ตรวจว่า Nginx อ่านค่ากับไฟล์ชุดใหม่ได้ และ `nginx -s reload` สั่ง Nginx โหลด config/Certificate ใหม่; ให้ผ่านสองคำสั่งแรกก่อนรัน reload
-
-ตรวจ Certificate จาก browser/เครื่องผู้ใช้อีกครั้ง รวมวันหมดอายุใหม่ ต้องมีขั้นตอนต่ออายุและผู้รับผิดชอบจริง ไม่ถือว่าติดตั้งครั้งแรกแล้วจะต่ออายุให้อัตโนมัติ
-
-**ผลที่ควรได้:** หลัง start/recreate/reload บริการกลับมา healthy และสิ่งที่เปลี่ยนตรวจผ่านจากการใช้งานจริง เช่น รับเมลได้หรือ browser เห็น Certificate ใหม่
+**ผลที่ควรได้:** หลัง start/recreate/reload บริการกลับมา healthy และสิ่งที่เปลี่ยนตรวจผ่านจากการใช้งานจริง เช่น รับเมลได้หรือผู้ใช้ Login ผ่าน HTTP URL ที่กำหนดได้
 
 ## 18. หลักการอัปเดตและย้อนกลับ
 
@@ -823,19 +786,33 @@ hams exec -T frontend nginx -s reload
 2. Build/tag backend/frontend/setup ด้วย commit ใหม่ให้เสร็จก่อนช่วงหยุดระบบ การ build รุ่นใหม่ใช้ Compose ของ release ใหม่และ override `HAMS_RELEASE` เฉพาะคำสั่ง build; ยังไม่แก้ค่าของ live release
 3. เก็บ backup ครบชุดของรุ่นเดิมก่อนเปลี่ยน `/etc/hams/compose.env` หรือ schema พร้อมซ้อม restore ที่แยกแล้ว
 4. ในช่วงบำรุงรักษา หยุด frontend/backend เปลี่ยน symlink `/opt/hams/app` และ `HAMS_RELEASE` ให้ตรงรุ่นใหม่โดยคง DB/auth/2FA/SMTP keys เดิม
-5. ตรวจ `prepare.sh --check` และ Nginx ของรุ่นใหม่ แล้วใช้ setup image รุ่นใหม่รัน `prisma migrate deploy` ก่อนเริ่มแอป ตรวจ migration status และรับงานจากอีกเครื่อง
+5. ตรวจ `prepare.sh --check` และ Nginx ของรุ่นใหม่ แล้วใช้ setup image รุ่นใหม่ตรวจ `prisma migrate status`, ทบทวนรายการค้าง, รัน `prisma migrate deploy` และตรวจ status ซ้ำก่อนเริ่มแอป แม้เป้าหมาย release เป็นการเปลี่ยน HTTP ก็ต้องตรวจ pending migrations จากฟีเจอร์ที่นำเข้ามาด้วย เช่น `20261024000000_add_email_verification_resend_limits` ซึ่งจำเป็นสำหรับ resend
 6. ตรวจสุขภาพ SMTP รูป วันที่/เวลา และงานหลักที่ได้รับผลจาก release นั้น บันทึก revision/ผลก่อนส่งมอบ
 
 การสลับโค้ดหรือ tag กลับไม่ย้อน schema หาก migration ไม่รองรับรุ่นเดิม ต้องใช้แผนกู้ DB/files/config ที่ตรงกันและตกลงเรื่องข้อมูลหลัง backup point ก่อน ห้ามใช้ reset, `down --volumes` หรือ prune volumes เป็นวิธีแก้ปัญหาอัปเดต
 
 คำสั่ง cutover/rollback ต้องรีวิวตาม release และ backup ที่ใช้จริงก่อนรัน คู่มือติดตั้งใหม่ไม่ใช่คำสั่งอนุมัติให้อัปเดต live server อัตโนมัติ
 
+### 18.1 สลับระบบเดิมจาก HTTPS เป็น HTTP
+
+ใช้ backup และขั้นอัปเดตข้างต้นก่อน cutover โดยคง `/etc/hams/compose.env`, `backend.env`, `postgres-password` และ volume เดิม ไม่รัน prepare --init เพื่อสร้างกุญแจใหม่
+
+1. Build backend/frontend/setup จาก release ที่มีทั้งโค้ด HTTP opt-in และ config production ชุดนี้ให้ครบก่อนหยุดเว็บ
+2. ตรวจและทบทวน migration status ด้วย setup ของ release ใหม่ โดยคง credentials/SMTP เดิม
+3. หยุด frontend/backend ของรุ่นเดิมก่อนสลับ symlink และ HAMS_RELEASE; frontend เปลี่ยนจาก TLS 8443 มา HTTP 8081 แต่ยังใช้พอร์ต host 443 เดิม จึงใช้ listener เก่าและใหม่พร้อมกันบน IP:port เดียวกันไม่ได้
+4. รัน prepare --check, migrate deploy, migrate status แล้วเปิด backend/frontend รุ่นใหม่ ไม่ seed/bootstrap ซ้ำสำหรับฐานเดิม
+5. ตรวจจาก server ด้วย HTTP + Host ภายนอกตามส่วน 11 จากนั้นตรวจ URL จริงจากเครื่องผู้ใช้; HTTP ไม่ใช่การ redirect จาก HTTPS อัตโนมัติ
+6. Login ใหม่ด้วย browser profile ใหม่ แล้วทดสอบ 2FA, refresh, logout, รูปเดิม/อัปโหลด และ resend ด้วยบัญชียังไม่ยืนยัน (รับเมลจริงและรอส่งซ้ำ 5 นาที)
+7. หาก rollback ให้ใช้ source/images/config/protocol รุ่นเดิมที่ backup ไว้พร้อมกัน ตรวจว่า schema ที่ migrate แล้วยังรองรับรุ่นเดิม การเอาเฉพาะ image tag กลับไม่คืน config หรือฐานข้อมูล
+
+ค่า SMTP ตัวอย่างใหม่ตั้งต้น Gmail แต่ไฟล์จริงเดิมไม่ถูกเปลี่ยน หากต้องย้ายจาก Brevo ให้แก้ `/etc/hams/smtp.env` และทดสอบ SMTP/รับเมลจริงแยกตามส่วน 17 อย่านำ App Password หรือกุญแจของ VM มาทับของลูกค้า
+
 ## 19. ขอบเขตหลักฐานของชุดนี้
 
 **ทำเพื่ออะไร:** แสดงว่าตรวจอะไรไปแล้ว และสิ่งใดต้องเก็บผลจาก server จริงเพิ่ม เพื่อไม่ตีความว่าคู่มือหรือ syntax ผ่านเท่ากับติดตั้งจริงผ่าน
 
 - Compose ตรวจโครงสร้างและการแยก project/volumes/SMTP networks แล้ว
-- Nginx ตรวจ syntax และ HTTPS/routing/redirect กับ Backend จำลองใน Docker แล้ว ไม่ใช่การตรวจ NAT/Certificate ของลูกค้า
+- ชุด HTTP นี้ตรวจ Compose และความสอดคล้องของ URL/port/healthcheck แยกจาก HTTPS เดิม ต้องรัน nginx -t และทดสอบ routing/redirect บน Docker/Linux ก่อน cutover; Docker Engine ใน Windows ปิดอยู่ขณะปรับไฟล์
 - Env templates ตรวจร่วมกับตัวตรวจค่าของ Backend โดยใช้ข้อมูลจำลอง
-- prepare.sh ตรวจ Bash/Python 3.10 และทดสอบ filesystem/OpenSSL บน Linux; ผล metadata/config CLI ของ Docker ถูกจำลองในชุดทดสอบเพื่อไม่แตะ volumes จริง
+- prepare.sh ชุด HTTP ตรวจ Bash syntax และ Python 3.10 syntax ผ่านแล้ว พร้อม fixture 8 กรณีสำหรับ HTTP ที่ไม่มี Certificate, การคง secrets เดิม, SMTP TLS และค่าตั้งที่ไม่ถูกต้อง โดยจำลอง filesystem metadata/CLI บน Windows; ยังต้องรัน --check บน Linux server จริง
 - การติดตั้ง Docker, build/migrate/bootstrap, SMTP delivery, URL ภายนอก และ backup/restore บนเครื่องลูกค้า ยังต้องรันและเก็บผลจริงตามขั้นที่เกี่ยวข้อง
