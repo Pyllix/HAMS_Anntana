@@ -1,5 +1,7 @@
 import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
 import { CsrfGuard } from './csrf.guard';
+import { runtimeConfig } from '../common/config/bootstrap-config';
+import { loadRuntimeConfig } from '../common/config/runtime-config';
 import {
   createCsrfToken,
   csrfCookieName,
@@ -139,6 +141,83 @@ describe('CsrfGuard', () => {
       expect(isTrustedOrigin('http://localhost:5173')).toBe(false);
     });
   });
+
+  describe.each(['http', 'https'])(
+    'customer production CSRF over %s',
+    (protocol) => {
+      const origin = `${protocol}://hams.example.test:20443`;
+      const previousEnvironment = process.env;
+
+      beforeEach(() => {
+        process.env = {
+          NODE_ENV: 'production',
+          HAMS_INSTALLATION_MODE: 'customer',
+          HAMS_ALLOW_INSECURE_HTTP: 'true',
+          DATABASE_URL: 'postgresql://hams:secret@localhost:5432/hams_test',
+          BETTER_AUTH_SECRET: 'a'.repeat(48),
+          BETTER_AUTH_URL: origin,
+          FRONTEND_URL: origin,
+          TWO_FACTOR_ENCRYPTION_KEY: 'a'.repeat(64),
+          SMTP_HOST: 'mail.example.test',
+          SMTP_PORT: '587',
+          SMTP_REQUIRE_TLS: 'true',
+          SMTP_FROM: 'HAMS <noreply@example.test>',
+        };
+        jest.replaceProperty(
+          runtimeConfig,
+          'server',
+          loadRuntimeConfig(process.env).server,
+        );
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+        process.env = previousEnvironment;
+      });
+
+      it('uses a browser-compatible cookie name and accepts a valid signed proof', () => {
+        const expectedName =
+          protocol === 'https' ? '__Host-hams.csrf' : 'hams.csrf';
+        expect(csrfCookieName()).toBe(expectedName);
+        const authCookie = 'hams.pre_auth=production-challenge';
+        const token = createCsrfToken(authCookie);
+        const request = {
+          method: 'POST',
+          headers: {
+            origin,
+            cookie: `${authCookie}; ${expectedName}=${token}`,
+            'x-csrf-token': token,
+          },
+        };
+        expect(guard.canActivate(contextFor(request))).toBe(true);
+        expect(trustedOrigins()).toEqual([origin]);
+
+        // The wrong scheme/port or a missing proof must still be rejected.
+        for (const invalidOrigin of [
+          `${protocol === 'http' ? 'https' : 'http'}://hams.example.test:20443`,
+          `${protocol}://hams.example.test:20444`,
+          'http://localhost:5173',
+        ]) {
+          expect(() =>
+            guard.canActivate(
+              contextFor({
+                ...request,
+                headers: { ...request.headers, origin: invalidOrigin },
+              }),
+            ),
+          ).toThrow(ForbiddenException);
+        }
+        expect(() =>
+          guard.canActivate(
+            contextFor({
+              ...request,
+              headers: { ...request.headers, 'x-csrf-token': undefined },
+            }),
+          ),
+        ).toThrow(ForbiddenException);
+      });
+    },
+  );
 
   describe('Vercel preview origins', () => {
     const pattern = 'https://hams-anntana-test-*-pyllix.vercel.app';

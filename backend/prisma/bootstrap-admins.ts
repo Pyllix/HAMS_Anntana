@@ -16,6 +16,7 @@ import {
   employeeIdPrefix,
 } from '../src/users/employee-id';
 import { loadBootstrapAdminEmails } from './bootstrap-admin-config';
+import { loadRuntimeConfig } from '../src/common/config/runtime-config';
 
 interface BootstrapAdmin {
   email: string;
@@ -55,7 +56,9 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
     };
   }) as [BootstrapAdmin, BootstrapAdmin];
 
-  const normalizedValues = [admins.map(({ userName }) => userName.toLowerCase())];
+  const normalizedValues = [
+    admins.map(({ userName }) => userName.toLowerCase()),
+  ];
   if (normalizedValues.some(([first, second]) => first === second)) {
     throw new BootstrapConfigurationError(
       'The two bootstrap ADMIN identities must be distinct',
@@ -78,46 +81,18 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
   return admins;
 }
 
-function validateProductionConfiguration(): void {
+export function validateProductionConfiguration(): void {
   if (process.env.NODE_ENV !== 'production') {
-    throw new BootstrapConfigurationError('ADMIN bootstrap requires NODE_ENV=production');
-  }
-  if (!process.env.DATABASE_URL) {
-    throw new BootstrapConfigurationError('DATABASE_URL is required');
-  }
-  if ((process.env.BETTER_AUTH_SECRET ?? '').length < 32) {
     throw new BootstrapConfigurationError(
-      'BETTER_AUTH_SECRET must contain at least 32 characters',
+      'ADMIN bootstrap requires NODE_ENV=production',
     );
   }
-  if (!/^[a-f0-9]{64}$/i.test(process.env.TWO_FACTOR_ENCRYPTION_KEY ?? '')) {
+  // Use the same URL, cookie-mode, secret and SMTP rules as application startup.
+  try {
+    loadRuntimeConfig(process.env);
+  } catch (error) {
     throw new BootstrapConfigurationError(
-      'TWO_FACTOR_ENCRYPTION_KEY must be 64 hexadecimal characters',
-    );
-  }
-
-  for (const key of ['BETTER_AUTH_URL', 'FRONTEND_URL']) {
-    const value = requiredValue(key);
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      throw new BootstrapConfigurationError(`${key} must be a valid HTTPS URL`);
-    }
-    if (url.protocol !== 'https:') {
-      throw new BootstrapConfigurationError(
-        `${key} must use HTTPS for production bootstrap`,
-      );
-    }
-  }
-
-  requiredValue('SMTP_HOST');
-  if (
-    process.env.SMTP_SECURE !== 'true' &&
-    process.env.SMTP_REQUIRE_TLS !== 'true'
-  ) {
-    throw new BootstrapConfigurationError(
-      'Credential delivery requires SMTP_SECURE=true or SMTP_REQUIRE_TLS=true',
+      error instanceof Error ? error.message : 'Invalid runtime configuration',
     );
   }
 }

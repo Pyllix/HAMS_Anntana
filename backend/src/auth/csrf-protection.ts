@@ -1,13 +1,12 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isSecureCookie } from './auth-cookies';
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const CSRF_COOKIE = 'hams.csrf';
 const SECURE_CSRF_COOKIE = '__Host-hams.csrf';
 
 export function csrfCookieName(): string {
-  return process.env.NODE_ENV === 'production'
-    ? SECURE_CSRF_COOKIE
-    : CSRF_COOKIE;
+  return isSecureCookie() ? SECURE_CSRF_COOKIE : CSRF_COOKIE;
 }
 
 export function createCsrfToken(cookieHeader?: string | null): string {

@@ -188,6 +188,114 @@ describe('loadRuntimeConfig', () => {
     ).toThrow(/BETTER_AUTH_SECRET[\s\S]*HTTPS/);
   });
 
+  describe('customer HTTP opt-in', () => {
+    const httpEnvironment = {
+      HAMS_INSTALLATION_MODE: 'customer',
+      BETTER_AUTH_URL: 'http://hams.example.test:20443',
+      FRONTEND_URL: 'http://hams.example.test:20443',
+    };
+
+    it.each([undefined, 'false'])(
+      'rejects HTTP when the opt-in is %s',
+      (value) => {
+        expect(() =>
+          loadRuntimeConfig(
+            productionEnvironment({
+              ...httpEnvironment,
+              HAMS_ALLOW_INSECURE_HTTP: value,
+            }),
+          ),
+        ).toThrow(/BETTER_AUTH_URL.*HTTPS[\s\S]*FRONTEND_URL.*HTTPS/);
+      },
+    );
+
+    it('allows explicitly enabled HTTP without switching out of production', () => {
+      const config = loadRuntimeConfig(
+        productionEnvironment({
+          ...httpEnvironment,
+          HAMS_ALLOW_INSECURE_HTTP: 'true',
+        }),
+      );
+
+      expect(config.server).toMatchObject({
+        environment: 'production',
+        installationMode: 'customer',
+        secureCookies: false,
+      });
+      expect(config.auth).toMatchObject({
+        baseUrl: httpEnvironment.BETTER_AUTH_URL,
+        frontendUrl: httpEnvironment.FRONTEND_URL,
+      });
+      expect(config.smtp.requireTLS).toBe(true);
+    });
+
+    it('keeps secure cookies for HTTPS even when the HTTP opt-in is enabled', () => {
+      expect(
+        loadRuntimeConfig(
+          productionEnvironment({
+            HAMS_INSTALLATION_MODE: 'customer',
+            HAMS_ALLOW_INSECURE_HTTP: 'true',
+          }),
+        ).server.secureCookies,
+      ).toBe(true);
+    });
+
+    it('does not allow the customer opt-in to weaken cloud installations', () => {
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            ...httpEnvironment,
+            HAMS_INSTALLATION_MODE: 'cloud',
+            HAMS_ALLOW_INSECURE_HTTP: 'true',
+          }),
+        ),
+      ).toThrow(/HAMS_ALLOW_INSECURE_HTTP.*customer/);
+    });
+
+    it('rejects invalid opt-in values rather than silently enabling HTTP', () => {
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            ...httpEnvironment,
+            HAMS_ALLOW_INSECURE_HTTP: 'yes',
+          }),
+        ),
+      ).toThrow(/HAMS_ALLOW_INSECURE_HTTP must be true or false/);
+    });
+
+    it.each([
+      { BETTER_AUTH_URL: 'https://hams.example.test:20443' },
+      { FRONTEND_URL: 'https://hams.example.test:20443' },
+    ])('rejects mixed HTTP and HTTPS URLs (%j)', (overrides) => {
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            ...httpEnvironment,
+            HAMS_ALLOW_INSECURE_HTTP: 'true',
+            ...overrides,
+          }),
+        ),
+      ).toThrow(/BETTER_AUTH_URL and FRONTEND_URL must use the same protocol/);
+    });
+
+    it('retains production secret, SMTP TLS and URL validation in HTTP mode', () => {
+      expect(() =>
+        loadRuntimeConfig(
+          productionEnvironment({
+            ...httpEnvironment,
+            HAMS_ALLOW_INSECURE_HTTP: 'true',
+            BETTER_AUTH_SECRET: 'short-secret',
+            TWO_FACTOR_ENCRYPTION_KEY: 'invalid-key',
+            SMTP_REQUIRE_TLS: 'false',
+            FRONTEND_URL: 'http://hams.example.test:20443?unexpected=query',
+          }),
+        ),
+      ).toThrow(
+        /BETTER_AUTH_SECRET[\s\S]*query or fragment[\s\S]*TWO_FACTOR_ENCRYPTION_KEY[\s\S]*SMTP_REQUIRE_TLS/,
+      );
+    });
+  });
+
   it('rejects invalid ports, database URLs, 2FA keys, and incomplete SMTP credentials', () => {
     expect(() =>
       loadRuntimeConfig(
@@ -268,6 +376,7 @@ describe('production startup validation order', () => {
                   'SMTP_PASS',
                   'SMTP_FROM',
                   'HAMS_INSTALLATION_MODE',
+                  'HAMS_ALLOW_INSECURE_HTTP',
                   'GEMINI_ENABLED',
                   'GEMINI_API_KEY',
                   'GEMINI_MODEL',

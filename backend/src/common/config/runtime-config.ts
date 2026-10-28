@@ -94,6 +94,21 @@ export function loadRuntimeConfig(
     ? (installationModeName as InstallationMode)
     : 'cloud';
 
+  // Plain HTTP is an explicit opt-in for customer installations only. Keep
+  // production secret validation and outbound SMTP TLS requirements intact.
+  const allowInsecureHttp = booleanSetting(
+    'HAMS_ALLOW_INSECURE_HTTP',
+    environment.HAMS_ALLOW_INSECURE_HTTP,
+    false,
+    addError,
+  );
+  if (allowInsecureHttp && installationMode !== 'customer') {
+    addError(
+      'HAMS_ALLOW_INSECURE_HTTP',
+      'is only supported when HAMS_INSTALLATION_MODE is customer.',
+    );
+  }
+
   const imageProviderName =
     normalizeConfigValue(environment.IMAGE_STORAGE_PROVIDER) || 'cloudinary';
   if (!['cloudinary', 'local'].includes(imageProviderName)) {
@@ -183,7 +198,7 @@ export function loadRuntimeConfig(
     rawValue: environment.BETTER_AUTH_URL,
     fallback: 'http://localhost:3000',
     required: isProduction,
-    requireHttps: isProduction,
+    requireHttps: isProduction && !allowInsecureHttp,
     addError,
   });
   const frontendUrl = httpUrl({
@@ -191,9 +206,18 @@ export function loadRuntimeConfig(
     rawValue: environment.FRONTEND_URL,
     fallback: 'http://localhost:5173',
     required: isProduction,
-    requireHttps: isProduction,
+    requireHttps: isProduction && !allowInsecureHttp,
     addError,
   });
+  if (
+    isProduction &&
+    new URL(authBaseUrl).protocol !== new URL(frontendUrl).protocol
+  ) {
+    addError(
+      'BETTER_AUTH_URL and FRONTEND_URL',
+      'must use the same protocol in production.',
+    );
+  }
 
   const twoFactorEncryptionKey = normalizeConfigValue(
     environment.TWO_FACTOR_ENCRYPTION_KEY,
@@ -261,7 +285,7 @@ export function loadRuntimeConfig(
       environment: nodeEnvironment,
       installationMode,
       port,
-      secureCookies: isProduction,
+      secureCookies: isProduction && authBaseUrl.startsWith('https://'),
     },
     database: {
       url: databaseUrl!,
@@ -409,7 +433,7 @@ function httpUrl(input: {
     } else if (input.requireHttps && parsed.protocol !== 'https:') {
       input.addError(input.name, 'must use HTTPS in production.');
     }
-    if (input.requireHttps && (parsed.search || parsed.hash)) {
+    if (input.required && (parsed.search || parsed.hash)) {
       input.addError(
         input.name,
         'must not include a query or fragment in production.',

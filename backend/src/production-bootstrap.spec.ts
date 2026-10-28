@@ -32,7 +32,10 @@ jest.mock('better-auth/crypto', () => ({
 }));
 
 import { UserRole } from '@prisma/client';
-import { ensureAdmin } from '../prisma/bootstrap-admins';
+import {
+  ensureAdmin,
+  validateProductionConfiguration,
+} from '../prisma/bootstrap-admins';
 import { isAdminReady } from '../prisma/handover-check';
 import { auth } from './auth/auth';
 import { sharedPrisma } from './common/config/database.config';
@@ -44,6 +47,57 @@ const configuredAdmin = {
   firstname: 'First',
   lastname: 'Admin',
 };
+
+describe('production ADMIN bootstrap transport configuration', () => {
+  const previousEnvironment = process.env;
+
+  beforeEach(() => {
+    // This validator is pure: no database access or credential delivery.
+    process.env = {
+      NODE_ENV: 'production',
+      HAMS_INSTALLATION_MODE: 'customer',
+      DATABASE_URL: 'postgresql://hams:secret@localhost:5432/hams_test',
+      BETTER_AUTH_SECRET: 'a'.repeat(48),
+      BETTER_AUTH_URL: 'https://hams.example.test:20443',
+      FRONTEND_URL: 'https://hams.example.test:20443',
+      TWO_FACTOR_ENCRYPTION_KEY: 'a'.repeat(64),
+      SMTP_HOST: 'mail.example.test',
+      SMTP_PORT: '587',
+      SMTP_REQUIRE_TLS: 'true',
+      SMTP_FROM: 'HAMS <noreply@example.test>',
+    };
+  });
+
+  afterEach(() => {
+    process.env = previousEnvironment;
+  });
+
+  it('continues to accept production HTTPS', () => {
+    expect(validateProductionConfiguration).not.toThrow();
+  });
+
+  it('requires the same explicit HTTP opt-in as application startup', () => {
+    process.env.BETTER_AUTH_URL = 'http://hams.example.test:20443';
+    process.env.FRONTEND_URL = 'http://hams.example.test:20443';
+    expect(validateProductionConfiguration).toThrow(/HTTPS/);
+
+    process.env.HAMS_ALLOW_INSECURE_HTTP = 'true';
+    expect(validateProductionConfiguration).not.toThrow();
+  });
+
+  it('still requires production mode and encrypted SMTP delivery', () => {
+    process.env.HAMS_ALLOW_INSECURE_HTTP = 'true';
+    process.env.BETTER_AUTH_URL = 'http://hams.example.test:20443';
+    process.env.FRONTEND_URL = 'http://hams.example.test:20443';
+    process.env.SMTP_REQUIRE_TLS = 'false';
+    expect(validateProductionConfiguration).toThrow(/SMTP_REQUIRE_TLS/);
+
+    process.env.NODE_ENV = 'development';
+    expect(validateProductionConfiguration).toThrow(
+      /requires NODE_ENV=production/,
+    );
+  });
+});
 
 describe('production ADMIN bootstrap', () => {
   beforeEach(() => {
