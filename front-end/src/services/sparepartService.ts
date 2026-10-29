@@ -156,57 +156,26 @@ export async function createSparepart(
   dto: CreateSparepartDto,
 ): Promise<Sparepart> {
   ensureLocalSparepartsForCurrentAccount();
-  const now = new Date().toISOString();
-  const payload: Record<string, any> = {
+  const payload = {
     name: dto.name,
     unit: dto.unit || "ชิ้น",
     price: Number(dto.price),
     minStock: Number(dto.minStock ?? 0),
     qtyInStock: Number(dto.qtyInStock ?? 0),
-    groupId: Number(dto.groupId || 1),
-    createdAt: now,
-    updatedAt: now,
+    groupId: Number(dto.groupId),
   };
-  if (dto.code) {
-    payload.code = dto.code;
-  }
 
-  try {
-    const res = await apiClient.post(
-      `/spare-parts`,
-      payload,
-    );
-    const saved: Sparepart = {
-      ...res.data,
-      category: dto.category || res.data?.group?.name || "ไฟฟ้า",
-      createdAt: res.data?.createdAt || now,
-      updatedAt: res.data?.updatedAt || now,
-    };
-    saveSparepartTimestamp(saved.id, { createdAt: saved.createdAt, updatedAt: saved.updatedAt });
-    localSpareparts = [saved, ...localSpareparts.filter((i) => i.id !== saved.id)];
-    saveSparepartsToStorage(localSpareparts);
-    return saved;
-  } catch (err) {
-    if (isSessionExpiredApiError(err)) throw err;
-    console.warn("Backend create spare part failed, saving locally:", err);
-    const fallbackItem: Sparepart = {
-      id: Date.now(),
-      code: dto.code || `SP-${Date.now().toString().slice(-4)}`,
-      name: dto.name,
-      unit: dto.unit || "ชิ้น",
-      price: Number(dto.price),
-      minStock: Number(dto.minStock ?? 0),
-      qtyInStock: Number(dto.qtyInStock ?? 0),
-      groupId: Number(dto.groupId || 1),
-      category: dto.category || "ไฟฟ้า",
-      createdAt: now,
-      updatedAt: now,
-    };
-    saveSparepartTimestamp(fallbackItem.id, { createdAt: now, updatedAt: now });
-    localSpareparts = [fallbackItem, ...localSpareparts];
-    saveSparepartsToStorage(localSpareparts);
-    return fallbackItem;
-  }
+  // Codes and timestamps belong to the server. Failed saves must reach the form.
+  const res = await apiClient.post<Sparepart>("/spare-parts", payload);
+  const saved: Sparepart = {
+    ...res.data,
+    localDraft: false,
+    category: res.data.group?.name ?? dto.category,
+  };
+  saveSparepartTimestamp(saved.id, { createdAt: saved.createdAt, updatedAt: saved.updatedAt });
+  localSpareparts = [saved, ...localSpareparts.filter((i) => i.id !== saved.id)];
+  saveSparepartsToStorage(localSpareparts);
+  return saved;
 }
 
 export async function updateSparepart(
@@ -214,15 +183,7 @@ export async function updateSparepart(
   dto: UpdateSparepartDto,
 ): Promise<Sparepart> {
   ensureLocalSparepartsForCurrentAccount();
-  const now = new Date().toISOString();
-  const existing = localSpareparts.find((i) => i.id === id);
-  const prevTs = getSparePartTimestamp(id);
-  const createdAt = existing?.createdAt || prevTs?.createdAt || now;
-
-  const payload: Record<string, any> = {
-    updatedAt: now,
-  };
-  if (dto.code !== undefined) payload.code = dto.code;
+  const payload: Record<string, string | number> = {};
   if (dto.name !== undefined) payload.name = dto.name;
   if (dto.unit !== undefined) payload.unit = dto.unit;
   if (dto.price !== undefined) payload.price = Number(dto.price);
@@ -230,50 +191,16 @@ export async function updateSparepart(
   if (dto.qtyInStock !== undefined) payload.qtyInStock = Number(dto.qtyInStock);
   if (dto.groupId !== undefined) payload.groupId = Number(dto.groupId);
 
-  try {
-    const res = await apiClient.patch(
-      `/spare-parts/${id}`,
-      payload,
-    );
-    const updated: Sparepart = {
-      ...res.data,
-      localDraft: false,
-      ...dto,
-      createdAt: res.data?.createdAt || createdAt,
-      updatedAt: res.data?.updatedAt || now,
-    };
-    saveSparepartTimestamp(id, { createdAt: updated.createdAt, updatedAt: now });
-    const exists = localSpareparts.some((i) => i.id === id);
-    if (exists) {
-      localSpareparts = localSpareparts.map((i) => (i.id === id ? { ...i, ...updated } : i));
-    } else {
-      localSpareparts = [updated, ...localSpareparts];
-    }
-    saveSparepartsToStorage(localSpareparts);
-    return updated;
-  } catch (err) {
-    if (isSessionExpiredApiError(err)) throw err;
-    console.warn("Backend update failed, updating locally:", err);
-    saveSparepartTimestamp(id, { createdAt, updatedAt: now });
-    const exists = localSpareparts.some((i) => i.id === id);
-    const fallback = {
-      localDraft: true,
-      id,
-      ...dto,
-      createdAt,
-      updatedAt: now,
-    } as Sparepart;
-    if (exists) {
-      localSpareparts = localSpareparts.map((i) =>
-        i.id === id ? ({ ...i, ...dto, localDraft: true, createdAt, updatedAt: now } as Sparepart) : i,
-      );
-    } else {
-      localSpareparts = [fallback, ...localSpareparts];
-    }
-    saveSparepartsToStorage(localSpareparts);
-    const item = localSpareparts.find((i) => i.id === id);
-    return item!;
-  }
+  const res = await apiClient.patch<Sparepart>(`/spare-parts/${id}`, payload);
+  const updated: Sparepart = {
+    ...res.data,
+    localDraft: false,
+    category: res.data.group?.name ?? dto.category,
+  };
+  saveSparepartTimestamp(id, { createdAt: updated.createdAt, updatedAt: updated.updatedAt });
+  localSpareparts = [updated, ...localSpareparts.filter((i) => i.id !== id)];
+  saveSparepartsToStorage(localSpareparts);
+  return updated;
 }
 
 export async function deleteSparepart(id: number): Promise<void> {

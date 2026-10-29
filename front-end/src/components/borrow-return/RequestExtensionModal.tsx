@@ -9,23 +9,9 @@ import {
 } from "../../services/borrowService";
 import { useToastStore } from "../../stores/useToastStore";
 import ThaiDatePicker from "./ThaiDatePicker";
+import { borrowDeadlineAtEndOfDay, minimumBorrowExtensionDate } from "../../services/borrowDeadline";
 
 const MIN_REASON_LENGTH = 5;
-
-const toDateString = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
-// วันแรกที่เลือกได้ = วันถัดจากกำหนดคืนเดิม (หรือพรุ่งนี้ ถ้ากำหนดคืนเดิมผ่านไปแล้ว/ไม่มี)
-// เพราะ backend บังคับว่าวันใหม่ต้องอยู่หลังกำหนดคืนเดิมและเป็นอนาคต
-function getMinExtensionDate(currentReturnDate: string | null | undefined) {
-  const base = new Date();
-  if (currentReturnDate) {
-    const current = new Date(currentReturnDate);
-    if (!isNaN(current.getTime()) && current > base) base.setTime(current.getTime());
-  }
-  base.setDate(base.getDate() + 1);
-  return toDateString(base);
-}
 
 const formatThaiDate = (dateString: string | null | undefined) => {
   if (!dateString) return "ไม่ได้กำหนด";
@@ -33,6 +19,7 @@ const formatThaiDate = (dateString: string | null | undefined) => {
   if (isNaN(date.getTime())) return "ไม่ได้กำหนด";
 
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -90,10 +77,7 @@ export default function RequestExtensionModal() {
     handleRequestExtension({
       id: transaction.id,
       data: {
-        // ใช้รูปแบบเวลาเดียวกับตอนขอยืม (SelfBorrowModal)
-        requestedReturnDate: new Date(
-          `${requestedReturnDate}T17:00:00.000Z`,
-        ).toISOString(),
+        requestedReturnDate: borrowDeadlineAtEndOfDay(requestedReturnDate),
         reason: reason.trim(),
       },
     });
@@ -169,7 +153,7 @@ export default function RequestExtensionModal() {
               </label>
               <ThaiDatePicker
                 id="requestedReturnDate"
-                minDate={getMinExtensionDate(transaction?.expectedReturnDate)}
+                minDate={minimumBorrowExtensionDate(transaction?.expectedReturnDate)}
                 value={requestedReturnDate}
                 onChange={setRequestedReturnDate}
                 placeholder="เลือกวันที่ต้องการคืนใหม่"

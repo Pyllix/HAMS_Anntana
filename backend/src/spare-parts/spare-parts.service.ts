@@ -1,3 +1,4 @@
+import { thaiDayStart, thaiDayEnd } from '../common/time/thai-date';
 import {
   BadRequestException,
   Injectable,
@@ -705,10 +706,10 @@ export class SparePartsService {
         ? {
             createdAt: {
               ...(query.startDate
-                ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+                ? { gte: thaiDayStart(query.startDate) }
                 : {}),
               ...(query.endDate
-                ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+                ? { lte: thaiDayEnd(query.endDate) }
                 : {}),
             },
           }
@@ -795,10 +796,10 @@ export class SparePartsService {
       ? Prisma.sql`AND a."sparepart_add_doc" ILIKE ${`%${query.sparepartAddDoc}%`}`
       : Prisma.empty;
     const startDateFilter = query.startDate
-      ? Prisma.sql`AND a."createdAt" >= ${new Date(`${query.startDate}T00:00:00.000Z`)}`
+      ? Prisma.sql`AND a."createdAt" >= ${thaiDayStart(query.startDate)}`
       : Prisma.empty;
     const endDateFilter = query.endDate
-      ? Prisma.sql`AND a."createdAt" <= ${new Date(`${query.endDate}T23:59:59.999Z`)}`
+      ? Prisma.sql`AND a."createdAt" <= ${thaiDayEnd(query.endDate)}`
       : Prisma.empty;
     const commonFilters = Prisma.sql`
       ${sparepartIdFilter}

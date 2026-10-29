@@ -1,3 +1,4 @@
+import { formatThaiDisplayDate } from "../../services/thaiDate";
 import { useServerPage, useDebouncedSearch } from "../../hooks/useServerPage";
 import { getPage } from "../../services/pagedApi";
 import QueryStatus from "../shared/QueryStatus";
@@ -27,26 +28,7 @@ const features = tableFeatures({
 });
 
 function formatDateTH(dateString?: string): string {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return dateString;
-
-  const months = [
-    "ม.ค.",
-    "ก.พ.",
-    "มี.ค.",
-    "เม.ย.",
-    "พ.ค.",
-    "มิ.ย.",
-    "ก.ค.",
-    "ส.ค.",
-    "ก.ย.",
-    "ต.ค.",
-    "พ.ย.",
-    "ธ.ค.",
-  ];
-
-  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
+  return formatThaiDisplayDate(dateString);
 }
 
 function UrgencyBadge({ urgencyStatus }: { urgencyStatus?: string }) {

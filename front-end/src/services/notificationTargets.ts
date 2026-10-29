@@ -141,6 +141,7 @@ export function formatNotificationRelativeTime(
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays} วันที่แล้ว`;
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "short",
     year: "2-digit",

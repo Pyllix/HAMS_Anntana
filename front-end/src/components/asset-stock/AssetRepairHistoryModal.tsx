@@ -1,3 +1,4 @@
+import { formatThaiDisplayDate } from "../../services/thaiDate";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowLeft, Banknote, Clock, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -9,33 +10,10 @@ import {
   ApiRepairJob,
 } from "../../services/repairApiService";
 
-const THAI_MONTHS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
+
 
 function formatThaiDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = THAI_MONTHS[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    return `${day} ${month} ${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiDisplayDate(dateString);
 }
 
 function calculateJobCost(job: ApiRepairJob): number {

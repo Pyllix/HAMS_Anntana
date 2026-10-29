@@ -51,6 +51,12 @@ describe('Cloudinary storage adapter contract', () => {
       'https://api.cloudinary.com/v1_1/hams-test-cloud/image/upload',
     );
     expect(asset.method).toBe('POST');
+    expect(asset.transport).toMatchObject({
+      kind: 'multipart-form-v1',
+      endpoint: asset.url,
+      method: 'POST',
+      fields: asset.fields,
+    });
     expect(asset.fields).toMatchObject({
       api_key: 'test-api-key',
       overwrite: 'false',
@@ -90,6 +96,61 @@ describe('Cloudinary storage adapter contract', () => {
         ]),
       ),
     );
+  });
+
+  it('normalizes the provider response proof behind the storage boundary', () => {
+    const input = uploadInput('ASSET_IMAGE');
+    const expected = 'hams-provider-proof';
+    const context = input.storageContext;
+    const fromProvider = adapter.fingerprintUploadEvidence(expected, context, {
+      public_id: expected,
+      version: 17,
+      signature: 'a'.repeat(40),
+      provider_metadata: { request_id: 'opaque-to-HAMS' },
+    });
+    const legacy = adapter.fingerprintUploadEvidence(expected, context, {
+      publicId: expected,
+      version: 17,
+      signature: 'a'.repeat(40),
+    });
+
+    expect(fromProvider).toBe(`${expected}\n17\n${'a'.repeat(40)}`);
+    expect(legacy).toBe(fromProvider);
+    expect(() =>
+      adapter.fingerprintUploadEvidence(expected, context, {
+        public_id: 'another-image',
+        version: 17,
+        signature: 'a'.repeat(40),
+      }),
+    ).toThrow(ImageStorageError);
+  });
+
+  it('accepts only an authenticated, matching short-lived employee image grant', () => {
+    const input = uploadInput('EMPLOYEE_PHOTO');
+    const reference = {
+      publicId: input.publicId,
+      storageContext: input.storageContext,
+      resourceType: 'image' as const,
+      deliveryType: 'authenticated' as const,
+      version: 7,
+    };
+    const grant = adapter.createShortLivedReadGrant(
+      reference,
+      new Date(Date.now() + 60_000),
+    );
+
+    expect(() =>
+      adapter.validateShortLivedReadGrant(reference, grant),
+    ).not.toThrow();
+    expect(() =>
+      adapter.validateShortLivedReadGrant(reference, {
+        ...grant,
+        url: grant.url.replace(
+          encodeURIComponent(input.publicId),
+          'another-image',
+        ),
+      }),
+    ).toThrow(ImageStorageError);
   });
 
   it('rejects animated WebP at the source-policy step even when pages is absent', () => {

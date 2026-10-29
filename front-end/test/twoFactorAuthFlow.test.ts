@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import axios, { type AxiosRequestConfig } from "axios";
+import axios, { AxiosError, type AxiosRequestConfig } from "axios";
 import process from "node:process";
 import { after, before, test } from "node:test";
 import { createServer, type ViteDevServer } from "vite";
@@ -16,6 +16,8 @@ const requests: RecordedRequest[] = [];
 const originalAdapter = axios.defaults.adapter;
 let signInResponse: unknown;
 let sessionResponse: unknown;
+let verificationResponse: unknown = { status: true };
+let verificationStatus = 200;
 let vite: ViteDevServer | undefined;
 let authService: any;
 let twoFactorLoginPage: any;
@@ -46,6 +48,17 @@ before(async () => {
       data = { csrfToken: "csrf-test-token" };
     } else if (method === "POST" && path === "/api/auth/sign-in") {
       data = signInResponse;
+    } else if (method === "POST" && path === "/api/auth/send-verification-email") {
+      if (verificationStatus !== 200) {
+        throw new AxiosError("Request failed", "ERR_BAD_REQUEST", config, undefined, {
+          data: { message: "Verification request failed" },
+          status: verificationStatus,
+          statusText: "Error",
+          headers: { "retry-after": "120" },
+          config,
+        });
+      }
+      data = verificationResponse;
     } else if (method === "GET" && path === "/api/auth/session") {
       data = sessionResponse;
     } else if (method === "POST" && path === "/api/auth/2fa/enable") {
@@ -211,4 +224,84 @@ test("locked 2FA attempts tell the user how long to wait", () => {
   });
 
   assert.match(message, /2 นาที/);
+});
+
+function verificationError(status: number, code?: string, retryAfter?: string): AxiosError {
+  return new AxiosError("Request failed", "ERR_BAD_REQUEST", undefined, undefined, {
+    data: { code },
+    status,
+    statusText: "Error",
+    headers: retryAfter ? { "retry-after": retryAfter } : {},
+    config: { headers: new axios.AxiosHeaders() },
+  });
+}
+
+test("only the server's unverified-email sign-in response offers verification resend", () => {
+  const unverified = verificationError(403, "EMAIL_NOT_VERIFIED");
+  assert.equal(authService.isEmailVerificationRequired(unverified), true);
+  assert.match(authService.getLoginErrorMessage(unverified), /อีเมลนี้ยังไม่ได้รับการยืนยัน/);
+  assert.equal(authService.isEmailVerificationRequired(verificationError(403, "CSRF_INVALID")), false);
+  assert.equal(authService.isEmailVerificationRequired(verificationError(401, "INVALID_EMAIL_OR_PASSWORD")), false);
+  assert.equal(authService.isEmailVerificationRequired(new Error("Network error")), false);
+  assert.equal(authService.isEmailVerificationRequired(null), false);
+  assert.equal(authService.getLoginErrorMessage(verificationError(401)), "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+});
+
+test("verification resend works without a session and sends only the email with CSRF", async () => {
+  requests.length = 0;
+  verificationStatus = 200;
+  verificationResponse = { status: true };
+
+  assert.equal(await authService.sendVerificationEmail("  unverified@example.test  "), 300);
+
+  const postRequests = requests.filter((request) => request.method === "POST");
+  assert.equal(postRequests.length, 1);
+  const request = postRequests[0];
+  assert.equal(request.path, "/api/auth/send-verification-email");
+  assert.deepEqual(bodyOf(request), { email: "unverified@example.test" });
+  assert.equal(request.withCredentials, true);
+  assert.equal(request.csrf, "csrf-test-token");
+  assert.equal(requests.some((entry) => entry.path === "/api/auth/session"), false);
+});
+
+test("a failed verification response never reports successful submission", async () => {
+  verificationStatus = 429;
+  await assert.rejects(authService.sendVerificationEmail("unverified@example.test"), (error) => {
+    assert.equal(authService.getVerificationEmailRetryDelay(error), 120);
+    assert.match(authService.getVerificationEmailErrorMessage(error), /กรุณารอ/);
+    return true;
+  });
+
+  verificationStatus = 200;
+  verificationResponse = { status: false };
+  await assert.rejects(authService.sendVerificationEmail("unverified@example.test"));
+  verificationResponse = { status: true };
+});
+
+test("verification retry honors the server delay and defaults to five minutes when absent", () => {
+  assert.equal(authService.getVerificationEmailRetryDelay(verificationError(429, undefined, "120")), 120);
+  assert.equal(authService.getVerificationEmailRetryDelay(verificationError(429)), 300);
+  assert.equal(authService.getVerificationEmailRetryDelay(verificationError(429, undefined, "invalid")), 300);
+  assert.equal(authService.getVerificationEmailRetryDelay(verificationError(500)), 0);
+  const retryAt = new Date(Date.now() + 120_000).toUTCString();
+  const seconds = authService.getVerificationEmailRetryDelay(verificationError(429, undefined, retryAt));
+  assert.ok(seconds >= 119 && seconds <= 120);
+});
+
+test("verification errors distinguish connectivity from server failure without exposing server text", () => {
+  assert.match(authService.getVerificationEmailErrorMessage(new AxiosError("Network Error")), /เชื่อมต่อไม่ได้/);
+  assert.match(authService.getVerificationEmailErrorMessage(verificationError(400)), /ลองเข้าสู่ระบบอีกครั้ง/);
+  assert.match(authService.getVerificationEmailErrorMessage(verificationError(500)), /ส่งไม่สำเร็จ/);
+  assert.match(authService.getVerificationEmailErrorMessage(new Error("Unexpected response")), /ส่งไม่สำเร็จ/);
+});
+
+test("verification success uses the server cooldown and throttling can return a longer hourly wait", async () => {
+  verificationResponse = { status: true, retryAfterSeconds: 420 };
+  assert.equal(await authService.sendVerificationEmail("unverified@example.test"), 420);
+  verificationResponse = { status: true, retryAfterSeconds: 60 };
+  assert.equal(await authService.sendVerificationEmail("unverified@example.test"), 300);
+  verificationResponse = { status: true };
+  const error = verificationError(429);
+  error.response!.data = { retryAfterSeconds: 1800 };
+  assert.equal(authService.getVerificationEmailRetryDelay(error), 1800);
 });

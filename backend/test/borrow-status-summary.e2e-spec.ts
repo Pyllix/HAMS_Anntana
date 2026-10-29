@@ -39,8 +39,7 @@ jest.mock('../src/auth/two-factor.service', () => ({
   TwoFactorService: class TwoFactorService {},
 }));
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 type BorrowListResponse = {
   data: Array<{ id: string; borrowStatus: { code: string } }>;
@@ -95,7 +94,7 @@ type SparePartListResponse = {
   meta: { total: number; totalPages: number };
 };
 
-describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
+describe('Borrow status summary API (PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
   let userId: string;
@@ -153,12 +152,6 @@ describeWithDatabase('Borrow status summary API (PostgreSQL)', () => {
   const server = () => app.getHttpServer() as Server;
 
   beforeAll(async () => {
-    if (!testDatabaseUrl || !/test/i.test(new URL(testDatabaseUrl).pathname)) {
-      throw new Error(
-        'TEST_DATABASE_URL must point to a dedicated database with "test" in its name',
-      );
-    }
-
     prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: testDatabaseUrl }),
     });

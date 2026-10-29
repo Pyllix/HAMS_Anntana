@@ -17,23 +17,12 @@ import {
 } from "../../services/borrowService";
 import { useRejectExtensionModalStore } from "../../stores/useRejectExtensionModalStore";
 import { useToastStore } from "../../stores/useToastStore";
+import { formatThaiDisplayDate as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
-
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-};
 
 function ExtensionActions({ extension }: { extension: BorrowExtension }) {
   const queryClient = useQueryClient();

@@ -33,7 +33,7 @@ function renderForm(file: string, props: Record<string, unknown>) {
   function requireMock(name: string): unknown {
     if (name === "react") return { ...react, default: react };
     if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Element["props"]) => ({ type, props }), jsxs: (type: unknown, props: Element["props"]) => ({ type, props }) };
-    if (name === "@tanstack/react-query") return { useQuery: () => ({ data: [] }), useQueryClient: () => ({ invalidateQueries() {} }), useMutation(options: typeof mutation) { mutation = options; return { isPending: false, mutate(input: unknown) { mutationInput = input; mutationCalls += 1; } }; } };
+    if (name === "@tanstack/react-query") return { useQuery: ({ queryKey }: { queryKey: string[] }) => ({ data: queryKey[0] === "budgetTypes" ? [{ id: 1, name: "เงินทดสอบ" }] : [], isSuccess: true }), useQueryClient: () => ({ invalidateQueries() {} }), useMutation(options: typeof mutation) { mutation = options; return { isPending: false, mutate(input: unknown) { mutationInput = input; mutationCalls += 1; } }; } };
     if (name.endsWith("useEquipmentModalStore")) return { useEquipmentModalStore: () => ({ isOpen: true, mode: "edit", selectedAsset: { id: "asset-1" }, closeModal() {} }) };
     if (name.endsWith("authStore")) return { useAuthStore: auth };
     if (name.endsWith("useImageUploadSelection")) return { useImageUploadSelection: () => ({ state: imageState, clearSelection() {}, selectFile() {}, markSelectionError() {} }) };
@@ -65,7 +65,7 @@ function renderForm(file: string, props: Record<string, unknown>) {
       assert.equal(mutationCalls, 1, "the recovery submit handler must dispatch exactly once");
       return mutation.mutationFn(mutationInput);
     },
-    fillAsset() { Object.assign(states[0] as object, { name: "Synthetic", model: "Model", price: "1", receivedDate: "2026-10-05", type_id: "1", section_id: "section-1", company_id: "company-1", owner_id: "actor-1" }); },
+    fillAsset() { Object.assign(states[0] as object, { name: "Synthetic", model: "Model", price: "1", receivedDate: "2026-10-05", type_id: "1", section_id: "section-1", company_id: "company-1", owner_id: "actor-1", budgetType: "เงินทดสอบ" }); render(); },
     get recoveries() { return recoveries; },
     get snapshot() { return snapshot; },
   };

@@ -1,3 +1,4 @@
+import { thaiTimeString, calendarDateString, thaiDateString } from "./thaiDate";
 // =============================================================
 // File: src/services/assetPrintService.ts
 // Standardized print service for Asset Stock (HAMS)
@@ -79,21 +80,10 @@ function escapeHtml(text: unknown): string {
 
 function formatDate(val: unknown, includeTime = false): string {
   if (!val) return "-";
-  const d = new Date(val as string | number | Date);
-  if (isNaN(d.getTime())) return "-";
-  const thaiMonths = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-  ];
-  const day = d.getDate();
-  const month = thaiMonths[d.getMonth()];
-  const year = d.getFullYear() + 543;
-  if (!includeTime) {
-    return `${day} ${month} ${year}`;
-  }
-  const hours = String(d.getHours()).padStart(2, "0");
-  const mins = String(d.getMinutes()).padStart(2, "0");
-  return `${day} ${month} ${year} เวลา ${hours}:${mins}`;
+  const date = new Date(val as string | number | Date);
+  if (Number.isNaN(date.getTime())) return "-";
+  const day = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "long", year: "numeric" }).format(date);
+  return includeTime ? day + " เวลา " + thaiTimeString(date) : day;
 }
 
 function money(val: unknown): string {
@@ -134,6 +124,13 @@ function documentShell(
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${escapeHtml(title)}</title>
   <style>
+    @font-face {
+      font-family: "Noto Sans Thai";
+      src: url("/fonts/NotoSansThai-Variable.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
     @page { size: A4; margin: 12mm; }
     * { box-sizing: border-box; }
     body {
@@ -393,15 +390,13 @@ function getBadgeHtml(statusName?: string, statusCode?: string): string {
 }
 
 function getWarrantyHtml(warrantyDateStr?: string | null): string {
-  if (!warrantyDateStr) return `<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">(ไม่ระบุประกัน)</small>`;
-  const d = new Date(warrantyDateStr);
-  if (isNaN(d.getTime())) return `<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">-</small>`;
-  const isExpired = d.getTime() < Date.now();
-  const dateShort = `${d.getDate()}/${d.getMonth() + 1}/${(d.getFullYear() + 543).toString().slice(2)}`;
-  if (isExpired) {
-    return `<small style="color: #be123c; font-weight: 600; display: block; font-size: 8px; margin-top: 2px; white-space: nowrap;">หมดประกัน (${dateShort})</small>`;
-  }
-  return `<small style="color: #047857; font-weight: 600; display: block; font-size: 8px; margin-top: 2px; white-space: nowrap;">ในประกัน (${dateShort})</small>`;
+  const day = calendarDateString(warrantyDateStr);
+  if (!warrantyDateStr) return '<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">(ไม่ระบุประกัน)</small>';
+  if (!day) return '<small style="color: #94a3b8; display: block; font-size: 8px; margin-top: 2px;">-</small>';
+  const isExpired = day < thaiDateString();
+  const [year, month, date] = day.split("-").map(Number);
+  const dateShort = `${date}/${month}/${String(year + 543).slice(-2)}`;
+  return '<small style="color: ' + (isExpired ? '#be123c' : '#047857') + '; font-weight: 600; display: block; font-size: 8px; margin-top: 2px; white-space: nowrap;">' + (isExpired ? 'หมดประกัน' : 'ในประกัน') + ' (' + dateShort + ')</small>';
 }
 
 // -------------------------------------------------------------
@@ -419,7 +414,7 @@ export function printAssetStockReport(request: AssetStockPrintRequest): boolean 
     context,
   } = request;
 
-  const refCode = reportRef || `AST-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  const refCode = reportRef || `AST-${thaiDateString().replace(/-/g, "")}`;
 
   let filterBarHtml = "";
   if (filters) {
@@ -714,7 +709,7 @@ export function printAssetStockGroupedByDepartmentReport(
 
   const refCode =
     reportRef ||
-    `AST-GRP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    `AST-GRP-${thaiDateString().replace(/-/g, "")}`;
 
   interface DeptGroup {
     sectionId: string;
@@ -977,7 +972,7 @@ export function printEquipmentStockReport(
   const subtitle = request.subtitle || defaultSubtitle;
   const refCode =
     reportRef ||
-    `PCL-${activeTab.slice(0, 3)}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    `PCL-${activeTab.slice(0, 3)}-${thaiDateString().replace(/-/g, "")}`;
 
   let filterBarHtml = "";
   if (filters) {
@@ -1274,7 +1269,7 @@ export function printEquipmentStockGroupedByTypeReport(
 
   const refCode =
     reportRef ||
-    `PCL-TYP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    `PCL-TYP-${thaiDateString().replace(/-/g, "")}`;
 
   interface TypeGroup {
     typeId: string;

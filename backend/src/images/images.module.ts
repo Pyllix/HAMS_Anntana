@@ -14,26 +14,41 @@ import { ImageUploadsController } from './image-uploads.controller';
 import { ImageAttachmentService } from './image-attachment.service';
 import { ImageReadService } from './image-read.service';
 import { ImageCleanupService } from './image-cleanup.service';
+import { runtimeConfig } from '../common/config/bootstrap-config';
+import { LocalFilesystemStorageAdapter } from './local-filesystem-storage.adapter';
+import { PublicAssetImagesController } from './public-asset-images.controller';
+import { EmployeePhotoImagesController } from './employee-photo-images.controller';
 
 @Module({
-  controllers: [ImageUploadsController],
+  controllers: [
+    ImageUploadsController,
+    PublicAssetImagesController,
+    EmployeePhotoImagesController,
+  ],
   providers: [
     PrismaService,
     ImageUploadService,
     ImageAttachmentService,
     ImageReadService,
     ImageCleanupService,
-    CloudinaryStorageAdapter,
-    { provide: IMAGE_STORAGE, useExisting: CloudinaryStorageAdapter },
+    {
+      provide: IMAGE_STORAGE,
+      useFactory: () =>
+        runtimeConfig.images.provider === 'local'
+          ? new LocalFilesystemStorageAdapter(runtimeConfig.images)
+          : new CloudinaryStorageAdapter(),
+    },
     { provide: IMAGE_CLOCK, useValue: { now: () => new Date() } },
   ],
   exports: [ImageAttachmentService, ImageReadService, ImageCleanupService],
 })
 export class ImagesModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(ImageNoStoreMiddleware).forRoutes(ImageUploadsController, {
-      path: 'users/:id/photo',
-      method: RequestMethod.GET,
-    });
+    consumer
+      .apply(ImageNoStoreMiddleware)
+      .forRoutes(ImageUploadsController, EmployeePhotoImagesController, {
+        path: 'users/:id/photo',
+        method: RequestMethod.GET,
+      });
   }
 }

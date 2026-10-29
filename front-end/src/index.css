@@ -1,9 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  src: url('/fonts/NotoSansThai-Variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 @theme {
   /* font อิงตามเครื่อง */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', 'Noto Sans Thai', system-ui, -apple-system, sans-serif;
   /* สีของพื้นหลัง App */
   --color-bg-app: var(--color-slate-50);
   /* สีของพื้นหลัง Component */

@@ -266,9 +266,21 @@ Body: { "email": string, "callbackURL"?: string }
 
 | HTTP | Body | Meaning |
 |---|---|---|
-| `200` | `{ "status": true, "message": "..." }` | Email queued |
+| `200` | `{ "status": true, "message": "...", "retryAfterSeconds": 300 }` | Resend request accepted |
 | `400` | `{ "code": "EMAIL_ALREADY_VERIFIED" }` | Already verified |
 | `400` | `{ "code": "USER_NOT_FOUND" }` | No account with that email |
+| `429` | `{ "code": "VERIFICATION_EMAIL_RATE_LIMITED", "message": "...", "retryAfterSeconds": number }` | Wait before another resend; also returns `Retry-After` |
+
+Resend policy: wait five minutes between accepted requests, with at most three
+requests per rolling hour per unverified account. Initial sign-up verification
+mail does not consume this quota. Accepted resend attempts consume quota even if
+SMTP later fails, preventing rapid retries during an outage. PostgreSQL stores
+the request history and serializes concurrent requests, so page reloads and app
+restarts do not reset it. The same Better Auth hook covers internal and HTTP
+resend calls. A separate 60-request/minute bucket protects a shared client IP;
+the deployment proxy must overwrite `X-Real-IP`, as the Docker Nginx config does.
+Callers without that header share an internal fallback bucket. Apply migration
+`20261024000000_add_email_verification_resend_limits` before starting this version.
 
 ### 4.12 Change Password (Self-Service)
 

@@ -154,11 +154,13 @@ export default function ConfirmRepairModal() {
   };
 
   const currentDate = new Date().toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "short",
     day: "numeric",
   });
   const currentTime = new Date().toLocaleTimeString("th-TH", {
+    timeZone: "Asia/Bangkok",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",

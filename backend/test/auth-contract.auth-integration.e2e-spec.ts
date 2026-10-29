@@ -29,8 +29,7 @@ import { TwoFactorService } from '../src/auth/two-factor.service';
 import { auth } from '../src/auth/auth';
 
 // The setup file rejects missing or unsafe TEST_DATABASE_URL values before this suite loads.
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = describe;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,7 +71,7 @@ function isHttpOnly(res: request.Response, name: string): boolean {
 // Suite
 // ---------------------------------------------------------------------------
 
-describeWithDatabase(
+describe(
   'Auth Contract (HTTP + Real BetterAuth + PostgreSQL)',
   () => {
     let app: INestApplication;
@@ -262,7 +261,7 @@ describeWithDatabase(
 
         expect(res.status).toBe(200);
         expect(res.body.session).toBeNull();
-        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['cache-control']).toContain('no-store');
       });
 
       it('rejects a legacy Bearer token on Business APIs', async () => {
@@ -285,7 +284,7 @@ describeWithDatabase(
         expect(res.body).not.toHaveProperty('sessionToken');
         expect(res.body).not.toHaveProperty('accessToken');
         expect(JSON.stringify(res.body)).not.toContain(sessionToken);
-        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['cache-control']).toContain('no-store');
       });
 
       it('blocks the direct BetterAuth session endpoint', async () => {

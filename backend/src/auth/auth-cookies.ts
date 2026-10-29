@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import { runtimeConfig } from '../common/config/bootstrap-config';
 
 export const PRE_AUTH_COOKIE = 'hams.pre_auth';
 export const TRUSTED_BROWSER_COOKIE = 'better-auth.trust_device';
@@ -41,5 +42,5 @@ export function readSessionToken(request: Request): string | undefined {
 }
 
 export function isSecureCookie(): boolean {
-  return process.env.NODE_ENV === 'production';
+  return runtimeConfig.server.secureCookies;
 }

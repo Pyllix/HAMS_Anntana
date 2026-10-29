@@ -1,4 +1,4 @@
-import type { AxiosError } from "axios";
+import { isAxiosError, type AxiosError } from "axios";
 import type { User } from "../types/TypeUser";
 import type { PreAuthStep } from "../types/AuthFlow";
 import { apiClient, invalidateCsrfToken } from "./apiClient";
@@ -53,6 +53,14 @@ function authenticatedResult(current: AuthenticatedSession) {
   return { kind: "authenticated" as const, ...current };
 }
 
+export function isEmailVerificationRequired(error: unknown): boolean {
+  return (
+    isAxiosError<{ code?: string }>(error) &&
+    error.response?.status === 403 &&
+    error.response.data?.code === "EMAIL_NOT_VERIFIED"
+  );
+}
+
 export function getLoginErrorMessage(error: unknown): string {
   const value = error as AxiosError<{ code?: string }> & {
     code?: string;
@@ -65,6 +73,9 @@ export function getLoginErrorMessage(error: unknown): string {
   if (value.response?.data?.code === "SESSION_EXPIRED") {
     return "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง";
   }
+  if (isEmailVerificationRequired(error)) {
+    return "อีเมลนี้ยังไม่ได้รับการยืนยัน กรุณาตรวจสอบกล่องข้อความและโฟลเดอร์สแปม";
+  }
   if (!value.response) {
     return "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง";
   }
@@ -75,6 +86,53 @@ export function getLoginErrorMessage(error: unknown): string {
     return "พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่อีกครั้งภายหลัง";
   }
   return "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+}
+
+export function getVerificationEmailErrorMessage(error: unknown): string {
+  if (isAxiosError(error) && !error.response) {
+    return "เชื่อมต่อไม่ได้ กรุณาลองใหม่";
+  }
+  if (isAxiosError(error) && error.response?.status === 429) {
+    return "กรุณารอก่อนขออีเมลใหม่";
+  }
+  if (isAxiosError(error) && error.response?.status === 400) {
+    return "ส่งไม่ได้ กรุณาลองเข้าสู่ระบบอีกครั้ง";
+  }
+  return "ส่งไม่สำเร็จ กรุณาลองใหม่";
+}
+
+export function getVerificationEmailRetryDelay(error: unknown): number {
+  if (!isAxiosError(error) || error.response?.status !== 429) return 0;
+
+  const bodyDelay = error.response.data?.retryAfterSeconds;
+  const retryAfter = error.response.headers["retry-after"];
+  if (typeof retryAfter === "string" || typeof retryAfter === "number") {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
+
+    const retryAt = Date.parse(String(retryAfter));
+    if (Number.isFinite(retryAt) && retryAt > Date.now()) {
+      return Math.ceil((retryAt - Date.now()) / 1000);
+    }
+  }
+  return typeof bodyDelay === "number" && Number.isFinite(bodyDelay) && bodyDelay > 0
+    ? Math.ceil(bodyDelay)
+    : 300;
+}
+
+export async function sendVerificationEmail(email: string): Promise<number> {
+  const response = await apiClient.post<{ status: boolean; retryAfterSeconds?: number }>(
+    "/auth/send-verification-email",
+    { email: email.trim() },
+    { allowUnauthenticated: true },
+  );
+  if (response.data?.status !== true) {
+    throw new Error("The server did not confirm the verification email request");
+  }
+  const delay = response.data.retryAfterSeconds;
+  return typeof delay === "number" && Number.isFinite(delay) && delay > 0
+    ? Math.max(300, Math.ceil(delay))
+    : 300;
 }
 
 export function getTwoFactorErrorMessage(error: unknown): string {

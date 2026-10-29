@@ -1,7 +1,8 @@
 import { apiClient } from "./apiClient";
 import type { User, UserDto } from "../types/TypeUser";
 
-export type UserUpdateDto = Partial<Omit<UserDto, "password">> & {
+export type UserUpdateDto = Partial<Omit<UserDto, "password" | "sectionId">> & {
+  sectionId?: string | null;
   banned?: boolean;
 };
 

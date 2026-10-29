@@ -195,6 +195,7 @@ function formatRelativeTime(createdAt: string): string {
   const diffHours = Math.floor(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "short",
   }).format(new Date(createdAt));

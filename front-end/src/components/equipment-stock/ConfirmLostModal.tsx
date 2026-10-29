@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Calendar as CalendarIcon } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDisposalModalStore } from "../../stores/useDisposalModalStore";
 import { updateAsset, getAssetStatuses } from "../../services/assetService";
+import { formatThaiCalendarDate } from "../../services/thaiDate";
 
 const formatThaiDate = (dateStr?: string | null) => {
-  if (!dateStr) return "-";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "-";
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear() + 543;
-  return `${day}/${month}/${year}`;
+  return formatThaiCalendarDate(dateStr, "2-digit");
 };
 
 export default function ConfirmLostModal() {
@@ -19,15 +13,12 @@ export default function ConfirmLostModal() {
     useDisposalModalStore();
   const queryClient = useQueryClient();
 
-  const [lostDate, setLostDate] = useState("");
   const [lastLocation, setLastLocation] = useState("");
   const [lostReason, setLostReason] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (isMarkLostOpen) {
-      const today = new Date().toISOString().split("T")[0];
-      setLostDate(today);
       setLastLocation("");
       setLostReason("");
       setErrorMsg("");
@@ -80,7 +71,7 @@ export default function ConfirmLostModal() {
       onClick={closeMarkLost}
     >
       <div
-        className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200"
+        className="w-full max-w-lg max-h-[calc(100dvh-2rem)] bg-white rounded-3xl shadow-2xl overflow-y-auto animate-in fade-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header matching image */}
@@ -133,23 +124,7 @@ export default function ConfirmLostModal() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* Field 1: วันที่ตรวจพบว่าสูญหาย */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                วันที่ตรวจพบว่าสูญหาย <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  required
-                  value={lostDate}
-                  onChange={(e) => setLostDate(e.target.value)}
-                  className="w-full h-9 rounded-xl border border-slate-200 px-3 text-xs text-slate-800 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                />
-              </div>
-            </div>
-
-            {/* Field 2: สถานที่/หน่วยงานล่าสุดที่พบ */}
+            {/* สถานที่/หน่วยงานล่าสุดที่พบ */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 สถานที่/หน่วยงานล่าสุดที่พบ <span className="text-rose-500">*</span>
@@ -164,7 +139,7 @@ export default function ConfirmLostModal() {
               />
             </div>
 
-            {/* Field 3: รายละเอียด/หมายเหตุการสูญหาย */}
+            {/* รายละเอียด/หมายเหตุการสูญหาย */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 รายละเอียด/หมายเหตุการสูญหาย <span className="text-rose-500">*</span>

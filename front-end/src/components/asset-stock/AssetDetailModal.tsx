@@ -5,45 +5,22 @@ import { useAssetDetailModalStore } from "../../stores/useAssetDetailModalStore"
 import { useAssetRepairHistoryModalStore } from "../../stores/useAssetRepairHistoryModalStore";
 import { getAssetTypes } from "../../services/assetService";
 import { fetchRepairJobSummaries } from "../../services/repairApiService";
-
-const THAI_MONTHS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
+import { calendarDateString, formatThaiCalendarDate, thaiDateString } from "../../services/thaiDate";
 
 function formatThaiDate(dateString?: string | null): string {
-  if (!dateString) return "-";
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    const day = d.getDate();
-    const month = THAI_MONTHS[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    return `${day} ${month} ${year}`;
-  } catch {
-    return "-";
-  }
+  return formatThaiCalendarDate(dateString);
 }
 
 function calculateUsageTime(receivedDateString?: string | null): string {
-  if (!receivedDateString) return "-";
+  const receivedDay = calendarDateString(receivedDateString);
+  if (!receivedDay) return "-";
   try {
-    const start = new Date(receivedDateString);
-    const now = new Date();
+    const start = new Date(`${receivedDay}T00:00:00.000Z`);
+    const now = new Date(`${thaiDateString()}T00:00:00.000Z`);
     if (isNaN(start.getTime())) return "-";
 
-    let years = now.getFullYear() - start.getFullYear();
-    let months = now.getMonth() - start.getMonth();
+    let years = now.getUTCFullYear() - start.getUTCFullYear();
+    let months = now.getUTCMonth() - start.getUTCMonth();
 
     if (months < 0) {
       years -= 1;
@@ -61,14 +38,8 @@ function calculateUsageTime(receivedDateString?: string | null): string {
 }
 
 function isWarrantyActive(warrantyDateString?: string | null): boolean {
-  if (!warrantyDateString) return false;
-  try {
-    const warranty = new Date(warrantyDateString);
-    const now = new Date();
-    return warranty.getTime() > now.getTime();
-  } catch {
-    return false;
-  }
+  const warrantyDay = calendarDateString(warrantyDateString);
+  return Boolean(warrantyDay && warrantyDay >= thaiDateString());
 }
 
 export default function AssetDetailModal() {

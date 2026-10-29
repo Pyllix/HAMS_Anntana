@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 export const IMAGE_STORAGE = Symbol('IMAGE_STORAGE');
 
 export type ImagePurpose = 'ASSET_IMAGE' | 'EMPLOYEE_PHOTO';
@@ -28,17 +30,31 @@ export interface UploadInstructionsInput {
 }
 
 export interface UploadInstructions {
+  readonly transport: ImageUploadTransport;
+  /** Temporary compatibility fields for callers being migrated to transport. */
   readonly url: string;
   readonly method: 'POST';
   readonly fields: Readonly<Record<string, string>>;
   readonly expiresAt: Date;
 }
 
-export interface UploadEvidence {
-  readonly publicId: string;
-  readonly version: number;
-  readonly signature: string;
-}
+export type ImageUploadTransport =
+  | {
+      readonly kind: 'multipart-form-v1';
+      readonly endpoint: string;
+      readonly method: 'POST';
+      readonly fields: Readonly<Record<string, string>>;
+      readonly expiresAt: Date;
+    }
+  | {
+      readonly kind: 'hams-binary-v1';
+      readonly endpoint: string;
+      readonly method: 'POST';
+      readonly fields: Readonly<Record<string, string>>;
+      readonly expiresAt: Date;
+    };
+
+export type UploadEvidence = Readonly<Record<string, unknown>>;
 
 export interface VerifyUploadedObjectInput {
   readonly publicId: string;
@@ -78,6 +94,11 @@ export interface ShortLivedImageGrant {
 export interface ImageStoragePort {
   getProviderContext(): ImageStorageContext;
   createUploadInstructions(input: UploadInstructionsInput): UploadInstructions;
+  fingerprintUploadEvidence(
+    publicId: string,
+    storageContext: ImageStorageContext,
+    evidence: UploadEvidence,
+  ): string;
   verifyUploadedObject(
     input: VerifyUploadedObjectInput,
   ): Promise<VerifiedImageObject>;
@@ -86,11 +107,86 @@ export interface ImageStoragePort {
     reference: ImageObjectReference,
     expiresAt: Date,
   ): ShortLivedImageGrant;
+  validateShortLivedReadGrant(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): void;
   deleteObject(reference: ImageObjectReference): Promise<void>;
   deleteAllocatedImageVariants(input: {
     readonly publicId: string;
     readonly storageContext: ImageStorageContext;
   }): Promise<void>;
+}
+
+export interface LocalImageStoragePort extends ImageStoragePort {
+  receiveLocalUpload(input: {
+    readonly publicId: string;
+    readonly stream: Readable;
+    readonly policy: ImageUploadPolicy;
+    readonly receivedAt: Date;
+  }): Promise<UploadEvidence>;
+  openPublicAsset(reference: ImageObjectReference): Promise<{
+    readonly stream: Readable;
+    readonly bytes: number;
+  }>;
+  openPrivateEmployeePhoto(
+    reference: ImageObjectReference,
+    grant: ShortLivedImageGrant,
+  ): Promise<{
+    readonly stream: Readable;
+    readonly bytes: number;
+  }>;
+}
+
+export function isLocalImageStoragePort(
+  storage: ImageStoragePort,
+  context?: ImageStorageContext,
+): storage is LocalImageStoragePort {
+  const hasLocalOperations =
+    'receiveLocalUpload' in storage &&
+    typeof storage.receiveLocalUpload === 'function' &&
+    'openPublicAsset' in storage &&
+    typeof storage.openPublicAsset === 'function' &&
+    'openPrivateEmployeePhoto' in storage &&
+    typeof storage.openPrivateEmployeePhoto === 'function';
+  if (!hasLocalOperations) return false;
+  if (context) return context.provider === 'local';
+  try {
+    return storage.getProviderContext().provider === 'local';
+  } catch {
+    return false;
+  }
+}
+
+export function isVersionedAssetImageUrl(
+  url: string,
+  reference: ImageObjectReference,
+): boolean {
+  if (
+    reference.resourceType !== 'image' ||
+    reference.deliveryType !== 'upload' ||
+    !reference.version ||
+    !Number.isSafeInteger(reference.version)
+  ) {
+    return false;
+  }
+  if (reference.storageContext.provider === 'local') {
+    return (
+      url ===
+      `/api/images/assets/${encodeURIComponent(reference.publicId)}/v${reference.version}.jpg`
+    );
+  }
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.pathname.split('/').includes(`v${reference.version}`)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export type ImageStorageErrorCode =

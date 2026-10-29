@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
+import { thaiCalendarDate } from '../common/time/thai-date';
 import {
   QueryAssetViabilityDto,
   ViabilitySortBy,
@@ -593,7 +594,7 @@ export class AssetViabilityService {
         : 8;
 
     const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
 
     let totalOutsourceCost = 0;
     let totalSparePartsCost = 0;
@@ -686,7 +687,7 @@ export class AssetViabilityService {
       blockReason = 'ASSET_ALREADY_DISPOSED';
     }
 
-    const buddhistYear = new Date().getFullYear() + 543;
+    const buddhistYear = Number(thaiCalendarDate().slice(0, 4)) + 543;
 
     return {
       asset: {

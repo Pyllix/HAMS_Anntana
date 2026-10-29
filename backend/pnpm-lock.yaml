@@ -50,6 +50,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      libheif-js:
+        specifier: 1.23.5
+        version: 1.23.5
       nodemailer:
         specifier: ^10.0.7
         version: 10.0.10
@@ -65,6 +68,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      sharp:
+        specifier: ^0.33.5
+        version: 0.33.5
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -120,9 +126,6 @@ importers:
       prisma:
         specifier: ^7.9.1
         version: 7.10.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
-      sharp:
-        specifier: ^0.33.5
-        version: 0.33.5
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
@@ -3190,6 +3193,10 @@ packages:
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
+
+  libheif-js@1.23.5:
+    resolution: {integrity: sha512-umXZPthnWZtF3iG/5mQG+AZ2V6i0UeYpo3z2CkggTEgL8dKmIIwJT6TDuAMuabXa1yTW8uJ1ZAgR+CxNTklYYw==}
+    engines: {node: '>=8.0.0'}
 
   libphonenumber-js@1.13.6:
     resolution: {integrity: sha512-NdB6O6QvlGMCoG003m0YIKG2+Xw7DjmCZhmc1RH+K6HncADUbRf8TZeLegxBBN1VFyPHcNpPTKpIhYLXzJVy1Q==}
@@ -7608,6 +7615,8 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  libheif-js@1.23.5: {}
 
   libphonenumber-js@1.13.6: {}
 

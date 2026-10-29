@@ -24,7 +24,8 @@ import SessionLifecycle from "../components/auth/SessionLifecycle";
 function RootRedirect() {
   const role = useAuthStore((state) => state.role);
   const defaultRoute = APP_ROUTE.find(
-    (route) => route.showInNav && role && route.roles.includes(role),
+    (route) => route.showInNav && role && route.roles.includes(role)
+      && (!route.navRoles || route.navRoles.includes(role)),
   );
   return (
     <Navigate

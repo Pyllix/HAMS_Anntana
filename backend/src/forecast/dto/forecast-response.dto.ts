@@ -309,6 +309,19 @@ export class ForecastModelsDto {
 
 export class ForecastResponseDto {
   @ApiProperty({
+    description:
+      'สถานะผลพยากรณ์: ปิดใช้งาน, ข้อมูลไม่พอ, บริการไม่พร้อม หรือพร้อมใช้งาน',
+    enum: ['disabled', 'insufficient_data', 'unavailable', 'available'],
+    example: 'disabled',
+  })
+  /** Keep the established snake_case API wire name consumed by the frontend. */
+  readonly forecast_status:
+    | 'disabled'
+    | 'insufficient_data'
+    | 'unavailable'
+    | 'available';
+
+  @ApiProperty({
     description: 'แหล่งที่มาของผลการทำนาย (gemini_api หรือ fallback)',
     enum: ['gemini_api', 'fallback'],
     example: 'gemini_api',

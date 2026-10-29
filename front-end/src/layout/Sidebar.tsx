@@ -9,7 +9,8 @@ export default function Sidebar() {
   const { signOut, isSigningOut, signOutError } = useSignOut();
 
   const navItems = APP_ROUTE.filter(
-    (item) => item.showInNav && role && item.roles.includes(role),
+    (item) => item.showInNav && role && item.roles.includes(role)
+      && (!item.navRoles || item.navRoles.includes(role)),
   );
 
   return (

@@ -3,9 +3,13 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/database-test-setup.cjs"],
   "transform": {
     "^.+\\.(t|j|mj)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "node_modules/(?!\\.pnpm[\\\\/](?:@thallesp\\+nestjs-better-auth[^\\\\/]*|otplib@[^\\\\/]*|@otplib\\+[^\\\\/]*|@scure\\+base@[^\\\\/]*|@noble\\+hashes@[^\\\\/]*)[\\\\/]node_modules[\\\\/]|@thallesp[\\\\/]|otplib[\\\\/]|@otplib[\\\\/]|@scure[\\\\/]|@noble[\\\\/])"
+  ],
   "moduleNameMapper": {
     "^@thallesp/nestjs-better-auth$": "<rootDir>/../src/__mocks__/@thallesp/nestjs-better-auth.ts",
     "^better-auth$": "<rootDir>/../src/__mocks__/better-auth.ts",

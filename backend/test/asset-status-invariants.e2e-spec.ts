@@ -18,10 +18,9 @@ import { RepairsService } from '../src/repairs/repairs.service';
 import { PrismaService } from '../src/prisma.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
-describeWithDatabase(
+describe(
   'Cross-module asset status invariants (HTTP + PostgreSQL)',
   () => {
     let app: INestApplication;
@@ -133,14 +132,6 @@ describeWithDatabase(
     }
 
     beforeAll(async () => {
-      if (
-        !testDatabaseUrl ||
-        !/test/i.test(new URL(testDatabaseUrl).pathname)
-      ) {
-        throw new Error(
-          'TEST_DATABASE_URL must name a dedicated test database',
-        );
-      }
       prisma = new PrismaClient({
         adapter: new PrismaPg({ connectionString: testDatabaseUrl }),
       });

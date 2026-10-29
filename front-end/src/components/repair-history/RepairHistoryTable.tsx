@@ -1,3 +1,4 @@
+import { formatThaiDisplayDate } from "../../services/thaiDate";
 import { mapApiRepairJob } from "../../services/repairApiService";
 import "./RepairHistoryTable.css";
 import type { ApiRepairJob } from "../../services/repairApiService";
@@ -56,26 +57,10 @@ const features = tableFeatures({
   paginatedRowModel: createPaginatedRowModel(),
 });
 
-const THAI_MONTHS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
+
 
 function formatDateTH(dateString?: string | null): string {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "-";
-  return `${date.getDate()} ${THAI_MONTHS[date.getMonth()]} ${date.getFullYear() + 543}`;
+  return formatThaiDisplayDate(dateString);
 }
 
 const actionLabels: Record<RepairActionType, string> = {
@@ -692,7 +677,7 @@ export default function RepairHistoryTable({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M9 5l7 7-7"
+                d="M9 5l7 7-7 7"
               />
             </svg>
           </button>

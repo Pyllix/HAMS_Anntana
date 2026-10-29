@@ -26,6 +26,7 @@ import {
   type ImagePurpose,
   type ImageStorageContext,
   type ImageStoragePort,
+  isVersionedAssetImageUrl,
 } from './image-storage.port';
 import {
   imageDeliveryTypeForPurpose,
@@ -466,12 +467,8 @@ export class ImageAttachmentService {
     let imageUrl: string;
     try {
       imageUrl = this.storage.publicUrl(this.toReference(locator));
-      const parsedUrl = new URL(imageUrl);
-      if (
-        parsedUrl.protocol !== 'https:' ||
-        !parsedUrl.pathname.split('/').includes(`v${locator.version}`)
-      ) {
-        throw new Error('Asset image URL is not HTTPS and versioned');
+      if (!isVersionedAssetImageUrl(imageUrl, this.toReference(locator))) {
+        throw new Error('Asset image URL is not versioned for its provider');
       }
     } catch {
       throw new ServiceUnavailableException({

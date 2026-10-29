@@ -9,7 +9,5 @@
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/../src/$1"
   },
-  "setupFiles": [
-    "<rootDir>/auth-integration-setup.ts"
-  ]
+  "setupFiles": ["<rootDir>/database-test-setup.cjs"]
 }

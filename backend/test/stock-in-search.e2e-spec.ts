@@ -13,8 +13,7 @@ import { SparePartsController } from '../src/spare-parts/spare-parts.controller'
 import { SparePartsService } from '../src/spare-parts/spare-parts.service';
 import { RolesGuard } from '../src/common/guards/roles.guard';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 type StockInHistoryResponse = {
   data: Array<{
@@ -50,7 +49,7 @@ function asStockInHistoryResponse(value: unknown): StockInHistoryResponse {
   return value as StockInHistoryResponse;
 }
 
-describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
+describe('Stock-in history search API (PostgreSQL)', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
   let userId: string;
@@ -108,12 +107,6 @@ describeWithDatabase('Stock-in history search API (PostgreSQL)', () => {
   }
 
   beforeAll(async () => {
-    if (!testDatabaseUrl || !/test/i.test(new URL(testDatabaseUrl).pathname)) {
-      throw new Error(
-        'TEST_DATABASE_URL must point to a dedicated database with "test" in its name',
-      );
-    }
-
     prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: testDatabaseUrl }),
     });

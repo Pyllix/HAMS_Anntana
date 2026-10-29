@@ -4,6 +4,9 @@
   "description": "",
   "author": "",
   "private": true,
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -11,16 +14,18 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node scripts/start-production.cjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:unit": "jest --config ./test/jest-unit.config.cjs --runInBand",
     "fixtures:cloudinary": "node scripts/prepare-cloudinary-fixtures.mjs",
-    "test:asset-status:e2e": "node -e \"if (!process.env.TEST_DATABASE_URL) { console.error('TEST_DATABASE_URL is required'); process.exit(1) }\" && jest --config ./test/jest-e2e.json --runInBand asset-status-invariants.e2e-spec.ts",
-    "test:auth-integration": "node -e \"if (!process.env.TEST_DATABASE_URL) { console.error('TEST_DATABASE_URL is required'); process.exit(1) }\" && node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-auth-integration.json --runInBand",
+    "test:asset-status:e2e": "jest --config ./test/jest-e2e.json --runInBand asset-status-invariants.e2e-spec.ts",
+    "test:auth-integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-auth-integration.json --runInBand",
+    "test:database-guard": "node --test test/database-test-setup.test.cjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
@@ -49,11 +54,13 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
+    "libheif-js": "1.23.5",
     "nodemailer": "^10.0.7",
     "otplib": "^13.5.0",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -74,7 +81,6 @@
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
     "prisma": "^7.9.1",
-    "sharp": "^0.33.5",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
@@ -86,6 +92,9 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
+    "setupFiles": [
+      "<rootDir>/../test/database-test-setup.cjs"
+    ],
     "moduleFileExtensions": [
       "js",
       "json",
@@ -98,7 +107,7 @@
       "^.+\\.(t|j|mj)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!(@thallesp|otplib|@otplib|@scure))"
+      "node_modules/(?!\\.pnpm[\\\\/](?:@thallesp\\+nestjs-better-auth[^\\\\/]*|otplib@[^\\\\/]*|@otplib\\+[^\\\\/]*|@scure\\+base@[^\\\\/]*|@noble\\+hashes@[^\\\\/]*)[\\\\/]node_modules[\\\\/]|@thallesp[\\\\/]|otplib[\\\\/]|@otplib[\\\\/]|@scure[\\\\/]|@noble[\\\\/])"
     ],
     "moduleNameMapper": {
       "^@thallesp/nestjs-better-auth$": "<rootDir>/__mocks__/@thallesp/nestjs-better-auth.ts",

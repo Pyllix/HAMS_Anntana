@@ -13,7 +13,7 @@ export interface User {
   imageUrl: string | null;
   hasEmployeePhoto: boolean;
   photoRevision: string | null;
-  section_id: string;
+  section_id: string | null;
   role: RoleType;
   banned: boolean;
   banReason: string | null;

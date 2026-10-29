@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from "../../stores/authStore";
 import { useRequestReturnModalStore } from "../../stores/useRequestReturnModalStore";
 import { useExtensionModalStore } from "../../stores/useExtensionModalStore";
+import { formatThaiDisplayDate as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
@@ -43,18 +44,6 @@ const STATUS_STYLES: Record<string, string> = {
   RETURNED: "bg-slate-100 text-slate-600 border-slate-200",
   REJECTED: "bg-rose-100 text-rose-700 border-rose-200",
   CANCELLED: "bg-slate-100 text-slate-500 border-slate-200",
-};
-
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
 };
 
 const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [

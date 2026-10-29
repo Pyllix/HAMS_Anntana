@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1
+
+# Build from the repository root:
+#   docker build -f Dockerfile.frontend -t hams-frontend:local .
+ARG NODE_VERSION=24.22.1
+ARG NGINX_VERSION=1.30.6
+FROM node:${NODE_VERSION}-bookworm-slim AS build
+
+WORKDIR /app/front-end
+
+COPY front-end/package.json front-end/package-lock.json ./
+RUN --mount=type=cache,id=hams-frontend-npm,target=/root/.npm \
+    npm ci --include=dev --no-audit --no-fund
+
+# API calls use the same-origin /api path; do not bake deployment secrets or
+# the Vite development proxy target into the frontend image.
+COPY front-end/index.html front-end/vite.config.js front-end/tsconfig.json ./
+COPY front-end/src ./src
+COPY front-end/public ./public
+RUN npm run build \
+    && test -s dist/index.html \
+    && test -s dist/fonts/Inter-Variable.ttf \
+    && test -s dist/fonts/NotoSansThai-Variable.ttf
+
+FROM nginx/nginx-unprivileged:${NGINX_VERSION}-alpine AS runtime
+
+USER root
+RUN rm -f /usr/share/nginx/html/index.html /usr/share/nginx/html/50x.html
+COPY --from=build /app/front-end/dist/ /usr/share/nginx/html/
+
+# Standalone static-site defaults for image checks. Compose will mount the
+# separately reviewed HTTPS/API configuration over this same file.
+# Until that configuration is supplied, fail API requests instead of returning
+# index.html for a missing backend route.
+COPY <<'NGINX' /etc/nginx/conf.d/default.conf
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location = /api { return 503; }
+    location ^~ /api/ { return 503; }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location /fonts/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~ /\. { deny all; }
+}
+NGINX
+
+USER nginx
+RUN nginx -t
+
+# 8080 serves internal health checks; the mounted TLS config listens on 8443.
+EXPOSE 8080 8443
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["wget", "-q", "-T", "3", "--spider", "http://127.0.0.1:8080/healthz"]
+
+CMD ["nginx", "-g", "daemon off;"]

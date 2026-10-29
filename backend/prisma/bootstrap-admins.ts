@@ -11,14 +11,18 @@ import type { PoolClient } from 'pg';
 import { auth } from '../src/auth/auth';
 import { sharedPool, sharedPrisma } from '../src/common/config/database.config';
 import { mailService } from '../src/common/mail/mail.service';
+import {
+  buildNextEmployeeId,
+  employeeIdPrefix,
+} from '../src/users/employee-id';
 import { loadBootstrapAdminEmails } from './bootstrap-admin-config';
+import { loadRuntimeConfig } from '../src/common/config/runtime-config';
 
 interface BootstrapAdmin {
   email: string;
   userName: string;
   firstname: string;
   lastname: string;
-  employeeId: string;
 }
 
 const BOOTSTRAP_LOCK_ID = 90260927;
@@ -49,13 +53,11 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
       userName: requiredValue(`${prefix}_USERNAME`),
       firstname: requiredValue(`${prefix}_FIRSTNAME`),
       lastname: requiredValue(`${prefix}_LASTNAME`),
-      employeeId: requiredValue(`${prefix}_EMPLOYEE_ID`),
     };
   }) as [BootstrapAdmin, BootstrapAdmin];
 
   const normalizedValues = [
     admins.map(({ userName }) => userName.toLowerCase()),
-    admins.map(({ employeeId }) => employeeId.toLowerCase()),
   ];
   if (normalizedValues.some(([first, second]) => first === second)) {
     throw new BootstrapConfigurationError(
@@ -68,8 +70,7 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
       admin.email.length > 100 ||
       admin.userName.length > 50 ||
       admin.firstname.length > 100 ||
-      admin.lastname.length > 100 ||
-      admin.employeeId.length > 50
+      admin.lastname.length > 100
     ) {
       throw new BootstrapConfigurationError(
         `Bootstrap ADMIN ${index + 1} has invalid identity fields`,
@@ -80,46 +81,18 @@ function loadAdmins(): [BootstrapAdmin, BootstrapAdmin] {
   return admins;
 }
 
-function validateProductionConfiguration(): void {
+export function validateProductionConfiguration(): void {
   if (process.env.NODE_ENV !== 'production') {
-    throw new BootstrapConfigurationError('ADMIN bootstrap requires NODE_ENV=production');
-  }
-  if (!process.env.DATABASE_URL) {
-    throw new BootstrapConfigurationError('DATABASE_URL is required');
-  }
-  if ((process.env.BETTER_AUTH_SECRET ?? '').length < 32) {
     throw new BootstrapConfigurationError(
-      'BETTER_AUTH_SECRET must contain at least 32 characters',
+      'ADMIN bootstrap requires NODE_ENV=production',
     );
   }
-  if (!/^[a-f0-9]{64}$/i.test(process.env.TWO_FACTOR_ENCRYPTION_KEY ?? '')) {
+  // Use the same URL, cookie-mode, secret and SMTP rules as application startup.
+  try {
+    loadRuntimeConfig(process.env);
+  } catch (error) {
     throw new BootstrapConfigurationError(
-      'TWO_FACTOR_ENCRYPTION_KEY must be 64 hexadecimal characters',
-    );
-  }
-
-  for (const key of ['BETTER_AUTH_URL', 'FRONTEND_URL']) {
-    const value = requiredValue(key);
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      throw new BootstrapConfigurationError(`${key} must be a valid HTTPS URL`);
-    }
-    if (url.protocol !== 'https:') {
-      throw new BootstrapConfigurationError(
-        `${key} must use HTTPS for production bootstrap`,
-      );
-    }
-  }
-
-  requiredValue('SMTP_HOST');
-  if (
-    process.env.SMTP_SECURE !== 'true' &&
-    process.env.SMTP_REQUIRE_TLS !== 'true'
-  ) {
-    throw new BootstrapConfigurationError(
-      'Credential delivery requires SMTP_SECURE=true or SMTP_REQUIRE_TLS=true',
+      error instanceof Error ? error.message : 'Invalid runtime configuration',
     );
   }
 }
@@ -234,7 +207,7 @@ export async function ensureAdmin(admin: BootstrapAdmin): Promise<void> {
   if (existing) {
     if (
       existing.role !== UserRole.ADMIN ||
-      existing.employeeId !== admin.employeeId ||
+      !existing.employeeId ||
       existing.userName !== admin.userName ||
       existing.banned === true ||
       existing.deletedAt !== null
@@ -271,14 +244,12 @@ export async function ensureAdmin(admin: BootstrapAdmin): Promise<void> {
   }
 
   const identityConflict = await sharedPrisma.user.findFirst({
-    where: {
-      OR: [{ userName: admin.userName }, { employeeId: admin.employeeId }],
-    },
+    where: { userName: admin.userName },
     select: { id: true },
   });
   if (identityConflict) {
     throw new Error(
-      'A configured username or employee ID is already assigned to another account',
+      'A configured username is already assigned to another account',
     );
   }
 
@@ -289,10 +260,15 @@ export async function ensureAdmin(admin: BootstrapAdmin): Promise<void> {
   const passwordEncrypted = encryptInitialPassword(userId, initialPassword);
 
   await sharedPrisma.$transaction(async (tx) => {
+    const latest = await tx.user.findFirst({
+      where: { employeeId: { startsWith: employeeIdPrefix(now) } },
+      orderBy: { employeeId: 'desc' },
+      select: { employeeId: true },
+    });
     await tx.user.create({
       data: {
         id: userId,
-        employeeId: admin.employeeId,
+        employeeId: buildNextEmployeeId(latest?.employeeId, now),
         userName: admin.userName,
         firstname: admin.firstname,
         lastname: admin.lastname,

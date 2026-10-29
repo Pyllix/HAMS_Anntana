@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { repairDueDate } from "../../services/repairDates";
 import { useSessionDraft } from "../../hooks/useSessionDraft";
 import { clearSessionDraft } from "../../services/sessionDraftStorage";
 import {
@@ -489,21 +490,7 @@ export default function AssessmentForm() {
     const selectedDetail = jobDetail;
     if (!selectedDetail) return;
 
-    let formattedDueDate = new Date().toISOString().slice(0, 10);
-
-    if (formState.dueDate) {
-      const days = Number(formState.dueDate);
-      if (!isNaN(days) && days > 0) {
-        const d = new Date();
-        d.setDate(d.getDate() + days);
-        formattedDueDate = d.toISOString().slice(0, 10);
-      } else {
-        const parsedDate = new Date(formState.dueDate);
-        if (!isNaN(parsedDate.getTime())) {
-          formattedDueDate = parsedDate.toISOString().slice(0, 10);
-        }
-      }
-    }
+    const formattedDueDate = repairDueDate(formState.dueDate);
 
     const dto: DiagnoseDto = {
       stepActionType,

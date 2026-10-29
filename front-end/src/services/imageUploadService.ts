@@ -1,5 +1,9 @@
 import type { AxiosInstance } from "axios";
 import { apiClient } from "./apiClient";
+import { ImageUploadError } from "./imageUploadError";
+import { allowedImageUrl } from "./imageUrlPolicy";
+import { uploadImageWithInstructions } from "./imageUploadTransport";
+import type { MultipartFormImageTransport } from "./multipartFormImageTransport";
 import {
   cacheEmployeePhotoGrant,
   clearEmployeePhotoGrantCache,
@@ -39,15 +43,7 @@ const EXTENSION_TYPES: Record<string, string> = {
   heif: "image/heif",
 };
 
-export class ImageUploadError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "ImageUploadError";
-    this.code = code;
-  }
-}
+export { ImageUploadError } from "./imageUploadError";
 
 export interface ImageUploadIntent {
   uploadId: string;
@@ -56,11 +52,20 @@ export interface ImageUploadIntent {
   attachmentWindowSeconds: number;
   acceptedSourceMimeTypes: readonly string[];
   uploadInstructions: {
-    url: string;
-    method: string;
-    fields: Record<string, string>;
+    transport?: MultipartFormImageTransport | HamsBinaryImageTransport;
+    url?: string;
+    method?: string;
+    fields?: Readonly<Record<string, string>>;
     expiresAt: string;
   };
+}
+
+interface HamsBinaryImageTransport {
+  readonly kind: "hams-binary-v1";
+  readonly endpoint: string;
+  readonly method: "POST";
+  readonly fields: Readonly<Record<string, string>>;
+  readonly expiresAt: string;
 }
 
 export interface VerifiedImageUpload {
@@ -101,29 +106,6 @@ export function validateImageSource(file: File): { contentType: string } {
   return { contentType };
 }
 
-function providerUrl(value: unknown): string {
-  if (typeof value !== "string") {
-    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new ImageUploadError("IMAGE_URL_INVALID", "ที่อยู่รูปจากระบบไม่ถูกต้อง");
-  }
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.port !== "" ||
-    parsed.hash !== "" ||
-    !["api.cloudinary.com", "res.cloudinary.com"].includes(parsed.hostname)
-  ) {
-    throw new ImageUploadError("IMAGE_URL_NOT_ALLOWED", "ระบบส่งที่อยู่รูปที่ไม่อนุญาตมาให้");
-  }
-  return parsed.toString();
-}
-
 function boundedSignal(parent: AbortSignal | undefined, timeoutMs: number) {
   const controller = new AbortController();
   const abortFromParent = () => controller.abort(parent?.reason);
@@ -159,7 +141,7 @@ async function fetchImageBlob(
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
 ): Promise<Blob> {
-  const url = providerUrl(urlValue);
+  const url = allowedImageUrl(urlValue);
   const bounded = boundedSignal(signal, 20_000);
   try {
     let response: Response;
@@ -180,7 +162,7 @@ async function fetchImageBlob(
       );
     }
 
-    if (response.url) providerUrl(response.url);
+    if (response.url) allowedImageUrl(response.url);
     if (!response.ok) {
       throw new ImageUploadError(
         "IMAGE_READ_UNAVAILABLE",
@@ -290,74 +272,52 @@ export async function getEmployeePhotoBlob(
   }
 }
 
-async function uploadToProvider(
+async function uploadWithInstructions(
   file: File,
   intent: ImageUploadIntent,
   signal: AbortSignal | undefined,
   fetchImpl: typeof fetch,
-): Promise<{ publicId: string; version: number; signature: string }> {
-  const targetUrl = providerUrl(intent.uploadInstructions?.url);
-  if (intent.uploadInstructions.method !== "POST") {
-    throw new ImageUploadError("UPLOAD_INSTRUCTIONS_INVALID", "คำสั่งอัปโหลดรูปไม่ถูกต้อง");
-  }
-  const fields = intent.uploadInstructions.fields;
-  if (!fields || typeof fields !== "object" || Object.values(fields).some((value) => typeof value !== "string")) {
-    throw new ImageUploadError("UPLOAD_INSTRUCTIONS_INVALID", "คำสั่งอัปโหลดรูปไม่ถูกต้อง");
-  }
-
-  const formData = new FormData();
-  Object.entries(fields).forEach(([name, value]) => formData.append(name, value));
-  formData.append("file", file, file.name);
-
-  const bounded = boundedSignal(signal, 60_000);
-  try {
-    let response: Response;
-    try {
-      response = await fetchImpl(targetUrl, {
-        method: intent.uploadInstructions.method,
-        body: formData,
-        credentials: "omit",
-        cache: "no-store",
-        redirect: "error",
-        signal: bounded.signal,
-      });
-    } catch (error) {
-      if (bounded.signal.aborted) throw error;
-      throw new ImageUploadError(
-        "PROVIDER_UPLOAD_FAILED",
-        "ส่งรูปไปยังพื้นที่จัดเก็บไม่สำเร็จ กรุณาเลือกไฟล์เดิมเพื่อลองใหม่",
-      );
-    }
-    if (response.url) providerUrl(response.url);
-    if (!response.ok) {
-      throw new ImageUploadError(
-        "PROVIDER_UPLOAD_FAILED",
-        "พื้นที่จัดเก็บปฏิเสธรูปนี้ กรุณาตรวจสอบชนิดและขนาดไฟล์",
-      );
-    }
-    let evidence: { public_id?: unknown; version?: unknown; signature?: unknown };
-    try {
-      evidence = await response.json();
-    } catch {
-      throw new ImageUploadError("UPLOAD_EVIDENCE_INVALID", "ระบบตรวจสอบผลอัปโหลดไม่ได้");
-    }
+  api: ImageApi,
+): Promise<Readonly<Record<string, unknown>>> {
+  const transport = intent.uploadInstructions.transport;
+  if (transport?.kind === "hams-binary-v1") {
+    const endpoint = `/images/uploads/${encodeURIComponent(intent.uploadId)}/file`;
     if (
-      typeof evidence.public_id !== "string" ||
-      evidence.public_id !== fields.public_id ||
-      typeof evidence.version !== "number" ||
-      !Number.isInteger(evidence.version) ||
-      typeof evidence.signature !== "string"
+      transport.method !== "POST" ||
+      transport.endpoint !== endpoint ||
+      !transport.fields ||
+      Object.keys(transport.fields).length !== 0 ||
+      !Number.isFinite(Date.parse(transport.expiresAt)) ||
+      Date.parse(transport.expiresAt) <= Date.now()
     ) {
-      throw new ImageUploadError("UPLOAD_EVIDENCE_INVALID", "ระบบตรวจสอบผลอัปโหลดไม่ได้");
+      throw new ImageUploadError(
+        "UPLOAD_INSTRUCTIONS_INVALID",
+        "คำสั่งอัปโหลดรูปไม่ถูกต้อง",
+      );
     }
-    return {
-      publicId: evidence.public_id,
-      version: evidence.version,
-      signature: evidence.signature,
-    };
-  } finally {
-    bounded.dispose();
+    try {
+      const { data } = await api.post<Readonly<Record<string, unknown>>>(
+        endpoint,
+        file,
+        {
+          headers: { "Content-Type": acceptedContentType(file) ?? "application/octet-stream" },
+          signal,
+          timeout: 60_000,
+        },
+      );
+      return { proof: data };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new ImageUploadError(
+        "LOCAL_UPLOAD_FAILED",
+        "ส่งรูปเข้า HAMS ไม่สำเร็จ กรุณาเลือกไฟล์เดิมเพื่อลองใหม่",
+      );
+    }
   }
+  return uploadImageWithInstructions(file, intent.uploadInstructions, {
+    signal,
+    fetchImpl,
+  });
 }
 
 export async function uploadAndVerifyImage(
@@ -386,20 +346,26 @@ export async function uploadAndVerifyImage(
   if (
     intent.purpose !== purpose ||
     !intent.uploadId ||
-    !intent.uploadInstructions?.url ||
+    (!intent.uploadInstructions?.transport && !intent.uploadInstructions?.url) ||
     !Array.isArray(intent.acceptedSourceMimeTypes) ||
     !intent.acceptedSourceMimeTypes.includes(source.contentType)
   ) {
     throw new ImageUploadError("UPLOAD_INTENT_INVALID", "ระบบอนุญาตชนิดไฟล์นี้ไม่ได้");
   }
 
-  const evidence = await uploadToProvider(file, intent, options.signal, fetchImpl);
+  const completionBody = await uploadWithInstructions(
+    file,
+    intent,
+    options.signal,
+    fetchImpl,
+    api,
+  );
   options.onStage?.("verifying");
   const { data: completion } = await withBoundedApiRequest(options.signal, (signal) =>
     api.post<{
     status: string;
     attachmentExpiresAt?: string | null;
-    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, evidence, { signal }),
+    }>(`/images/uploads/${encodeURIComponent(intent.uploadId)}/complete`, completionBody, { signal }),
   );
   if (completion.status !== "VERIFIED_PENDING") {
     throw new ImageUploadError("UPLOAD_NOT_VERIFIED", "ระบบยังตรวจสอบรูปไม่ผ่าน จึงยังบันทึกรูปนี้ไม่ได้");
@@ -429,7 +395,7 @@ export async function uploadAndVerifyImage(
     );
     if (!previewBlob) throw new ImageUploadError("UPLOAD_PREVIEW_NOT_AVAILABLE", "โหลดตัวอย่างรูปที่ตรวจสอบแล้วไม่ได้");
   } else {
-    previewUrl = providerUrl(preview.url);
+    previewUrl = allowedImageUrl(preview.url);
   }
 
   return {

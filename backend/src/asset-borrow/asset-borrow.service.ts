@@ -1,3 +1,4 @@
+import { thaiDayStart, thaiDayEnd, thaiCalendarDate, parseThaiDeadline } from '../common/time/thai-date';
 import {
   Injectable,
   NotFoundException,
@@ -156,8 +157,9 @@ export class AssetBorrowService {
   ): Promise<string> {
     const client = tx || this.prisma;
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const period = thaiCalendarDate(now);
+    const year = period.slice(0, 4);
+    const month = period.slice(5, 7);
     const prefix = `BR-${year}${month}-`;
 
     const latest = await client.borrowTransaction.findFirst({
@@ -243,7 +245,7 @@ export class AssetBorrowService {
     // Validate expectedReturnDate if supplied
     let parsedExpectedReturnDate: Date | null = null;
     if (dto.expectedReturnDate) {
-      parsedExpectedReturnDate = new Date(dto.expectedReturnDate);
+      parsedExpectedReturnDate = parseThaiDeadline(dto.expectedReturnDate);
       if (isNaN(parsedExpectedReturnDate.getTime())) {
         throw new BadRequestException('Invalid expected return date format');
       }
@@ -1327,10 +1329,10 @@ export class AssetBorrowService {
     if (query.startDate || query.endDate) {
       where.createdAt = {
         ...(query.startDate
-          ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+          ? { gte: thaiDayStart(query.startDate) }
           : {}),
         ...(query.endDate
-          ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+          ? { lte: thaiDayEnd(query.endDate) }
           : {}),
       };
     }
@@ -1338,10 +1340,10 @@ export class AssetBorrowService {
     if (query.expectedReturnStartDate || query.expectedReturnEndDate) {
       where.expectedReturnDate = {
         ...(query.expectedReturnStartDate
-          ? { gte: new Date(`${query.expectedReturnStartDate}T00:00:00.000Z`) }
+          ? { gte: thaiDayStart(query.expectedReturnStartDate) }
           : {}),
         ...(query.expectedReturnEndDate
-          ? { lte: new Date(`${query.expectedReturnEndDate}T23:59:59.999Z`) }
+          ? { lte: thaiDayEnd(query.expectedReturnEndDate) }
           : {}),
       };
     }
@@ -1514,7 +1516,7 @@ export class AssetBorrowService {
     user: BorrowActor,
   ): Promise<BorrowExtensionDeskResponse | BorrowExtensionOnlineResponse> {
     const { requestedReturnDate, reason } = dto;
-    const newReturnDate = new Date(requestedReturnDate);
+    const newReturnDate = parseThaiDeadline(requestedReturnDate);
     if (isNaN(newReturnDate.getTime())) {
       throw new BadRequestException('Invalid requested return date format');
     }
@@ -1890,10 +1892,10 @@ export class AssetBorrowService {
     if (query.startDate || query.endDate) {
       where.createdAt = {
         ...(query.startDate
-          ? { gte: new Date(`${query.startDate}T00:00:00.000Z`) }
+          ? { gte: thaiDayStart(query.startDate) }
           : {}),
         ...(query.endDate
-          ? { lte: new Date(`${query.endDate}T23:59:59.999Z`) }
+          ? { lte: thaiDayEnd(query.endDate) }
           : {}),
       };
     }

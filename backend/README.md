@@ -27,7 +27,7 @@ This repository contains the backend service for HAMS, built with:
 สำหรับการเตรียมความพร้อมของ Backend เพื่อให้นำไปเชื่อมต่อกับ Frontend ได้ มีขั้นตอนดังนี้:
 
 ### 1. Prerequisites (สิ่งที่ต้องมี)
-- [Node.js](https://nodejs.org/) (แนะนำเวอร์ชัน 18 ขึ้นไป)
+- [Node.js](https://nodejs.org/) 24.22.1 LTS หรือใหม่กว่าในสาย 24.x (ดู `.nvmrc`)
 - [pnpm](https://pnpm.io/installation) (`npm install -g pnpm`)
 - [Docker](https://www.docker.com/products/docker-desktop/) (สำหรับรัน Database)
 
@@ -44,6 +44,7 @@ cp .env.example .env
 ```
 ตรวจสอบและแก้ไขค่าในไฟล์ `.env` (ค่าเริ่มต้นสามารถใช้งานกับ Docker ด้านล่างได้เลย):
 ```env
+NODE_ENV="development"
 DATABASE_URL="postgresql://postgres:password@localhost:5432/hams_db?schema=public"
 BETTER_AUTH_SECRET="your_better_auth_secret" # สามารถนำ secret มาใส่ได้จาก https://better-auth-secret.com/
 BETTER_AUTH_URL="http://localhost:3000"
@@ -53,11 +54,18 @@ DATABASE_USER="postgres"
 DATABASE_PASSWORD="password"
 ```
 
+### ตั้งค่า Gemini Forecast
+
+สำหรับการติดตั้งบน server ลูกค้า ให้ใช้ค่าจาก [`.env.customer.example`](.env.customer.example) ร่วมกับค่าฐานข้อมูล, auth และ SMTP ของเครื่องนั้น ระบบจะปิดการส่งข้อมูลไป Gemini เป็นค่าเริ่มต้น แม้จะมี `GEMINI_API_KEY` อยู่ก็ตาม หากได้รับอนุญาตให้ใช้ Gemini ต้องกำหนดทั้ง `GEMINI_ENABLED="true"` และ `GEMINI_API_KEY` ระบบจะปฏิเสธการเริ่มต้นเมื่อเปิดใช้งานแต่ไม่มี key และจำกัดเวลารวมของคำขอผ่าน `GEMINI_TIMEOUT_MS` (ค่าเริ่มต้น 30 วินาที สูงสุด 60 วินาที)
+
+การติดตั้ง cloud ที่มี `GEMINI_API_KEY` อยู่แล้วจะคงพฤติกรรมเดิม หากต้องการปิดให้กำหนด `GEMINI_ENABLED="false"` โดยตรง
+
 ### 4. รัน Database ด้วย Docker
 โปรเจกต์นี้ใช้ PostgreSQL รันผ่าน Docker Compose:
 ```bash
 docker compose up -d
 ```
+
 *(ถ้าต้องการปิด Database ให้ใช้คำสั่ง `docker compose down`)*
 
 **การเปิดดู Database ด้วย DBeaver (Optional):**
@@ -70,12 +78,12 @@ docker compose up -d
 - **Password**: `password`
 *(ค่าทั้งหมดอ้างอิงจากไฟล์ `.env` ที่ตั้งไว้)*
 
-
 ### 5. ตั้งค่า Database Schema (Prisma)
 หลังจาก Database รันขึ้นมาแล้ว ให้รันคำสั่งเพื่อสร้าง Table และเพิ่มข้อมูลจำลอง (Seed data) เบื้องต้น:
 ```bash
 pnpm run prisma:reset
 ```
+
 *(คำสั่งนี้จะทำการ generate client, migrate database, และ seed ข้อมูลให้ครบจบในคำสั่งเดียว)*
 *(หมายเหตุ: สามารถใช้คำสั่ง `pnpm run prisma:studio` เพื่อเปิดหน้าเว็บสำหรับดูและแก้ไขข้อมูลใน Database ได้ตลอดเวลา)*
 
@@ -86,6 +94,7 @@ pnpm run prisma:reset
 ```bash
 pnpm run start:dev
 ```
+
 Backend จะทำงานที่ `http://localhost:3000` 
 - ลองทดสอบ API Reference (Swagger/Scalar) ได้ที่: `http://localhost:3000/reference`
 
@@ -99,11 +108,21 @@ Backend จะทำงานที่ `http://localhost:3000`
 pnpm start          # Start the application
 pnpm run start:dev  # Start in development (watch) mode
 pnpm run build      # Build the application for production
+pnpm run start:prod # Start built application with production settings
 pnpm run format     # Format source files using Prettier
 pnpm run lint       # Lint source files using ESLint
-pnpm run test       # Run unit tests
+pnpm run test:unit  # Run mocked unit tests without opening a DB connection
+pnpm run test       # Run all specs; requires TEST_DATABASE_URL
 pnpm dlx prisma studio # เปิด UI สำหรับดูข้อมูลใน Database ของ Prisma
 ```
+
+`start:prod` sets `NODE_ENV=production` before loading the built application. Use this command for a production launch; the environment file must still provide the production secrets, HTTPS URLs, database, and SMTP settings.
+
+## Test database safety
+
+Jest runners (`test`, `test:unit`, `test:e2e`, and `test:auth-integration`) validate `TEST_DATABASE_URL` before loading the application or test files. It must be a PostgreSQL URL whose database name contains a standalone `test` token, such as `hams_test`. The runner points `DATABASE_URL` at that validated target; it never falls back to the development `DATABASE_URL`. Missing or unsafe settings stop the run before any test can connect or write data.
+
+`pnpm run test:unit` excludes the two service suites that write through shared Prisma and does not open a database connection. It still requires a valid `TEST_DATABASE_URL` because the shared guard runs before test files load. `pnpm run test:database-guard` verifies the safety checks without connecting to PostgreSQL. Every Jest command requires a dedicated test database configured in `TEST_DATABASE_URL`.
 
 ## Cross-module asset status integration tests
 
@@ -127,7 +146,7 @@ pnpm run test:asset-status:e2e
 │   └── main.ts               # Entry file of the application
 ├── test/                     # End-to-end testing files and configurations
 │   ├── app.e2e-spec.ts       # E2E test specifications
-│   └── jest-e2e.json         # Jest E2E configuration 
+│   └── jest-e2e.json         # Jest E2E configuration
 ├── eslint.config.mjs         # ESLint configuration
 ├── nest-cli.json             # NestJS CLI configuration
 ├── package.json              # Project dependencies and scripts

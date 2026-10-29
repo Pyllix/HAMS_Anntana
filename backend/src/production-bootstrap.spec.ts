@@ -32,7 +32,10 @@ jest.mock('better-auth/crypto', () => ({
 }));
 
 import { UserRole } from '@prisma/client';
-import { ensureAdmin } from '../prisma/bootstrap-admins';
+import {
+  ensureAdmin,
+  validateProductionConfiguration,
+} from '../prisma/bootstrap-admins';
 import { isAdminReady } from '../prisma/handover-check';
 import { auth } from './auth/auth';
 import { sharedPrisma } from './common/config/database.config';
@@ -43,8 +46,58 @@ const configuredAdmin = {
   userName: 'first-admin',
   firstname: 'First',
   lastname: 'Admin',
-  employeeId: 'HAMS-ADMIN-001',
 };
+
+describe('production ADMIN bootstrap transport configuration', () => {
+  const previousEnvironment = process.env;
+
+  beforeEach(() => {
+    // This validator is pure: no database access or credential delivery.
+    process.env = {
+      NODE_ENV: 'production',
+      HAMS_INSTALLATION_MODE: 'customer',
+      DATABASE_URL: 'postgresql://hams:secret@localhost:5432/hams_test',
+      BETTER_AUTH_SECRET: 'a'.repeat(48),
+      BETTER_AUTH_URL: 'https://hams.example.test:20443',
+      FRONTEND_URL: 'https://hams.example.test:20443',
+      TWO_FACTOR_ENCRYPTION_KEY: 'a'.repeat(64),
+      SMTP_HOST: 'mail.example.test',
+      SMTP_PORT: '587',
+      SMTP_REQUIRE_TLS: 'true',
+      SMTP_FROM: 'HAMS <noreply@example.test>',
+    };
+  });
+
+  afterEach(() => {
+    process.env = previousEnvironment;
+  });
+
+  it('continues to accept production HTTPS', () => {
+    expect(validateProductionConfiguration).not.toThrow();
+  });
+
+  it('requires the same explicit HTTP opt-in as application startup', () => {
+    process.env.BETTER_AUTH_URL = 'http://hams.example.test:20443';
+    process.env.FRONTEND_URL = 'http://hams.example.test:20443';
+    expect(validateProductionConfiguration).toThrow(/HTTPS/);
+
+    process.env.HAMS_ALLOW_INSECURE_HTTP = 'true';
+    expect(validateProductionConfiguration).not.toThrow();
+  });
+
+  it('still requires production mode and encrypted SMTP delivery', () => {
+    process.env.HAMS_ALLOW_INSECURE_HTTP = 'true';
+    process.env.BETTER_AUTH_URL = 'http://hams.example.test:20443';
+    process.env.FRONTEND_URL = 'http://hams.example.test:20443';
+    process.env.SMTP_REQUIRE_TLS = 'false';
+    expect(validateProductionConfiguration).toThrow(/SMTP_REQUIRE_TLS/);
+
+    process.env.NODE_ENV = 'development';
+    expect(validateProductionConfiguration).toThrow(
+      /requires NODE_ENV=production/,
+    );
+  });
+});
 
 describe('production ADMIN bootstrap', () => {
   beforeEach(() => {
@@ -58,7 +111,7 @@ describe('production ADMIN bootstrap', () => {
     const existingAdmin = {
       id: 'admin-user-1',
       role: UserRole.ADMIN,
-      employeeId: configuredAdmin.employeeId,
+      employeeId: 'GOV-690001',
       userName: configuredAdmin.userName,
       emailVerified: true,
       banned: false,
@@ -112,7 +165,7 @@ describe('production ADMIN bootstrap', () => {
     const existingAdmin = {
       id: 'admin-user-1',
       role: UserRole.ADMIN,
-      employeeId: configuredAdmin.employeeId,
+      employeeId: 'GOV-690001',
       userName: configuredAdmin.userName,
       emailVerified: false,
       banned: false,
@@ -123,8 +176,9 @@ describe('production ADMIN bootstrap', () => {
       .mockResolvedValue(existingAdmin);
     (sharedPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
     (sharedPrisma.user.create as jest.Mock).mockImplementation(
-      ({ data }: { data: { id: string } }) => {
+      ({ data }: { data: { id: string; employeeId: string } }) => {
         existingAdmin.id = data.id;
+        existingAdmin.employeeId = data.employeeId;
         return data;
       },
     );
@@ -182,8 +236,21 @@ describe('production ADMIN bootstrap', () => {
     const previousKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
     process.env.TWO_FACTOR_ENCRYPTION_KEY = 'b'.repeat(64);
     const pending = new Map<string, string>();
+    const employeeIds: string[] = [];
     (sharedPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
-    (sharedPrisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+    (sharedPrisma.user.findFirst as jest.Mock).mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) => {
+        if ('userName' in where) return null;
+        const latestEmployeeId = [...employeeIds].sort().at(-1);
+        return latestEmployeeId ? { employeeId: latestEmployeeId } : null;
+      },
+    );
+    (sharedPrisma.user.create as jest.Mock).mockImplementation(
+      ({ data }: { data: { employeeId: string } }) => {
+        employeeIds.push(data.employeeId);
+        return data;
+      },
+    );
     (sharedPrisma.$transaction as jest.Mock).mockImplementation(
       async (action: (tx: typeof sharedPrisma) => Promise<void>) =>
         action(sharedPrisma),
@@ -213,7 +280,6 @@ describe('production ADMIN bootstrap', () => {
         ...configuredAdmin,
         email: 'second.admin@example.org',
         userName: 'second-admin',
-        employeeId: 'HAMS-ADMIN-002',
       });
 
       const deliveries = (
@@ -226,6 +292,9 @@ describe('production ADMIN bootstrap', () => {
       expect((sharedPrisma.user.create as jest.Mock).mock.calls).toHaveLength(
         2,
       );
+      expect(employeeIds).toHaveLength(2);
+      expect(new Set(employeeIds).size).toBe(2);
+      expect(employeeIds[0]).toMatch(/^GOV-\d{6}$/);
       expect(pending.size).toBe(0);
     } finally {
       if (previousKey === undefined)

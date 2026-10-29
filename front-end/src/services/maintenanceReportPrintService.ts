@@ -46,6 +46,7 @@ function formatDate(value?: string | Date | null, includeTime = false): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -275,6 +276,13 @@ function documentShell(
 ): string {
   return `<!doctype html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>
   <style>
+    @font-face {
+      font-family: "Noto Sans Thai";
+      src: url("/fonts/NotoSansThai-Variable.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
     @page { size: A4; margin: 12mm; }
     * { box-sizing: border-box; }
     body { margin: 0; color: #172033; font-family: "Noto Sans Thai", Tahoma, Arial, sans-serif; font-size: 11px; line-height: 1.5; }

@@ -1,3 +1,4 @@
+import { formatThaiDisplayDateTime } from "../services/thaiDate";
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, Clock3, Eye, Search } from "lucide-react";
 import { useServerPage, useDebouncedSearch } from "../hooks/useServerPage";
@@ -10,20 +11,10 @@ import type {
   SparePartTxnType,
 } from "../types/TypeSparePartTransaction";
 
-const THAI_MONTHS = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
+
 
 function formatDateTimeTH(dateString?: string | null): string {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "-";
-  const time = date.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${date.getDate()} ${THAI_MONTHS[date.getMonth()]} ${date.getFullYear() + 543} ${time}`;
+  return formatThaiDisplayDateTime(dateString);
 }
 
 type TxnFilter = "ALL" | SparePartTxnType;

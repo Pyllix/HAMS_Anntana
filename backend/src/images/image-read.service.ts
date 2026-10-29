@@ -12,6 +12,7 @@ import {
   IMAGE_STORAGE,
   type ImageObjectReference,
   type ImageStoragePort,
+  isVersionedAssetImageUrl,
 } from './image-storage.port';
 import {
   managedImageLocator,
@@ -165,12 +166,7 @@ export class ImageReadService {
 
     try {
       const url = this.storage.publicUrl(reference);
-      const parsedUrl = new URL(url);
-      if (
-        parsedUrl.protocol !== 'https:' ||
-        !reference.version ||
-        !parsedUrl.pathname.split('/').includes(`v${reference.version}`)
-      ) {
+      if (!isVersionedAssetImageUrl(url, reference)) {
         throw new Error('Invalid public image URL');
       }
       return {
@@ -211,23 +207,11 @@ export class ImageReadService {
         reference,
         requestedExpiry,
       );
-      const parsedUrl = new URL(grant.url);
-      const isCloudinaryDownloadGrant =
-        context.provider !== 'cloudinary' ||
-        (parsedUrl.hostname === 'api.cloudinary.com' &&
-          parsedUrl.pathname === `/v1_1/${context.accountId}/image/download` &&
-          parsedUrl.searchParams.get('public_id') === reference.publicId &&
-          parsedUrl.searchParams.get('type') === 'authenticated' &&
-          parsedUrl.searchParams.get('format') === 'jpg' &&
-          parsedUrl.searchParams.get('signature') !== null &&
-          Number(parsedUrl.searchParams.get('expires_at')) ===
-            Math.floor(grant.expiresAt.getTime() / 1000));
+      this.storage.validateShortLivedReadGrant(reference, grant);
       if (
-        parsedUrl.protocol !== 'https:' ||
         !Number.isFinite(grant.expiresAt.getTime()) ||
         grant.expiresAt <= now ||
-        grant.expiresAt.getTime() > requestedExpiry.getTime() + 1000 ||
-        !isCloudinaryDownloadGrant
+        grant.expiresAt.getTime() > requestedExpiry.getTime() + 1000
       ) {
         throw new Error('The provider returned an invalid read grant');
       }

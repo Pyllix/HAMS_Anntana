@@ -5,8 +5,7 @@ import { AssetBorrowService } from '../src/asset-borrow/asset-borrow.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PrismaService } from '../src/prisma.service';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL!;
 
 // These CTEs shadow the application tables. Only SELECTs run, inside a
 // read-only transaction; no schema, customer records or fixtures are written.
@@ -45,7 +44,7 @@ interface ReferenceAsset {
   receivedDate: Date;
 }
 
-describeWithDatabase(
+describe(
   'Borrow recommendation eligibility (PostgreSQL fixtures)',
   () => {
     let client: Client;

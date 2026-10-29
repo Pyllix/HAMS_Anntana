@@ -15,6 +15,7 @@ import { PreAuthService } from './pre-auth.service';
 import { AdminStepUpService } from './admin-step-up.service';
 import { auth } from './auth';
 import { ImageReadService } from '../images/image-read.service';
+import { runtimeConfig } from '../common/config/bootstrap-config';
 
 // ─── Mock Better Auth ────────────────────────────────────────────────────────
 jest.mock('./auth', () => ({
@@ -244,154 +245,204 @@ describe('AuthController', () => {
     });
   });
 
-  describe('mandatory-role sign-in and trusted browser', () => {
-    it('keeps the normal session pending until mandatory enrollment completes', async () => {
-      const sessionCookie =
-        'better-auth.session_token=pending-session; Path=/; HttpOnly';
-      mockSignInEmail.mockResolvedValue({
-        response: {
-          token: 'pending-session',
+  describe.each(['http', 'https'])(
+    'production cookies and mandatory 2FA over %s',
+    (protocol) => {
+      const secure = protocol === 'https';
+      const sessionCookieName = `${secure ? '__Secure-' : ''}better-auth.session_token`;
+
+      beforeEach(() => {
+        jest.replaceProperty(runtimeConfig, 'server', {
+          ...runtimeConfig.server,
+          environment: 'production',
+          secureCookies: secure,
+        });
+      });
+
+      afterEach(() => jest.restoreAllMocks());
+
+      it('issues a CSRF cookie with a matching name and transport attributes', () => {
+        const response = {
+          cookie: jest.fn(),
+          setHeader: jest.fn(),
+        } as unknown as Response;
+        const result = controller.getCsrfToken(mockRequest, response);
+
+        expect(response.cookie).toHaveBeenCalledWith(
+          secure ? '__Host-hams.csrf' : 'hams.csrf',
+          result.csrfToken,
+          expect.objectContaining({
+            secure,
+            httpOnly: true,
+            sameSite: 'strict',
+            path: '/',
+          }),
+        );
+        expect(response.setHeader).toHaveBeenCalledWith(
+          'Cache-Control',
+          'no-store',
+        );
+      });
+
+      it('keeps the normal session pending until mandatory enrollment completes', async () => {
+        const sessionCookie = `${sessionCookieName}=pending-session; Path=/; HttpOnly${secure ? '; Secure' : ''}`;
+        mockSignInEmail.mockResolvedValue({
+          response: {
+            token: 'pending-session',
+            user: {
+              id: 'admin-1',
+              email: 'admin@hospital.go.th',
+              name: 'Admin',
+              role: 'ADMIN',
+            },
+          },
+          headers: { getSetCookie: () => [sessionCookie] },
+        });
+        mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
+        mockTwoFactorService.hasCompletedEnrollment.mockResolvedValue(false);
+        mockPreAuthService.createChallenge.mockResolvedValue({
+          token: 'opaque-pre-auth-token',
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        });
+        const response = { append: jest.fn() } as unknown as Response;
+
+        const result = await controller.signIn(
+          { email: 'admin@hospital.go.th', password: 'Password@1234' },
+          mockRequest,
+          response,
+        );
+
+        expect(result).toEqual({
+          requiresTwoFactor: true,
+          twoFactorRedirect: '/2fa/enroll',
+        });
+        expect(result).not.toHaveProperty('token');
+        expect(mockPreAuthService.createChallenge).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'admin-1',
+            state: 'ENROLLMENT',
+            sessionToken: 'pending-session',
+            sessionCookies: [sessionCookie],
+          }),
+        );
+        const setCookies = (response.append as jest.Mock).mock.calls.map(
+          (call) => call[1] as string,
+        );
+        expect(
+          setCookies.some(
+            (cookie) =>
+              cookie.startsWith('hams.pre_auth=') &&
+              cookie.includes('HttpOnly'),
+          ),
+        ).toBe(true);
+        const preAuthCookie = setCookies.find((cookie) =>
+          cookie.startsWith('hams.pre_auth='),
+        );
+        expect(preAuthCookie).toContain('SameSite=Lax');
+        expect(/;\s*Secure(?:;|$)/.test(preAuthCookie!)).toBe(secure);
+        expect(setCookies).not.toContain(sessionCookie);
+        expect(
+          setCookies.some(
+            (cookie) =>
+              cookie.startsWith('better-auth.session_token=') &&
+              cookie.includes('Max-Age=0'),
+          ),
+        ).toBe(true);
+      });
+
+      it('issues trust only after successful TOTP and keeps the cookie out of JSON', async () => {
+        const now = Date.now();
+        const requestWithChallenge = {
+          headers: {
+            cookie:
+              'hams.pre_auth=challenge-token; better-auth.trust_device=old-token',
+            'user-agent': 'Chrome test browser',
+          },
+          get: (name: string) =>
+            name.toLowerCase() === 'user-agent'
+              ? 'Chrome test browser'
+              : undefined,
+          ip: '192.0.2.1',
+          socket: { remoteAddress: '192.0.2.2' },
+        } as unknown as Request;
+        mockPreAuthService.findChallenge.mockResolvedValue({
+          id: 'challenge-id',
+          userId: 'admin-1',
+          state: 'TOTP',
+        });
+        mockTwoFactorService.verifyToken.mockResolvedValue({
+          success: true,
+          usedRecoveryCode: false,
+        });
+        mockPreAuthService.completeChallenge.mockResolvedValue({
+          userId: 'admin-1',
+          state: 'TOTP',
+          sessionCookies: [
+            `${sessionCookieName}=normal-session; Path=/; HttpOnly${secure ? '; Secure' : ''}`,
+          ],
+        });
+        mockPreAuthService.getUserSnapshot.mockResolvedValue({
+          id: 'admin-1',
+          email: 'admin@hospital.go.th',
+          firstname: 'Admin',
+          role: 'ADMIN',
+        });
+        mockTrustedBrowserService.grantTrust.mockResolvedValue({
+          token: 'new-opaque-trust-cookie',
+          expiresAt: new Date(now + 14 * 24 * 60 * 60 * 1000),
+        });
+        const response = { append: jest.fn() } as unknown as Response;
+
+        const result = await controller.verifyTotpAtSignIn(
+          { code: '123456', trustBrowser: true },
+          requestWithChallenge,
+          response,
+        );
+
+        expect(result).toEqual({
           user: {
             id: 'admin-1',
             email: 'admin@hospital.go.th',
-            name: 'Admin',
             role: 'ADMIN',
+            name: 'Admin',
           },
-        },
-        headers: { getSetCookie: () => [sessionCookie] },
+          browserTrusted: true,
+          usedRecoveryCode: false,
+        });
+        expect(result).not.toHaveProperty('token');
+        expect(result).not.toHaveProperty('trustedBrowserToken');
+        expect(mockTrustedBrowserService.grantTrust).toHaveBeenCalledWith(
+          'admin-1',
+          'Chrome test browser',
+          '192.0.2.1',
+          'old-token',
+        );
+        const setCookies = (response.append as jest.Mock).mock.calls.map(
+          (call) => call[1] as string,
+        );
+        expect(
+          setCookies.some(
+            (cookie) =>
+              cookie.startsWith(
+                'better-auth.trust_device=new-opaque-trust-cookie',
+              ) &&
+              cookie.includes('HttpOnly') &&
+              cookie.includes('Max-Age=1209600'),
+          ),
+        ).toBe(true);
+        expect(
+          setCookies.some((cookie) =>
+            cookie.startsWith(`${sessionCookieName}=normal-session`),
+          ),
+        ).toBe(true);
+        const trustCookie = setCookies.find((cookie) =>
+          cookie.startsWith('better-auth.trust_device='),
+        );
+        expect(trustCookie).toContain('SameSite=Lax');
+        expect(/;\s*Secure(?:;|$)/.test(trustCookie!)).toBe(secure);
       });
-      mockTwoFactorService.requiresTwoFactor.mockReturnValue(true);
-      mockTwoFactorService.hasCompletedEnrollment.mockResolvedValue(false);
-      mockPreAuthService.createChallenge.mockResolvedValue({
-        token: 'opaque-pre-auth-token',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      });
-      const response = { append: jest.fn() } as unknown as Response;
-
-      const result = await controller.signIn(
-        { email: 'admin@hospital.go.th', password: 'Password@1234' },
-        mockRequest,
-        response,
-      );
-
-      expect(result).toEqual({
-        requiresTwoFactor: true,
-        twoFactorRedirect: '/2fa/enroll',
-      });
-      expect(result).not.toHaveProperty('token');
-      expect(mockPreAuthService.createChallenge).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'admin-1',
-          state: 'ENROLLMENT',
-          sessionToken: 'pending-session',
-          sessionCookies: [sessionCookie],
-        }),
-      );
-      const setCookies = (response.append as jest.Mock).mock.calls.map(
-        (call) => call[1] as string,
-      );
-      expect(
-        setCookies.some(
-          (cookie) =>
-            cookie.startsWith('hams.pre_auth=') && cookie.includes('HttpOnly'),
-        ),
-      ).toBe(true);
-      expect(
-        setCookies.some(
-          (cookie) =>
-            cookie.startsWith('better-auth.session_token=') &&
-            cookie.includes('Max-Age=0'),
-        ),
-      ).toBe(true);
-    });
-
-    it('issues trust only after successful TOTP and keeps the cookie out of JSON', async () => {
-      const now = Date.now();
-      const requestWithChallenge = {
-        headers: {
-          cookie:
-            'hams.pre_auth=challenge-token; better-auth.trust_device=old-token',
-          'user-agent': 'Chrome test browser',
-        },
-        get: (name: string) =>
-          name.toLowerCase() === 'user-agent'
-            ? 'Chrome test browser'
-            : undefined,
-        ip: '192.0.2.1',
-        socket: { remoteAddress: '192.0.2.2' },
-      } as unknown as Request;
-      mockPreAuthService.findChallenge.mockResolvedValue({
-        id: 'challenge-id',
-        userId: 'admin-1',
-        state: 'TOTP',
-      });
-      mockTwoFactorService.verifyToken.mockResolvedValue({
-        success: true,
-        usedRecoveryCode: false,
-      });
-      mockPreAuthService.completeChallenge.mockResolvedValue({
-        userId: 'admin-1',
-        state: 'TOTP',
-        sessionCookies: [
-          'better-auth.session_token=normal-session; Path=/; HttpOnly',
-        ],
-      });
-      mockPreAuthService.getUserSnapshot.mockResolvedValue({
-        id: 'admin-1',
-        email: 'admin@hospital.go.th',
-        firstname: 'Admin',
-        role: 'ADMIN',
-      });
-      mockTrustedBrowserService.grantTrust.mockResolvedValue({
-        token: 'new-opaque-trust-cookie',
-        expiresAt: new Date(now + 14 * 24 * 60 * 60 * 1000),
-      });
-      const response = { append: jest.fn() } as unknown as Response;
-
-      const result = await controller.verifyTotpAtSignIn(
-        { code: '123456', trustBrowser: true },
-        requestWithChallenge,
-        response,
-      );
-
-      expect(result).toEqual({
-        user: {
-          id: 'admin-1',
-          email: 'admin@hospital.go.th',
-          role: 'ADMIN',
-          name: 'Admin',
-        },
-        browserTrusted: true,
-        usedRecoveryCode: false,
-      });
-      expect(result).not.toHaveProperty('token');
-      expect(result).not.toHaveProperty('trustedBrowserToken');
-      expect(mockTrustedBrowserService.grantTrust).toHaveBeenCalledWith(
-        'admin-1',
-        'Chrome test browser',
-        '192.0.2.1',
-        'old-token',
-      );
-      const setCookies = (response.append as jest.Mock).mock.calls.map(
-        (call) => call[1] as string,
-      );
-      expect(
-        setCookies.some(
-          (cookie) =>
-            cookie.startsWith(
-              'better-auth.trust_device=new-opaque-trust-cookie',
-            ) &&
-            cookie.includes('HttpOnly') &&
-            cookie.includes('Max-Age=1209600'),
-        ),
-      ).toBe(true);
-      expect(
-        setCookies.some((cookie) =>
-          cookie.startsWith('better-auth.session_token=normal-session'),
-        ),
-      ).toBe(true);
-    });
-  });
+    },
+  );
   // ─── Send Verification Email (Resend) ──────────────────────────────────────
   describe('sendVerificationEmail', () => {
     it('should send verification email successfully', async () => {
@@ -417,6 +468,7 @@ describe('AuthController', () => {
       expect(result).toEqual({
         status: true,
         message: 'Verification email sent successfully',
+        retryAfterSeconds: 300,
       });
     });
 
@@ -432,6 +484,30 @@ describe('AuthController', () => {
       await expect(
         controller.sendVerificationEmail(dto, mockRequest),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns the server resend wait as HTTP 429 and Retry-After', async () => {
+      mockSendVerificationEmail.mockRejectedValue({
+        statusCode: 429,
+        body: { retryAfterSeconds: 1800 },
+      });
+      const setHeader = jest.fn();
+      const response = { setHeader } as unknown as Response;
+      await expect(
+        controller.sendVerificationEmail(
+          { email: 'unverified@hospital.go.th' },
+          mockRequest,
+          response,
+        ),
+      ).rejects.toMatchObject({
+        status: 429,
+        response: {
+          code: 'VERIFICATION_EMAIL_RATE_LIMITED',
+          retryAfterSeconds: 1800,
+          message: 'กรุณารอก่อนส่งอีเมลยืนยันอีกครั้ง',
+        },
+      });
+      expect(setHeader).toHaveBeenCalledWith('Retry-After', '1800');
     });
   });
 

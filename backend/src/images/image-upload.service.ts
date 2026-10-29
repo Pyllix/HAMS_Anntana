@@ -19,6 +19,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
 import { PrismaService } from '../prisma.service';
 import { IMAGE_CLOCK, type ImageClock } from './image-clock.port';
 import {
@@ -28,6 +29,8 @@ import {
   type ImagePurpose,
   type ImageStorageContext,
   type ImageStoragePort,
+  type ImageUploadTransport,
+  isLocalImageStoragePort,
   type ImageUploadPolicy,
   type UploadInstructions,
   type UploadEvidence,
@@ -111,6 +114,9 @@ export class ImageUploadService {
     attachmentWindowSeconds: number;
     acceptedSourceMimeTypes: readonly string[];
     uploadInstructions: {
+      transport: Omit<ImageUploadTransport, 'expiresAt'> & {
+        readonly expiresAt: string;
+      };
       url: string;
       method: 'POST';
       fields: Readonly<Record<string, string>>;
@@ -267,12 +273,69 @@ export class ImageUploadService {
       attachmentWindowSeconds: Math.floor(this.readAttachmentWindow() / 1000),
       acceptedSourceMimeTypes: ACCEPTED_SOURCE_MIME_TYPES,
       uploadInstructions: {
+        transport: {
+          kind: uploadInstructions.transport.kind,
+          endpoint: uploadInstructions.transport.endpoint,
+          method: uploadInstructions.transport.method,
+          fields: uploadInstructions.transport.fields,
+          expiresAt: uploadInstructions.transport.expiresAt.toISOString(),
+        },
         url: uploadInstructions.url,
         method: uploadInstructions.method,
         fields: uploadInstructions.fields,
         expiresAt: uploadInstructions.expiresAt.toISOString(),
       },
     };
+  }
+
+  async receiveLocalUpload(
+    actor: UploadActor,
+    uploadId: string,
+    stream: Readable,
+  ): Promise<UploadEvidence> {
+    const upload = await this.findOwnedUpload(actor, uploadId);
+    this.assertPurposePermission(actor.role, upload.purpose);
+    const now = this.clock.now();
+    if (upload.status !== ImageUploadStatus.AUTHORIZED) {
+      throw new ConflictException({
+        code: 'UPLOAD_NOT_AVAILABLE',
+        message: 'This upload is not available for receiving image bytes',
+      });
+    }
+    if (upload.intentExpiresAt <= now) {
+      await this.markExpired(upload.id);
+      throw this.expiredException();
+    }
+    if (upload.signatureExpiresAt <= now) {
+      throw this.expiredException();
+    }
+    const currentContext = this.safeCurrentStorageContext();
+    if (
+      upload.storageProvider !== currentContext.provider ||
+      upload.storageAccountId !== currentContext.accountId
+    ) {
+      throw new ConflictException({
+        code: 'IMAGE_STORAGE_CONFIGURATION_CHANGED',
+        message: 'The image storage configuration changed after authorization',
+      });
+    }
+    if (!isLocalImageStoragePort(this.storage)) {
+      throw new ConflictException({
+        code: 'LOCAL_IMAGE_UPLOAD_UNAVAILABLE',
+        message: 'This image storage provider does not accept local uploads',
+      });
+    }
+
+    try {
+      return await this.storage.receiveLocalUpload({
+        publicId: upload.publicId,
+        stream,
+        policy: this.readPolicy(upload.purpose),
+        receivedAt: now,
+      });
+    } catch (error) {
+      this.raiseStorageError(error);
+    }
   }
 
   async complete(
@@ -282,18 +345,23 @@ export class ImageUploadService {
   ): Promise<UploadStatusResponse> {
     const upload = await this.findOwnedUpload(actor, uploadId);
     this.assertPurposePermission(actor.role, upload.purpose);
-    if (evidence.publicId !== upload.publicId) {
-      throw new BadRequestException({
-        code: 'UPLOAD_EVIDENCE_INVALID',
-        message: 'The upload evidence does not match the allocated image',
-      });
+    let evidenceHash: string;
+    try {
+      evidenceHash = createHash('sha256')
+        .update(
+          this.storage.fingerprintUploadEvidence(
+            upload.publicId,
+            {
+              provider: upload.storageProvider,
+              accountId: upload.storageAccountId,
+            },
+            evidence,
+          ),
+        )
+        .digest('hex');
+    } catch (error) {
+      this.raiseStorageError(error);
     }
-
-    const evidenceHash = createHash('sha256')
-      .update(
-        `${evidence.publicId}\n${evidence.version}\n${evidence.signature}`,
-      )
-      .digest('hex');
     if (upload.status === ImageUploadStatus.VERIFIED_PENDING) {
       if (upload.verifiedEvidenceHash !== evidenceHash) {
         throw new ConflictException({

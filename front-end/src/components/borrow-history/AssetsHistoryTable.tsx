@@ -12,27 +12,12 @@ import {
 import type { ColumnDef } from "@tanstack/react-table";
 import type { BorrowHistory } from "../../services/borrowService";
 import { useMemo } from "react";
+import { formatThaiDisplayDateTime as formatThaiDate } from "../../services/thaiDate";
 
 const features = tableFeatures({
   rowPaginationFeature,
   paginatedRowModel: createPaginatedRowModel(),
 });
-
-// ฟังก์ชันสำหรับแปลงรูปแบบวันที่ให้ออกมาเป็นภาษาไทย (เช่น 01 มี.ค. 2026, 13:56)
-const formatThaiDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("th-TH", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-};
 
 const columns: Array<ColumnDef<typeof features, BorrowHistory>> = [
   {
@@ -320,7 +305,7 @@ export default function AssetsHistoryTable({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M9 5l7 7-7"
+                d="M9 5l7 7-7 7"
               />
             </svg>
           </button>

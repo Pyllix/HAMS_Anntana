@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { thaiDateString, thaiDateTimeRange, thaiMonthDateRange } from "../services/thaiDate";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
@@ -60,16 +61,12 @@ const statusLabels: Record<RepairJobStatusCode, string> = {
   CANCELLED: "ยกเลิก",
 };
 
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
 function localDateValue(date = new Date()): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return thaiDateString(date);
 }
 
 function localMonthValue(date = new Date()): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+  return thaiDateString(date).slice(0, 7);
 }
 
 function buildPeriod(
@@ -77,30 +74,28 @@ function buildPeriod(
   value: string,
 ): MaintenanceReportPeriod {
   if (mode === "MONTH") {
-    const [year, month] = value.split("-").map(Number);
-    const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const { startDate, endDate } = thaiMonthDateRange(value);
     return {
       mode,
       value,
       startDate,
       endDate,
       label: new Intl.DateTimeFormat("th-TH", {
+        timeZone: "Asia/Bangkok",
         month: "long",
         year: "numeric",
       }).format(startDate),
     };
   }
 
-  const [year, month, day] = value.split("-").map(Number);
-  const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-  const endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+  const { startDate, endDate } = thaiDateTimeRange(value);
   return {
     mode,
     value,
     startDate,
     endDate,
     label: new Intl.DateTimeFormat("th-TH", {
+      timeZone: "Asia/Bangkok",
       day: "numeric",
       month: "long",
       year: "numeric",
@@ -113,6 +108,7 @@ function formatDate(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "short",
     year: "2-digit",

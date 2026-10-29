@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import type { ForecastStatus } from "./forecastPresentation";
 
 
 export interface ExpenseCategoryDetail {
@@ -87,6 +88,7 @@ export interface AssetLifespanSummary {
 }
 
 export interface ForecastResponse {
+  forecast_status: ForecastStatus;
   source: 'gemini_api' | 'fallback';
   section_id: string;
   section_name: string;

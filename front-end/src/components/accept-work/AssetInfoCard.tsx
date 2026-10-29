@@ -60,6 +60,7 @@ export default function AssetInfoCard({
   const urgencyStatus = job.urgencyStatus;
   const reportedAt = job.createdAt
     ? new Date(job.createdAt).toLocaleDateString("th-TH", {
+        timeZone: "Asia/Bangkok",
         year: "numeric",
         month: "short",
         day: "numeric",

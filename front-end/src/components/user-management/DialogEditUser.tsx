@@ -197,6 +197,11 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       return;
     }
 
+    if (isSectionRequired && !form.sectionId) {
+      setError("กรุณาเลือกหน่วยงาน");
+      return;
+    }
+
     const upload = imageSelection.state.status === "ready"
       ? imageSelection.state.upload
       : null;
@@ -207,7 +212,7 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
       email: form.email.trim(),
       role: form.role,
       banned: form.banned,
-      ...(isSectionRequired && form.sectionId && { sectionId: form.sectionId }),
+      sectionId: form.sectionId || null,
     } as UserUpdateDto;
 
     submitStartedRef.current = true;
@@ -326,22 +331,21 @@ export default function DialogEditUser({ isOpen, onClose, user }: Props) {
                 <span className="text-emerald-600">*</span>
               ) : (
                 <span className="text-xs font-normal text-gray-400">
-                  (ไม่ต้องระบุ)
+                  (ไม่บังคับ)
                 </span>
               )}
             </label>
             <select
               name="sectionId"
               required={isSectionRequired}
-              disabled={!isSectionRequired}
-              value={isSectionRequired ? form.sectionId : ""}
+              value={form.sectionId}
               onChange={handleChange}
               className={`${inputClass} bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
             >
               <option value="" disabled={isSectionRequired}>
                 {isSectionRequired
                   ? "-- โปรดเลือกหน่วยงาน --"
-                  : "-- ผู้ดูแลระบบไม่ต้องระบุหน่วยงาน --"}
+                  : "-- ไม่ระบุหน่วยงาน --"}
               </option>
               {sections?.map((section) => (
                 <option key={section.id} value={section.id}>

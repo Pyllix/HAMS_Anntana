@@ -1,4 +1,5 @@
 import React from "react";
+import { formatThaiCalendarDate, thaiDateString } from "../../services/thaiDate";
 import {
   FileText,
   Trash2,
@@ -136,7 +137,7 @@ export default function AssetViabilityTable({
                       </div>
                       {row.receivedDate && (
                         <div className="text-[10px] text-slate-400 mt-0.5">
-                          รับ: {new Date(row.receivedDate).toLocaleDateString("th-TH")}
+                          รับ: {formatThaiCalendarDate(row.receivedDate, "2-digit")}
                         </div>
                       )}
                     </td>
@@ -250,7 +251,7 @@ export default function AssetViabilityTable({
                                 costRatioPercentage:
                                   row.metrics?.costRatioPercentage ?? null,
                                 suggestedDisposalReason: `แทงจำหน่ายเนื่องจากประเมินแล้วซ่อมไม่คุ้มค่า: ${row.viabilityReason}`,
-                                suggestedDocPrefix: `DISP-${new Date().getFullYear() + 543}-`,
+                                suggestedDocPrefix: `DISP-${Number(thaiDateString().slice(0, 4)) + 543}-`,
                               })
                             }
                             className="flex h-7 px-2 items-center gap-1 rounded-md bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer text-xs font-semibold"

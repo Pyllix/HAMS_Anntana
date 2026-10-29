@@ -65,7 +65,7 @@ export function SparePartDetailModal() {
     if (!val || val === "-") return "-";
     const d = new Date(val);
     if (isNaN(d.getTime())) return "-";
-    return d.toLocaleString("th-TH", {
+    return d.toLocaleString("th-TH", {      timeZone: "Asia/Bangkok",
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -196,25 +196,19 @@ export function SparePartFormModal() {
   const { isOpen, editItem, closeModal } = useSparePartFormModalStore();
   const queryClient = useQueryClient();
 
-  const { data: groups = [] } = useQuery({
+  const groupsQuery = useQuery({
     queryKey: ["sparepartGroups"],
     queryFn: getSparepartGroups,
+    enabled: isOpen,
   });
 
-  const defaultGroups = [
-    { id: 1, name: "ไฟฟ้า" },
-    { id: 2, name: "เครื่องมือแพทย์" },
-    { id: 3, name: "อิเล็กทรอนิกส์" },
-    { id: 4, name: "กลไก/เครื่องกล" },
-  ];
-
-  const availableGroups = groups.length > 0 ? groups : defaultGroups;
+  const availableGroups = groupsQuery.data ?? [];
 
   const empty: CreateSparepartDto = {
     code: "",
     name: "",
-    groupId: availableGroups[0]?.id ?? 1,
-    category: availableGroups[0]?.name ?? "ไฟฟ้า",
+    groupId: 0,
+    category: "",
     unit: "ชิ้น",
     price: 0,
     minStock: 0,
@@ -223,6 +217,11 @@ export function SparePartFormModal() {
 
   const [form, setForm] = useState<CreateSparepartDto>(empty);
   const [priceInput, setPriceInput] = useState<string>("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSaveError(null);
+  }, [isOpen, editItem]);
 
   useEffect(() => {
     if (editItem) {
@@ -230,8 +229,8 @@ export function SparePartFormModal() {
       setForm({
         code: editItem.code,
         name: editItem.name,
-        groupId: editItem.groupId || editItem.group?.id || (availableGroups[0]?.id ?? 1),
-        category: editItem.category || editItem.group?.name || availableGroups[0]?.name || "ไฟฟ้า",
+        groupId: editItem.groupId || editItem.group?.id || 0,
+        category: editItem.group?.name || editItem.category || "",
         unit: editItem.unit ?? "",
         price: currentPrice,
         minStock: editItem.minStock || 0,
@@ -242,12 +241,35 @@ export function SparePartFormModal() {
       setForm({
         ...empty,
         unit: "ชิ้น",
-        groupId: availableGroups[0]?.id ?? 1,
-        category: availableGroups[0]?.name ?? "ไฟฟ้า",
+        groupId: 0,
+        category: "",
       });
       setPriceInput("");
     }
-  }, [editItem, isOpen, groups]);
+  }, [editItem, isOpen]);
+
+  const selectedGroup = availableGroups.find((group) => group.id === form.groupId);
+  const canSaveGroup = groupsQuery.isSuccess && !groupsQuery.isError && Boolean(selectedGroup);
+  const submitStartedRef = useRef(false);
+
+  const groupStatus = groupsQuery.isLoading ? (
+    <p role="status" className="text-sm text-slate-500">กำลังโหลดกลุ่มอะไหล่...</p>
+  ) : groupsQuery.isError ? (
+    <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+      โหลดกลุ่มอะไหล่ไม่สำเร็จ ข้อมูลที่กรอกยังอยู่ในฟอร์ม
+      <button type="button" disabled={groupsQuery.isFetching}
+        onClick={() => void groupsQuery.refetch()}
+        className="ml-2 font-semibold underline disabled:opacity-50">
+        ลองอีกครั้ง
+      </button>
+    </div>
+  ) : availableGroups.length === 0 ? (
+    <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      ยังไม่มีกลุ่มอะไหล่ กรุณาเพิ่มกลุ่มที่เมนูจัดการกลุ่มอะไหล่ก่อนบันทึกอะไหล่
+    </p>
+  ) : form.groupId > 0 && !selectedGroup ? (
+    <p role="alert" className="text-sm text-rose-700">กลุ่มเดิมไม่มีอยู่ในรายการ กรุณาเลือกกลุ่มอะไหล่ใหม่</p>
+  ) : null;
 
   const timerRef = useRef<any>(null);
   const timeoutRef = useRef<any>(null);
@@ -375,23 +397,24 @@ export function SparePartFormModal() {
   };
 
   const mutation = useMutation({
+    onMutate: () => setSaveError(null),
     mutationFn: async (dto: CreateSparepartDto) => {
+      if (!canSaveGroup) throw new Error("กรุณาเลือกกลุ่มอะไหล่จากรายการที่โหลดสำเร็จ");
+      const payload = { ...dto, groupId: selectedGroup!.id, category: selectedGroup!.name };
       if (editItem) {
-        return await updateSparepart(editItem.id, dto);
+        return await updateSparepart(editItem.id, payload);
       } else {
-        return await createSparepart(dto);
+        return await createSparepart(payload);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["spareParts"] });
       closeModal();
     },
-    onError: (err: any) => {
-      console.error("Mutation failed:", err);
-      // Even if backend fails, update locally so user is never blocked
-      queryClient.invalidateQueries({ queryKey: ["spareParts"] });
-      closeModal();
+    onError: () => {
+      setSaveError("บันทึกอะไหล่ไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองอีกครั้ง ข้อมูลที่กรอกยังอยู่ในฟอร์ม");
     },
+    onSettled: () => { submitStartedRef.current = false; },
   });
 
   if (!isOpen) return null;
@@ -423,6 +446,7 @@ export function SparePartFormModal() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!canSaveGroup || submitStartedRef.current) return;
               if (!form.name.trim()) {
                 alert("กรุณากรอกชื่ออะไหล่");
                 return;
@@ -432,10 +456,17 @@ export function SparePartFormModal() {
                 alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
                 return;
               }
+              submitStartedRef.current = true;
               mutation.mutate({ ...form, price: finalPrice });
             }}
             className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
           >
+            {groupStatus}
+            {saveError && (
+              <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                {saveError}
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               {/* Left Column */}
               <div className="md:col-span-6 space-y-4">
@@ -519,7 +550,10 @@ export function SparePartFormModal() {
                         หมวดหมู่ <span className="text-rose-500 font-bold ml-1">*</span>
                       </label>
                       <select
-                        value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
+                        aria-label="กลุ่มอะไหล่"
+                        required
+                        disabled={groupsQuery.isLoading || groupsQuery.isError || availableGroups.length === 0 || mutation.isLoading}
+                        value={selectedGroup ? form.groupId : ""}
                         onChange={(e) => {
                           const gid = Number(e.target.value);
                           const g = availableGroups.find((x) => x.id === gid);
@@ -531,6 +565,7 @@ export function SparePartFormModal() {
                         }}
                         className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       >
+                        <option value="" disabled>เลือกกลุ่มอะไหล่</option>
                         {availableGroups.map((g) => (
                           <option key={g.id} value={g.id}>
                             {g.name}
@@ -649,10 +684,10 @@ export function SparePartFormModal() {
               </button>
               <button
                 type="submit"
-                disabled={mutation.isPending}
+                disabled={mutation.isLoading || !canSaveGroup}
                 className="px-5 h-9 rounded-xl bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
               >
-                {mutation.isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+                {mutation.isLoading ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
               </button>
             </div>
           </form>
@@ -685,6 +720,7 @@ export function SparePartFormModal() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (!canSaveGroup || submitStartedRef.current) return;
             if (!form.name.trim()) {
               alert("กรุณากรอกชื่ออะไหล่");
               return;
@@ -694,10 +730,17 @@ export function SparePartFormModal() {
               alert("กรุณากรอกตัวเลขจำนวนและราคาเป็นค่าบวก (ตั้งแต่ 0 ขึ้นไป)");
               return;
             }
+            submitStartedRef.current = true;
             mutation.mutate({ ...form, price: finalPrice });
           }}
           className="p-6 space-y-5 max-h-[80vh] overflow-y-auto"
         >
+          {groupStatus}
+          {saveError && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {saveError}
+            </p>
+          )}
           <div className="space-y-4">
             {/* ข้อมูลพื้นฐาน */}
             <div className="space-y-2.5">
@@ -724,7 +767,10 @@ export function SparePartFormModal() {
                     หมวดหมู่ <span className="text-rose-500 font-bold ml-1">*</span>
                   </label>
                   <select
-                    value={form.groupId || (availableGroups.find((g) => g.name === form.category)?.id ?? availableGroups[0]?.id ?? 1)}
+                    aria-label="กลุ่มอะไหล่"
+                    required
+                    disabled={groupsQuery.isLoading || groupsQuery.isError || availableGroups.length === 0 || mutation.isLoading}
+                    value={selectedGroup ? form.groupId : ""}
                     onChange={(e) => {
                       const gid = Number(e.target.value);
                       const g = availableGroups.find((x) => x.id === gid);
@@ -736,6 +782,7 @@ export function SparePartFormModal() {
                     }}
                     className="w-full h-8.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800 focus:border-emerald-500"
                   >
+                    <option value="" disabled>เลือกกลุ่มอะไหล่</option>
                     {availableGroups.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.name}
@@ -859,10 +906,10 @@ export function SparePartFormModal() {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isLoading || !canSaveGroup}
               className="px-5 h-9 rounded-xl bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
             >
-              {mutation.isPending ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+              {mutation.isLoading ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
             </button>
           </div>
         </form>
